@@ -23,7 +23,18 @@ Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in 
 
 Playwright E2E runs locally (`cd e2e && npm run test:install && npm test`) and is added to CI incrementally as cross-cutting flows land (Stage 2+).
 
-The runner executes each job inside a Node 20 container.
+The runner executes each job inside a Node 20 container. The workflow is committed but has not run yet — it needs a Gitea Actions runner registered on the server.
+
+## Current check status
+
+All checks pass locally at the scaffold stage:
+
+| Package | Checks | Result |
+|---------|--------|--------|
+| `frontend` | lint, typecheck, test, build | passing (2 Vitest/RTL tests) |
+| `backend` | lint, typecheck, test, build | passing (13 Vitest/Supertest tests) |
+| `docs` | build | passing |
+| `e2e` | against frontend via Playwright | passing (1 smoke test) |
 
 ## Definition of done
 
@@ -37,3 +48,7 @@ A task is "done" when its tests pass in CI and:
 - the README AI Usage section is current.
 
 Full checklist: the build spec, Section 12.
+
+## AI declaration
+
+This document was generated with the assistance of opencode[deepseek-v4-flash-free].

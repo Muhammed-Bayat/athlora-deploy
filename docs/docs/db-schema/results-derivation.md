@@ -33,6 +33,14 @@ deriveResult(entries, 'field')  // → { value, incident }
 
 Coaches can correct a derived result with `manual_override`, `override_reason`, and `overridden_by` — an audit trail of who corrected what and when. Overrides are stored alongside, not instead of, the derived values.
 
+## Implementation status
+
+`backend/src/services/resultDerivation.ts` implements `deriveFieldBest`, `deriveTrackTime` and `deriveResult`, including DQ/DNF/DNS voiding. It is covered by 8 Vitest unit tests (best-valid-attempt, foul-only attempts, DQ voiding, tied-value semantics). The functions are ready to be called from a results-recompute service once DB access arrives in Stage 1.
+
 ## Design note
 
 These rules are deliberately small and pure so they can be unit-tested exhaustively (foul-only attempts, DQ after valid attempts, tied results) and reused by the merge logic in Stage 3, where every synced batch recomputes `results` so all clients converge on the same derived state.
+
+## AI declaration
+
+This document was generated with the assistance of opencode[deepseek-v4-flash-free].

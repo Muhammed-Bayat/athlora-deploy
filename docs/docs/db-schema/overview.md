@@ -47,6 +47,16 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 `0001_init.sql` — the full authoritative schema. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
+Status: committed in the repo; **not yet applied** to a live database. Until a database is provisioned, apply it with:
+
+```bash
+psql "$DATABASE_URL" -f backend/src/db/migrations/0001_init.sql
+```
+
 ## ERD
 
 An ERD will be drafted from the dev plan's data model and reviewed as a team before further migrations are written.
+
+## AI declaration
+
+This document was generated with the assistance of opencode[deepseek-v4-flash-free].

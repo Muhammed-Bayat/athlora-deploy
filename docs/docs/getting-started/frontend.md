@@ -51,8 +51,18 @@ VITE_AUTH0_AUDIENCE=
 - Feature code lives in `src/features/<feature>` folders, not global pages/forms dirs.
 - All colours, fonts, radii and shadows come from `src/styles/tokens.css` — never hard-code hex values.
 - `src/types` mirrors the backend DTOs (camelCase on the wire).
-- `src/api/client.ts` is the typed fetch wrapper; one file per resource will be added per resource as features land.
+- `src/api/client.ts` is the shared typed fetch wrapper; thinner per-resource files are added as each feature lands.
+
+## Current state
+
+- The app shell renders with **Athlora** branding, an ink sidebar and placeholder pages for each feature (Dashboard, Roster, Events, Live Logging, Results, Sign in).
+- Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Bebas Neue, Inter, Space Mono) load in `index.html`.
+- Tests: Vitest + React Testing Library (App shell, shared Button). Runs with `npm run test`.
 
 ## Deployment
 
 Skeleton deploys to **Vercel** (see the dev plan, Stage 1).
+
+## AI declaration
+
+This document was generated with the assistance of opencode[deepseek-v4-flash-free].
