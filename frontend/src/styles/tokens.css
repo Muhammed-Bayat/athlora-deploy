@@ -1,0 +1,69 @@
+:root {
+  /* Brand — "Athlora": deep-ink navy with teal/cyan/blue track-lane accents */
+  --ink-900: #001D3C;
+  --ink-800: #012C4E;
+  --ink-700: #023A62;
+  --teal-800: #004A68;
+  --teal-700: #005E83;
+  --blue-500: #0092BC;
+  --blue-400: #1CA6CE;
+  --cyan-400: #45BED7;
+  --cyan-300: #6ED2E6;
+  --cyan-200: #8AE9F2;
+  --mist-50: #EFFBFC;
+  --mist-100: #E3F6F9;
+  --white: #FFFFFF;
+  --alert: #E2664F;
+  --alert-soft: #FBE4DF;
+
+  /* Semantic aliases (what components actually consume) */
+  --color-primary: var(--blue-500);
+  --color-primary-dark: var(--teal-700);
+  --color-secondary: var(--cyan-400);
+  --color-secondary-dark: var(--blue-400);
+  --color-accent: var(--cyan-200);
+  --color-bg: var(--mist-50);
+  --color-surface: var(--white);
+  --color-border: rgba(0, 94, 131, 0.16);
+  --color-text: var(--ink-900);
+  --color-text-muted: rgba(0, 29, 60, 0.62);
+  --color-text-faint: rgba(0, 29, 60, 0.42);
+  --color-text-light: #EAFBFD;
+  --color-text-light-muted: rgba(234, 251, 252, 0.68);
+
+  /* Semantic status */
+  --color-success: var(--teal-700);
+  --color-warning: #00879E;
+  --color-danger: var(--alert);
+  --color-info: var(--blue-500);
+
+  /* Typography (Google Fonts: Bebas Neue, Inter, Space Mono) */
+  --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-mono: 'Space Mono', 'Courier New', monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius / shadow / motion (per mockups) */
+  --radius-sm: 9px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --shadow-soft: 0 20px 50px -22px rgba(0, 29, 60, 0.35);
+  --shadow-card: 0 10px 30px -16px rgba(0, 29, 60, 0.22);
+  --shadow-glow: 0 0 0 1px rgba(69, 190, 215, 0.35), 0 12px 30px -10px rgba(0, 146, 188, 0.45);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}

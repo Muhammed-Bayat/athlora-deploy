@@ -1,0 +1,39 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.4;
+}
+
+.pb {
+  background-color: var(--mist-100);
+  color: var(--teal-700);
+}
+
+.sb {
+  background-color: var(--mist-100);
+  color: var(--blue-500);
+  box-shadow: inset 0 0 0 1.5px var(--blue-500);
+}
+
+.foul {
+  background-color: var(--alert-soft);
+  color: var(--color-danger);
+}
+
+.dq,
+.dnf,
+.dns {
+  background-color: var(--alert-soft);
+  color: var(--color-danger);
+}
+
+.neutral {
+  background-color: var(--mist-100);
+  color: var(--color-text-muted);
+}

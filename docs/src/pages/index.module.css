@@ -1,0 +1,30 @@
+.hero {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 5rem 1rem 6rem;
+}
+
+.title {
+  font-size: clamp(3rem, 10vw, 6rem);
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  margin: 0 0 1rem;
+}
+
+.tagline {
+  font-size: 1.5rem;
+  color: var(--ifm-color-primary);
+  margin-bottom: 1.5rem;
+}
+
+.lede {
+  font-size: 1.125rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 2.5rem;
+}

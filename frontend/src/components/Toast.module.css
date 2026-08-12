@@ -1,0 +1,24 @@
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-text);
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.success {
+  border-left: 4px solid var(--color-success);
+}
+
+.error {
+  border-left: 4px solid var(--color-danger);
+}
+
+.info {
+  border-left: 4px solid var(--color-info);
+}

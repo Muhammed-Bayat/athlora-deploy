@@ -1,0 +1,16 @@
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.card.flat {
+  box-shadow: none;
+}
+
+.card.ink {
+  background: linear-gradient(135deg, var(--ink-900), var(--teal-800));
+  color: var(--color-text-light);
+}

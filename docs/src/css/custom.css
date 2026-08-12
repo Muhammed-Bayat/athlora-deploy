@@ -1,0 +1,45 @@
+:root {
+  --ifm-color-primary: #0092bc;
+  --ifm-color-primary-dark: #0083a9;
+  --ifm-color-primary-darker: #007b9f;
+  --ifm-color-primary-darkest: #006583;
+  --ifm-color-primary-light: #1ca6ce;
+  --ifm-color-primary-lighter: #29aed4;
+  --ifm-color-primary-lightest: #55c3e0;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 146, 188, 0.12);
+}
+
+[data-theme='dark'] {
+  --ifm-background-color: #001d3c;
+  --ifm-background-surface-color: #012c4e;
+  --ifm-font-color-base: #eafbfd;
+  --docusaurus-highlighted-code-line-bg: rgba(138, 233, 242, 0.12);
+}
+
+.navbar {
+  background-color: #001d3c;
+}
+
+.navbar__title,
+.navbar__link {
+  color: #eafbfd;
+}
+
+.navbar__link:hover {
+  color: #8ae9f2;
+}
+
+.footer {
+  --ifm-footer-background-color: #001d3c;
+}
+
+.button--primary {
+  background: linear-gradient(135deg, #0092bc, #005e83);
+  border-color: transparent;
+}
+
+.button--secondary {
+  --ifm-button-border-color: #005e83;
+  color: #005e83;
+}
