@@ -5,12 +5,21 @@
 }
 
 .brand {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-display);
   font-size: var(--font-size-xl);
   letter-spacing: 0.06em;
   color: var(--color-text-light);
   margin-bottom: var(--space-6);
+}
+
+.brandLogo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .navList {

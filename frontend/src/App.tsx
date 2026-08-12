@@ -34,7 +34,10 @@ export default function App() {
   return (
     <div className={styles.shell}>
       <nav aria-label="Main" className={`${styles.sideNav} ink`}>
-        <span className={styles.brand}>Athlora</span>
+        <span className={styles.brand}>
+          <img className={styles.brandLogo} src="/logo-removebg.png" alt="" />
+          Athlora
+        </span>
         <ul className={styles.navList}>
           {NAV.map((item) => (
             <li key={item.id} className={styles.navItem}>
