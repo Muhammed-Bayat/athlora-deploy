@@ -414,13 +414,33 @@ VITE_AUTH0_AUDIENCE=
 - [ ] Tests added and passing in CI
 - [ ] `Assisted-by:` footer added if AI generated code, listing every contributing tool and model
 - [ ] README/AI Usage section updated for every AI tool, model and usage category, with explicit non-usage statements for unused categories
-- [ ] Docs updated in `/docs` if this changes the schema, API, or setup steps
+- [ ] Docs updated in `/docs` if this changes the schema, API, setup steps, or project status (see Section 14)
 
 ---
 
 ## 13. Distributing This to the Team
 
 Every team member should hand their opencode agent **both** this file and `athletics_coaching_app_dev_plan.md` at the start of a session, and re-share this file whenever it's updated (treat edits to this doc like a schema migration — announce it, don't let it drift silently between branches).
+
+---
+
+## 14. Keeping the Docs Current (mandatory agent duty)
+
+The `/docs` Docusaurus site is the living record of the project, not a one-time deliverable. Work is only "done" if the docs that describe it are updated **by the same agent, in the same session** — never deferred and never left for a developer.
+
+### Non-negotiables after every agent session
+
+1. **Status sections reflect reality.** Keep the status/state sections accurate every time you add code:
+   - `docs/docs/welcome.md` — "Current status (Stage 1 start)": move implemented items out of *Pending*; add what you built.
+   - `getting-started/frontend.md` and `getting-started/backend.md` — "Current state": new routes, endpoints, components, scripts, auth/DB wiring.
+   - `getting-started/scripts.md` — "Current check status": refresh the table (lint/typecheck/test/build results and counts) so it matches what `npm test`/`npm run build` actually report.
+   - `architecture/overview.md`, `tech-stack/stack.md` — align claims ("currently in use" vs "reserved for later stages") with the code.
+   - `db-schema/overview.md` and `db-schema/results-derivation.md` — migration status, table additions, derivation behaviour.
+2. **Name things from this spec.** Use the exact table/column names (Section 5), route shapes (Section 8) and tokens (Section 6) in docs — never invented synonyms.
+3. **Docs commit with the code.** Commit documentation changes on the same branch as the feature they describe, in the same commit when practical, using Conventional Commits (`docs:` scope) and the `Assisted-by:` footer (Section 9). Never open a PR without its doc updates.
+4. **Verify the build.** Run `cd docs && npm run build` before finishing a session so broken links or stale claims never ship.
+5. **Source-of-truth docs are read-only for progress.** `git-methodology`, `agent-build-spec` and `dev-plan` are team records — never edit them to reflect progress. If you believe one needs a change, flag it to the developer and let the team update/re-share the file.
+6. **AI declarations trail edits.** Any document you edit must end with its AI declaration updated to name every contributing tool and model (Section 9).
 
 ---
 

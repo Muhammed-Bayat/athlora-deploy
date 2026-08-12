@@ -187,6 +187,7 @@ results          (event_id, athlete_id, discipline, final_result, placing, manua
 - [ ] The agent, not the developer, creates all commits in agent-driven sessions; the developer only creates and pushes the branch, then reviews and merges the PR.
 - [ ] AI usage/non-usage declaration on every submitted document (including this plan, if AI-assisted).
 - [ ] All AI-generated code and tests reviewed and tested before merge — passing AI-written tests never assumed to prove correctness.
+- [ ] The `/docs` site is kept current in every session: status/state sections and the check-status table are updated with the code (build spec Section 14), doc changes committed with the feature, and the docs build passes before a task is declared done.
 - [ ] Reports/discussions rewritten in the team's own voice, especially motivation/design-rationale sections.
 - [ ] For each assessment: start a new AI session, keep an unedited transcript/tool export as evidence.
 - [ ] Re-check the COMS3011A and University AI policies before each submission; University policy wins on conflict.

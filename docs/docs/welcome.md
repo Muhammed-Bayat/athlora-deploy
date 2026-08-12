@@ -43,6 +43,10 @@ Pending for Stage 1 (needs accounts/credentials you hold):
 - Build the CRUD features: roster, events (with Open-Meteo weather), live logging, results/dashboard.
 - Deploy frontend → Vercel, backend → Render, docs → Cloudflare Pages.
 
+## Keeping these docs current
+
+These pages are a living record that agents maintain as part of every task. If you are an agent working in this repo: the sections marked **Current status** / **Current state** and the **check-status table** in `getting-started/scripts.md` must be updated in the same session as the code they describe, documentation changes are committed with the feature (Conventional Commits, `Assisted-by:` footer), the docs build must pass before you finish, and this site's source-of-truth process docs must never be edited for progress. The full mandatory rules are in the build spec, Section 14.
+
 ## Getting around
 
 - [Getting Started](/docs/getting-started/frontend) — run the stack locally
