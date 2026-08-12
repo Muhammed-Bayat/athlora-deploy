@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Athlora',
   tagline: 'Run the whole season from one place.',
-  favicon: 'img/logo.svg',
+  favicon: 'img/logo-removebg.png',
 
   url: 'https://athlora.pages.dev',
   baseUrl: '/',
@@ -44,7 +44,7 @@ const config: Config = {
       title: 'Athlora',
       logo: {
         alt: 'Athlora',
-        src: 'img/logo.svg',
+        src: 'img/logo-removebg.png',
       },
       items: [
         {
