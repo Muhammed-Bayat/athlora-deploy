@@ -73,7 +73,7 @@ CREATE TABLE results (
   discipline      TEXT NOT NULL,
   final_result    NUMERIC,
   unit            TEXT,
-  placing         INT,
+  "placing"       INT,
   is_pb           BOOLEAN NOT NULL DEFAULT false,
   is_sb           BOOLEAN NOT NULL DEFAULT false,
   manual_override NUMERIC,
