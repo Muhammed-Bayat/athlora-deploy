@@ -36,13 +36,12 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml` (runs once a Gitea Actions runner is registered).
-- **Docs site** — this Docusaurus site builds and is ready to deploy.
+- **Docs deployment** — the Docusaurus site is live at `https://athlora-deploy.pages.dev`.
 
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
 - Build the CRUD features: roster, events (with Open-Meteo weather), live logging, results/dashboard.
-- Deploy docs → Cloudflare Pages.
 
 ## Keeping these docs current
 

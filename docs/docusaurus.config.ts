@@ -7,7 +7,7 @@ const config: Config = {
   tagline: 'Run the whole season from one place.',
   favicon: 'img/logo-removebg.png',
 
-  url: 'https://athlora.pages.dev',
+  url: 'https://athlora-deploy.pages.dev',
   baseUrl: '/',
 
   organizationName: 'sdp-ms-wits',
