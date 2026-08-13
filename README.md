@@ -4,6 +4,12 @@ Run the whole season from one place.
 
 Athlora is a web app for an athletics (track & field) coach to manage a roster of athletes, plan competitions and training, log results live during an event (times for track, distances/heights for field), derive statistics and PBs/SBs from that log, and — in later stages — collaborate with assistants offline, publish public results pages, and generate season schedules.
 
+## Live services
+
+- **Application:** [athlora-deploy.vercel.app](https://athlora-deploy.vercel.app)
+- **Documentation:** [athlora-deploy.pages.dev](https://athlora-deploy.pages.dev)
+- **API health:** [athlora-deploy.onrender.com/health](https://athlora-deploy.onrender.com/health)
+
 ## Architecture
 
 Non-monolithic: a **React + Vite + TypeScript** frontend talks to a separate **Express + TypeScript** API over HTTP/JSON, backed by **PostgreSQL**. Auth is handled by **Auth0**. No framework that merges front and back (no Next.js/SvelteKit-style fused routing) — this is a hard project requirement.
