@@ -31,15 +31,15 @@ Design mockups live at the repo root: `SDP-Landing.html` (marketing page) and `S
 
 The monorepo is scaffolded, committed, and all automated checks pass locally. What is done today:
 
-- **Frontend shell** — Vite + React + TypeScript (strict), design tokens from the mockups, shared components (`Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Toast`, `EmptyState`), feature folders, typed API client.
-- **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT middleware (not yet wired to routes), init DB migration, and pure result-derivation services.
+- **Frontend shell** — Vite + React + TypeScript (strict), design tokens from the mockups, shared components (`Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Toast`, `EmptyState`), feature folders, typed API client, and Auth0 Universal Login integration.
+- **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT protection for application resources, init DB migration, and pure result-derivation services.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml` (runs once a Gitea Actions runner is registered).
 - **Docs site** — this Docusaurus site builds and is ready to deploy.
 
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Provision PostgreSQL (Neon/university) and apply `backend/src/db/migrations/0001_init.sql`.
-- Configure the Auth0 tenant and wire login + JWT verification into the frontend and backend.
+- Implement account deletion and complete the remaining password/account lifecycle requirements.
 - Build the CRUD features: roster, events (with Open-Meteo weather), live logging, results/dashboard.
 - Deploy frontend → Vercel, backend → Render, docs → Cloudflare Pages.
 
@@ -58,8 +58,8 @@ These pages are a living record that agents maintain as part of every task. If y
 
 This documentation site and the repository follow the course AI policy.
 
-- **Code generation:** `opencode[deepseek-v4-flash-free]`
-- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
+- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
+- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
 - **Code review:** none used — not used for code review
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.
@@ -68,4 +68,4 @@ This section is kept current as tools and models change.
 
 ## AI declaration
 
-This document was generated and is maintained with the assistance of opencode[deepseek-v4-flash-free]; in-line editing via Codex[GPT-5].
+This document was generated and is maintained with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]; in-line editing via Codex[GPT-5].

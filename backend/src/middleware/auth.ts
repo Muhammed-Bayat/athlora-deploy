@@ -1,17 +1,20 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { RequestHandler } from 'express';
 
-function keyset() {
-  const domain = process.env.AUTH0_DOMAIN;
-  if (!domain) return null;
+function keyset(domain: string) {
   return createRemoteJWKSet(new URL(`https://${domain}/.well-known/jwks.json`));
 }
 
 export const requireAuth: RequestHandler = async (req, res, next) => {
-  const jwks = keyset();
-  if (!jwks) {
+  const domain = process.env.AUTH0_DOMAIN;
+  const audience = process.env.AUTH0_AUDIENCE;
+  if (!domain || !audience) {
     res.status(503).json({
-      error: { code: 'AUTH_NOT_CONFIGURED', message: 'AUTH0_DOMAIN is not configured', details: {} },
+      error: {
+        code: 'AUTH_NOT_CONFIGURED',
+        message: 'Auth0 domain and audience are not configured',
+        details: {},
+      },
     });
     return;
   }
@@ -25,15 +28,16 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     return;
   }
 
-  const domain = process.env.AUTH0_DOMAIN as string;
-  const audience = process.env.AUTH0_AUDIENCE;
-
   try {
-    const { payload } = await jwtVerify(token, jwks, {
+    const { payload } = await jwtVerify(token, keyset(domain), {
       issuer: `https://${domain}/`,
-      ...(audience ? { audience } : {}),
+      audience,
     });
+    if (!payload.sub) {
+      throw new Error('Token subject is missing');
+    }
     req.user = { sub: payload.sub };
+    req.accessToken = token;
     next();
   } catch {
     res.status(401).json({

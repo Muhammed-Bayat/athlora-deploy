@@ -71,8 +71,8 @@ We use **GitHub Flow** with Conventional Commits. Branch off `main` (`feature/<s
 
 This project follows the course AI policy. The tools below have contributed to the repository; categories that are unused are explicitly declared as unused.
 
-- **Code generation:** `opencode[deepseek-v4-flash-free]`
-- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
+- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
+- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
 - **Code review:** none used — not used for code review
 - Every commit where AI generated code includes an `Assisted-by:` footer naming every contributing tool and model.
 - Every submitted document ends with an AI usage/non-usage declaration.

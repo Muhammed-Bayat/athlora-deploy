@@ -32,7 +32,7 @@ All checks pass locally at the scaffold stage:
 | Package | Checks | Result |
 |---------|--------|--------|
 | `frontend` | lint, typecheck, test, build | passing (2 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (13 Vitest/Supertest tests) |
+| `backend` | lint, typecheck, test, build | passing (16 Vitest/Supertest tests) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
 
@@ -51,4 +51,4 @@ Full checklist: the build spec, Section 12.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
