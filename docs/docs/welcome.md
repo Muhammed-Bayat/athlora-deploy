@@ -32,13 +32,12 @@ Design mockups live at the repo root: `SDP-Landing.html` (marketing page) and `S
 The monorepo is scaffolded, committed, and all automated checks pass locally. What is done today:
 
 - **Frontend shell** — Vite + React + TypeScript (strict), design tokens from the mockups, shared components (`Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Toast`, `EmptyState`), feature folders, typed API client, and Auth0 Universal Login integration.
-- **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT protection for application resources, init DB migration, and pure result-derivation services.
+- **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT protection for application resources, Neon PostgreSQL with checksum-tracked migrations, and pure result-derivation services.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml` (runs once a Gitea Actions runner is registered).
 - **Docs site** — this Docusaurus site builds and is ready to deploy.
 
 Pending for Stage 1 (needs accounts/credentials you hold):
 
-- Provision PostgreSQL (Neon/university) and apply `backend/src/db/migrations/0001_init.sql`.
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
 - Build the CRUD features: roster, events (with Open-Meteo weather), live logging, results/dashboard.
 - Deploy frontend → Vercel, backend → Render, docs → Cloudflare Pages.
