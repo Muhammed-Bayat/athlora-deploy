@@ -41,16 +41,17 @@ Derived/materialized from `timeline_entries`. Recalculated after every entry cha
 
 ## Migration conventions
 
-Migrations live in `backend/src/db/migrations`, one file per change, sequentially numbered. Never edit a migration after it has been merged — write a new one.
+Migrations live in `backend/src/db/migrations`, one file per change, sequentially numbered. Never edit a migration after it has been merged — write a new one. From `backend`, run `npm run db:migrate`; applied names and checksums are recorded in `schema_migrations`.
 
 ## Current migration
 
 `0001_init.sql` — the full authoritative schema. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
-Status: committed in the repo; **not yet applied** to a live database. Until a database is provisioned, apply it with:
+Status: applied to the Neon development database and baselined in `schema_migrations`. New databases and pending migrations are handled with:
 
 ```bash
-psql "$DATABASE_URL" -f backend/src/db/migrations/0001_init.sql
+cd backend
+npm run db:migrate
 ```
 
 ## ERD
@@ -59,4 +60,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].

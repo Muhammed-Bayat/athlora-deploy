@@ -32,6 +32,8 @@ jobs:
         run: npm run typecheck --prefix backend
       - name: Test
         run: npm run test --prefix backend
+      - name: Build
+        run: npm run build --prefix backend
 
   docs:
     runs-on: docker://node:22-bookworm

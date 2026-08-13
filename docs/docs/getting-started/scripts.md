@@ -18,12 +18,12 @@ Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in 
 | Job | Steps |
 |-----|-------|
 | `frontend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
-| `backend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test` |
+| `backend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `docs` | `npm ci`, `npm run build` |
 
 Playwright E2E runs locally (`cd e2e && npm run test:install && npm test`) and is added to CI incrementally as cross-cutting flows land (Stage 2+).
 
-The runner executes each job inside a Node 20 container. The workflow is committed but has not run yet — it needs a Gitea Actions runner registered on the server.
+The runner executes each job inside a Node 22 container. The workflow requires a Gitea Actions runner registered on the server.
 
 ## Current check status
 
@@ -32,7 +32,7 @@ All checks pass locally at the scaffold stage:
 | Package | Checks | Result |
 |---------|--------|--------|
 | `frontend` | lint, typecheck, test, build | passing (2 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (16 Vitest/Supertest tests) |
+| `backend` | lint, typecheck, test, build | passing (19 Vitest/Supertest tests) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
 

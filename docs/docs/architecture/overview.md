@@ -32,8 +32,8 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
 - **Services**: pure, unit-testable functions for result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — never buried in route handlers.
-- **Database access**: `pg` pool in `src/db/client.ts` (lazy); schema is migration files in `src/db/migrations` — `0001_init.sql` is committed but not yet applied.
-- **Auth**: `src/middleware/auth.ts` verifies Auth0 JWTs via `jose`, ready to mount on non-public routes; public results pages (Stage 3) are explicitly allow-listed.
+- **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked and applied before production startup. `0001_init.sql` is applied to Neon.
+- **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose` on application resource routes; public results pages (Stage 3) will be explicitly allow-listed.
 
 ## Data flow for a live result
 
@@ -63,4 +63,4 @@ Implemented at the scaffold stage: frontend shell with feature placeholders, bac
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
