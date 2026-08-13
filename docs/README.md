@@ -11,8 +11,8 @@ npm run serve      # serve the build locally
 
 Content lives in `docs/`, the Docusaurus config in `docusaurus.config.ts`, and the sidebar in `sidebars.ts`.
 
-Deployment target is Cloudflare Pages (see the dev plan, Stage 1).
+The site is deployed to Cloudflare Pages at https://athlora-deploy.pages.dev.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].

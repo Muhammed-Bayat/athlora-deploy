@@ -47,7 +47,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 - Frontend → Vercel (`https://athlora-deploy.vercel.app`)
 - Backend → Render (`https://athlora-deploy.onrender.com`)
-- Docs site → Cloudflare Pages
+- Docs site → Cloudflare Pages (`https://athlora-deploy.pages.dev`)
 - Postgres → Neon (Frankfurt)
 
 ## Design decisions
