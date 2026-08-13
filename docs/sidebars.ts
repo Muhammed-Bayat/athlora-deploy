@@ -31,6 +31,11 @@ const sidebars: SidebarsConfig = {
         'process/dev-plan',
       ],
     },
+    {
+      type: 'category',
+      label: 'Sprint 1',
+      items: ['sprint 1/Meetings'],
+    },
   ],
 };
 
