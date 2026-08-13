@@ -25,4 +25,4 @@ sidebar_position: 1
 - Tyra Mohamed (2800066)
 
 ## Proof of meeting
-<img src="screenshots/meeting1.png" alt="Meeting 1" width="500" />
+![Meeting 1](./screenshots/meeting1.png)
