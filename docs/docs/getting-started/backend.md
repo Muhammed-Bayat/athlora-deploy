@@ -82,7 +82,25 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 
 ## Deployment
 
-Skeleton deploys to **Render** (see the dev plan, Stage 1).
+The backend is deployed to **Render** at:
+
+```text
+https://athlora-deploy.onrender.com
+```
+
+`GET /health` is publicly available at `https://athlora-deploy.onrender.com/health`. Render builds from the private GitHub deployment mirror because the university Gitea repository cannot be connected directly. Gitea remains the source of truth and pushes are mirrored to GitHub.
+
+Render configuration:
+
+```text
+Region: Frankfurt
+Root directory: backend
+Build command: npm ci && npm run build
+Start command: npm start
+Health check path: /health
+```
+
+The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, and `NODE_VERSION=22`. Secrets are configured in Render and are never committed.
 
 ## AI declaration
 
