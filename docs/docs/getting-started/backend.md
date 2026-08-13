@@ -34,6 +34,7 @@ AUTH0_DOMAIN=
 AUTH0_AUDIENCE=
 AUTH0_CLIENT_ID=
 AUTH0_CLIENT_SECRET=
+CORS_ORIGINS=http://localhost:5173
 PORT=4000
 ```
 
@@ -100,7 +101,7 @@ Start command: npm start
 Health check path: /health
 ```
 
-The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, and `NODE_VERSION=22`. Secrets are configured in Render and are never committed.
+The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22`. Multiple allowed frontend origins can be provided as a comma-separated list. Secrets are configured in Render and are never committed.
 
 ## AI declaration
 

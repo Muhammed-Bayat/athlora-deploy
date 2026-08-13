@@ -32,7 +32,7 @@ All checks pass locally at the scaffold stage:
 | Package | Checks | Result |
 |---------|--------|--------|
 | `frontend` | lint, typecheck, test, build | passing (2 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (19 Vitest/Supertest tests) |
+| `backend` | lint, typecheck, test, build | passing (21 Vitest/Supertest tests) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
 

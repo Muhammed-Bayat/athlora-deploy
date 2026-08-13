@@ -17,6 +17,27 @@ describe('health', () => {
   });
 });
 
+describe('cors', () => {
+  it('allows the configured frontend origin', async () => {
+    const response = await request(app)
+      .options('/api/v1/athletes')
+      .set('Origin', 'http://localhost:5173')
+      .set('Access-Control-Request-Method', 'GET');
+
+    expect(response.status).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5173');
+  });
+
+  it('does not allow an unconfigured origin', async () => {
+    const response = await request(app)
+      .options('/api/v1/athletes')
+      .set('Origin', 'https://example.com')
+      .set('Access-Control-Request-Method', 'GET');
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
 describe('athletes', () => {
   it('requires Auth0 configuration', async () => {
     const response = await request(app).get('/api/v1/athletes');

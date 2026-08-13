@@ -62,7 +62,15 @@ VITE_AUTH0_AUDIENCE=
 
 ## Deployment
 
-Skeleton deploys to **Vercel** (see the dev plan, Stage 1).
+The frontend is deployed to **Vercel** at:
+
+```text
+https://athlora-deploy.vercel.app
+```
+
+Vercel builds the `frontend` root from the private GitHub deployment mirror with `npm ci` and `npm run build`, then publishes `dist`. Production and preview environments require the four `VITE_*` variables above; `VITE_API_BASE_URL` is `https://athlora-deploy.onrender.com`.
+
+The production URL must be listed in the Auth0 application's allowed callback URLs, logout URLs, and web origins. Auth0 production sign-in and redirect have been verified.
 
 ## AI declaration
 
