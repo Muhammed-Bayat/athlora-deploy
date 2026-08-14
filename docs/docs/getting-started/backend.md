@@ -71,15 +71,16 @@ The schema is defined by sequential SQL files in `src/db/migrations`. Apply all 
 npm run db:migrate
 ```
 
-The runner records names and SHA-256 checksums in `schema_migrations`, serializes concurrent runs with a PostgreSQL advisory lock, and applies each migration transactionally. It can baseline the original six-table schema if `0001_init.sql` was applied manually before the runner existed, but rejects partial schemas and modified applied migrations. Production `npm start` runs pending migrations before starting the API. `gen_random_uuid()` requires PostgreSQL 13+.
+The runner records names and SHA-256 checksums in `schema_migrations`, serializes concurrent runs with a PostgreSQL advisory lock, and applies each migration transactionally. It can baseline the original six-table schema if `0001_init.sql` was applied manually before the runner existed, but rejects partial schemas and modified applied migrations. Checksums are computed over line-ending-normalized content, so they are stable across platforms (LF vs CRLF checkouts). Production `npm start` runs pending migrations before starting the API. `gen_random_uuid()` requires PostgreSQL 13+.
 
 ## Current state
 
 - Public endpoint: `GET /health`. Legacy login/logout callback scaffolds under `/api/v1/auth` are public, while `PUT /api/v1/auth/me` verifies the Auth0 token, retrieves its `/userinfo` profile and upserts the matching application user. Application resource routes require an Auth0 access token. Athlete/event list handlers return empty lists after authentication, while CRUD and timeline/results mutations return `NOT_IMPLEMENTED` until Stage 1 features land.
 - Errors use the standard `{ error: { code, message, details } }` shape via `src/middleware/errors.ts`.
 - `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience with `jose` and protects athlete, event, timeline and results routes. It returns `AUTH_NOT_CONFIGURED` until both `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set.
-- `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; the initial migration is applied to the Neon development database and tracked by the migration runner.
-- Tests: Vitest + Supertest (app routes) and Vitest unit tests for result derivation. Runs with `npm run test`.
+- `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; the initial migration is applied to the Neon development database and tracked by the migration runner. `0002_contract_100m.sql` adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes) and applies cleanly to both fresh databases and the existing development database.
+- The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS.
+- Tests: Vitest + Supertest (app routes), Vitest unit tests for result derivation, and migration tests (unit-mocked runner behavior plus a real-DB integration suite gated behind `TEST_DATABASE_URL` that skips when unset). Runs with `npm run test`.
 
 ## Deployment
 

@@ -24,6 +24,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'API Reference',
+      items: ['api-reference/contract'],
+    },
+    {
+      type: 'category',
       label: 'Project Process',
       items: [
         'process/git-methodology',

@@ -50,7 +50,7 @@ VITE_AUTH0_AUDIENCE=
 - Shared UI primitives live in `src/components` (Button, Input, Select, Card, Badge, Modal, Toast, EmptyState).
 - Feature code lives in `src/features/<feature>` folders, not global pages/forms dirs.
 - All colours, fonts, radii and shadows come from `src/styles/tokens.css` — never hard-code hex values.
-- `src/types` mirrors the backend DTOs (camelCase on the wire).
+- `src/types` mirrors the backend DTOs (camelCase on the wire). The MVP 100m contract is encoded there: `DISCIPLINE_100M`/`Discipline`, `RESULT_UNIT_SECONDS`/`ResultUnit`, `ResultOutcome`, and the aligned `Athlete`, `TimelineEntry`, `Result`, `EventParticipant`, `AthleteStatistics` and `DashboardSummary` types.
 - `src/api/client.ts` is the shared typed fetch wrapper; thinner per-resource files are added as each feature lands.
 
 ## Current state

@@ -33,6 +33,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 
 - **Frontend shell** — Vite + React + TypeScript (strict), design tokens from the mockups, shared components (`Button`, `Input`, `Select`, `Card`, `Badge`, `Modal`, `Toast`, `EmptyState`), feature folders, typed API client, and Auth0 Universal Login integration.
 - **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT protection for application resources, Neon PostgreSQL with checksum-tracked migrations, and pure result-derivation services.
+- **100m data/API contract** — the authoritative MVP contract is defined in `docs/api-reference/contract`, encoded in the aligned backend/frontend TypeScript domain types (fixed to 100m/seconds at the API/service boundary), and backed by the forward-only migration `0002_contract_100m.sql` (athlete archival, result outcomes, override audit timestamp, note storage, constraints and indexes). The schema now distinguishes no result, a valid finish, DQ, DNF and DNS.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml` (runs once a Gitea Actions runner is registered).

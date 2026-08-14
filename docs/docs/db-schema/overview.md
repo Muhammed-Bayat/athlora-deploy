@@ -10,14 +10,15 @@ PostgreSQL 13+. Every table uses UUID primary keys, `created_at`/`updated_at` ti
 
 ```
 users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
-athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, notes)
+athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, notes,
+                      archived_at, created_at, updated_at)
 events               (id UUID PK, created_by -> users, type, discipline, title, date, time,
                       location_name, latitude, longitude, status)
 event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id) — Stage 2
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
-                      is_foul, incident_type, recorded_by, version, device_id, deleted_at)
-results              (event_id, athlete_id, discipline, final_result, unit, placing,
-                      is_pb, is_sb, manual_override, override_reason, overridden_by)
+                      is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
+results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
+                      is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
                       — PK (event_id, athlete_id, discipline)
 ```
 
@@ -25,9 +26,10 @@ results              (event_id, athlete_id, discipline, final_result, unit, plac
 The append-only live log — the heart of the app.
 
 - `entry_type`: `attempt`, `split`, `penalty`, `note`.
-- `value` + `unit`: seconds for time, metres/cm for distance/height.
+- `value` + `unit`: seconds for time, metres/cm for distance/height. For the 100m contract the unit is `seconds`.
 - `is_foul`: field-event foul attempts.
 - `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
+- `note_text`: free-text body for `note` entries.
 - `version`: bumped on every edit — used for merge-conflict detection (Stage 3).
 - `device_id`: originating device for offline merge (Stage 3).
 - `deleted_at`: "undo" is a soft delete, never `DELETE`.
@@ -35,9 +37,21 @@ The append-only live log — the heart of the app.
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
 
-- `final_result`: computed value (best valid field attempt, finishing time).
+- `outcome`: `no_result` | `valid` | `dq` | `dnf` | `dns` — distinguishes no result, a valid finish, and voided outcomes.
+- `final_result`: computed value (best valid field attempt, finishing time). Must be `NULL` for voided outcomes.
 - `is_pb` / `is_sb`: derived flags, not manually logged.
-- `manual_override`, `override_reason`, `overridden_by`: coach corrections with an audit trail.
+- `manual_override`, `override_reason`, `overridden_by`, `override_at`: coach corrections with an audit trail (who corrected, when, and why).
+
+## Constraints and indexes
+
+Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so invalid state cannot be written:
+
+- `events`: `status` in `scheduled`/`in_progress`/`completed`/`cancelled`; `type` in `competition`/`training`; indexes on `(created_by)` and `(status, date)`.
+- `event_participants`: `rsvp_status` in `pending`/`yes`/`no`; index on `(athlete_id)`.
+- `timeline_entries`: `entry_type`, `incident_type` and `unit` domain checks; `value >= 0` when present; index on `(event_id, athlete_id, discipline)`.
+- `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
+
+The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
 
 ## Migration conventions
 
@@ -45,9 +59,9 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` — the full authoritative schema. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` — the full authoritative base schema, followed by `0002_contract_100m.sql` which adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes). Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
-Status: applied to the Neon development database and baselined in `schema_migrations`. New databases and pending migrations are handled with:
+Status: applied to the Neon development database and tracked in `schema_migrations`. New databases and pending migrations are handled with:
 
 ```bash
 cd backend
