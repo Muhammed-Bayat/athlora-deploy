@@ -31,10 +31,12 @@ All checks pass locally at the scaffold stage:
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (2 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (21 Vitest/Supertest tests) |
+| `frontend` | lint, typecheck, test, build | passing (5 Vitest/RTL tests) |
+| `backend` | lint, typecheck, test, build | passing (29 Vitest/Supertest tests) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
+
+The backend suite includes 6 migration integration tests that exercise real SQL against PostgreSQL (fresh application, baseline upgrade, constraints, checksums). They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database:
 
 ## Definition of done
 

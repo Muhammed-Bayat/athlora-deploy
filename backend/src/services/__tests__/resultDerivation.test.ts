@@ -11,9 +11,10 @@ function attempt(value: number | null, overrides: Partial<EntryInput> = {}): Ent
 }
 
 describe('deriveFieldBest', () => {
-  it('returns the best valid attempt', () => {
-    const { value } = deriveFieldBest([attempt(6.42), attempt(6.61), attempt(6.55)]);
-    expect(value).toBe(6.61);
+  it('returns the best valid attempt as valid', () => {
+    const derivation = deriveFieldBest([attempt(6.42), attempt(6.61), attempt(6.55)]);
+    expect(derivation.value).toBe(6.61);
+    expect(derivation.outcome).toBe('valid');
   });
 
   it('ignores foul attempts', () => {
@@ -21,22 +22,40 @@ describe('deriveFieldBest', () => {
     expect(value).toBe(7.1);
   });
 
-  it('returns null when every attempt is foul', () => {
-    const { value } = deriveFieldBest([attempt(0, { isFoul: true }), attempt(0, { isFoul: true })]);
-    expect(value).toBeNull();
+  it('is no_result when every attempt is foul', () => {
+    const derivation = deriveFieldBest([attempt(0, { isFoul: true }), attempt(0, { isFoul: true })]);
+    expect(derivation.value).toBeNull();
+    expect(derivation.outcome).toBe('no_result');
   });
 });
 
 describe('deriveTrackTime', () => {
-  it('returns the finishing time from valid attempts', () => {
-    const { value } = deriveTrackTime([attempt(11.32), attempt(11.2)]);
-    expect(value).toBe(11.32);
+  it('returns the finishing time from valid attempts as valid', () => {
+    const derivation = deriveTrackTime([attempt(11.32), attempt(11.2)]);
+    expect(derivation.value).toBe(11.32);
+    expect(derivation.outcome).toBe('valid');
   });
 
   it('voids the result on a DQ incident', () => {
-    const { value, incident } = deriveTrackTime([attempt(10.9), attempt(10.9, { incidentType: 'dq' })]);
-    expect(value).toBeNull();
-    expect(incident).toBe('dq');
+    const derivation = deriveTrackTime([
+      attempt(10.9),
+      attempt(10.9, { incidentType: 'dq' }),
+    ]);
+    expect(derivation.value).toBeNull();
+    expect(derivation.incident).toBe('dq');
+    expect(derivation.outcome).toBe('dq');
+  });
+
+  it('voids the result on a DNS incident', () => {
+    const derivation = deriveTrackTime([attempt(0, { incidentType: 'dns' })]);
+    expect(derivation.value).toBeNull();
+    expect(derivation.outcome).toBe('dns');
+  });
+
+  it('is no_result without any valid attempt', () => {
+    const derivation = deriveTrackTime([]);
+    expect(derivation.value).toBeNull();
+    expect(derivation.outcome).toBe('no_result');
   });
 });
 
@@ -55,5 +74,11 @@ describe('deriveResult', () => {
     const entries = [attempt(5.0), attempt(0, { isFoul: true })];
     const { value } = deriveResult(entries, 'field');
     expect(value).toBe(5.0);
+  });
+
+  it('maps a DNF void to the dnf outcome', () => {
+    const derivation = deriveResult([attempt(0, { incidentType: 'dnf' })], 'track');
+    expect(derivation.value).toBeNull();
+    expect(derivation.outcome).toBe('dnf');
   });
 });

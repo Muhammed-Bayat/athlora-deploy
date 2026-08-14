@@ -37,13 +37,18 @@ This means the "timeline" concept from the brief becomes, per event: a sequence 
 ## 1. Core Data Model (built in Stage 1, extended later)
 
 ```
-users            (id, name, email, auth0_id, role, created_at)
-athletes         (id, coach_id, name, dob, gender, squad, notes)
-events           (id, type[competition|training], discipline, date, time, location, status, created_by)
-event_participants (event_id, athlete_id, rsvp_status)          -- Stage 2
+users            (id, auth0_id, name, email, role[coach|assistant|viewer], created_at, updated_at)
+athletes         (id, coach_id, name, dob, gender, squad, notes, archived_at, created_at, updated_at)
+events           (id, created_by, type[competition|training], discipline, title, date, time,
+                   location_name, latitude, longitude,
+                   status[scheduled|in_progress|completed|cancelled], created_at, updated_at)
+event_participants (event_id, athlete_id, rsvp_status[pending|yes|no])  -- live RSVP
 timeline_entries (id, event_id, athlete_id, discipline, entry_type[attempt|split|penalty|note],
-                   value, unit, is_foul, recorded_by, created_at, edited_at, deleted_at)
-results          (event_id, athlete_id, discipline, final_result, placing, manual_override, penalties_summary)
+                   value, unit[seconds|metres|cm], is_foul, incident_type, note_text, recorded_by,
+                   version, device_id, created_at, updated_at, deleted_at)
+results          (event_id, athlete_id, discipline, outcome[no_result|valid|dq|dnf|dns], final_result,
+                   unit, placing, is_pb, is_sb, manual_override, override_reason, overridden_by,
+                   override_at, updated_at)
 ```
 
 - `timeline_entries` is the append-only log the brief calls for ("recording what happens ... as it happens"). Soft-delete (`deleted_at`) supports "easy to edit or undo."

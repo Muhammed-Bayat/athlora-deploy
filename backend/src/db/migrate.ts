@@ -23,7 +23,11 @@ const INITIAL_TABLES = [
   'results',
 ];
 
-async function loadMigrations(): Promise<Migration[]> {
+export function normalizeSql(sql: string): string {
+  return sql.replace(/\r\n/g, '\n');
+}
+
+export async function loadMigrations(): Promise<Migration[]> {
   const directory = path.dirname(fileURLToPath(import.meta.url));
   const migrationsDirectory = path.resolve(directory, '../../src/db/migrations');
   const names = (await readdir(migrationsDirectory))
@@ -32,7 +36,7 @@ async function loadMigrations(): Promise<Migration[]> {
 
   return Promise.all(
     names.map(async (name) => {
-      const sql = await readFile(path.join(migrationsDirectory, name), 'utf8');
+      const sql = normalizeSql(await readFile(path.join(migrationsDirectory, name), 'utf8'));
       return {
         name,
         sql,

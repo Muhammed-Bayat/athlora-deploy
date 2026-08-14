@@ -135,6 +135,7 @@ CREATE TABLE athletes (
   gender        TEXT,                             -- category, not restricted to binary
   squad         TEXT,
   notes         TEXT,
+  archived_at   TIMESTAMPTZ,                       -- archival state (non-null = archived)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -169,12 +170,13 @@ CREATE TABLE timeline_entries (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- client-generated in Stage 2+ for offline support
   event_id      UUID NOT NULL REFERENCES events(id),
   athlete_id    UUID NOT NULL REFERENCES athletes(id),
-  discipline    TEXT NOT NULL,
+  discipline    TEXT NOT NULL,                      -- '100m' for the MVP contract (API fixes discipline)
   entry_type    TEXT NOT NULL,                      -- 'attempt' | 'split' | 'penalty' | 'note'
   value         NUMERIC,                             -- seconds for time, metres for distance/height
   unit          TEXT,                                -- 'seconds' | 'metres' | 'cm'
   is_foul       BOOLEAN NOT NULL DEFAULT false,
   incident_type TEXT,                                 -- 'false_start' | 'dq' | 'dnf' | 'dns' | 'lane_infringement' | null
+  note_text     TEXT,                                 -- free-text body for 'note' entries
   recorded_by   UUID NOT NULL REFERENCES users(id),
   version       INT NOT NULL DEFAULT 1,               -- Stage 3: bumped on every edit, used for merge conflict detection
   device_id     TEXT,                                 -- Stage 3: originating device for offline merge
@@ -188,18 +190,22 @@ CREATE TABLE results (
   event_id        UUID NOT NULL REFERENCES events(id),
   athlete_id      UUID NOT NULL REFERENCES athletes(id),
   discipline      TEXT NOT NULL,
+  outcome         TEXT NOT NULL DEFAULT 'no_result',  -- 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns'
   final_result    NUMERIC,
   unit            TEXT,
-  placing         INT,
+  "placing"       INT,
   is_pb           BOOLEAN NOT NULL DEFAULT false,
   is_sb           BOOLEAN NOT NULL DEFAULT false,
   manual_override NUMERIC,
   override_reason TEXT,
   overridden_by   UUID REFERENCES users(id),
+  override_at     TIMESTAMPTZ,                        -- when the override was applied
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (event_id, athlete_id, discipline)
 );
 ```
+
+**MVP contract and enforced state (migration `0002_contract_100m.sql`):** the MVP discipline is fixed to **100m** and the result unit to **seconds** at the API/service boundary (see `docs/api-reference/contract`); the `discipline` column stays free-form `TEXT` so future disciplines are added by new migrations. The migration also adds `archived_at` on `athletes`, `note_text` on `timeline_entries`, `outcome` + `override_at` on `results`, CHECK constraints (event `status`/`type`, `rsvp_status`, `entry_type`, `incident_type`, `unit`, non-negative values, voided outcomes carry no `final_result`), and indexes on `events(created_by)`, `events(status, date)`, `event_participants(athlete_id)` and `timeline_entries(event_id, athlete_id, discipline)`.
 
 **Rules for agents extending this schema:**
 - New tables follow the same PK/timestamp/soft-delete conventions above.
