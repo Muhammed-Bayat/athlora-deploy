@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
+import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 import type { User } from '../types/domain.js';
 
@@ -22,15 +23,14 @@ interface UserRow {
 
 export const syncCurrentUser: RequestHandler = async (req, res, next) => {
   const domain = process.env.AUTH0_DOMAIN;
-  const subject = req.user?.sub;
-  const accessToken = req.accessToken;
 
-  if (!domain || !subject || !accessToken) {
+  if (!domain) {
     next(new ApiError(500, 'AUTH_CONTEXT_MISSING', 'Verified authentication context is missing'));
     return;
   }
 
   try {
+    const { auth0Id: subject, accessToken } = getVerifiedAuth0Context(req);
     const profileResponse = await fetch(`https://${domain}/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });

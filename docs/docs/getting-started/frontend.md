@@ -56,9 +56,10 @@ VITE_AUTH0_AUDIENCE=
 ## Current state
 
 - The app shell renders with **Athlora** branding, an ink sidebar and placeholder pages for each feature (Dashboard, Roster, Events, Live Logging, Results).
-- Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in and sign-out. The shared API client obtains an access token silently and sends it as a bearer token. After authentication, the app calls `PUT /api/v1/auth/me` to synchronize the verified Auth0 profile with the backend user record. Auth0 must be configured through the environment variables above and the tenant must allow the application's callback, logout and web-origin URLs.
+- Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in and sign-out. The shared API client obtains an access token silently and sends it as a bearer token. After authentication, the app calls `PUT /api/v1/auth/me` to synchronize the verified Auth0 profile with the backend user record and withholds authenticated content until that call succeeds; a failed synchronization displays a retry state. Auth0 must be configured through the environment variables above and the tenant must allow the application's callback, logout and web-origin URLs.
+- API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
 - Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Bebas Neue, Inter, Space Mono) load in `index.html`.
-- Tests: Vitest + React Testing Library (App shell, shared Button). Runs with `npm run test`.
+- Tests: Vitest + React Testing Library cover the app shell, shared Button, API response/error handling and authenticated synchronization gate. Runs with `npm run test` (11 tests).
 
 ## Deployment
 

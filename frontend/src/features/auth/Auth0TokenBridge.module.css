@@ -1,0 +1,47 @@
+.gate {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--space-6);
+  color: var(--color-text);
+  background: linear-gradient(135deg, var(--color-bg), var(--mist-100));
+}
+
+.card {
+  width: min(100%, 32rem);
+  padding: var(--space-8);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.card h1 {
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+}
+
+.eyebrow,
+.status {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.eyebrow {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.description {
+  max-width: 38ch;
+  margin: 0 auto var(--space-6);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.status {
+  color: var(--color-text-muted);
+}

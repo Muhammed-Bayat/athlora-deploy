@@ -24,7 +24,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 ## Frontend
 
 - **State & structure**: feature folders (`src/features/*`). Shared primitives in `src/components`.
-- **API access**: shared typed fetch client in `src/api/client.ts`; per-resource wrappers are added as features land.
+- **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; per-resource wrappers are added as features land. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user.
 - **Offline (Stage 2+)**: Dexie/IndexedDB mirror for live-logging writes, PWA service worker, background sync, Socket.IO live updates.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
 
@@ -33,7 +33,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 - **Routing**: resource routers under `src/routes` matching the database tables.
 - **Services**: pure, unit-testable functions for result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — never buried in route handlers.
 - **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. `0001_init.sql` and `0002_contract_100m.sql` are applied to Neon.
-- **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose` on application resource routes; public results pages (Stage 3) will be explicitly allow-listed.
+- **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
 
 ## Data flow for a live result
 
@@ -56,10 +56,11 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 - **Soft deletes** — undo is a tombstone (`deleted_at`), not a destructive delete.
 - **Derived results with manual override** — stats come from the timeline log, but a coach can correct with `manual_override` + audit trail.
 - **Timed vs measured disciplines** — the UI and result rules branch on whether a discipline is track (time) or field (distance/height).
+- **Non-enumerating ownership** — owner IDs and audit actors come from authenticated server context, never request payloads. A resource that is missing, malformed, nested under the wrong parent or owned by another coach produces the same generic not-found response.
 
 ## Implementation status
 
-Implemented at the scaffold stage: frontend shell with feature placeholders, backend route/middleware/service shell, tokens, init migration, CI workflow and all automated checks. Still to build in Stage 1: real CRUD for athletes/events, Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Still to build in Stage 1: real CRUD for athletes/events, Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 

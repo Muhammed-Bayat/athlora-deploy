@@ -31,8 +31,8 @@ All checks pass locally at the scaffold stage:
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (5 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (29 Vitest/Supertest tests) |
+| `frontend` | lint, typecheck, test, build | passing (11 Vitest/RTL tests) |
+| `backend` | lint, typecheck, test, build | passing (60 Vitest/Supertest tests; 6 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
 
