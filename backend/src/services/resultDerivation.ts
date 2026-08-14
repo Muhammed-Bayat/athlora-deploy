@@ -1,4 +1,4 @@
-import type { EntryType, IncidentType } from '../types/domain.js';
+import type { Discipline, EntryType, IncidentType, ResultOutcome } from '../types/domain.js';
 
 export interface EntryInput {
   entryType: EntryType;
@@ -10,11 +10,16 @@ export interface EntryInput {
 export interface Derivation {
   value: number | null;
   incident: IncidentType | null;
+  outcome: ResultOutcome;
 }
 
 export type DisciplineKind = 'field' | 'track';
 
-const VOID_INCIDENTS: readonly IncidentType[] = ['dq', 'dnf', 'dns'];
+export const DISCIPLINE_KIND: Record<Discipline, DisciplineKind> = {
+  '100m': 'track',
+};
+
+const VOID_INCIDENTS: readonly ['dq', 'dnf', 'dns'] = ['dq', 'dnf', 'dns'];
 
 function bestValidAttempt(entries: readonly EntryInput[]): number | null {
   let best: number | null = null;
@@ -26,11 +31,11 @@ function bestValidAttempt(entries: readonly EntryInput[]): number | null {
 }
 
 function voidedBy(entries: readonly EntryInput[]): Derivation | null {
-  const voided = entries.find(
-    (entry) => entry.incidentType !== null && VOID_INCIDENTS.includes(entry.incidentType),
+  const incident = VOID_INCIDENTS.find((candidate) =>
+    entries.some((entry) => entry.incidentType === candidate),
   );
-  if (voided && voided.incidentType) {
-    return { value: null, incident: voided.incidentType };
+  if (incident) {
+    return { value: null, incident, outcome: incident };
   }
   return null;
 }
@@ -38,13 +43,15 @@ function voidedBy(entries: readonly EntryInput[]): Derivation | null {
 export function deriveFieldBest(entries: readonly EntryInput[]): Derivation {
   const voided = voidedBy(entries);
   if (voided) return voided;
-  return { value: bestValidAttempt(entries), incident: null };
+  const value = bestValidAttempt(entries);
+  return { value, incident: null, outcome: value === null ? 'no_result' : 'valid' };
 }
 
 export function deriveTrackTime(entries: readonly EntryInput[]): Derivation {
   const voided = voidedBy(entries);
   if (voided) return voided;
-  return { value: bestValidAttempt(entries), incident: null };
+  const value = bestValidAttempt(entries);
+  return { value, incident: null, outcome: value === null ? 'no_result' : 'valid' };
 }
 
 export function deriveResult(entries: readonly EntryInput[], kind: DisciplineKind): Derivation {
