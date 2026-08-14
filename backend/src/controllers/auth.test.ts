@@ -13,9 +13,8 @@ const next = vi.fn() as unknown as NextFunction;
 
 function request(): Request {
   return {
-    user: { sub: 'auth0|user-1' },
-    accessToken: 'access-token',
-  } as Request;
+    auth0: { auth0Id: 'auth0|user-1', accessToken: 'access-token' },
+  } as unknown as Request;
 }
 
 function response(): Response {

@@ -6,6 +6,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.

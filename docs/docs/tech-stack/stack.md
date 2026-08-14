@@ -40,7 +40,7 @@ Anything currently listed but unused in the codebase is there deliberately for a
 ## Currently in use (scaffold stage)
 
 - **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), Express, `pg`, `jose` (Auth0 JWT verification), Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
-- **Configured and exercised**: Auth0 Universal Login/JWT verification and PostgreSQL on Neon with checksum-tracked migrations.
+- **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
 - **Committed but not yet exercised**: Open-Meteo (weather proxy endpoint is a scaffolded stub).
 - **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 

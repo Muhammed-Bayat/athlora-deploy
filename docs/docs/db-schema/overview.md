@@ -42,6 +42,12 @@ Derived/materialized from `timeline_entries`. Recalculated after every entry cha
 - `is_pb` / `is_sb`: derived flags, not manually logged.
 - `manual_override`, `override_reason`, `overridden_by`, `override_at`: coach corrections with an audit trail (who corrected, when, and why).
 
+## Ownership boundaries
+
+Protected requests resolve the verified Auth0 subject to `users.id` before resource access. Direct ownership is `athletes.coach_id` for athletes and `events.created_by` for events. Timeline entries, participants and results are authorized through both parent relationships: the event must have been created by the current user and the athlete must belong to that user. `recorded_by` and `overridden_by` are audit actors, not ownership fields.
+
+Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. The policy is centralized in `backend/src/services/ownership.ts` so the Stage 2 sharing model can replace it consistently when assistants and cross-coach fixtures are introduced.
+
 ## Constraints and indexes
 
 Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so invalid state cannot be written:

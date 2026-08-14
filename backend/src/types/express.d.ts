@@ -1,8 +1,10 @@
+import type { ApplicationUserContext, VerifiedAuth0Context } from './auth.js';
+
 declare global {
   namespace Express {
     interface Request {
-      user?: { sub?: string };
-      accessToken?: string;
+      auth0?: VerifiedAuth0Context;
+      auth?: ApplicationUserContext;
     }
   }
 }

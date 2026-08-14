@@ -44,7 +44,29 @@ Success responses wrap payloads in `data`; lists add `meta.count`; errors use th
 { "error": { "code": "VALIDATION_ERROR", "message": "Human-readable message", "details": {} } }
 ```
 
-All application resource routes require `Authorization: Bearer <auth0 JWT>`.
+All application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row.
+
+### 3.1 Authentication context and ownership
+
+`PUT /api/v1/auth/me` verifies the Auth0 token and synchronizes its subject/profile to `users`; it intentionally does not require an existing `users` row. Every protected resource route performs a second step after JWT verification: it resolves the verified Auth0 `sub` by `users.auth0_id` and exposes the application user UUID, Auth0 ID and role to controllers through typed request context.
+
+A valid Auth0 identity that has not completed synchronization receives:
+
+```json
+{
+  "error": {
+    "code": "AUTH_USER_NOT_SYNCHRONIZED",
+    "message": "Authenticated user is not synchronized",
+    "details": { "syncEndpoint": "/api/v1/auth/me" }
+  }
+}
+```
+
+The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHORIZED` responses.
+
+Resource ownership is server-derived: athlete access uses `athletes.coach_id`; event access uses `events.created_by`; timeline entry, participant and result access requires both the parent event and athlete to belong to the current user. `recordedBy` and `overriddenBy` are audit actors, not owners. Client mutation payloads never control `coachId`, `createdBy`, `recordedBy` or `overriddenBy`.
+
+To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
 ## 4. DTOs
 
@@ -173,4 +195,4 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
