@@ -23,7 +23,7 @@ Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in 
 
 Playwright E2E runs locally (`cd e2e && npm run test:install && npm test`) and is added to CI incrementally as cross-cutting flows land (Stage 2+).
 
-The runner executes each job inside a Node 22 container. The workflow requires a Gitea Actions runner registered on the server.
+Each job runs on the default `ubuntu-latest` runner label with Node 22 pinned via `actions/setup-node@v4` — so CI does not depend on a runner being registered with a custom `docker://` image label. The workflow requires a Gitea Actions runner registered on the server.
 
 ## Current check status
 
@@ -53,4 +53,4 @@ Full checklist: the build spec, Section 12.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free].

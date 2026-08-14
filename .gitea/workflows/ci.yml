@@ -6,9 +6,12 @@ on:
 
 jobs:
   frontend:
-    runs-on: docker://node:22-bookworm
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install
         run: npm ci --prefix frontend
       - name: Lint
@@ -21,9 +24,12 @@ jobs:
         run: npm run build --prefix frontend
 
   backend:
-    runs-on: docker://node:22-bookworm
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install
         run: npm ci --prefix backend
       - name: Lint
@@ -36,9 +42,12 @@ jobs:
         run: npm run build --prefix backend
 
   docs:
-    runs-on: docker://node:22-bookworm
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install
         run: npm ci --prefix docs
       - name: Build
