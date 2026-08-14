@@ -37,7 +37,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Ownership foundation** — verified Auth0 subjects resolve to `users.id` and role before protected resource handlers run. Unsynchronized identities receive a structured recovery error, while reusable athlete/event/timeline/participant/result checks scope access to the current user and return the same generic not-found response for missing and cross-coach resources.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
-- **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml` (runs once a Gitea Actions runner is registered).
+- **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml`, executed by a registered Gitea Actions runner on the university instance.
 - **Docs deployment** — the Docusaurus site is live at `https://athlora-deploy.pages.dev`.
 
 Pending for Stage 1 (needs accounts/credentials you hold):
@@ -70,4 +70,4 @@ This section is kept current as tools and models change.
 
 ## AI declaration
 
-This document was generated and is maintained with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]; in-line editing via Codex[GPT-5].
+This document was generated and is maintained with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]; in-line editing via Codex[GPT-5] and opencode[deepseek-v4-flash-free].

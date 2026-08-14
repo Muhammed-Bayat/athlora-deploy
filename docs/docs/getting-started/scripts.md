@@ -23,11 +23,25 @@ Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in 
 
 Playwright E2E runs locally (`cd e2e && npm run test:install && npm test`) and is added to CI incrementally as cross-cutting flows land (Stage 2+).
 
-Each job runs on the default `ubuntu-latest` runner label with Node 22 pinned via `actions/setup-node@v4` — so CI does not depend on a runner being registered with a custom `docker://` image label. The workflow requires a Gitea Actions runner registered on the server.
+Each job runs on the default `ubuntu-latest` runner label with Node 22 pinned via `actions/setup-node@v4` — so CI does not depend on a runner being registered with a custom `docker://` image label.
+
+The runner is registered against the university Gitea instance (`https://sdp.ms.wits.ac.za`) and executes in the `ubuntu-latest:docker://node:22-bookworm` container. It runs from Docker Desktop on a team machine with the DinD flavour (bundled daemon, no host socket required):
+
+```bash
+docker run -d --name athlora_runner --privileged \
+  -e GITEA_INSTANCE_URL=https://sdp.ms.wits.ac.za/ \
+  -e GITEA_RUNNER_REGISTRATION_TOKEN=<token> \
+  -e GITEA_RUNNER_NAME=athlora-runner \
+  -e GITEA_RUNNER_LABELS="ubuntu-latest:docker://node:22-bookworm" \
+  -v <path>:/data \
+  docker.io/gitea/runner:3-dind
+```
+
+The registration token is obtained in the Gitea UI under the repository's **Settings → Actions → Runners**. A runner only accepts jobs while its machine and container are running.
 
 ## Current check status
 
-All checks pass locally at the scaffold stage:
+All checks pass locally at the scaffold stage, and the same gates run in Gitea Actions CI on every push/PR:
 
 | Package | Checks | Result |
 |---------|--------|--------|
