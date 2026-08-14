@@ -388,7 +388,7 @@
   white-space: nowrap;
   border: 0;
 }
-@media(max-width:720px) {
+@media(max-width:980px) {
   .viewHeader {
     display: block;
   }
@@ -408,7 +408,10 @@
   .grid {
     grid-template-columns: 1fr;
   }
-  .formFields>div,.profileStats {
+  .formFields>div {
+    grid-template-columns: 1fr;
+  }
+  .profileStats {
     grid-template-columns: 1fr 1fr;
   }
   .profileStats div:last-child {

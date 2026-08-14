@@ -64,9 +64,9 @@ function DashboardView({ athletes, events, navigate }: DashboardViewProps) {
   const active = athletes.filter((athlete) => athlete.status === 'Active' || athlete.status === 'Peaking').length;
   const upcoming14 = upcoming.filter((event) => (new Date(`${event.date}T00:00:00`).getTime() - new Date(`${FIXTURE_TODAY}T00:00:00`).getTime()) / 86400000 <= 14);
   const pbs = athletes.filter((athlete) => athlete.status === 'Peaking').length + 4;
-  const score = readiness(athletes);
+  const activeReadiness = athletes.length ? Math.round(active / athletes.length * 100) : 0;
   const metrics = [
-    { icon: 'athletes' as const, value: athletes.length, label: 'Athletes', delta: '+2 this month', context: `${active} active or peaking`, progress: score },
+    { icon: 'athletes' as const, value: athletes.length, label: 'Athletes', delta: '+2 this month', context: `${active} active or peaking`, progress: activeReadiness },
     { icon: 'calendar' as const, value: upcoming14.length, label: 'Next 14 days', delta: `${upcoming14.length} scheduled`, context: upcoming[0] ? `Next: ${upcoming[0].name}` : 'Calendar clear', progress: Math.min(100, upcoming14.length * 18) },
     { icon: 'trend' as const, value: pbs, label: 'Season PBs', delta: '+1 this week', context: 'Performance momentum', progress: Math.min(100, 55 + pbs * 4) },
     { icon: 'activity' as const, value: 9, label: 'Sessions this week', delta: 'on plan', context: 'Weekly load tracking', progress: 82 },
@@ -75,7 +75,7 @@ function DashboardView({ athletes, events, navigate }: DashboardViewProps) {
 
   return <section aria-label="Dashboard overview">
     <div className={dashboard.hero}>
-      <div className={dashboard.heroCopy}><p className={dashboard.kicker}><i />Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, Coach</p><h2>Performance.<br /><span>In motion.</span></h2><p><b>{active} athletes</b> are active or peaking, with <b>{upcoming14.length} events</b> in the next 14 days and <b>{pbs} season PBs</b> on the board.</p><div className={dashboard.heroMeta}><span><small>Local time</small><b><LiveTime compact /></b></span><span><small>Squad readiness</small><b>{score}<i>%</i></b></span></div></div>
+      <div className={dashboard.heroCopy}><p className={dashboard.kicker}><i />Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, Coach</p><h2>Performance.<br /><span>In motion.</span></h2><p><b>{active} athletes</b> are active or peaking, with <b>{upcoming14.length} events</b> in the next 14 days and <b>{pbs} season PBs</b> on the board.</p><div className={dashboard.heroMeta}><span><small>Local time</small><b><LiveTime compact /></b></span><span><small>Squad readiness</small><b>{activeReadiness}<i>%</i></b></span></div></div>
       <div className={dashboard.orbit} aria-hidden="true"><i /><i /><i /><span /><span /><span /><p><b>{active}</b> athletes active on today's plan</p></div>
     </div>
     <div className={dashboard.metrics}>{metrics.map((metric, index) => <article className={index === 0 ? dashboard.featured : ''} key={metric.label}><header><span><ConsoleIcon name={metric.icon} /></span><small>{metric.delta}</small></header><strong>{metric.value}</strong><h3>{metric.label}</h3><footer><i><i style={{ width: `${metric.progress}%` }} /></i><span>{metric.context}</span></footer></article>)}</div>
@@ -98,7 +98,7 @@ export function CoachConsole() {
   const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem('athlora-weather-effects', next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
   const counts = Object.fromEntries(STATUSES.map((status) => [status, athletes.filter((athlete) => athlete.status === status).length]));
 
-  return <div className={styles.console} data-weather={weather} data-weather-enabled={weatherEnabled}>
+  return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-enabled={weatherEnabled}>
     <div className={styles.weatherScene} aria-hidden="true">{(weather.includes('rain') || weather === 'storm') && Array.from({ length: 36 }, (_, index) => <i className={styles.rain} style={{ left: `${(index * 17) % 101}%`, animationDelay: `${-(index % 13) / 3}s` }} key={index} />)}{weather === 'snow' && Array.from({ length: 30 }, (_, index) => <i className={styles.snow} style={{ left: `${(index * 23) % 101}%`, animationDelay: `${-(index % 11) / 2}s` }} key={index} />)}{weather === 'storm' && <i className={styles.lightning} />}</div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
@@ -112,8 +112,8 @@ export function CoachConsole() {
         <div className={styles.weatherOrigin} aria-hidden="true"><i className={styles.sun} /><i className={styles.moon} /><i className={styles.cloudOne} /><i className={styles.cloudTwo} /></div>
         <div className={styles.topControls}>
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather}><span>Weather FX</span><i><i /></i></button>
-          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeather(preset.id); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Fixture presets change atmosphere only. No weather service is contacted.</p></div></details>
-          <div className={styles.weatherReadout}><i /><span>{weatherMeta.label} · {weatherMeta.temperature}°</span></div>
+          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Fixture presets change atmosphere only. No weather service is contacted.</p></div></details>
+          <div className={styles.weatherReadout} aria-live="polite"><i /><span>{weatherMeta.label} · {weatherMeta.temperature}°</span></div>
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>

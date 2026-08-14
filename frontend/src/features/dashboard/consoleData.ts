@@ -78,7 +78,7 @@ export const fixtureEvents: ConsoleEvent[] = [
   { id: 108, name: 'Season Opener Time Trial', type: 'Time Trial', date: '2026-06-20', location: 'Home Track', notes: 'Completed. Baseline times recorded.', athleteIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
 ];
 
-export const FIXTURE_TODAY = '2026-08-14';
+export const FIXTURE_TODAY = '2026-08-11';
 
 export const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 

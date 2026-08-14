@@ -119,18 +119,31 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function AccountButton({ children, primary = false, light = false, large = false }: { children: ReactNode; primary?: boolean; light?: boolean; large?: boolean }) {
+interface AccountButtonProps {
+  children: ReactNode;
+  primary?: boolean;
+  light?: boolean;
+  large?: boolean;
+  onClick?: () => void;
+}
+
+function AccountButton({ children, primary = false, light = false, large = false, onClick }: AccountButtonProps) {
   return (
     <button
       type="button"
       className={`${styles.button} ${primary ? styles.buttonPrimary : light ? styles.buttonLight : styles.buttonGhost} ${large ? styles.buttonLarge : ''}`}
+      onClick={onClick}
     >
       {children}
     </button>
   );
 }
 
-export function LandingPage() {
+interface LandingPageProps {
+  onLogin: () => void;
+}
+
+export function LandingPage({ onLogin }: LandingPageProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PreviewTab>('athletes');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -199,7 +212,7 @@ export function LandingPage() {
             <a href="#faq">FAQ</a>
           </nav>
           <div className={styles.navActions}>
-            <AccountButton>Log in</AccountButton>
+            <AccountButton onClick={onLogin}>Log in</AccountButton>
             <AccountButton primary>Get started</AccountButton>
             <button
               ref={menuButtonRef}
@@ -235,7 +248,7 @@ export function LandingPage() {
           <a href="#faq" onClick={closeMenu}>FAQ</a>
         </nav>
         <div className={styles.mobileActions}>
-          <AccountButton large>Log in</AccountButton>
+          <AccountButton large onClick={onLogin}>Log in</AccountButton>
           <AccountButton primary large>Get started</AccountButton>
         </div>
       </div>
@@ -364,7 +377,7 @@ export function LandingPage() {
         </section>
 
         <section className={`${styles.section} ${styles.noTop}`} aria-labelledby="cta-title">
-          <div className={styles.wrap}><div className={styles.ctaBand}><h2 id="cta-title">Ready to run the season?</h2><p>Set up your squad in minutes and see the dashboard fill in as trials happen.</p><div className={styles.ctaActions}><AccountButton light large>Get started free</AccountButton><AccountButton large>I already have an account</AccountButton></div></div></div>
+          <div className={styles.wrap}><div className={styles.ctaBand}><h2 id="cta-title">Ready to run the season?</h2><p>Set up your squad in minutes and see the dashboard fill in as trials happen.</p><div className={styles.ctaActions}><AccountButton light large>Get started free</AccountButton><AccountButton large onClick={onLogin}>I already have an account</AccountButton></div></div></div>
         </section>
       </main>
 
@@ -373,8 +386,8 @@ export function LandingPage() {
           <div className={styles.footerTop}>
             <div className={styles.footerBrand}><Brand /><p>The coach's console for rosters, PBs, meets and training camps - built for the track, not a spreadsheet.</p></div>
             <div className={styles.footerCol}><h2>Product</h2><a href="#features">Features</a><a href="#preview">Preview</a><a href="#how">How it works</a></div>
-            <div className={styles.footerCol}><h2>Account</h2><button type="button">Log in</button><button type="button">Get started</button><button type="button">Forgot password</button></div>
-            <div className={styles.footerCol}><h2>Company</h2><a href="#faq">FAQ</a><span>About</span><span>Contact</span></div>
+            <div className={styles.footerCol}><h2>Account</h2><button type="button" onClick={onLogin}>Log in</button><button type="button">Get started</button><a href="#top">Forgot password</a></div>
+            <div className={styles.footerCol}><h2>Company</h2><a href="#faq">FAQ</a><a href="#top">About</a><a href="#top">Contact</a></div>
           </div>
           <div className={styles.footerBottom}><span>© {new Date().getFullYear()} Athlora Athletics Coaching. All rights reserved.</span><span>Built for coaches who'd rather be on the track.</span></div>
         </div>

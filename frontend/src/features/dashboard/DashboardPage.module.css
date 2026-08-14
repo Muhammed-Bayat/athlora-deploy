@@ -479,6 +479,7 @@
 }
 @media(max-width:980px) {
   .hero {
+    grid-template-columns: 1fr;
     padding: 30px 26px;
     min-height: auto;
     border-radius: 24px;
@@ -491,14 +492,8 @@
   }
 }
 @media(max-width:650px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
   .heroCopy h2 {
     font-size: 43px;
-  }
-  .orbit {
-    display: none;
   }
   .heroMeta {
     gap: 18px;
@@ -525,9 +520,6 @@
   }
 }
 @media(max-width:400px) {
-  .metrics {
-    grid-template-columns: 1fr;
-  }
   .heroMeta b {
     font-size: 22px;
   }

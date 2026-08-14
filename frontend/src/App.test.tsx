@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -15,6 +15,12 @@ vi.mock('@auth0/auth0-react', () => ({
 describe('App', () => {
   beforeAll(() => {
     Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
+  });
+
+  beforeEach(() => {
+    authState.isAuthenticated = false;
+    authState.isLoading = false;
+    window.history.replaceState({}, '', '/');
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -52,6 +58,16 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: /add athlete/i }));
     expect(screen.getByRole('dialog', { name: 'Add Athlete' })).toBeInTheDocument();
+  });
+
+  it('routes a landing-page login to the temporary console route', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Log in' })[0]);
+
+    expect(window.location.pathname).toBe('/console');
+    expect(screen.getByText('Performance.')).toBeInTheDocument();
   });
 
   it('shows an accessible loading state while authentication initializes', () => {
