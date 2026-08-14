@@ -1,24 +1,15 @@
 import type { RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
+import { mapUserRow, type UserRow } from '../db/row-mappers.js';
 import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
-import type { User } from '../types/domain.js';
+import { normalizeRequiredString } from '../validation/primitives.js';
 
 interface Auth0Profile {
   sub?: unknown;
   name?: unknown;
   nickname?: unknown;
   email?: unknown;
-}
-
-interface UserRow {
-  id: string;
-  auth0Id: string;
-  name: string;
-  email: string;
-  role: User['role'];
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export const syncCurrentUser: RequestHandler = async (req, res, next) => {
@@ -43,16 +34,13 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
     if (profile.sub !== subject) {
       throw new ApiError(401, 'UNAUTHORIZED', 'Auth0 profile does not match the access token');
     }
-    if (typeof profile.email !== 'string' || profile.email.length === 0) {
+    const email = normalizeRequiredString(profile.email);
+    if (email === null) {
       throw new ApiError(422, 'AUTH_EMAIL_REQUIRED', 'The Auth0 profile must include an email address');
     }
 
     const name =
-      typeof profile.name === 'string' && profile.name.length > 0
-        ? profile.name
-        : typeof profile.nickname === 'string' && profile.nickname.length > 0
-          ? profile.nickname
-          : profile.email;
+      normalizeRequiredString(profile.name) ?? normalizeRequiredString(profile.nickname) ?? email;
 
     const result = await getPool().query<UserRow>(
       `INSERT INTO users (auth0_id, name, email)
@@ -62,23 +50,15 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
            email = EXCLUDED.email,
            updated_at = now()
        RETURNING id,
-                 auth0_id AS "auth0Id",
-                 name,
-                 email,
-                 role,
-                 created_at AS "createdAt",
-                 updated_at AS "updatedAt"`,
-      [subject, name, profile.email],
+                  auth0_id,
+                  name,
+                  email,
+                  role,
+                  created_at,
+                  updated_at`,
+      [subject, name, email],
     );
-    const user = result.rows[0];
-
-    res.json({
-      data: {
-        ...user,
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt.toISOString(),
-      },
-    });
+    res.json({ data: mapUserRow(result.rows[0]) });
   } catch (error) {
     next(error);
   }

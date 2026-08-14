@@ -38,9 +38,9 @@ function configureAuth(subject = 'auth0|coach-1'): void {
   vi.mocked(jwtVerify).mockResolvedValue({ payload: { sub: subject } } as never);
 }
 
-function synchronizedUser(): { rows: Array<{ userId: string; auth0Id: string; role: string }> } {
+function synchronizedUser(): { rows: Array<{ user_id: string; auth0_id: string; role: string }> } {
   return {
-    rows: [{ userId: USER_ID, auth0Id: 'auth0|coach-1', role: 'coach' }],
+    rows: [{ user_id: USER_ID, auth0_id: 'auth0|coach-1', role: 'coach' }],
   };
 }
 
@@ -158,12 +158,12 @@ describe('auth bootstrap', () => {
       rows: [
         {
           id: USER_ID,
-          auth0Id: 'auth0|new-coach',
+          auth0_id: 'auth0|new-coach',
           name: 'New Coach',
           email: 'new@example.com',
           role: 'coach',
-          createdAt: new Date('2026-08-14T10:00:00.000Z'),
-          updatedAt: new Date('2026-08-14T10:00:00.000Z'),
+          created_at: new Date('2026-08-14T10:00:00.000Z'),
+          updated_at: new Date('2026-08-14T10:00:00.000Z'),
         },
       ],
     });
@@ -187,17 +187,37 @@ describe('owned resource scaffolds', () => {
     configureAuth();
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200],
-      ['put', `/api/v1/athletes/${ATHLETE_ID}`, {}, 501],
+      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501],
       ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200],
-      ['put', `/api/v1/events/${EVENT_ID}`, {}, 501],
+      [
+        'put',
+        `/api/v1/events/${EVENT_ID}`,
+        {
+          type: 'competition',
+          title: 'City Sprint Meet',
+          date: '2026-09-01',
+          status: 'scheduled',
+        },
+        501,
+      ],
       ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501],
       ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501],
-      ['post', `/api/v1/events/${EVENT_ID}/entries`, { athleteId: ATHLETE_ID }, 501],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, {}, 501],
+      [
+        'post',
+        `/api/v1/events/${EVENT_ID}/entries`,
+        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
+        501,
+      ],
+      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }, 501],
       ['delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, undefined, 501],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 501],
-      ['put', `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`, {}, 501],
+      [
+        'put',
+        `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
+        { manualOverride: 11.1, overrideReason: 'Photo finish' },
+        501,
+      ],
     ] as const;
     const statuses: number[] = [];
 
@@ -220,9 +240,17 @@ describe('ownership non-disclosure', () => {
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined],
-      ['post', `/api/v1/events/${EVENT_ID}/entries`, { athleteId: ATHLETE_ID }],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, {}],
-      ['put', `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`, {}],
+      [
+        'post',
+        `/api/v1/events/${EVENT_ID}/entries`,
+        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
+      ],
+      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }],
+      [
+        'put',
+        `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
+        { manualOverride: 11.1, overrideReason: 'Photo finish' },
+      ],
     ] as const;
     const responses = [];
 
@@ -255,32 +283,47 @@ describe('ownership non-disclosure', () => {
     const wrongParent = await request(app)
       .patch(`/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ recordedBy: USER_ID });
+      .send({ value: 11.1 });
 
-    expect([malformed.status, missingChild.status, wrongParent.status]).toEqual([404, 404, 404]);
-    expect([malformed.body, missingChild.body, wrongParent.body]).toEqual([
-      resourceNotFound,
-      resourceNotFound,
-      resourceNotFound,
-    ]);
+    expect(malformed.status).toBe(404);
+    expect(malformed.body).toEqual(resourceNotFound);
+    expect(missingChild.status).toBe(400);
+    expect(missingChild.body.error).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { issues: expect.arrayContaining([expect.objectContaining({ path: 'athleteId' })]) },
+    });
+    expect(wrongParent.status).toBe(404);
+    expect(wrongParent.body).toEqual(resourceNotFound);
   });
 
-  it('uses req.auth.userId rather than owner or audit IDs from the body', async () => {
+  it('rejects owner and audit IDs before an ownership query', async () => {
     configureAuth();
-    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+    query.mockResolvedValueOnce(synchronizedUser());
 
     const response = await request(app)
       .post(`/api/v1/events/${EVENT_ID}/entries`)
       .set('Authorization', 'Bearer valid')
       .send({
         athleteId: ATHLETE_ID,
+        entryType: 'attempt',
+        value: 11.2,
         coachId: '99999999-9999-4999-8999-999999999999',
         createdBy: '99999999-9999-4999-8999-999999999999',
         recordedBy: '99999999-9999-4999-8999-999999999999',
       });
 
-    expect(response.status).toBe(501);
-    expect(query.mock.calls[1]?.[1]).toEqual([EVENT_ID, ATHLETE_ID, USER_ID]);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: {
+        issues: [
+          expect.objectContaining({ path: 'coachId', code: 'unknown_field' }),
+          expect.objectContaining({ path: 'createdBy', code: 'unknown_field' }),
+          expect.objectContaining({ path: 'recordedBy', code: 'unknown_field' }),
+        ],
+      },
+    });
+    expect(query).toHaveBeenCalledOnce();
   });
 });
 
@@ -305,5 +348,25 @@ describe('error handling', () => {
     const response = await request(app).post('/api/v1/events/evt-1/entries').send({});
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('AUTH_NOT_CONFIGURED');
+  });
+
+  it('returns the validation envelope for malformed JSON', async () => {
+    const response = await request(app)
+      .post('/api/v1/athletes')
+      .set('Content-Type', 'application/json')
+      .send('{"name":');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: {
+          issues: [
+            { path: '$', code: 'invalid_format', message: 'Request body must contain valid JSON' },
+          ],
+        },
+      },
+    });
   });
 });

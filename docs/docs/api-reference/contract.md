@@ -44,6 +44,24 @@ Success responses wrap payloads in `data`; lists add `meta.count`; errors use th
 { "error": { "code": "VALIDATION_ERROR", "message": "Human-readable message", "details": {} } }
 ```
 
+Mutation payload validation failures return HTTP `400` with code `VALIDATION_ERROR`, message `Request validation failed`, and an ordered issue list:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": {
+      "issues": [
+        { "path": "date", "code": "invalid_format", "message": "Expected a real date in YYYY-MM-DD format" }
+      ]
+    }
+  }
+}
+```
+
+Mutation payloads use strict field allow-lists. Unknown fields and server-controlled identifiers, ownership/audit fields, derived fields, and timestamps are rejected rather than ignored. Malformed JSON uses the same envelope. Malformed resource identifiers in URL paths retain the ownership contract's non-enumerating `404 NOT_FOUND` response.
+
 All application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row.
 
 ### 3.1 Authentication context and ownership
@@ -70,7 +88,7 @@ To prevent resource enumeration, a malformed identifier, nonexistent row, wrong 
 
 ## 4. DTOs
 
-Field names are camelCase on the wire. Every date/time is an ISO string. `createdAt`/`updatedAt` (and `archivedAt`, `overrideAt`) are `timestamptz` ISO 8601 strings.
+Field names are camelCase on the wire. Calendar dates are real Gregorian `YYYY-MM-DD` values. Local event clock times accept `HH:mm` or `HH:mm:ss` and are serialized as `HH:mm:ss` without timezone conversion. `createdAt`/`updatedAt` (and `archivedAt`, `overrideAt`) are `timestamptz` ISO 8601 strings.
 
 ### 4.1 User
 
@@ -87,7 +105,7 @@ notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 
 **Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion. Archived athletes are excluded from roster and dashboard summaries by default.
 
-Athlete create/update request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `archivedAt` is set via a dedicated archive/unarchive action, not through the generic update.
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`. `archivedAt` is set via a dedicated archive/unarchive action, not through the generic update.
 
 ### 4.3 Event
 
@@ -110,7 +128,7 @@ status, createdAt, updatedAt
 
 **Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete.
 
-Event create/update request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`).
+Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`.
 
 ### 4.4 Event participant
 
@@ -130,13 +148,13 @@ recordedBy, version, deviceId (string|null), createdAt, updatedAt, deletedAt (IS
 
 - `entryType`: `attempt` | `split` | `penalty` | `note` (CHECK-constrained).
 - `incidentType`: `false_start` | `dq` | `dnf` | `dns` | `lane_infringement` | null (CHECK-constrained).
-- `value` is in seconds for the 100m contract; must be non-negative when present (CHECK-constrained).
+- `value` is in seconds for the 100m contract; the API requires a positive finite number when present. The database retains its broader non-negative defensive constraint.
 - `noteText` stores the free-text body of `note` entries (and is null otherwise).
 - `isFoul` applies to field-event attempts only; it is always `false` for 100m.
 - `deletedAt` is the soft-delete tombstone — undo is `deleted_at = now()`, never `DELETE`.
 - `version` starts at 1 and bumps on every edit (Stage 3 merge conflict detection); `deviceId` is set when the entry originated offline.
 
-Create request DTO: `athleteId`, `discipline` (defaults `'100m'`), `entryType`, `value`, `unit` (defaults `'seconds'` for timed entries), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). `recordedBy` is taken from the authenticated user. Edit/undo: `PATCH /events/:eventId/entries/:entryId` and `DELETE /events/:eventId/entries/:entryId` (soft delete).
+Create request DTO: `athleteId`, `discipline` (optional, only exact `'100m'` accepted), `entryType`, `value`, `unit` (optional, only exact `'seconds'` accepted when a value is present), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). Discipline and unit are normalized to server constants rather than trusted as client-controlled values. `recordedBy` is taken from the authenticated user. A note requires non-blank `noteText` and cannot carry a value, unit, or incident. `isFoul` is always false for 100m. Edit uses a sparse, non-empty `PATCH`; omitted fields remain unchanged, explicit `null` clears nullable fields, and the merged entry state is revalidated. Undo uses `DELETE /events/:eventId/entries/:entryId` as a soft delete.
 
 ### 4.6 Result
 
@@ -148,7 +166,7 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 
 - `outcome` is derived, never typed in by hand (see §2).
 - `isPb`/`isSb` are derived flags, not manually logged.
-- Override fields record a coach correction: `manualOverride` (non-negative seconds), `overrideReason`, `overriddenBy` (user id), `overrideAt` (timestamp). An override is stored alongside the derived `finalResult`, never replacing it.
+- Override fields record a coach correction: `manualOverride` (positive finite seconds), `overrideReason`, `overriddenBy` (user id), `overrideAt` (timestamp). An override request supplies a non-blank reason with the value, or paired nulls to clear it. An override is stored alongside the derived `finalResult`, never replacing it.
 
 **PB/SB rules:** `isPb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `isSb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count toward PB/SB; voided outcomes do not. A manual override is what the statistic is computed from when present.
 
@@ -191,6 +209,7 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - Migration `0002_contract_100m.sql` applies the column additions, constraints and indexes described above; applied to fresh and existing databases via the checksum-tracked runner.
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
 - `backend/src/services/resultDerivation.ts` derives `{ value, incident, outcome }` per the §2 mapping.
+- `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - Feature endpoints (athletes/events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
 
 ## AI declaration

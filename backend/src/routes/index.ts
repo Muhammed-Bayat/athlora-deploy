@@ -6,21 +6,38 @@ import resultsRouter from './results.js';
 import authRouter from './auth.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
+import { validateBody } from '../middleware/validation.js';
+import {
+  parseAthleteCreatePayload,
+  parseAthleteReplacementPayload,
+  parseEventCreatePayload,
+  parseEventReplacementPayload,
+} from '../validation/payloads.js';
 
 const router = Router();
 
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
-athletesRouter.post('/', athletes.createAthlete);
+athletesRouter.post('/', validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);
-athletesRouter.put('/:id', requireAthleteOwnership, athletes.updateAthlete);
+athletesRouter.put(
+  '/:id',
+  validateBody(parseAthleteReplacementPayload),
+  requireAthleteOwnership,
+  athletes.updateAthlete,
+);
 athletesRouter.delete('/:id', requireAthleteOwnership, athletes.deleteAthlete);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);
-eventsRouter.post('/', events.createEvent);
+eventsRouter.post('/', validateBody(parseEventCreatePayload), events.createEvent);
 eventsRouter.get('/:id', requireEventOwnership(), events.getEvent);
-eventsRouter.put('/:id', requireEventOwnership(), events.updateEvent);
+eventsRouter.put(
+  '/:id',
+  validateBody(parseEventReplacementPayload),
+  requireEventOwnership(),
+  events.updateEvent,
+);
 eventsRouter.delete('/:id', requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 

@@ -54,6 +54,17 @@ describe('ownership checks', () => {
     );
   });
 
+  it('can run an ownership check through a transaction client', async () => {
+    const transactionQuery = vi.fn().mockResolvedValue({ rows: [{ owned: 1 }] });
+
+    await expect(
+      assertEventOwnership(USER_ID, EVENT_ID, { query: transactionQuery }),
+    ).resolves.toBeUndefined();
+
+    expect(transactionQuery).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, USER_ID]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('requires both event and athlete ownership for an event-athlete scope', async () => {
     query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
 

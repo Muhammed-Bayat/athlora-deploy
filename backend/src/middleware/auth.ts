@@ -1,19 +1,13 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Request, RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
+import {
+  DatabaseMappingError,
+  mapApplicationUserContextRow,
+  type ApplicationUserContextRow,
+} from '../db/row-mappers.js';
 import { ApiError } from './errors.js';
 import type { ApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
-import type { UserRole } from '../types/domain.js';
-
-interface ApplicationUserRow {
-  userId: string;
-  auth0Id: string;
-  role: unknown;
-}
-
-function isUserRole(role: unknown): role is UserRole {
-  return role === 'coach' || role === 'assistant' || role === 'viewer';
-}
 
 export function getVerifiedAuth0Context(req: Request): VerifiedAuth0Context {
   if (!req.auth0) {
@@ -80,8 +74,8 @@ export const requireAuth = verifyAuth0Token;
 export const resolveApplicationUser: RequestHandler = async (req, _res, next) => {
   try {
     const auth0 = getVerifiedAuth0Context(req);
-    const result = await getPool().query<ApplicationUserRow>(
-      `SELECT id AS "userId", auth0_id AS "auth0Id", role
+    const result = await getPool().query<ApplicationUserContextRow>(
+      `SELECT id AS user_id, auth0_id, role
        FROM users
        WHERE auth0_id = $1`,
       [auth0.auth0Id],
@@ -100,15 +94,14 @@ export const resolveApplicationUser: RequestHandler = async (req, _res, next) =>
       return;
     }
 
-    if (!isUserRole(user.role)) {
-      throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
+    try {
+      req.auth = mapApplicationUserContextRow(user);
+    } catch (error) {
+      if (error instanceof DatabaseMappingError) {
+        throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
+      }
+      throw error;
     }
-
-    req.auth = {
-      userId: user.userId,
-      auth0Id: user.auth0Id,
-      role: user.role,
-    };
     next();
   } catch (error) {
     next(error);
