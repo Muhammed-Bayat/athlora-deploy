@@ -1,15 +1,10 @@
-import { getPool } from '../db/client.js';
+import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { DISCIPLINE_100M } from '../types/domain.js';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isCanonicalUuid } from '../validation/primitives.js';
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
-}
-
-function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_PATTERN.test(value);
 }
 
 async function assertOwned(
@@ -17,18 +12,23 @@ async function assertOwned(
   resourceIds: readonly unknown[],
   query: string,
   queryParameters: string[],
+  executor: DbExecutor,
 ): Promise<void> {
-  if (!isUuid(userId) || !resourceIds.every(isUuid)) {
+  if (!isCanonicalUuid(userId) || !resourceIds.every(isCanonicalUuid)) {
     throw notFound();
   }
 
-  const result = await getPool().query(query, queryParameters);
+  const result = await executor.query(query, queryParameters);
   if (result.rows.length === 0) {
     throw notFound();
   }
 }
 
-export async function assertAthleteOwnership(userId: string, athleteId: unknown): Promise<void> {
+export async function assertAthleteOwnership(
+  userId: string,
+  athleteId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<void> {
   await assertOwned(
     userId,
     [athleteId],
@@ -37,10 +37,15 @@ export async function assertAthleteOwnership(userId: string, athleteId: unknown)
      WHERE id = $1 AND coach_id = $2
      LIMIT 1`,
     [athleteId as string, userId],
+    executor,
   );
 }
 
-export async function assertEventOwnership(userId: string, eventId: unknown): Promise<void> {
+export async function assertEventOwnership(
+  userId: string,
+  eventId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<void> {
   await assertOwned(
     userId,
     [eventId],
@@ -49,6 +54,7 @@ export async function assertEventOwnership(userId: string, eventId: unknown): Pr
      WHERE id = $1 AND created_by = $2
      LIMIT 1`,
     [eventId as string, userId],
+    executor,
   );
 }
 
@@ -56,6 +62,7 @@ export async function assertEventAthleteOwnership(
   userId: string,
   eventId: unknown,
   athleteId: unknown,
+  executor: DbExecutor = getPool(),
 ): Promise<void> {
   await assertOwned(
     userId,
@@ -68,6 +75,7 @@ export async function assertEventAthleteOwnership(
        AND a.coach_id = $3
      LIMIT 1`,
     [eventId as string, athleteId as string, userId],
+    executor,
   );
 }
 
@@ -75,6 +83,7 @@ export async function assertTimelineEntryOwnership(
   userId: string,
   eventId: unknown,
   entryId: unknown,
+  executor: DbExecutor = getPool(),
 ): Promise<void> {
   await assertOwned(
     userId,
@@ -89,6 +98,7 @@ export async function assertTimelineEntryOwnership(
        AND a.coach_id = $3
      LIMIT 1`,
     [entryId as string, eventId as string, userId],
+    executor,
   );
 }
 
@@ -96,6 +106,7 @@ export async function assertParticipantOwnership(
   userId: string,
   eventId: unknown,
   athleteId: unknown,
+  executor: DbExecutor = getPool(),
 ): Promise<void> {
   await assertOwned(
     userId,
@@ -110,6 +121,7 @@ export async function assertParticipantOwnership(
        AND a.coach_id = $3
      LIMIT 1`,
     [eventId as string, athleteId as string, userId],
+    executor,
   );
 }
 
@@ -117,6 +129,7 @@ export async function assertResultOwnership(
   userId: string,
   eventId: unknown,
   athleteId: unknown,
+  executor: DbExecutor = getPool(),
 ): Promise<void> {
   await assertOwned(
     userId,
@@ -132,5 +145,6 @@ export async function assertResultOwnership(
         AND r.discipline = $4
       LIMIT 1`,
     [eventId as string, athleteId as string, userId, DISCIPLINE_100M],
+    executor,
   );
 }

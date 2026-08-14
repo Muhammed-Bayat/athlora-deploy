@@ -92,8 +92,8 @@ describe('resolveApplicationUser', () => {
     query.mockResolvedValue({
       rows: [
         {
-          userId: '11111111-1111-4111-8111-111111111111',
-          auth0Id: 'auth0|coach-1',
+          user_id: '11111111-1111-4111-8111-111111111111',
+          auth0_id: 'auth0|coach-1',
           role: 'coach',
         },
       ],
@@ -138,8 +138,8 @@ describe('resolveApplicationUser', () => {
     query.mockResolvedValue({
       rows: [
         {
-          userId: '11111111-1111-4111-8111-111111111111',
-          auth0Id: 'auth0|coach-1',
+          user_id: '11111111-1111-4111-8111-111111111111',
+          auth0_id: 'auth0|coach-1',
           role: 'administrator',
         },
       ],

@@ -47,13 +47,13 @@ describe('syncCurrentUser', () => {
     query.mockResolvedValue({
       rows: [
         {
-          id: 'user-1',
-          auth0Id: 'auth0|user-1',
+          id: '11111111-1111-4111-8111-111111111111',
+          auth0_id: 'auth0|user-1',
           name: 'Coach One',
           email: 'coach@example.com',
           role: 'coach',
-          createdAt: new Date('2026-08-13T10:00:00.000Z'),
-          updatedAt: new Date('2026-08-13T10:00:00.000Z'),
+          created_at: new Date('2026-08-13T10:00:00.000Z'),
+          updated_at: new Date('2026-08-13T10:00:00.000Z'),
         },
       ],
     });
@@ -70,7 +70,7 @@ describe('syncCurrentUser', () => {
     ]);
     expect(json).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        id: 'user-1',
+        id: '11111111-1111-4111-8111-111111111111',
         auth0Id: 'auth0|user-1',
         role: 'coach',
         createdAt: '2026-08-13T10:00:00.000Z',
@@ -97,6 +97,27 @@ describe('syncCurrentUser', () => {
     expect(query).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ status: 401, code: 'UNAUTHORIZED' }),
+    );
+  });
+
+  it('rejects a whitespace-only profile email before querying', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          sub: 'auth0|user-1',
+          name: '   ',
+          email: '   ',
+        }),
+      }),
+    );
+
+    await syncCurrentUser(request(), response(), next);
+
+    expect(query).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 422, code: 'AUTH_EMAIL_REQUIRED' }),
     );
   });
 });

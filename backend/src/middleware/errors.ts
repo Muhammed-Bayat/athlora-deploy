@@ -24,6 +24,27 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     });
     return;
   }
+  if (
+    err instanceof SyntaxError &&
+    typeof err === 'object' &&
+    'status' in err &&
+    err.status === 400 &&
+    'type' in err &&
+    err.type === 'entity.parse.failed'
+  ) {
+    res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: {
+          issues: [
+            { path: '$', code: 'invalid_format', message: 'Request body must contain valid JSON' },
+          ],
+        },
+      },
+    });
+    return;
+  }
   res.status(500).json({
     error: { code: 'INTERNAL_ERROR', message: 'Internal server error', details: {} },
   });

@@ -1,4 +1,6 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
+
+export type DbExecutor = Pick<PoolClient, 'query'>;
 
 const connectionString = process.env.DATABASE_URL;
 

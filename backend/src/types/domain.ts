@@ -1,4 +1,5 @@
-export type UserRole = 'coach' | 'assistant' | 'viewer';
+export const USER_ROLES = ['coach', 'assistant', 'viewer'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
 
 export interface User {
   id: string;
@@ -19,7 +20,8 @@ export type Discipline = typeof DISCIPLINE_100M;
 export const RESULT_UNIT_SECONDS = 'seconds' as const;
 export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 
-export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
+export const RESULT_OUTCOMES = ['no_result', 'valid', 'dq', 'dnf', 'dns'] as const;
+export type ResultOutcome = (typeof RESULT_OUTCOMES)[number];
 
 export interface Athlete {
   id: string;
@@ -34,8 +36,11 @@ export interface Athlete {
   updatedAt: string;
 }
 
-export type EventType = 'competition' | 'training';
-export type EventStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export const EVENT_TYPES = ['competition', 'training'] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+export const EVENT_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
 
 export interface AthleticsEvent {
   id: string;
@@ -53,7 +58,8 @@ export interface AthleticsEvent {
   updatedAt: string;
 }
 
-export type RsvpStatus = 'pending' | 'yes' | 'no';
+export const RSVP_STATUSES = ['pending', 'yes', 'no'] as const;
+export type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
 export interface EventParticipant {
   eventId: string;
@@ -61,8 +67,11 @@ export interface EventParticipant {
   rsvpStatus: RsvpStatus;
 }
 
-export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
-export type IncidentType = 'false_start' | 'dq' | 'dnf' | 'dns' | 'lane_infringement';
+export const ENTRY_TYPES = ['attempt', 'split', 'penalty', 'note'] as const;
+export type EntryType = (typeof ENTRY_TYPES)[number];
+
+export const INCIDENT_TYPES = ['false_start', 'dq', 'dnf', 'dns', 'lane_infringement'] as const;
+export type IncidentType = (typeof INCIDENT_TYPES)[number];
 
 export interface TimelineEntry {
   id: string;
