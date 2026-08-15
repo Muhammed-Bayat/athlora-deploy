@@ -92,4 +92,51 @@ describe('API client', () => {
     });
     await expect(remove('users', 'user-1')).resolves.toBeUndefined();
   });
+
+  it('handles network failures as ApiError with code NETWORK_ERROR', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockRejectedValue(new Error('Failed to fetch')),
+    );
+
+    const error = await get<User>('users', 'user-1').catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 0,
+      code: 'NETWORK_ERROR',
+      message: 'Failed to fetch',
+    });
+  });
+
+  it('handles malformed JSON responses as ApiError with code MALFORMED_RESPONSE', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('not-json', { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+      ),
+    );
+
+    const error = await get<User>('users', 'user-1').catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 200,
+      code: 'MALFORMED_RESPONSE',
+    });
+  });
+
+  it('handles token acquisition failure cleanly', async () => {
+    const getToken = vi.fn().mockRejectedValue(new Error('Token expired'));
+    setAccessTokenGetter(getToken);
+
+    const error = await get<User>('users', 'user-1').catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      status: 401,
+      code: 'AUTH_TOKEN_ACQUISITION_FAILED',
+      message: 'Token expired',
+    });
+  });
 });
