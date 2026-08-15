@@ -10,16 +10,20 @@ The MVP discipline is fixed to **100m** (track, timed) with unit **seconds** at 
 
 ## Timed disciplines (track)
 
-Recording a track event produces time values in seconds. The **finishing time** is the largest valid `attempt` value recorded for the athlete/discipline (i.e. the final time, later than any splits).
+Recording a track event produces time values in seconds. The finishing time follows the 100m sprint timing rules in `deriveTrackTime(entries, eventType)` — the event type decides how the time is read from the active attempts:
+
+- **Competition** (`eventType = 'competition'`, the default): a single active finish. The finishing time is the **latest** valid `attempt` in the timeline (the final time, recorded after any splits).
+- **Training** (`eventType = 'training'`): the finishing time is the **fastest** (lowest) valid positive `attempt` — the quickest rep is the one that counts.
 
 ```ts
-deriveTrackTime(entries)  // → { value, incident, outcome }
+deriveTrackTime(entries, eventType = 'competition')  // → { value, incident, outcome }
 ```
 
+- Only `attempt` entries count; soft-deleted entries (`deletedAt` set) and zero/negative/non-finite values are ignored.
 - A valid finish → `{ value, incident: null, outcome: 'valid' }`.
 - `dq` / `dnf` / `dns` incidents void the result: `{ value: null, incident, outcome: <same> }`.
 - No valid attempt (or no attempts) → `{ value: null, incident: null, outcome: 'no_result' }`.
-- Fouls do not apply to track (a dimension is a penalty incident instead).
+- `false_start` and `lane_infringement` are penalty incidents and do not void the result — a `dq` entry must be recorded to void it. Fouls do not apply to track.
 
 ## Measured disciplines (field)
 
@@ -29,21 +33,25 @@ Recording field events produces distance (metres) or height (metres/cm) attempts
 deriveFieldBest(entries)  // → { value, incident, outcome }
 ```
 
-- Foul attempts are skipped (`is_foul`).
+- Foul attempts are skipped (`is_foul`), as are soft-deleted entries and non-positive values.
 - All-foul attempts → `{ value: null, incident: null, outcome: 'no_result' }`.
 - `dq` / `dnf` / `dns` void the result.
 
 ## Overrides
 
-Coaches can correct a derived result with `manual_override`, `override_reason`, `overridden_by`, and `override_at` — an audit trail of who corrected what, when, and why. Overrides are stored alongside, not instead of, the derived values.
+Coaches can correct a derived result with `manual_override`, `override_reason`, `overridden_by`, and `override_at` — an audit trail of who corrected what, when, and why. Overrides are stored alongside, not instead of, the derived values. `deriveEffectiveResult(derived, manualOverride)` computes the effective result: when a positive override is present its value replaces the derived value (and promotes a `no_result` outcome to `valid`), otherwise the derived values pass through unchanged.
+
+## Placings
+
+`calculatePlacings(results)` ranks valid results in ascending time (fastest first) within an event. Athletes with an identical time share a place, and voided outcomes (`dq`/`dnf`/`dns`) or `no_result` entries receive `null`.
 
 ## PB/SB rules
 
-`is_pb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `is_sb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count — voided outcomes never set PB/SB. When a manual override is present, statistics are computed from the override value.
+`is_pb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `is_sb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count — voided outcomes never set PB/SB. When a manual override is present, statistics are computed from the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season.
 
 ## Implementation status
 
-`backend/src/services/resultDerivation.ts` implements `deriveFieldBest`, `deriveTrackTime` and `deriveResult`, including DQ/DNF/DNS voiding and the derived `outcome`. It is covered by Vitest unit tests (best-valid-attempt, foul-only attempts, DQ/DNF/DNS voiding, no-result semantics, tied-value semantics). The functions are ready to be called from a results-recompute service once DB access arrives in Stage 1, and they align with the `results.outcome` column added by migration `0002_contract_100m.sql`.
+`backend/src/services/resultDerivation.ts` implements `deriveFieldBest`, `deriveTrackTime` (competition vs training rules), `deriveResult`, `deriveEffectiveResult`, `calculatePlacings` and `checkPbSb` — including DQ/DNF/DNS voiding, penalty retention, soft-delete handling and the derived `outcome`. It is covered by Vitest unit tests (best-valid-field-attempt, competition single-finish and training fastest-rep rules, foul-only attempts, DQ/DNF/DNS voiding, penalty retention, soft-deleted/invalid values, no-result semantics, manual override, tied placings, and PB/SB). Database access utilities (`backend/src/db/row-mappers.ts`, `backend/src/db/transaction.ts`) now exist to feed these functions, and the engine aligns with the `results.outcome` column added by migration `0002_contract_100m.sql`.
 
 ## Design note
 

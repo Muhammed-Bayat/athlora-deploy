@@ -55,12 +55,13 @@ Real values are never committed — only `.env.example` templates are versioned.
 ## Layout
 
 ```
-src/routes        one router per resource (athletes, events, timeline, results, auth)
-src/controllers   thin HTTP handlers
-src/services      pure business logic (result derivation, merge rules) — unit-tested
-src/db            pg client + migrations
-src/middleware    auth, error handling, not-implemented
-src/types         domain DTOs (camelCase JSON)
+src/routes         one router per resource (athletes, events, timeline, results, auth)
+src/controllers    thin HTTP handlers
+src/services       pure business logic (result derivation engine, ownership, merge rules) — unit-tested
+src/validation     strict shared payload parsers + primitives (UUIDs, dates, local times, enums)
+src/db             pg client, checksum-tracked migrations, snake-case row mappers, transactions
+src/middleware     auth, ownership, validation, error handling, not-implemented
+src/types          domain DTOs (camelCase JSON) + request auth context
 ```
 
 ## Database
@@ -78,10 +79,11 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 - Public endpoint: `GET /health`. Legacy login/logout callback scaffolds under `/api/v1/auth` are public, while `PUT /api/v1/auth/me` verifies the Auth0 token, retrieves its `/userinfo` profile and upserts the matching application user. Application resource routes verify the token and then resolve its subject to a typed context containing the application user UUID, Auth0 ID and role. A verified identity without a `users` row receives `403 AUTH_USER_NOT_SYNCHRONIZED`. Athlete/event list handlers return empty lists after authentication, while CRUD and timeline/results mutations return `NOT_IMPLEMENTED` until Stage 1 features land.
 - Errors use the standard `{ error: { code, message, details } }` shape via `src/middleware/errors.ts`.
 - `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience with `jose`, resolves synchronized application users, and provides non-optional typed context accessors to protected controllers. It returns `AUTH_NOT_CONFIGURED` until both `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set.
-- `src/services/ownership.ts` provides reusable athlete, event, event/athlete, timeline entry, participant and 100m result ownership checks. Route guards use the resolved application UUID rather than payload owner/audit IDs and use one generic `404 NOT_FOUND` response for malformed, missing, wrong-parent and cross-coach resources.
+- `src/middleware/ownership.ts` wraps `src/services/ownership.ts` as Express route guards, providing reusable athlete, event, event/athlete, timeline entry, participant and 100m result ownership checks. Route guards use the resolved application UUID rather than payload owner/audit IDs and use one generic `404 NOT_FOUND` response for malformed, missing, wrong-parent and cross-coach resources.
+- `src/validation` provides strict shared payload parsers (camelCase create/replacement/PATCH DTOs that return ordered issue lists), `src/db/row-mappers.ts` owns snake-case PostgreSQL row mapping with deliberate numeric/timestamp conversion, and `src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; the initial migration is applied to the Neon development database and tracked by the migration runner. `0002_contract_100m.sql` adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes) and applies cleanly to both fresh databases and the existing development database.
-- The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS.
-- Tests: Vitest + Supertest (app routes), middleware/application-user resolution, ownership/non-disclosure checks, result derivation, and migration tests (unit-mocked runner behavior plus a real-DB integration suite gated behind `TEST_DATABASE_URL` that skips when unset). Runs with `npm run test` (60 passing; 6 additional database tests skip when `TEST_DATABASE_URL` is unset).
+- The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS — including competition/training timing rules, manual override, placings and PB/SB.
+- Tests: Vitest + Supertest (app routes), middleware/application-user resolution, ownership/non-disclosure checks, validation and row-mapping, result derivation, and migration tests (unit-mocked runner behavior plus a real-DB integration suite gated behind `TEST_DATABASE_URL` that skips when unset). Runs with `npm run test` (128 passing; 6 database integration tests skip when `TEST_DATABASE_URL` is unset).
 
 ## Deployment
 

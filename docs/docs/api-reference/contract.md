@@ -170,6 +170,8 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 
 **PB/SB rules:** `isPb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `isSb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count toward PB/SB; voided outcomes do not. A manual override is what the statistic is computed from when present.
 
+**Placings:** `placing` is derived per event — valid results rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or `no_result` entries carry `placing = null`.
+
 ### 4.7 Statistics
 
 ```
@@ -199,16 +201,17 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 ## 5. 100m timing rules
 
 - Track (timed) recording produces time values in **seconds**.
-- The finishing time is the largest valid `attempt` value recorded for the athlete (the final time, later than any splits); splits are informational and are not aggregated into the result.
+- The finishing time is read by `deriveTrackTime(entries, eventType)`: for **competition** events it is the **latest** valid `attempt` in the timeline (the final time, recorded after any splits); for **training** events it is the **fastest** (lowest) valid positive attempt. Splits are informational and are not aggregated into the result.
+- Only active `attempt` entries count — soft-deleted entries and zero/negative/non-finite values are ignored.
 - Any `dq`/`dnf`/`dns` incident voids the result (`outcome` dq/dnf/dns, `final_result = NULL`).
-- `false_start` and `lane_infringement` are penalty incidents; a `dq` entry must be recorded to void the result.
+- `false_start` and `lane_infringement` are penalty incidents and do not void the result; a `dq` entry must be recorded to void it.
 - No valid attempt → `outcome = 'no_result'`, `final_result = NULL`.
 
 ## 6. Implementation status
 
 - Migration `0002_contract_100m.sql` applies the column additions, constraints and indexes described above; applied to fresh and existing databases via the checksum-tracked runner.
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
-- `backend/src/services/resultDerivation.ts` derives `{ value, incident, outcome }` per the §2 mapping.
+- `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - Feature endpoints (athletes/events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
 

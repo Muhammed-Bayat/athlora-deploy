@@ -51,7 +51,7 @@ VITE_AUTH0_AUDIENCE=
 - Feature code lives in `src/features/<feature>` folders, not global pages/forms dirs.
 - All colours, fonts, radii and shadows come from `src/styles/tokens.css` — never hard-code hex values.
 - `src/types` mirrors the backend DTOs (camelCase on the wire). The MVP 100m contract is encoded there: `DISCIPLINE_100M`/`Discipline`, `RESULT_UNIT_SECONDS`/`ResultUnit`, `ResultOutcome`, and the aligned `Athlete`, `TimelineEntry`, `Result`, `EventParticipant`, `AthleteStatistics` and `DashboardSummary` types.
-- `src/api/client.ts` is the shared typed fetch wrapper; thinner per-resource files are added as each feature lands.
+- `src/api/client.ts` is the shared typed fetch wrapper with per-resource files (`athletes`, `events`, `participants`, `timeline`, `results`, `statistics`, `dashboard`), and `src/components/AsyncBoundary.tsx` renders shared loading/error/empty states for them.
 
 ## Current state
 
@@ -59,7 +59,7 @@ VITE_AUTH0_AUDIENCE=
 - Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in and sign-out. The shared API client obtains an access token silently and sends it as a bearer token. After authentication, the app calls `PUT /api/v1/auth/me` to synchronize the verified Auth0 profile with the backend user record and withholds authenticated content until that call succeeds; a failed synchronization displays a retry state. Auth0 must be configured through the environment variables above and the tenant must allow the application's callback, logout and web-origin URLs.
 - API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
 - Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Bebas Neue, Inter, Space Mono) load in `index.html`.
-- Tests: Vitest + React Testing Library cover the app shell, shared Button, API response/error handling and authenticated synchronization gate. Runs with `npm run test` (11 tests).
+- Tests: Vitest + React Testing Library cover the app shell, shared Button, shared API client response/error handling and the authenticated synchronization gate. Runs with `npm run test` (14 tests).
 
 ## Deployment
 
