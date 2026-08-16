@@ -1,23 +1,13 @@
-import { useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import styles from './App.module.css';
 import { CoachConsole } from './features/dashboard/CoachConsole';
 import { LandingPage } from './features/landing/LandingPage';
 
 export default function App() {
-  const { isAuthenticated, isLoading } = useAuth0();
-  const [route, setRoute] = useState(() => window.location.pathname);
-
-  useEffect(() => {
-    const handlePopState = () => setRoute(window.location.pathname);
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
 
   const openConsole = () => {
-    window.history.pushState({}, '', '/console');
-    setRoute('/console');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    void loginWithRedirect({ appState: { returnTo: '/console' } });
   };
 
   if (isLoading) {
@@ -29,7 +19,7 @@ export default function App() {
     );
   }
 
-  return isAuthenticated || route === '/console' ? (
+  return isAuthenticated ? (
     <CoachConsole />
   ) : (
     <LandingPage onLogin={openConsole} />

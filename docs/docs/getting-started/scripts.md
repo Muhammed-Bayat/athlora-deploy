@@ -41,14 +41,14 @@ The registration token is obtained in the Gitea UI under the repository's **Sett
 
 ## Current check status
 
-All checks pass locally at the scaffold stage, and the same gates run in Gitea Actions CI on every push/PR:
+The implemented Stage 1 checks pass locally, and the same frontend/backend/docs gates run in Gitea Actions CI on every push/PR:
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (14 Vitest/RTL tests) |
+| `frontend` | lint, typecheck, test, build | passing (31 Vitest/RTL tests) |
 | `backend` | lint, typecheck, test, build | passing (230 Vitest/Supertest tests; 22 database tests skipped when unconfigured) |
 | `docs` | build | passing |
-| `e2e` | against frontend via Playwright | passing (1 smoke test) |
+| `e2e` | against frontend via Playwright | smoke test present; not run locally because Chromium system libraries are unavailable |
 
 The backend suite includes 22 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests (fresh application, baseline upgrade, constraints, checksums), 5 athlete-persistence tests (coach-scoped create/list/filter, and archival preserving timeline entries and results), 6 event-persistence tests (coach-scoped create/list/filter, the full lifecycle with transition enforcement, cancellation preserving timeline entries and results, and cross-coach isolation), and 5 participant-persistence tests (assignment/list/update, duplicate and archive handling, ownership isolation, and removal preserving timeline/results history). They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database:
 
