@@ -498,9 +498,14 @@ describe('EventsPage', () => {
     await screen.findByRole('button', { name: /City Sprint Meet/ });
     await user.click(screen.getByRole('button', { name: 'Calendar view' }));
     await user.click(screen.getByRole('button', { name: 'Next month' }));
-    await user.click(screen.getByRole('button', { name: /1 September 2026, 1 event/i }));
+    const septemberFirst = new Date('2026-09-01T00:00:00').toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    await user.click(screen.getByRole('button', { name: `${septemberFirst}, 1 event` }));
     expect(screen.getByRole('button', { name: /City Sprint Meet/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Events on 1 September 2026/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: `Events on ${septemberFirst}` })).toBeInTheDocument();
   });
 
   it('applies date filters to calendar markers', async () => {
@@ -509,9 +514,14 @@ describe('EventsPage', () => {
     await screen.findByRole('button', { name: /City Sprint Meet/ });
     await user.click(screen.getByRole('button', { name: 'Calendar view' }));
 
-    expect(screen.getByRole('button', { name: /10 August 2026, 0 events/i })).toBeInTheDocument();
+    const augustTenth = new Date('2026-08-10T00:00:00').toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    expect(screen.getByRole('button', { name: `${augustTenth}, 0 events` })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'All' }));
-    expect(screen.getByRole('button', { name: /10 August 2026, 1 event/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `${augustTenth}, 1 event` })).toBeInTheDocument();
   });
 
   it('reports only non-cancelled upcoming events to the console', async () => {
