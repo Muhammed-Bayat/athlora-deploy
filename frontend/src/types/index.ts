@@ -55,6 +55,17 @@ export interface EventParticipant {
   rsvpStatus: RsvpStatus;
 }
 
+export interface EventParticipantAthleteSummary {
+  id: string;
+  name: string;
+  squad: string | null;
+  archivedAt: string | null;
+}
+
+export interface EventParticipantSummary extends EventParticipant {
+  athlete: EventParticipantAthleteSummary;
+}
+
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
 export type IncidentType = 'false_start' | 'dq' | 'dnf' | 'dns' | 'lane_infringement' | null;
 

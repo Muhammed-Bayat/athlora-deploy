@@ -14,6 +14,7 @@ import {
   type AthleticsEvent,
   type DashboardUpcomingEvent,
   type EventParticipant,
+  type EventParticipantSummary,
   type Result,
   type RosterSnapshotEntry,
   type TimelineEntry,
@@ -79,6 +80,12 @@ export interface EventParticipantRow {
   event_id: string;
   athlete_id: string;
   rsvp_status: string;
+}
+
+export interface EventParticipantSummaryRow extends EventParticipantRow {
+  athlete_name: string;
+  athlete_squad: string | null;
+  athlete_archived_at: TimestampValue | null;
 }
 
 export interface TimelineEntryRow {
@@ -458,6 +465,24 @@ export function mapEventParticipantRow(row: EventParticipantRow): EventParticipa
     eventId: uuid(row.event_id, 'event_participants.event_id'),
     athleteId: uuid(row.athlete_id, 'event_participants.athlete_id'),
     rsvpStatus: enumValue(row.rsvp_status, RSVP_STATUSES, 'event_participants.rsvp_status'),
+  };
+}
+
+export function mapEventParticipantSummaryRow(
+  row: EventParticipantSummaryRow,
+): EventParticipantSummary {
+  const participant = mapEventParticipantRow(row);
+  return {
+    ...participant,
+    athlete: {
+      id: participant.athleteId,
+      name: nonemptyString(row.athlete_name, 'athletes.name'),
+      squad: nullableString(row.athlete_squad, 'athletes.squad'),
+      archivedAt:
+        row.athlete_archived_at === null
+          ? null
+          : timestamp(row.athlete_archived_at, 'athletes.archived_at'),
+    },
   };
 }
 

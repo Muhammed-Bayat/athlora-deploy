@@ -6,12 +6,14 @@ import {
   EVENT_TYPES,
   INCIDENT_TYPES,
   RESULT_UNIT_SECONDS,
+  RSVP_STATUSES,
   type Discipline,
   type EntryType,
   type EventStatus,
   type EventType,
   type IncidentType,
   type ResultUnit,
+  type RsvpStatus,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -84,6 +86,14 @@ export interface EventListQuery {
   dateTo?: string;
 }
 
+export interface EventParticipantCreatePayload {
+  athleteId: string;
+}
+
+export interface EventParticipantReplacementPayload {
+  rsvpStatus: RsvpStatus;
+}
+
 export interface TimelineEntryCreatePayload {
   athleteId: string;
   discipline: Discipline;
@@ -131,6 +141,8 @@ const EVENT_FIELDS = [
   'longitude',
   'status',
 ] as const;
+const EVENT_PARTICIPANT_CREATE_FIELDS = ['athleteId'] as const;
+const EVENT_PARTICIPANT_REPLACEMENT_FIELDS = ['rsvpStatus'] as const;
 const TIMELINE_CREATE_FIELDS = [
   'athleteId',
   'discipline',
@@ -179,6 +191,38 @@ function payloadObject(input: unknown): PayloadObject {
 
 function hasOwn(payload: PayloadObject, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, field);
+}
+
+export function parseEventParticipantCreatePayload(
+  input: unknown,
+): EventParticipantCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, EVENT_PARTICIPANT_CREATE_FIELDS, issues);
+
+  let athleteId = '';
+  if (!hasOwn(payload, 'athleteId')) {
+    issues.push(issue('athleteId', 'required', 'Field is required'));
+  } else if (!isCanonicalUuid(payload.athleteId)) {
+    issues.push(issue('athleteId', 'invalid_format', 'Expected a canonical UUID'));
+  } else {
+    athleteId = payload.athleteId;
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { athleteId };
+}
+
+export function parseEventParticipantReplacementPayload(
+  input: unknown,
+): EventParticipantReplacementPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, EVENT_PARTICIPANT_REPLACEMENT_FIELDS, issues);
+  const rsvpStatus = requiredEnum(payload, 'rsvpStatus', RSVP_STATUSES, issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { rsvpStatus };
 }
 
 function rejectUnknownFields(

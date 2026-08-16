@@ -31,7 +31,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: pure, unit-testable functions for result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — never buried in route handlers.
+- **Services**: resource services own coach-scoped PostgreSQL behavior for athletes, events and event participants; pure, unit-testable functions own result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — business logic is never buried in route handlers.
 - **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. `0001_init.sql` and `0002_contract_100m.sql` are applied to Neon.
 - **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
 
@@ -60,7 +60,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Implementation status
 
-Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Athlete roster CRUD is live end-to-end (`src/services/athletes.ts` + controllers + routes, with archival that preserves timeline entries and results), and event CRUD is live (`src/services/events.ts` + controllers + routes, with filters, forward-only status transitions, cancellation-as-delete, and an in-progress logging guard on the timeline routes). Still to build in Stage 1: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Athlete roster CRUD is live end-to-end (`src/services/athletes.ts` + controllers + routes, with archival that preserves timeline entries and results), event CRUD is live (`src/services/events.ts` + controllers + routes, with filters, forward-only status transitions, cancellation-as-delete, and an in-progress logging guard), and event assignment is live (`src/services/participants.ts` + controllers + routes, with athlete summaries, active-athlete and duplicate guards, idempotent RSVP updates, and history-preserving removal). Still to build in Stage 1: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 
