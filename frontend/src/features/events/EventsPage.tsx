@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cancelEvent, createEvent, listEvents, updateEvent } from '../../api/events';
-import { listEventParticipants } from '../../api/participants';
+import { listAthletes } from '../../api/athletes';
+import {
+  addEventParticipant,
+  listEventParticipants,
+  removeEventParticipant,
+  updateEventParticipant,
+} from '../../api/participants';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
 import {
   DISCIPLINE_100M,
+  type Athlete,
   type AthleticsEvent,
+  type EventParticipantSummary,
   type EventMutationPayload,
   type EventStatus,
   type EventType,
+  type RsvpStatus,
 } from '../../types';
 import styles from './EventsPage.module.css';
 
@@ -142,6 +151,10 @@ function formattedType(type: EventType): string {
   return type === 'competition' ? 'Competition' : 'Training';
 }
 
+function formattedRsvp(status: RsvpStatus): string {
+  return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : 'pending';
+}
+
 function formattedDate(date: string, long = false): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -162,6 +175,13 @@ function sortedEvents(events: AthleticsEvent[], descending = false): AthleticsEv
     const created = left.createdAt.localeCompare(right.createdAt);
     return created !== 0 ? created * direction : left.id.localeCompare(right.id) * direction;
   });
+}
+
+function sortedParticipants(participants: EventParticipantSummary[]): EventParticipantSummary[] {
+  return [...participants].sort((left, right) =>
+    left.athlete.name.localeCompare(right.athlete.name, undefined, { sensitivity: 'base' }) ||
+    left.athleteId.localeCompare(right.athleteId),
+  );
 }
 
 interface EventFormProps {
@@ -298,6 +318,193 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
   );
 }
 
+function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusyChange: (busy: boolean) => void }) {
+  const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(true);
+  const [participantsError, setParticipantsError] = useState<string | null>(null);
+  const [participantReloadKey, setParticipantReloadKey] = useState(0);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
+  const [athletesLoading, setAthletesLoading] = useState(true);
+  const [athletesError, setAthletesError] = useState<string | null>(null);
+  const [athleteReloadKey, setAthleteReloadKey] = useState(0);
+  const [candidateId, setCandidateId] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<EventParticipantSummary | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const keepAthleteRef = useRef<HTMLButtonElement>(null);
+  const removeTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const operationTriggerRef = useRef<HTMLElement | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const wasBusyRef = useRef(false);
+
+  useEffect(() => {
+    onBusyChange(Boolean(busy));
+  }, [busy, onBusyChange]);
+
+  useEffect(() => () => onBusyChange(false), [onBusyChange]);
+
+  useEffect(() => {
+    if (busy) {
+      wasBusyRef.current = true;
+      return;
+    }
+    if (!wasBusyRef.current) return;
+    wasBusyRef.current = false;
+    window.requestAnimationFrame(() => {
+      const trigger = operationTriggerRef.current;
+      if (trigger?.isConnected && !trigger.matches(':disabled')) trigger.focus();
+      else sectionRef.current?.focus();
+    });
+  }, [busy]);
+
+  useEffect(() => {
+    if (removeTarget) keepAthleteRef.current?.focus();
+  }, [removeTarget]);
+
+  useEffect(() => {
+    let current = true;
+    setParticipantsLoading(true);
+    setParticipantsError(null);
+    void listEventParticipants(eventId)
+      .then(({ data }) => {
+        if (current) setParticipants(sortedParticipants(data));
+      })
+      .catch((error: unknown) => {
+        if (current) setParticipantsError(errorMessage(error));
+      })
+      .finally(() => {
+        if (current) setParticipantsLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [eventId, participantReloadKey]);
+
+  useEffect(() => {
+    let current = true;
+    setAthletesLoading(true);
+    setAthletesError(null);
+    void listAthletes({ includeArchived: false })
+      .then(({ data }) => {
+        if (current) setAthletes(data.filter((athlete) => athlete.archivedAt === null));
+      })
+      .catch((error: unknown) => {
+        if (current) setAthletesError(errorMessage(error));
+      })
+      .finally(() => {
+        if (current) setAthletesLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [athleteReloadKey, eventId]);
+
+  const candidates = athletes.filter((athlete) =>
+    !participants.some((participant) => participant.athleteId === athlete.id),
+  );
+
+  const assign = async () => {
+    if (!candidateId) return;
+    setBusy('assign');
+    setMutationError(null);
+    setFeedback(null);
+    try {
+      const participant = await addEventParticipant(eventId, candidateId);
+      setParticipants((current) => sortedParticipants([...current, participant]));
+      setCandidateId('');
+      setFeedback(`${participant.athlete.name} assigned with a pending RSVP.`);
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const updateRsvp = async (participant: EventParticipantSummary, rsvpStatus: RsvpStatus) => {
+    setBusy(`rsvp-${participant.athleteId}`);
+    setMutationError(null);
+    setFeedback(null);
+    try {
+      const updated = await updateEventParticipant(eventId, participant.athleteId, rsvpStatus);
+      setParticipants((current) => sortedParticipants(current.map((item) =>
+        item.athleteId === updated.athleteId ? updated : item,
+      )));
+      setFeedback(`${updated.athlete.name}'s RSVP updated to ${formattedRsvp(updated.rsvpStatus)}.`);
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    if (!removeTarget) return;
+    setBusy(`remove-${removeTarget.athleteId}`);
+    setMutationError(null);
+    setFeedback(null);
+    try {
+      await removeEventParticipant(eventId, removeTarget.athleteId);
+      setParticipants((current) => current.filter((item) => item.athleteId !== removeTarget.athleteId));
+      setFeedback(`${removeTarget.athlete.name} removed from this event. Existing timeline entries and results were preserved.`);
+      setRemoveTarget(null);
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const cancelRemoval = () => {
+    setRemoveTarget(null);
+    window.requestAnimationFrame(() => removeTriggerRef.current?.focus());
+  };
+
+  return (
+    <section ref={sectionRef} className={styles.participants} aria-labelledby="event-participants-heading" aria-busy={participantsLoading || athletesLoading || Boolean(busy)} tabIndex={-1}>
+      <header>
+        <div><p>Event roster</p><h3 id="event-participants-heading">Assigned athletes <span>{participantsLoading ? '...' : participantsError ? 'Unavailable' : participants.length}</span></h3></div>
+      </header>
+
+      {participantsLoading && <p className={styles.inlineStatus} role="status">Loading assigned athletes...</p>}
+      {!participantsLoading && participantsError && <div className={styles.inlineError} role="alert"><p>{participantsError}</p><Button variant="secondary" onClick={() => setParticipantReloadKey((key) => key + 1)}>Retry assignments</Button></div>}
+      {!participantsLoading && !participantsError && participants.length === 0 && <p className={styles.inlineEmpty}>No athletes are assigned to this event yet.</p>}
+      {!participantsLoading && !participantsError && participants.length > 0 && (
+        <ul className={styles.participantList}>
+          {participants.map((participant) => {
+            const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
+            return <li key={participant.athleteId}>
+              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squad ?? 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
+              <label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
+              <Select id={`participant-rsvp-${participant.athleteId}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+                { value: 'pending', label: 'Pending' },
+                { value: 'yes', label: 'Attending' },
+                { value: 'no', label: 'Not attending' },
+              ]} disabled={Boolean(busy)} />
+              <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button>
+            </li>;
+          })}
+        </ul>
+      )}
+
+      {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
+
+      <div className={styles.assignment}>
+        <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
+        {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
+        {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
+        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
+          { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
+          ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squad ? ` · ${athlete.squad}` : ''}` })),
+        ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
+      </div>
+
+      {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
+      {feedback && <p className={styles.participantFeedback} role="status">{feedback}</p>}
+    </section>
+  );
+}
+
 export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -313,12 +520,11 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
+  const [participantBusy, setParticipantBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<{ eventId: string; action: LifecycleAction } | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [participantCount, setParticipantCount] = useState<number | null>(null);
-  const [participantError, setParticipantError] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -348,27 +554,6 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     }
   }, [events, loadError, loading, onUpcomingCountChange, today]);
 
-  useEffect(() => {
-    if (!selectedId) {
-      setParticipantCount(null);
-      setParticipantError(false);
-      return;
-    }
-    let current = true;
-    setParticipantCount(null);
-    setParticipantError(false);
-    void listEventParticipants(selectedId)
-      .then(({ meta }) => {
-        if (current) setParticipantCount(meta.count);
-      })
-      .catch(() => {
-        if (current) setParticipantError(true);
-      });
-    return () => {
-      current = false;
-    };
-  }, [selectedId]);
-
   const storeEvent = (event: AthleticsEvent) => {
     setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
   };
@@ -383,7 +568,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   );
   const calendarEvents = filtered.filter((event) => event.date === selectedDay);
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
-  const pending = editorBusy || lifecycleBusy;
+  const pending = editorBusy || lifecycleBusy || participantBusy;
 
   const saveEditor = async (payload: EventMutationPayload) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
@@ -538,7 +723,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
         </div>
       )}
 
-      <Modal open={selected !== null && confirmation === null && editor === null} title={selected?.title ?? 'Event detail'} onClose={() => setSelectedId(null)}>
+      <Modal open={selected !== null && confirmation === null && editor === null} title={selected?.title ?? 'Event detail'} onClose={() => setSelectedId(null)} closeDisabled={participantBusy}>
         {selected && (
           <div className={styles.detail}>
             <div className={styles.detailTags}><span data-type={selected.type}>{formattedType(selected.type)}</span><span data-status={selected.status}>{formattedStatus(selected.status)}</span><span>100m</span></div>
@@ -546,14 +731,15 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
               <div><dt>Date</dt><dd><time dateTime={selected.date}>{formattedDate(selected.date, true)}</time></dd></div>
               <div><dt>Time</dt><dd>{selected.time ?? 'Time not set'}</dd></div>
               <div><dt>Location</dt><dd>{selected.locationName ?? 'Location not set'}</dd></div>
-              <div><dt>Assigned athletes</dt><dd>{participantError ? 'Unavailable' : participantCount === null ? 'Loading...' : participantCount}</dd></div>
+              <div><dt>Discipline</dt><dd>100m</dd></div>
             </dl>
             {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
+            <ParticipantManager eventId={selected.id} onBusyChange={setParticipantBusy} />
             <div className={styles.detailActions}>
-              <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }}>Edit event</Button>
-              {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')}>Start event</Button>}
-              {(selected.status === 'scheduled' || selected.status === 'in_progress') && <Button onClick={() => openConfirmation(selected.id, 'complete')}>Mark completed</Button>}
-              {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')}>Cancel event</Button>}
+              <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }} disabled={participantBusy}>Edit event</Button>
+              {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')} disabled={participantBusy}>Start event</Button>}
+              {(selected.status === 'scheduled' || selected.status === 'in_progress') && <Button onClick={() => openConfirmation(selected.id, 'complete')} disabled={participantBusy}>Mark completed</Button>}
+              {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')} disabled={participantBusy}>Cancel event</Button>}
             </div>
           </div>
         )}

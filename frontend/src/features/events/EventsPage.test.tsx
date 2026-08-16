@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { AthleticsEvent } from '../../types';
+import type { Athlete, AthleticsEvent, EventParticipantSummary } from '../../types';
 import { EventsPage } from './EventsPage';
 
 const eventApi = vi.hoisted(() => ({
@@ -13,16 +13,25 @@ const eventApi = vi.hoisted(() => ({
 }));
 const participantApi = vi.hoisted(() => ({
   listEventParticipants: vi.fn(),
+  addEventParticipant: vi.fn(),
+  updateEventParticipant: vi.fn(),
+  removeEventParticipant: vi.fn(),
+}));
+const athleteApi = vi.hoisted(() => ({
+  listAthletes: vi.fn(),
 }));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
+vi.mock('../../api/athletes', () => athleteApi);
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
 const TRAINING_ID = '22222222-2222-4222-8222-222222222222';
 const PAST_ID = '33333333-3333-4333-8333-333333333333';
 const CANCELLED_ID = '44444444-4444-4444-8444-444444444444';
+const ARI_ID = '66666666-6666-4666-8666-666666666666';
+const BEA_ID = '77777777-7777-4777-8777-777777777777';
 
 function event(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
   return {
@@ -68,13 +77,48 @@ const cancelled = event({
   status: 'cancelled',
 });
 
+function athlete(overrides: Partial<Athlete> = {}): Athlete {
+  return {
+    id: ARI_ID,
+    coachId: '55555555-5555-4555-8555-555555555555',
+    name: 'Ari Runner',
+    dob: null,
+    gender: null,
+    squad: 'Sprint',
+    notes: null,
+    archivedAt: null,
+    createdAt: '2026-08-16T10:00:00.000Z',
+    updatedAt: '2026-08-16T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function participant(overrides: Partial<EventParticipantSummary> = {}): EventParticipantSummary {
+  return {
+    eventId: CITY_ID,
+    athleteId: ARI_ID,
+    rsvpStatus: 'pending',
+    athlete: { id: ARI_ID, name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+    ...overrides,
+  };
+}
+
+const ari = athlete();
+const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squad: null });
+const ariParticipant = participant();
+const beaParticipant = participant({
+  athleteId: BEA_ID,
+  athlete: { id: BEA_ID, name: 'Bea Sprinter', squad: null, archivedAt: null },
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   eventApi.listEvents.mockResolvedValue({
     data: [past, cancelled, city, training],
     meta: { count: 4 },
   });
-  participantApi.listEventParticipants.mockResolvedValue({ data: [], meta: { count: 2 } });
+  participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });
+  athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
@@ -229,7 +273,7 @@ describe('EventsPage', () => {
     expect(await screen.findByRole('button', { name: /City Sprint Final/ })).toBeInTheDocument();
   });
 
-  it('shows event metadata and assigned-athlete count in detail', async () => {
+  it('shows event metadata and assigned-athlete details', async () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
@@ -238,8 +282,152 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Scheduled');
     expect(detail).toHaveTextContent('100m');
     expect(detail).toHaveTextContent('Central Stadium');
-    await waitFor(() => expect(detail).toHaveTextContent('Assigned athletes2'));
+    expect(await within(detail).findByText('Ari Runner')).toBeInTheDocument();
+    expect(detail).toHaveTextContent('Assigned athletes 1');
+    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: false });
+  });
+
+  it('assigns an active athlete with a pending RSVP', async () => {
+    participantApi.addEventParticipant.mockResolvedValue(beaParticipant);
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    const candidate = await within(detail).findByLabelText('Assign an active athlete');
+    await user.selectOptions(candidate, BEA_ID);
+    await user.click(within(detail).getByRole('button', { name: 'Assign athlete' }));
+
+    await waitFor(() => expect(participantApi.addEventParticipant).toHaveBeenCalledWith(CITY_ID, BEA_ID));
+    expect(await within(detail).findByLabelText('RSVP for Bea Sprinter')).toHaveValue('pending');
+    expect(detail).toHaveTextContent('Bea Sprinter assigned with a pending RSVP.');
+    expect(candidate).toHaveValue('');
+    await waitFor(() => expect(within(detail).getByRole('region', { name: /Assigned athletes/ })).toHaveFocus());
+  });
+
+  it('waits for existing assignments before enabling new assignment', async () => {
+    let resolveParticipants!: (value: { data: EventParticipantSummary[]; meta: { count: number } }) => void;
+    participantApi.listEventParticipants.mockReturnValue(new Promise((resolve) => { resolveParticipants = resolve; }));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    const candidate = await within(detail).findByLabelText('Assign an active athlete');
+
+    expect(candidate).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Assign athlete' })).toBeDisabled();
+    resolveParticipants({ data: [ariParticipant], meta: { count: 1 } });
+    await waitFor(() => expect(candidate).toBeEnabled());
+    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+  });
+
+  it('replaces RSVP status with the exact participant request', async () => {
+    participantApi.updateEventParticipant.mockResolvedValue({ ...ariParticipant, rsvpStatus: 'yes' });
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
+    await user.selectOptions(rsvp, 'yes');
+
+    await waitFor(() => expect(participantApi.updateEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID, 'yes'));
+    expect(rsvp).toHaveValue('yes');
+    expect(detail).toHaveTextContent("Ari Runner's RSVP updated to attending.");
+    await waitFor(() => expect(rsvp).toHaveFocus());
+  });
+
+  it('confirms removal and explains preserved event history', async () => {
+    participantApi.removeEventParticipant.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
+
+    expect(detail).toHaveTextContent('Existing timeline entries and results will be preserved.');
+    expect(within(detail).getByRole('button', { name: 'Keep athlete' })).toHaveFocus();
+    await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
+    await waitFor(() => expect(participantApi.removeEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID));
+    expect(within(detail).queryByLabelText('RSVP for Ari Runner')).not.toBeInTheDocument();
+    expect(detail).toHaveTextContent('Existing timeline entries and results were preserved.');
+  });
+
+  it('keeps the previous RSVP when an update fails', async () => {
+    participantApi.updateEventParticipant.mockRejectedValue(new ApiError(409, 'CONFLICT', 'RSVP changed elsewhere'));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
+    await user.selectOptions(rsvp, 'yes');
+
+    expect(await within(detail).findByRole('alert')).toHaveTextContent('RSVP changed elsewhere');
+    expect(rsvp).toHaveValue('pending');
+  });
+
+  it('keeps an assignment when removal fails', async () => {
+    participantApi.removeEventParticipant.mockRejectedValue(new ApiError(0, 'NETWORK_ERROR', 'offline'));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
+    await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
+
+    expect(await within(detail).findByText(/Could not reach Athlora/i)).toBeInTheDocument();
+    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(within(detail).getByRole('region', { name: /Remove Ari Runner/ })).toBeInTheDocument();
+    await waitFor(() => expect(within(detail).getByRole('button', { name: 'Remove athlete' })).toHaveFocus());
+  });
+
+  it('blocks modal-changing actions while participant removal is pending', async () => {
+    let resolveRemoval!: () => void;
+    participantApi.removeEventParticipant.mockReturnValue(new Promise<void>((resolve) => { resolveRemoval = resolve; }));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
+    await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
+
+    for (const name of ['Close', 'Edit event', 'Start event', 'Mark completed', 'Cancel event']) {
+      expect(within(detail).getByRole('button', { name })).toBeDisabled();
+    }
+    resolveRemoval();
+    await waitFor(() => expect(within(detail).getByRole('button', { name: 'Close' })).toBeEnabled());
+  });
+
+  it('retries assignment and active-roster loading independently', async () => {
+    participantApi.listEventParticipants
+      .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
+      .mockResolvedValueOnce({ data: [ariParticipant], meta: { count: 1 } });
+    athleteApi.listAthletes
+      .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
+      .mockResolvedValueOnce({ data: [ari, bea], meta: { count: 2 } });
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    expect(await within(detail).findByText('Unavailable')).toBeInTheDocument();
+    await user.click(await within(detail).findByRole('button', { name: 'Retry assignments' }));
+    await user.click(within(detail).getByRole('button', { name: 'Retry roster' }));
+    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(await within(detail).findByLabelText('Assign an active athlete')).toBeInTheDocument();
+    expect(participantApi.listEventParticipants).toHaveBeenCalledTimes(2);
+    expect(athleteApi.listAthletes).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps archived historical participants visible but out of assignment candidates', async () => {
+    participantApi.listEventParticipants.mockResolvedValueOnce({
+      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z' } })],
+      meta: { count: 1 },
+    });
+    athleteApi.listAthletes.mockResolvedValueOnce({ data: [bea], meta: { count: 1 } });
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    expect(await within(detail).findByText('Archived')).toBeInTheDocument();
+    const candidate = within(detail).getByLabelText('Assign an active athlete');
+    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    expect(within(candidate).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
 
   it('starts and completes events using full replacement payloads', async () => {
