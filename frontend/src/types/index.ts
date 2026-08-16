@@ -61,6 +61,27 @@ export interface AthleticsEvent {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventMutationPayload {
+  type: EventType;
+  discipline: Discipline;
+  title: string;
+  date: string;
+  time: string | null;
+  locationName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: EventStatus;
+}
+
+export interface EventListFilters {
+  type?: EventType;
+  status?: EventStatus;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export type RsvpStatus = 'pending' | 'yes' | 'no';

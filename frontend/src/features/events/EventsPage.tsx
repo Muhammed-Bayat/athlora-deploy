@@ -1,59 +1,433 @@
-import { useState, type FormEvent } from 'react';
-import { ConsoleDialog } from '../dashboard/ConsoleDialog';
-import { EVENT_TYPES, FIXTURE_TODAY, fixtureAthletes, fixtureEvents, formatDate, type Athlete, type ConsoleEvent, type EventType } from '../dashboard/consoleData';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { cancelEvent, createEvent, listEvents, updateEvent } from '../../api/events';
+import { listEventParticipants } from '../../api/participants';
+import { ApiError } from '../../api/client';
+import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import {
+  DISCIPLINE_100M,
+  type AthleticsEvent,
+  type EventMutationPayload,
+  type EventStatus,
+  type EventType,
+} from '../../types';
 import styles from './EventsPage.module.css';
 
-export interface EventsPageProps {
-  events?: ConsoleEvent[];
-  athletes?: Athlete[];
-  onChange?: (events: ConsoleEvent[]) => void;
-}
-
-type EventTab = 'upcoming' | 'past' | 'all';
+type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
-type EventForm = Omit<ConsoleEvent, 'id'>;
-const emptyForm = (): EventForm => ({ name: '', type: 'Meet', date: FIXTURE_TODAY, location: '', notes: '', athleteIds: [] });
+type Editor = 'new' | AthleticsEvent | null;
+type LifecycleAction = 'start' | 'complete' | 'cancel';
 
-function dateParts(iso: string) {
-  const date = new Date(`${iso}T00:00:00`);
-  return { day: date.getDate(), month: date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() };
+interface EventDraft {
+  title: string;
+  type: EventType;
+  date: string;
+  time: string;
+  locationName: string;
+  latitude: string;
+  longitude: string;
 }
 
-function isoDate(year: number, month: number, day: number) {
-  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+type FieldErrors = Partial<Record<keyof EventDraft, string>>;
+
+export interface EventsPageProps {
+  onUpcomingCountChange?: (count: number) => void;
+  today?: string;
 }
 
-export function EventsPage({ events: controlled, athletes = fixtureAthletes, onChange }: EventsPageProps = {}) {
-  const [localEvents, setLocalEvents] = useState(() => fixtureEvents.map((item) => ({ ...item, athleteIds: [...item.athleteIds] })));
-  const events = controlled ?? localEvents;
-  const update = (next: ConsoleEvent[]) => onChange ? onChange(next) : setLocalEvents(next);
-  const [tab, setTab] = useState<EventTab>('upcoming');
-  const [view, setView] = useState<EventView>('list');
-  const [month, setMonth] = useState(() => new Date(2026, 7, 1));
-  const [selectedDay, setSelectedDay] = useState(FIXTURE_TODAY);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<ConsoleEvent | 'new' | null>(null);
-  const [form, setForm] = useState<EventForm>(emptyForm);
+function localToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
 
-  const selected = events.find((item) => item.id === selectedId);
-  const filtered = [...events].filter((item) => tab === 'all' || (tab === 'upcoming' ? item.date >= FIXTURE_TODAY : item.date < FIXTURE_TODAY)).sort((a, b) => tab === 'past' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
-  const displayed = view === 'calendar' ? events.filter((item) => item.date === selectedDay) : filtered;
-  const setField = <K extends keyof EventForm>(field: K, value: EventForm[K]) => setForm((current) => ({ ...current, [field]: value }));
-  const beginEdit = (item: ConsoleEvent) => { setForm({ name: item.name, type: item.type, date: item.date, location: item.location, notes: item.notes, athleteIds: [...item.athleteIds] }); setSelectedId(null); setEditing(item); };
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!form.name.trim() || !form.date) return;
-    if (editing === 'new') {
-      update([...events, { ...form, name: form.name.trim(), location: form.location.trim() || 'TBC', id: Math.max(199, ...events.map((item) => item.id)) + 1 }]);
-    } else if (editing) {
-      update(events.map((item) => item.id === editing.id ? { ...item, ...form, name: form.name.trim(), location: form.location.trim() || 'TBC' } : item));
-    }
-    setEditing(null);
+function draftFor(event?: AthleticsEvent): EventDraft {
+  return {
+    title: event?.title ?? '',
+    type: event?.type ?? 'competition',
+    date: event?.date ?? '',
+    time: event?.time ?? '',
+    locationName: event?.locationName ?? '',
+    latitude: event?.latitude === null || event?.latitude === undefined ? '' : String(event.latitude),
+    longitude: event?.longitude === null || event?.longitude === undefined ? '' : String(event.longitude),
   };
-  const toggleAssignment = (athleteId: number) => {
-    if (!selected) return;
-    const athleteIds = selected.athleteIds.includes(athleteId) ? selected.athleteIds.filter((id) => id !== athleteId) : [...selected.athleteIds, athleteId];
-    update(events.map((item) => item.id === selected.id ? { ...item, athleteIds } : item));
+}
+
+function parseCoordinate(
+  value: string,
+  field: 'latitude' | 'longitude',
+  errors: FieldErrors,
+): number | null {
+  if (!value.trim()) return null;
+  const number = Number(value);
+  const [minimum, maximum] = field === 'latitude' ? [-90, 90] : [-180, 180];
+  if (!Number.isFinite(number) || number < minimum || number > maximum) {
+    errors[field] = `${field === 'latitude' ? 'Latitude' : 'Longitude'} must be between ${minimum} and ${maximum}.`;
+    return null;
+  }
+  return number;
+}
+
+function toPayload(
+  draft: EventDraft,
+  status: EventStatus,
+): { payload: EventMutationPayload; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  if (!draft.title.trim()) errors.title = 'Event title is required.';
+  if (!draft.date) errors.date = 'Event date is required.';
+  const latitude = parseCoordinate(draft.latitude, 'latitude', errors);
+  const longitude = parseCoordinate(draft.longitude, 'longitude', errors);
+  return {
+    payload: {
+      type: draft.type,
+      discipline: DISCIPLINE_100M,
+      title: draft.title.trim(),
+      date: draft.date,
+      time: draft.time || null,
+      locationName: draft.locationName.trim() || null,
+      latitude,
+      longitude,
+      status,
+    },
+    errors,
+  };
+}
+
+function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
+  return {
+    type: event.type,
+    discipline: DISCIPLINE_100M,
+    title: event.title,
+    date: event.date,
+    time: event.time,
+    locationName: event.locationName,
+    latitude: event.latitude,
+    longitude: event.longitude,
+    status,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
+    if (error.status === 401) return 'Your session could not be authorized. Please sign in again.';
+    return error.message;
+  }
+  return 'Something went wrong. Please try again.';
+}
+
+function validationErrors(error: unknown): FieldErrors {
+  if (!(error instanceof ApiError) || error.code !== 'VALIDATION_ERROR') return {};
+  const issues = error.details.issues;
+  if (!Array.isArray(issues)) return {};
+  const fields: FieldErrors = {};
+  for (const issue of issues) {
+    if (typeof issue !== 'object' || issue === null) continue;
+    const path = 'path' in issue ? issue.path : undefined;
+    const message = 'message' in issue ? issue.message : undefined;
+    if (
+      typeof path === 'string' &&
+      typeof message === 'string' &&
+      ['title', 'type', 'date', 'time', 'locationName', 'latitude', 'longitude'].includes(path)
+    ) {
+      fields[path as keyof EventDraft] ??= message;
+    }
+  }
+  return fields;
+}
+
+function formattedStatus(status: EventStatus): string {
+  return status.replace('_', ' ').replace(/^./, (character) => character.toUpperCase());
+}
+
+function formattedType(type: EventType): string {
+  return type === 'competition' ? 'Competition' : 'Training';
+}
+
+function formattedDate(date: string, long = false): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: long ? 'long' : 'short',
+    year: 'numeric',
+  });
+}
+
+function sortedEvents(events: AthleticsEvent[], descending = false): AthleticsEvent[] {
+  const direction = descending ? -1 : 1;
+  return [...events].sort((left, right) => {
+    const date = left.date.localeCompare(right.date);
+    if (date !== 0) return date * direction;
+    const leftTime = left.time ?? '99:99:99';
+    const rightTime = right.time ?? '99:99:99';
+    const time = leftTime.localeCompare(rightTime);
+    if (time !== 0) return time * direction;
+    const created = left.createdAt.localeCompare(right.createdAt);
+    return created !== 0 ? created * direction : left.id.localeCompare(right.id) * direction;
+  });
+}
+
+interface EventFormProps {
+  event?: AthleticsEvent;
+  onSave: (payload: EventMutationPayload) => Promise<void>;
+  onCancel: () => void;
+  onSubmittingChange: (submitting: boolean) => void;
+}
+
+function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormProps) {
+  const [draft, setDraft] = useState(() => draftFor(event));
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+
+  const setField = <K extends keyof EventDraft>(field: K, value: EventDraft[K]) => {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: undefined }));
+  };
+
+  const submit = async (formEvent: FormEvent) => {
+    formEvent.preventDefault();
+    const parsed = toPayload(draft, event?.status ?? 'scheduled');
+    if (Object.keys(parsed.errors).length > 0) {
+      setErrors(parsed.errors);
+      if (parsed.errors.title) titleRef.current?.focus();
+      else if (parsed.errors.date) dateRef.current?.focus();
+      return;
+    }
+
+    setSubmitting(true);
+    onSubmittingChange(true);
+    setSubmitError(null);
+    try {
+      await onSave(parsed.payload);
+    } catch (error) {
+      const fields = validationErrors(error);
+      setErrors(fields);
+      setSubmitError(errorMessage(error));
+      if (fields.title) titleRef.current?.focus();
+      else if (fields.date) dateRef.current?.focus();
+    } finally {
+      setSubmitting(false);
+      onSubmittingChange(false);
+    }
+  };
+
+  return (
+    <form className={styles.form} onSubmit={submit} noValidate>
+      {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
+      <p className={styles.fixedDiscipline}><span>Discipline</span><strong>100m</strong></p>
+
+      <label htmlFor="event-title">Event title</label>
+      <Input
+        ref={titleRef}
+        id="event-title"
+        value={draft.title}
+        onChange={(input) => setField('title', input.target.value)}
+        invalid={Boolean(errors.title)}
+        aria-invalid={Boolean(errors.title)}
+        aria-describedby={errors.title ? 'event-title-error' : undefined}
+        required
+        aria-required="true"
+        disabled={submitting}
+      />
+      {errors.title && <span id="event-title-error" className={styles.fieldError}>{errors.title}</span>}
+
+      <div className={styles.formRow}>
+        <div>
+          <label htmlFor="event-type">Event type</label>
+          <Select
+            id="event-type"
+            value={draft.type}
+            onChange={(input) => setField('type', input.target.value as EventType)}
+            options={[
+              { value: 'competition', label: 'Competition' },
+              { value: 'training', label: 'Training' },
+            ]}
+            disabled={submitting}
+          />
+        </div>
+        <div>
+          <label htmlFor="event-date">Date</label>
+          <Input
+            ref={dateRef}
+            id="event-date"
+            type="date"
+            value={draft.date}
+            onChange={(input) => setField('date', input.target.value)}
+            invalid={Boolean(errors.date)}
+            aria-invalid={Boolean(errors.date)}
+            aria-describedby={errors.date ? 'event-date-error' : undefined}
+            required
+            aria-required="true"
+            disabled={submitting}
+          />
+          {errors.date && <span id="event-date-error" className={styles.fieldError}>{errors.date}</span>}
+        </div>
+      </div>
+
+      <div className={styles.formRow}>
+        <div>
+          <label htmlFor="event-time">Time <span>Optional</span></label>
+          <Input id="event-time" type="time" step="1" value={draft.time} onChange={(input) => setField('time', input.target.value)} invalid={Boolean(errors.time)} aria-invalid={Boolean(errors.time)} aria-describedby={errors.time ? 'event-time-error' : undefined} disabled={submitting} />
+          {errors.time && <span id="event-time-error" className={styles.fieldError}>{errors.time}</span>}
+        </div>
+        <div>
+          <label htmlFor="event-location">Location <span>Optional</span></label>
+          <Input id="event-location" value={draft.locationName} onChange={(input) => setField('locationName', input.target.value)} invalid={Boolean(errors.locationName)} aria-invalid={Boolean(errors.locationName)} aria-describedby={errors.locationName ? 'event-location-error' : undefined} disabled={submitting} />
+          {errors.locationName && <span id="event-location-error" className={styles.fieldError}>{errors.locationName}</span>}
+        </div>
+      </div>
+
+      <div className={styles.formRow}>
+        <div>
+          <label htmlFor="event-latitude">Latitude <span>Optional</span></label>
+          <Input id="event-latitude" type="number" step="any" value={draft.latitude} onChange={(input) => setField('latitude', input.target.value)} invalid={Boolean(errors.latitude)} aria-invalid={Boolean(errors.latitude)} aria-describedby={errors.latitude ? 'event-latitude-error' : undefined} disabled={submitting} />
+          {errors.latitude && <span id="event-latitude-error" className={styles.fieldError}>{errors.latitude}</span>}
+        </div>
+        <div>
+          <label htmlFor="event-longitude">Longitude <span>Optional</span></label>
+          <Input id="event-longitude" type="number" step="any" value={draft.longitude} onChange={(input) => setField('longitude', input.target.value)} invalid={Boolean(errors.longitude)} aria-invalid={Boolean(errors.longitude)} aria-describedby={errors.longitude ? 'event-longitude-error' : undefined} disabled={submitting} />
+          {errors.longitude && <span id="event-longitude-error" className={styles.fieldError}>{errors.longitude}</span>}
+        </div>
+      </div>
+
+      <div className={styles.formActions}>
+        <Button variant="secondary" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" disabled={submitting}>{submitting ? 'Saving...' : event ? 'Save changes' : 'Add event'}</Button>
+      </div>
+    </form>
+  );
+}
+
+export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
+  const [events, setEvents] = useState<AthleticsEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [dateTab, setDateTab] = useState<DateTab>('upcoming');
+  const [typeFilter, setTypeFilter] = useState<EventType | ''>('');
+  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
+  const [view, setView] = useState<EventView>('list');
+  const todayDate = new Date(`${today}T00:00:00`);
+  const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+  const [selectedDay, setSelectedDay] = useState(today);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<Editor>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ eventId: string; action: LifecycleAction } | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [participantCount, setParticipantCount] = useState<number | null>(null);
+  const [participantError, setParticipantError] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setLoadError(null);
+    void listEvents()
+      .then(({ data }) => {
+        if (current) setEvents(sortedEvents(data));
+      })
+      .catch((error: unknown) => {
+        if (current) setLoadError(errorMessage(error));
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!loading && !loadError) {
+      onUpcomingCountChange?.(
+        events.filter((event) => event.status !== 'cancelled' && event.date >= today).length,
+      );
+    }
+  }, [events, loadError, loading, onUpcomingCountChange, today]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setParticipantCount(null);
+      setParticipantError(false);
+      return;
+    }
+    let current = true;
+    setParticipantCount(null);
+    setParticipantError(false);
+    void listEventParticipants(selectedId)
+      .then(({ meta }) => {
+        if (current) setParticipantCount(meta.count);
+      })
+      .catch(() => {
+        if (current) setParticipantError(true);
+      });
+    return () => {
+      current = false;
+    };
+  }, [selectedId]);
+
+  const storeEvent = (event: AthleticsEvent) => {
+    setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
+  };
+
+  const selected = events.find((event) => event.id === selectedId) ?? null;
+  const filtered = sortedEvents(
+    events.filter((event) => {
+      const dateMatches = dateTab === 'all' || (dateTab === 'upcoming' ? event.date >= today : event.date < today);
+      return dateMatches && (!typeFilter || event.type === typeFilter) && (!statusFilter || event.status === statusFilter);
+    }),
+    dateTab === 'past',
+  );
+  const calendarEvents = filtered.filter((event) => event.date === selectedDay);
+  const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
+  const pending = editorBusy || lifecycleBusy;
+
+  const saveEditor = async (payload: EventMutationPayload) => {
+    const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
+    storeEvent(event);
+    setEditor(null);
+    setNotice(editor === 'new' ? `${event.title} added to the calendar.` : `${event.title} updated.`);
+  };
+
+  const runLifecycle = async () => {
+    if (!confirmation) return;
+    const event = events.find((item) => item.id === confirmation.eventId);
+    if (!event) return;
+    setLifecycleBusy(true);
+    setMutationError(null);
+    try {
+      const nextStatus: EventStatus = confirmation.action === 'start' ? 'in_progress' : 'completed';
+      const updated = confirmation.action === 'cancel'
+        ? await cancelEvent(event.id)
+        : await updateEvent(event.id, replacement(event, nextStatus));
+      storeEvent(updated);
+      setConfirmation(null);
+      setNotice(
+        confirmation.action === 'cancel'
+          ? `${updated.title} cancelled. Its history is preserved.`
+          : confirmation.action === 'start'
+            ? `${updated.title} is now live.`
+            : `${updated.title} marked completed.`,
+      );
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const openConfirmation = (eventId: string, action: LifecycleAction) => {
+    setMutationError(null);
+    setConfirmation({ eventId, action });
+  };
+
+  const clearFilters = () => {
+    setDateTab('upcoming');
+    setTypeFilter('');
+    setStatusFilter('');
   };
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -64,51 +438,151 @@ export function EventsPage({ events: controlled, athletes = fixtureAthletes, onC
     const rawDay = index - leading + 1;
     if (rawDay < 1) return { day: previousDays + rawDay, current: false, iso: '' };
     if (rawDay > days) return { day: rawDay - days, current: false, iso: '' };
-    return { day: rawDay, current: true, iso: isoDate(month.getFullYear(), month.getMonth(), rawDay) };
+    const iso = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(rawDay).padStart(2, '0')}`;
+    return { day: rawDay, current: true, iso };
   });
 
+  const confirmationEvent = confirmation
+    ? events.find((event) => event.id === confirmation.eventId) ?? null
+    : null;
+  const confirmationTitle = confirmation?.action === 'cancel'
+    ? 'Cancel event'
+    : confirmation?.action === 'start'
+      ? 'Start event'
+      : 'Complete event';
+
   return (
-    <section aria-labelledby="events-heading">
+    <section aria-labelledby="events-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
-        <div><p className={styles.eyebrow}>Season command</p><h1 id="events-heading">Events</h1><p>{events.filter((item) => item.date >= FIXTURE_TODAY).length} upcoming · {events.filter((item) => item.date < FIXTURE_TODAY).length} completed</p></div>
+        <div>
+          <p className={styles.eyebrow}>100m season calendar</p>
+          <h1 id="events-heading">Events</h1>
+          <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown`}</p>
+        </div>
         <div className={styles.controls}>
-          <div className={styles.segmented} aria-label="Filter events">{(['upcoming', 'past', 'all'] as const).map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div>
-          <div className={styles.viewToggle} aria-label="Event view"><button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button><button type="button" aria-label="Calendar view" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>□</button></div>
-          <button type="button" className={styles.primaryButton} onClick={() => { setForm(emptyForm()); setEditing('new'); }}>＋ Add event</button>
+          <div className={styles.segmented} role="group" aria-label="Filter events by date">
+            {(['upcoming', 'past', 'all'] as const).map((tab) => (
+              <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => setDateTab(tab)}>
+                {tab[0].toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+          <label className={styles.srOnly} htmlFor="event-type-filter">Filter by event type</label>
+          <Select id="event-type-filter" value={typeFilter} onChange={(input) => setTypeFilter(input.target.value as EventType | '')} options={[
+            { value: '', label: 'All types' },
+            { value: 'competition', label: 'Competition' },
+            { value: 'training', label: 'Training' },
+          ]} />
+          <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
+          <Select id="event-status-filter" value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
+            { value: '', label: 'All statuses' },
+            { value: 'scheduled', label: 'Scheduled' },
+            { value: 'in_progress', label: 'In progress' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]} />
+          <div className={styles.viewToggle} role="group" aria-label="Event view">
+            <button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button>
+            <button type="button" aria-label="Calendar view" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>□</button>
+          </div>
+          <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>
         </div>
       </header>
 
-      {view === 'calendar' && <div className={styles.calendar}>
-        <header><h2>{first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2><div><button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button></div></header>
-        <div className={styles.calendarGrid}>{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => <span className={styles.dayName} key={`${day}-${index}`}>{day}</span>)}{cells.map((cell, index) => {
-          const dayEvents = cell.iso ? events.filter((item) => item.date === cell.iso) : [];
-          return <button type="button" disabled={!cell.current} className={`${styles.day} ${cell.iso === FIXTURE_TODAY ? styles.today : ''}`} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}><span>{cell.day}</span><i>{dayEvents.slice(0, 3).map((item) => <i className={styles[`type${item.type.replace(/\s/g, '')}`]} key={item.id} />)}</i></button>;
-        })}</div>
-      </div>}
+      {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
-      {view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formatDate(selectedDay, true)}</h2>}
-      <div className={styles.list}>
-        {displayed.map((item) => { const date = dateParts(item.date); return <button type="button" className={styles.eventCard} onClick={() => setSelectedId(item.id)} key={item.id}><span className={styles.dateBlock}><b>{date.day}</b><small>{date.month}</small></span><span className={styles.eventBody}><strong>{item.name}</strong><span><i className={styles[`type${item.type.replace(/\s/g, '')}`]}>{item.type}</i><span>⌖ {item.location}</span><span>♙ {item.athleteIds.length} athletes</span></span></span><span aria-hidden="true">›</span></button>; })}
-        {!displayed.length && <div className={styles.empty}><span aria-hidden="true">⌕</span><h2>Nothing scheduled</h2><p>Pick another day, try another tab, or add an event.</p></div>}
-      </div>
+      {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
+      {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
+      {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
 
-      {selected && <ConsoleDialog title={selected.name} onClose={() => setSelectedId(null)} footer={<><button type="button" className={styles.dangerButton} onClick={() => { update(events.filter((item) => item.id !== selected.id)); setSelectedId(null); }}>Delete event</button><button type="button" className={styles.secondaryButton} onClick={() => setSelectedId(null)}>Close</button><button type="button" className={styles.primaryButton} onClick={() => beginEdit(selected)}>Edit event</button></>}>
-        <div className={styles.detailTags}><span className={styles[`type${selected.type.replace(/\s/g, '')}`]}>{selected.type}</span><span>{selected.date < FIXTURE_TODAY ? 'Completed' : 'Upcoming'}</span></div>
-        <div className={styles.detailStats}><div><b>{formatDate(selected.date, true)}</b><small>Date</small></div><div><b>{selected.location}</b><small>Location</small></div></div>
-        <h3 className={styles.sectionTitle}>Notes</h3><p className={styles.notes}>{selected.notes || 'No notes added.'}</p>
-        <h3 className={styles.sectionTitle}>Assigned athletes ({selected.athleteIds.length})</h3><div className={styles.chips}>{athletes.filter((athlete) => selected.athleteIds.includes(athlete.id)).map((athlete) => <span key={athlete.id}>{athlete.name}</span>)}</div>
-        <fieldset className={styles.assignments}><legend className={styles.srOnly}>Change athlete assignments</legend>{athletes.map((athlete) => <label key={athlete.id}><input type="checkbox" checked={selected.athleteIds.includes(athlete.id)} onChange={() => toggleAssignment(athlete.id)} /> <span>{athlete.name}</span><small>NO. {String(athlete.bib).padStart(3, '0')}</small></label>)}</fieldset>
-      </ConsoleDialog>}
+      {!loading && !loadError && events.length > 0 && view === 'calendar' && (
+        <div className={styles.calendar}>
+          <header>
+            <h2>{first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
+            <div><button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button></div>
+          </header>
+          <div className={styles.calendarGrid}>
+            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => <span className={styles.dayName} key={day}><span aria-hidden="true">{day[0]}</span><span className={styles.srOnly}>{day}</span></span>)}
+            {cells.map((cell, index) => {
+              const dayEvents = cell.iso ? filtered.filter((event) => event.date === cell.iso) : [];
+              const label = cell.current ? `${formattedDate(cell.iso, true)}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : `Outside current month, day ${cell.day}`;
+              return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}><span>{cell.day}</span><i aria-hidden="true">{dayEvents.slice(0, 3).map((event) => <i data-type={event.type} key={event.id} />)}</i></button>;
+            })}
+          </div>
+        </div>
+      )}
 
-      {editing && <ConsoleDialog title={editing === 'new' ? 'Add Event' : 'Edit Event'} onClose={() => setEditing(null)} footer={<><button type="button" className={styles.secondaryButton} onClick={() => setEditing(null)}>Cancel</button><button type="submit" form="event-form" className={styles.primaryButton}>{editing === 'new' ? 'Add event' : 'Save changes'}</button></>}>
-        <form id="event-form" className={styles.form} onSubmit={submit}>
-          <label>Event name<input required value={form.name} onChange={(event) => setField('name', event.target.value)} placeholder="e.g. County Championships" /></label>
-          <div><label>Type<select value={form.type} onChange={(event) => setField('type', event.target.value as EventType)}>{EVENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Date<input required type="date" value={form.date} onChange={(event) => setField('date', event.target.value)} /></label></div>
-          <label>Location<input value={form.location} onChange={(event) => setField('location', event.target.value)} placeholder="e.g. Central Stadium" /></label>
-          <label>Notes<textarea value={form.notes} onChange={(event) => setField('notes', event.target.value)} placeholder="Travel, kit, qualifying standards..." /></label>
-          <fieldset className={styles.assignments}><legend>Assign athletes <small>(optional)</small></legend>{athletes.map((athlete) => <label key={athlete.id}><input type="checkbox" checked={form.athleteIds.includes(athlete.id)} onChange={() => setField('athleteIds', form.athleteIds.includes(athlete.id) ? form.athleteIds.filter((id) => id !== athlete.id) : [...form.athleteIds, athlete.id])} /><span>{athlete.name}</span></label>)}</fieldset>
-        </form>
-      </ConsoleDialog>}
+      {!loading && !loadError && events.length > 0 && view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formattedDate(selectedDay, true)}</h2>}
+
+      {!loading && !loadError && events.length > 0 && ((view === 'list' && filtered.length === 0) || (view === 'calendar' && calendarEvents.length === 0)) && (
+        <div className={styles.emptyPanel}>
+          <EmptyState title={view === 'calendar' ? 'Nothing scheduled on this day' : 'No events match your filters'} description="Choose another date or adjust the event filters." />
+          {hasFilters && <Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
+        </div>
+      )}
+
+      {!loading && !loadError && (view === 'list' ? filtered : calendarEvents).length > 0 && (
+        <div className={styles.list} aria-label="Event calendar list">
+          {(view === 'list' ? filtered : calendarEvents).map((event) => {
+            const date = new Date(`${event.date}T00:00:00`);
+            return (
+              <Card className={styles.eventCard} key={event.id}>
+                <button type="button" className={styles.eventOpen} onClick={() => setSelectedId(event.id)}>
+                  <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
+                  <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <Modal open={selected !== null && confirmation === null && editor === null} title={selected?.title ?? 'Event detail'} onClose={() => setSelectedId(null)}>
+        {selected && (
+          <div className={styles.detail}>
+            <div className={styles.detailTags}><span data-type={selected.type}>{formattedType(selected.type)}</span><span data-status={selected.status}>{formattedStatus(selected.status)}</span><span>100m</span></div>
+            <dl className={styles.detailGrid}>
+              <div><dt>Date</dt><dd><time dateTime={selected.date}>{formattedDate(selected.date, true)}</time></dd></div>
+              <div><dt>Time</dt><dd>{selected.time ?? 'Time not set'}</dd></div>
+              <div><dt>Location</dt><dd>{selected.locationName ?? 'Location not set'}</dd></div>
+              <div><dt>Assigned athletes</dt><dd>{participantError ? 'Unavailable' : participantCount === null ? 'Loading...' : participantCount}</dd></div>
+            </dl>
+            {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
+            <div className={styles.detailActions}>
+              <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }}>Edit event</Button>
+              {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')}>Start event</Button>}
+              {(selected.status === 'scheduled' || selected.status === 'in_progress') && <Button onClick={() => openConfirmation(selected.id, 'complete')}>Mark completed</Button>}
+              {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')}>Cancel event</Button>}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={editor !== null} title={editor === 'new' ? 'Add event' : 'Edit event'} onClose={() => { if (!editorBusy) setEditor(null); }} closeDisabled={editorBusy}>
+        {editor && <EventForm key={editor === 'new' ? 'new' : editor.id} event={editor === 'new' ? undefined : editor} onSave={saveEditor} onCancel={() => setEditor(null)} onSubmittingChange={setEditorBusy} />}
+      </Modal>
+
+      <Modal open={confirmationEvent !== null} title={confirmationTitle} onClose={() => { if (!lifecycleBusy) { setConfirmation(null); setMutationError(null); } }} closeDisabled={lifecycleBusy}>
+        {confirmationEvent && confirmation && (
+          <div className={styles.confirmation}>
+            <p>
+              {confirmation.action === 'cancel'
+                ? <>Cancel <strong>{confirmationEvent.title}</strong>? The event remains in history. Participant assignments, timeline entries, and results are preserved, but cancelled-event results do not contribute to statistics.</>
+                : confirmation.action === 'start'
+                  ? <>Start <strong>{confirmationEvent.title}</strong>? Live result logging will open for this event.</>
+                  : <>Mark <strong>{confirmationEvent.title}</strong> completed? Live result logging will close.</>}
+            </p>
+            {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
+            <div className={styles.formActions}>
+              <Button variant="secondary" onClick={() => setConfirmation(null)} disabled={lifecycleBusy}>Back</Button>
+              <Button variant={confirmation.action === 'cancel' ? 'danger' : 'primary'} onClick={() => void runLifecycle()} disabled={lifecycleBusy}>
+                {lifecycleBusy ? 'Saving...' : confirmation.action === 'cancel' ? 'Cancel event' : confirmation.action === 'start' ? 'Start event' : 'Mark completed'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </section>
   );
 }
