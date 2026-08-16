@@ -188,10 +188,20 @@ Event create/full-replacement request DTO: `type` (required), `discipline`, `tit
 ### 4.4 Event participant
 
 ```
-eventId, athleteId, rsvpStatus ('pending'|'yes'|'no')
+eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'),
+athlete { id, name, squad, archivedAt }
 ```
 
-Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Used for fixtures and participation (Stage 2 wiring).
+Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /events/:eventId/participants` | List assigned athletes in stable name order |
+| `POST /events/:eventId/participants` | Assign an active owned athlete; body `{ athleteId }`, returns `201` |
+| `PUT /events/:eventId/participants/:athleteId` | Idempotently replace RSVP status; body `{ rsvpStatus }` |
+| `DELETE /events/:eventId/participants/:athleteId` | Remove the assignment; returns `204` |
+
+Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; an archived athlete cannot be newly assigned and returns `409 ATHLETE_ARCHIVED`. Archiving an already assigned athlete does not remove the assignment, so historical participation remains visible. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
 ### 4.5 Timeline entry (the live log)
 
@@ -270,6 +280,7 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, archival, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
 - `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
+- `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
 - Remaining feature endpoints (timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
 
 ## AI declaration

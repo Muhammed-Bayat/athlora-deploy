@@ -14,7 +14,7 @@ athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, n
                       archived_at, created_at, updated_at)
 events               (id UUID PK, created_by -> users, type, discipline, title, date, time,
                       location_name, latitude, longitude, status)
-event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id) — Stage 2
+event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
@@ -33,6 +33,15 @@ The append-only live log — the heart of the app.
 - `version`: bumped on every edit — used for merge-conflict detection (Stage 3).
 - `device_id`: originating device for offline merge (Stage 3).
 - `deleted_at`: "undo" is a soft delete, never `DELETE`.
+
+### event_participants
+The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
+
+- New assignments require an active athlete owned by the event's coach.
+- Existing assignments remain visible if the athlete is later archived, preserving historical participation.
+- RSVP status replacement is idempotent.
+- Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
+- Participant reads join the athlete name, squad and archive state for event detail and live-logger selection.
 
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.

@@ -7,6 +7,8 @@ import {
   parseAthleteReplacementPayload,
   parseEventCreatePayload,
   parseEventListQuery,
+  parseEventParticipantCreatePayload,
+  parseEventParticipantReplacementPayload,
   parseEventReplacementPayload,
   parseResultOverridePayload,
   parseTimelineEntryCreatePayload,
@@ -42,6 +44,51 @@ function expectValidationError(action: () => unknown, issues: ValidationIssue[])
     details: { issues },
   });
 }
+
+describe('event participant payloads', () => {
+  it('parses strict assignment and RSVP replacement payloads', () => {
+    expect(parseEventParticipantCreatePayload({ athleteId: ATHLETE_ID })).toEqual({
+      athleteId: ATHLETE_ID,
+    });
+    expect(parseEventParticipantReplacementPayload({ rsvpStatus: 'yes' })).toEqual({
+      rsvpStatus: 'yes',
+    });
+  });
+
+  it('rejects malformed identifiers and server-controlled assignment fields', () => {
+    expectValidationError(
+      () =>
+        parseEventParticipantCreatePayload({
+          athleteId: 'not-a-uuid',
+          eventId: ATHLETE_ID,
+          rsvpStatus: 'yes',
+        }),
+      [
+        {
+          path: 'athleteId',
+          code: 'invalid_format',
+          message: 'Expected a canonical UUID',
+        },
+        { path: 'eventId', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'rsvpStatus', code: 'unknown_field', message: 'Field is not allowed' },
+      ],
+    );
+  });
+
+  it('requires a supported RSVP status for replacement', () => {
+    expectValidationError(
+      () => parseEventParticipantReplacementPayload({ rsvpStatus: 'maybe', athleteId: ATHLETE_ID }),
+      [
+        { path: 'athleteId', code: 'unknown_field', message: 'Field is not allowed' },
+        {
+          path: 'rsvpStatus',
+          code: 'invalid_value',
+          message: 'Expected one of: pending, yes, no',
+        },
+      ],
+    );
+  });
+});
 
 describe('athlete payloads', () => {
   it('normalizes create and replacement payloads with omitted nullable fields', () => {

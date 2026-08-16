@@ -5,6 +5,7 @@ import {
   assertAthleteOwnership,
   assertEventAthleteOwnership,
   assertEventOwnership,
+  assertParticipantOwnership,
   assertResultOwnership,
   assertTimelineEntryOwnership,
 } from '../services/ownership.js';
@@ -33,6 +34,10 @@ export function requireEventOwnership(parameter = 'id'): RequestHandler {
 
 export const requireEventAthleteOwnership = ownershipGuard((req, userId) =>
   assertEventAthleteOwnership(userId, req.params.eventId, req.body?.athleteId),
+);
+
+export const requireParticipantOwnership = ownershipGuard((req, userId) =>
+  assertParticipantOwnership(userId, req.params.eventId, req.params.athleteId),
 );
 
 export const requireTimelineEntryOwnership = ownershipGuard((req, userId) =>

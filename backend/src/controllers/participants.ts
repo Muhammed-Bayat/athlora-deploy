@@ -1,0 +1,53 @@
+import type { RequestHandler } from 'express';
+import { getApplicationUserContext } from '../middleware/auth.js';
+import {
+  addEventParticipant as addParticipant,
+  listEventParticipants as listParticipants,
+  removeEventParticipant as removeParticipant,
+  replaceEventParticipant as replaceParticipant,
+} from '../services/participants.js';
+
+export const listEventParticipants: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const participants = await listParticipants(userId, req.params.eventId);
+    res.json({ data: participants, meta: { count: participants.length } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addEventParticipant: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const participant = await addParticipant(userId, req.params.eventId, req.body);
+    res.status(201).json({ data: participant });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateEventParticipant: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const participant = await replaceParticipant(
+      userId,
+      req.params.eventId,
+      req.params.athleteId,
+      req.body,
+    );
+    res.json({ data: participant });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeEventParticipant: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    await removeParticipant(userId, req.params.eventId, req.params.athleteId);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+};
