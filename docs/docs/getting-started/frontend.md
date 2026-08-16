@@ -60,6 +60,7 @@ VITE_AUTH0_AUDIENCE=
 - API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
 - Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Bebas Neue, Inter, Space Mono) load in `index.html`.
 - Tests: Vitest + React Testing Library cover the app shell, shared Button, shared API client response/error handling and the authenticated synchronization gate. Runs with `npm run test` (14 tests).
+- `src/api/athletes.ts` mirrors the live roster API: list/get/create/update/delete plus an `unarchiveAthlete` wrapper for `POST /api/v1/athletes/:id/unarchive`.
 
 ## Deployment
 
