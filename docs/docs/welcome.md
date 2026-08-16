@@ -36,6 +36,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **100m data/API contract** — the authoritative MVP contract is defined in `docs/api-reference/contract`, encoded in the aligned backend/frontend TypeScript domain types (fixed to 100m/seconds at the API/service boundary), and backed by the forward-only migration `0002_contract_100m.sql` (athlete archival, result outcomes, override audit timestamp, note storage, constraints and indexes). The schema now distinguishes no result, a valid finish, DQ, DNF and DNS.
 - **Ownership foundation** — verified Auth0 subjects resolve to `users.id` and role before protected resource handlers run. Unsynchronized identities receive a structured recovery error, while reusable athlete/event/timeline/participant/result checks scope access to the current user and return the same generic not-found response for missing and cross-coach resources.
 - **Athlete roster CRUD** — the `/api/v1/athletes` routes are live against PostgreSQL: coach-scoped list with name/squad filtering and stable ordering, create (server-derived owner), detail, full replacement, plus reversible archival (`DELETE` = archive, `POST /:id/unarchive`) that preserves timeline entries and results. Covered by API, service, and a `TEST_DATABASE_URL`-gated integration suite.
+- **Event CRUD & lifecycle** — the `/api/v1/events` routes are live against PostgreSQL: coach-scoped list with `type`/`status`/date-range filters and stable ordering, create (discipline fixed to 100m server-side), detail, full replacement with forward-only status transitions (`cancelled` is terminal), and cancellation-as-delete (`DELETE` sets `status = 'cancelled'`, preserving timeline entries and results). The timeline routes now reject logging against any event that is not `in_progress` (`409 EVENT_NOT_IN_PROGRESS`). Covered by API, service, and a `TEST_DATABASE_URL`-gated integration suite.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml`, executed by a registered Gitea Actions runner on the university instance.
@@ -44,7 +45,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
-- Build the remaining CRUD features: events (with Open-Meteo weather), live logging, results/dashboard, and wire the athlete roster UI to the API.
+- Build the remaining CRUD features: Open-Meteo weather for events, live logging endpoints + UI, results/dashboard, and wire the athlete and event UIs to the API.
 
 ## Keeping these docs current
 

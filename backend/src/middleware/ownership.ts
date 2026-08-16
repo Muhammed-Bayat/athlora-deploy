@@ -1,5 +1,6 @@
 import type { Request, RequestHandler } from 'express';
 import { getApplicationUserContext } from './auth.js';
+import { assertEventLoggingOpen } from '../services/events.js';
 import {
   assertAthleteOwnership,
   assertEventAthleteOwnership,
@@ -36,6 +37,10 @@ export const requireEventAthleteOwnership = ownershipGuard((req, userId) =>
 
 export const requireTimelineEntryOwnership = ownershipGuard((req, userId) =>
   assertTimelineEntryOwnership(userId, req.params.eventId, req.params.entryId),
+);
+
+export const requireEventLoggingOpen = ownershipGuard((req, userId) =>
+  assertEventLoggingOpen(userId, req.params.eventId),
 );
 
 export const requireResultOwnership = ownershipGuard((req, userId) =>

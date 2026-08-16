@@ -131,12 +131,12 @@ Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`,
 ### 4.3 Event
 
 ```
-id, createdBy, type ('competition'|'training'), discipline ('100m'|null), title, date (ISO date),
+id, createdBy, type ('competition'|'training'), discipline ('100m'), title, date (ISO date),
 time (ISO|null), locationName (string|null), latitude (number|null), longitude (number|null),
 status, createdAt, updatedAt
 ```
 
-`discipline` is nullable to represent multi-discipline meets.
+The MVP discipline is fixed to **100m** at the API/service boundary: create/full-replacement accepts only `'100m'` or `null` and normalizes both to `'100m'` server-side; any other value is rejected with `400`. The database stays permissive (TEXT) so future disciplines are added by migration, not by loosening this contract.
 
 **Event states** (`status`, CHECK-constrained):
 
@@ -147,9 +147,43 @@ status, createdAt, updatedAt
 | `completed` | Logging closed; results finalised |
 | `cancelled` | Called off; results/entries for it are not scored |
 
-**Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete.
+**Status transitions** are forward-only and enforced server-side on every full replacement:
 
-Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`.
+| From → To | Allowed |
+|---|---|
+| `scheduled` | `scheduled`, `in_progress`, `completed`, `cancelled` |
+| `in_progress` | `in_progress`, `completed`, `cancelled` |
+| `completed` | `completed`, `cancelled` |
+| `cancelled` | `cancelled` (terminal) |
+
+Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to }`. In particular, `cancelled` is terminal — a cancelled event can never start again — and `completed` events cannot revert to `in_progress` or `scheduled`. There is no single-active-event constraint: a coach may run any number of `in_progress` events concurrently.
+
+**Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete — `DELETE /events/:id` only sets `status = 'cancelled'`.
+
+**Endpoints:**
+
+| Method & path | Purpose |
+|---|---|
+| `GET /events` | List the coach's events with optional filters |
+| `POST /events` | Create an event; returns `201` with `{ data: event }` |
+| `GET /events/:id` | Fetch one owned event |
+| `PUT /events/:id` | Full replacement of mutable fields + status transition |
+| `DELETE /events/:id` | Cancel (sets `status = 'cancelled'`); returns `{ data: event }` |
+
+`GET /events` accepts strict query parameters (unknown parameters are rejected with `400`):
+
+| Parameter | Behavior |
+|---|---|
+| `type` | Exact match on `type` (`'competition'` or `'training'`) |
+| `status` | Exact match on `status` |
+| `dateFrom` | Inclusive lower bound on `date` (Gregorian `YYYY-MM-DD`) |
+| `dateTo` | Inclusive upper bound on `date`; `dateFrom` must not be after `dateTo` |
+
+Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `createdAt`, then `id`, so the ordering is stable.
+
+Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
+
+**Logging guard:** the timeline routes (`POST`/`PATCH`/`DELETE /events/:eventId/entries`) reject log writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`); only an `in_progress` event accepts live log writes.
 
 ### 4.4 Event participant
 
@@ -235,7 +269,8 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, archival, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
-- Feature endpoints (events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
+- `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
+- Remaining feature endpoints (timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
 
 ## AI declaration
 
