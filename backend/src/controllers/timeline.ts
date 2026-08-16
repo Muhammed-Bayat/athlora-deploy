@@ -2,9 +2,20 @@ import type { RequestHandler } from 'express';
 import { getApplicationUserContext } from '../middleware/auth.js';
 import {
   createTimelineEntry as createEntry,
+  listTimelineEntries as listEntries,
   removeTimelineEntry as removeEntry,
   updateTimelineEntry as updateEntry,
 } from '../services/timeline.js';
+
+export const listTimelineEntries: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const entries = await listEntries(userId, req.params.eventId);
+    res.json({ data: entries, meta: { count: entries.length } });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const createTimelineEntry: RequestHandler = async (req, res, next) => {
   try {
@@ -29,7 +40,7 @@ export const updateTimelineEntry: RequestHandler = async (req, res, next) => {
 export const removeTimelineEntry: RequestHandler = async (req, res, next) => {
   try {
     const { userId } = getApplicationUserContext(req);
-    await removeEntry(userId, req.params.eventId, req.params.entryId);
+    await removeEntry(userId, req.params.eventId, req.params.entryId, req.body);
     res.status(204).end();
   } catch (error) {
     next(error);

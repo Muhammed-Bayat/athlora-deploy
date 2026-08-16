@@ -4,6 +4,7 @@ import type { TimelineEntryRow } from '../db/row-mappers.js';
 import type { TimelineEntryCreatePayload } from '../validation/payloads.js';
 import {
   createTimelineEntry,
+  listTimelineEntries,
   recomputeEventResults,
   removeTimelineEntry,
   updateTimelineEntry,
@@ -86,7 +87,7 @@ function successfulQuery(options: {
       return { rows: [options.updated ?? { ...current, value: '10.90', version: 2 }] };
     }
     if (sql.includes('SET deleted_at = now()')) return { rows: [{ id: ENTRY_ID }] };
-    if (sql.includes('FROM timeline_entries') && sql.includes('ORDER BY created_at')) {
+    if (sql.includes('FROM timeline_entries') && sql.includes('ORDER BY') && sql.includes('created_at ASC')) {
       return { rows: options.derivedEntries ?? [current] };
     }
     if (sql.includes('INSERT INTO results')) return { rows: [] };
@@ -133,41 +134,101 @@ describe('timeline service', () => {
   });
 
   it('merges a sparse patch, increments version, and recomputes', async () => {
-    const updatedRow = { ...entryRow, value: '10.90', version: 2, device_id: 'watch-1' };
+    const updatedRow = { ...entryRow, value: '10.90', version: 2 };
     const query = successfulQuery({ updated: updatedRow, derivedEntries: [updatedRow] });
     const updated = await updateTimelineEntry(
       USER_ID,
       EVENT_ID,
       ENTRY_ID,
-      { value: 10.9, deviceId: 'watch-1' },
+      { expectedVersion: 1, value: 10.9 },
       transaction(query),
     );
 
-    expect(updated).toMatchObject({ value: 10.9, version: 2, deviceId: 'watch-1' });
+    expect(updated).toMatchObject({ value: 10.9, version: 2, deviceId: null });
     const update = query.mock.calls.find(([sql]) => String(sql).includes('SET entry_type'));
-    expect(update?.[1]).toEqual(['attempt', 10.9, 'seconds', null, null, 'watch-1', ENTRY_ID, EVENT_ID]);
+    expect(update?.[1]).toEqual(['attempt', 10.9, 'seconds', null, null, ENTRY_ID, EVENT_ID, 1]);
     expect(String(update?.[0])).toContain('version = version + 1');
+    expect(String(update?.[0])).toContain('version = $8');
   });
 
   it('revalidates merged patch state before updating', async () => {
     const query = successfulQuery();
     await expect(
-      updateTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, { entryType: 'note' }, transaction(query)),
+      updateTimelineEntry(
+        USER_ID,
+        EVENT_ID,
+        ENTRY_ID,
+        { expectedVersion: 1, entryType: 'note' },
+        transaction(query),
+      ),
     ).rejects.toMatchObject({ status: 400, code: 'VALIDATION_ERROR' });
     expect(query.mock.calls.some(([sql]) => String(sql).includes('SET entry_type'))).toBe(false);
+  });
+
+  it('rejects a stale patch before updating or recomputing', async () => {
+    const query = successfulQuery();
+    await expect(
+      updateTimelineEntry(
+        USER_ID,
+        EVENT_ID,
+        ENTRY_ID,
+        { expectedVersion: 2, value: 10.9 },
+        transaction(query),
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'TIMELINE_ENTRY_VERSION_CONFLICT',
+      details: { expectedVersion: 2, actualVersion: 1 },
+    });
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET entry_type'))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO results'))).toBe(false);
   });
 
   it('soft-deletes with a version bump and recomputes without the tombstone', async () => {
     const deletedRow = { ...entryRow, version: 2, deleted_at: new Date('2026-08-16T11:00:00.000Z') };
     const query = successfulQuery({ derivedEntries: [deletedRow] });
-    await removeTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, transaction(query));
+    await removeTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, { expectedVersion: 1 }, transaction(query));
 
     const removal = query.mock.calls.find(([sql]) => String(sql).includes('SET deleted_at = now()'));
-    expect(removal?.[1]).toEqual([ENTRY_ID, EVENT_ID]);
+    expect(removal?.[1]).toEqual([ENTRY_ID, EVENT_ID, 1]);
     expect(String(removal?.[0])).toContain('version = version + 1');
     expect(query.mock.calls.some(([sql]) => /^DELETE\s/i.test(String(sql).trim()))).toBe(false);
     const upsert = query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO results'));
     expect(upsert?.[1]).toEqual([EVENT_ID, ATHLETE_ID, '100m', 'no_result', null, null]);
+  });
+
+  it('treats an exact repeated undo as a no-op even after the event closes', async () => {
+    const tombstone = {
+      ...entryRow,
+      version: 2,
+      deleted_at: new Date('2026-08-16T11:00:00.000Z'),
+    };
+    const query = successfulQuery({ current: tombstone, status: 'scheduled' });
+
+    await removeTimelineEntry(
+      USER_ID,
+      EVENT_ID,
+      ENTRY_ID,
+      { expectedVersion: 1 },
+      transaction(query),
+    );
+
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET deleted_at = now()'))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO results'))).toBe(false);
+  });
+
+  it('returns a conflict for a stale undo without changing the entry', async () => {
+    const query = successfulQuery();
+    await expect(
+      removeTimelineEntry(
+        USER_ID,
+        EVENT_ID,
+        ENTRY_ID,
+        { expectedVersion: 2 },
+        transaction(query),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: 'TIMELINE_ENTRY_VERSION_CONFLICT' });
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET deleted_at = now()'))).toBe(false);
   });
 
   it('preserves a no-result override as the effective placing and PB/SB value', async () => {
@@ -189,7 +250,7 @@ describe('timeline service', () => {
       }],
     });
 
-    await removeTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, transaction(query));
+    await removeTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, { expectedVersion: 1 }, transaction(query));
     const placingUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET placing'));
     expect(placingUpdate?.[1]?.[0]).toBe(1);
     const flagsUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET is_pb'));
@@ -199,9 +260,20 @@ describe('timeline service', () => {
   it('uses one generic not-found response for malformed IDs', async () => {
     const query = vi.fn();
     await expect(
-      removeTimelineEntry(USER_ID, EVENT_ID, 'invalid', transaction(query)),
+      removeTimelineEntry(USER_ID, EVENT_ID, 'invalid', { expectedVersion: 1 }, transaction(query)),
     ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('lists active owned entries in deterministic timeline order', async () => {
+    const query = successfulQuery({ derivedEntries: [entryRow] });
+    const entries = await listTimelineEntries(USER_ID, EVENT_ID, { query } as never);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: ENTRY_ID, version: 1, deletedAt: null });
+    expect(String(query.mock.calls[0]?.[0])).toContain('te.deleted_at IS NULL');
+    expect(String(query.mock.calls[0]?.[0])).toContain('ORDER BY te.created_at ASC, te.id ASC');
+    expect(query.mock.calls[0]?.[1]).toEqual([EVENT_ID, USER_ID]);
   });
 
   it('locks affected athletes before event-wide result recomputation', async () => {

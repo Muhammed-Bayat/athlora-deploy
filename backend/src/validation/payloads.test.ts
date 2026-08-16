@@ -12,6 +12,7 @@ import {
   parseEventReplacementPayload,
   parseResultOverridePayload,
   parseTimelineEntryCreatePayload,
+  parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
   validateTimelineEntryState,
   type ValidationIssue,
@@ -454,24 +455,48 @@ describe('timeline patch and merged state', () => {
   it('preserves explicit nulls and omits absent fields', () => {
     expect(
       parseTimelineEntryPatchPayload({
+        expectedVersion: 2,
         value: null,
         incidentType: null,
         noteText: null,
-        deviceId: null,
       }),
-    ).toEqual({ value: null, incidentType: null, noteText: null, deviceId: null });
-    expect(parseTimelineEntryPatchPayload({ entryType: 'split' })).toEqual({ entryType: 'split' });
-    expect(parseTimelineEntryPatchPayload({ deviceId: '   ' })).toEqual({ deviceId: null });
+    ).toEqual({ expectedVersion: 2, value: null, incidentType: null, noteText: null });
+    expect(parseTimelineEntryPatchPayload({ expectedVersion: 3, entryType: 'split' })).toEqual({
+      expectedVersion: 3,
+      entryType: 'split',
+    });
   });
 
-  it('rejects an empty patch and immutable/server-controlled fields', () => {
+  it('requires a positive expected version and at least one editable field', () => {
     expectValidationError(() => parseTimelineEntryPatchPayload({}), [
-      { path: '$', code: 'empty_payload', message: 'At least one field is required' },
+      { path: '$', code: 'empty_payload', message: 'At least one editable field is required' },
+      { path: 'expectedVersion', code: 'required', message: 'Field is required' },
     ]);
+    expectValidationError(() => parseTimelineEntryPatchPayload({ expectedVersion: 0 }), [
+      { path: '$', code: 'empty_payload', message: 'At least one editable field is required' },
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+    expectValidationError(() => parseTimelineEntryPatchPayload({
+      expectedVersion: 2_147_483_648,
+      value: 10.9,
+    }), [
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+  });
+
+  it('rejects immutable, audit, and server-controlled fields', () => {
     expectValidationError(
-      () => parseTimelineEntryPatchPayload({ athleteId: ATHLETE_ID, unit: 'seconds', version: 2 }),
+      () => parseTimelineEntryPatchPayload({
+        expectedVersion: 2,
+        value: 10.9,
+        athleteId: ATHLETE_ID,
+        deviceId: 'watch-1',
+        unit: 'seconds',
+        version: 2,
+      }),
       [
         { path: 'athleteId', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'deviceId', code: 'unknown_field', message: 'Field is not allowed' },
         { path: 'unit', code: 'unknown_field', message: 'Field is not allowed' },
         { path: 'version', code: 'unknown_field', message: 'Field is not allowed' },
       ],
@@ -479,14 +504,19 @@ describe('timeline patch and merged state', () => {
   });
 
   it('validates cross-field state separately after a sparse patch is merged', () => {
-    const patch = parseTimelineEntryPatchPayload({ entryType: 'note', noteText: '  Review video ' });
+    const patch = parseTimelineEntryPatchPayload({
+      expectedVersion: 1,
+      entryType: 'note',
+      noteText: '  Review video ',
+    });
+    const { expectedVersion: _expectedVersion, ...editable } = patch;
     const merged = {
       entryType: 'attempt' as const,
       value: 10.9,
       unit: 'seconds' as const,
       incidentType: null,
       noteText: null,
-      ...patch,
+      ...editable,
     };
 
     expectValidationError(() => validateTimelineEntryState(merged), [
@@ -544,12 +574,26 @@ describe('timeline patch and merged state', () => {
       noteText: null,
     };
 
-    expect(applyTimelineEntryPatch(state, { value: null, incidentType: 'dns' })).toEqual({
+    expect(applyTimelineEntryPatch(state, {
+      expectedVersion: 1,
+      value: null,
+      incidentType: 'dns',
+    })).toEqual({
       ...state,
       value: null,
       unit: null,
       incidentType: 'dns',
     });
+  });
+
+  it('parses a strict version-aware delete payload', () => {
+    expect(parseTimelineEntryDeletePayload({ expectedVersion: 4 })).toEqual({ expectedVersion: 4 });
+    expectValidationError(() => parseTimelineEntryDeletePayload({ expectedVersion: 1.5 }), [
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+    expectValidationError(() => parseTimelineEntryDeletePayload({ expectedVersion: 4, id: ATHLETE_ID }), [
+      { path: 'id', code: 'unknown_field', message: 'Field is not allowed' },
+    ]);
   });
 });
 

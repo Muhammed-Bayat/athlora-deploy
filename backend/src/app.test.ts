@@ -246,7 +246,11 @@ describe('ownership non-disclosure', () => {
         `/api/v1/events/${EVENT_ID}/entries`,
         { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
       ],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }],
+      [
+        'patch',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1, value: 11.1 },
+      ],
       [
         'put',
         `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
@@ -284,7 +288,7 @@ describe('ownership non-disclosure', () => {
     const wrongParent = await request(app)
       .patch(`/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ value: 11.1 });
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(malformed.status).toBe(404);
     expect(malformed.body).toEqual(resourceNotFound);

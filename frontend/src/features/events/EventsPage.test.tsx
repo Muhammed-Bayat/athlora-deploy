@@ -498,9 +498,9 @@ describe('EventsPage', () => {
     await screen.findByRole('button', { name: /City Sprint Meet/ });
     await user.click(screen.getByRole('button', { name: 'Calendar view' }));
     await user.click(screen.getByRole('button', { name: 'Next month' }));
-    await user.click(screen.getByRole('button', { name: /September 1, 2026, 1 event/i }));
+    await user.click(screen.getByRole('button', { name: /1 September 2026, 1 event/i }));
     expect(screen.getByRole('button', { name: /City Sprint Meet/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Events on September 1, 2026/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Events on 1 September 2026/i })).toBeInTheDocument();
   });
 
   it('applies date filters to calendar markers', async () => {
@@ -509,9 +509,9 @@ describe('EventsPage', () => {
     await screen.findByRole('button', { name: /City Sprint Meet/ });
     await user.click(screen.getByRole('button', { name: 'Calendar view' }));
 
-    expect(screen.getByRole('button', { name: /August 10, 2026, 0 events/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /10 August 2026, 0 events/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'All' }));
-    expect(screen.getByRole('button', { name: /August 10, 2026, 1 event/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /10 August 2026, 1 event/i })).toBeInTheDocument();
   });
 
   it('reports only non-cancelled upcoming events to the console', async () => {

@@ -30,9 +30,9 @@ The append-only live log — the heart of the app.
 - `is_foul`: field-event foul attempts.
 - `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
 - `note_text`: free-text body for `note` entries.
-- `version`: bumped on every edit — used for merge-conflict detection (Stage 3).
+- `version`: starts at 1, is required as `expectedVersion` for PATCH/DELETE, and bumps once on each successful mutation. A mismatch is rejected before persistence.
 - `device_id`: originating device for offline merge (Stage 3).
-- `deleted_at`: "undo" is a soft delete, never `DELETE`.
+- `deleted_at`: "undo" is a soft delete, never `DELETE`; normal timeline reads and result derivation exclude tombstones. Repeating the same undo leaves its version and timestamps unchanged.
 
 ### event_participants
 The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.

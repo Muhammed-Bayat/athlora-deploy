@@ -3,15 +3,23 @@ import * as timeline from '../controllers/timeline.js';
 import {
   requireEventAthleteOwnership,
   requireEventLoggingOpen,
+  requireEventOwnership,
   requireTimelineEntryOwnership,
 } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
 import {
   parseTimelineEntryCreatePayload,
+  parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
 } from '../validation/payloads.js';
 
 const router = Router();
+
+router.get(
+  '/:eventId/entries',
+  requireEventOwnership('eventId'),
+  timeline.listTimelineEntries,
+);
 
 router.post(
   '/:eventId/entries',
@@ -22,15 +30,15 @@ router.post(
 );
 router.patch(
   '/:eventId/entries/:entryId',
-  validateBody(parseTimelineEntryPatchPayload),
   requireTimelineEntryOwnership,
+  validateBody(parseTimelineEntryPatchPayload),
   requireEventLoggingOpen,
   timeline.updateTimelineEntry,
 );
 router.delete(
   '/:eventId/entries/:entryId',
   requireTimelineEntryOwnership,
-  requireEventLoggingOpen,
+  validateBody(parseTimelineEntryDeletePayload),
   timeline.removeTimelineEntry,
 );
 
