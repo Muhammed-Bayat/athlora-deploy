@@ -33,7 +33,7 @@ const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; tempera
 const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
-  events: { title: 'Events', subtitle: 'Meets, trials and camps at a glance' },
+  events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
 };
 
 function ConsoleIcon({ name }: { name: IconName }) {
@@ -90,8 +90,9 @@ function DashboardView({ athletes, events, navigate }: DashboardViewProps) {
 export function CoachConsole() {
   const [view, setView] = useState<ConsoleView>('dashboard');
   const [athletes] = useState(() => fixtureAthletes.map((athlete) => ({ ...athlete, history: [...athlete.history] })));
-  const [events, setEvents] = useState(() => fixtureEvents.map((event) => ({ ...event, athleteIds: [...event.athleteIds] })));
+  const [events] = useState(() => fixtureEvents.map((event) => ({ ...event, athleteIds: [...event.athleteIds] })));
   const [rosterCount, setRosterCount] = useState<number | null>(null);
+  const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem('athlora-weather-effects') !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
@@ -103,7 +104,7 @@ export function CoachConsole() {
     <div className={styles.weatherScene} aria-hidden="true">{(weather.includes('rain') || weather === 'storm') && Array.from({ length: 36 }, (_, index) => <i className={styles.rain} style={{ left: `${(index * 17) % 101}%`, animationDelay: `${-(index % 13) / 3}s` }} key={index} />)}{weather === 'snow' && Array.from({ length: 30 }, (_, index) => <i className={styles.snow} style={{ left: `${(index * 23) % 101}%`, animationDelay: `${-(index % 11) / 2}s` }} key={index} />)}{weather === 'storm' && <i className={styles.lightning} />}</div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
-      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id !== 'dashboard' && <small>{item.id === 'athletes' ? (rosterCount ?? '—') : events.filter((event) => event.date >= FIXTURE_TODAY).length}</small>}</button></li>)}</ul></nav>
+      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id !== 'dashboard' && <small>{item.id === 'athletes' ? (rosterCount ?? '—') : (eventUpcomingCount ?? '—')}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness}><header><span>Squad Readiness</span><b>{readiness(athletes)}%</b></header><div><i style={{ width: `${readiness(athletes)}%` }} /></div>{STATUSES.map((status) => <p key={status}><i className={styles[`status${status}`]} />{status}<b>{counts[status]}</b></p>)}</section>
       <footer><span>C</span><div><b>Coach Console</b><small>Head Coach access</small></div></footer>
     </aside>
@@ -118,7 +119,7 @@ export function CoachConsole() {
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>
-      <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage events={events} athletes={athletes} onChange={setEvents} />}</main>
+      <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}</main>
     </div>
     <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
   </div>;

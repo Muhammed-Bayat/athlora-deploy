@@ -60,7 +60,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Implementation status
 
-Implemented in Stage 1: synchronized-auth gating; an API-backed responsive roster (`AthletesPage` → typed client → Express/PostgreSQL) with filtering, reusable create/edit forms and reversible archival; backend event CRUD with filters, forward-only status transitions, cancellation-as-delete and an in-progress logging guard; and event assignment services with athlete summaries, active-athlete/duplicate guards, idempotent RSVP updates and history-preserving removal. The dashboard and event frontend still use isolated preview data pending their dedicated API-integration issues. Still to build: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented in Stage 1: synchronized-auth gating; an API-backed responsive roster (`AthletesPage` → typed client → Express/PostgreSQL) with filtering, reusable create/edit forms and reversible archival; an API-backed event list/calendar with strict create/full-replacement edit payloads, detail counts and confirmed lifecycle transitions; backend event CRUD with filters, forward-only status transitions, cancellation-as-delete and an in-progress logging guard; and event assignment services with athlete summaries, active-athlete/duplicate guards, idempotent RSVP updates and history-preserving removal. The dashboard still uses isolated preview data, and participant assignment controls remain pending their dedicated integration issues. Still to build: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 
