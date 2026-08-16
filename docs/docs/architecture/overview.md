@@ -24,7 +24,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 ## Frontend
 
 - **State & structure**: feature folders (`src/features/*`). Shared primitives in `src/components`.
-- **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; per-resource wrappers are added as features land. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user.
+- **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; the roster consumes `src/api/athletes.ts` for list/create/full-replacement/archive/restore operations. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user, and unauthenticated console entry invokes Auth0 rather than exposing protected views.
 - **Offline (Stage 2+)**: Dexie/IndexedDB mirror for live-logging writes, PWA service worker, background sync, Socket.IO live updates.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
 
@@ -60,7 +60,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Implementation status
 
-Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Athlete roster CRUD is live end-to-end (`src/services/athletes.ts` + controllers + routes, with archival that preserves timeline entries and results), event CRUD is live (`src/services/events.ts` + controllers + routes, with filters, forward-only status transitions, cancellation-as-delete, and an in-progress logging guard), and event assignment is live (`src/services/participants.ts` + controllers + routes, with athlete summaries, active-athlete and duplicate guards, idempotent RSVP updates, and history-preserving removal). Still to build in Stage 1: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented in Stage 1: synchronized-auth gating; an API-backed responsive roster (`AthletesPage` → typed client → Express/PostgreSQL) with filtering, reusable create/edit forms and reversible archival; backend event CRUD with filters, forward-only status transitions, cancellation-as-delete and an in-progress logging guard; and event assignment services with athlete summaries, active-athlete/duplicate guards, idempotent RSVP updates and history-preserving removal. The dashboard and event frontend still use isolated preview data pending their dedicated API-integration issues. Still to build: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 

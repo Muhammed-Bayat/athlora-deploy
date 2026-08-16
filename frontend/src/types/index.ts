@@ -28,6 +28,22 @@ export interface Athlete {
   squad: string | null;
   notes: string | null;
   archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AthleteMutationPayload {
+  name: string;
+  dob: string | null;
+  gender: string | null;
+  squad: string | null;
+  notes: string | null;
+}
+
+export interface AthleteListFilters {
+  includeArchived?: boolean;
+  name?: string;
+  squad?: string;
 }
 
 export type EventType = 'competition' | 'training';
