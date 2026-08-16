@@ -27,6 +27,7 @@ athletesRouter.put(
   athletes.updateAthlete,
 );
 athletesRouter.delete('/:id', requireAthleteOwnership, athletes.deleteAthlete);
+athletesRouter.post('/:id/unarchive', requireAthleteOwnership, athletes.unarchiveAthlete);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);

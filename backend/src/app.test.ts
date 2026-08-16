@@ -112,6 +112,7 @@ describe('athletes', () => {
   it('allows a synchronized application user', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser());
+    query.mockResolvedValueOnce({ rows: [] });
 
     const response = await request(app)
       .get('/api/v1/athletes')
@@ -186,9 +187,6 @@ describe('owned resource scaffolds', () => {
   it('keeps every currently scaffolded owned route reachable', async () => {
     configureAuth();
     const cases = [
-      ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200],
-      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501],
-      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200],
       [
         'put',
