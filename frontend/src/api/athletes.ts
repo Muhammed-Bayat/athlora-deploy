@@ -1,5 +1,5 @@
 import type { Athlete, ApiList } from '../types';
-import { list, get, create, update, remove } from './client';
+import { list, get, create, update, remove, request } from './client';
 
 export async function listAthletes(): Promise<ApiList<Athlete>> {
   return list<Athlete>('athletes');
@@ -19,4 +19,11 @@ export async function updateAthlete(id: string, payload: unknown): Promise<Athle
 
 export async function deleteAthlete(id: string): Promise<void> {
   return remove('athletes', id);
+}
+
+export async function unarchiveAthlete(id: string): Promise<Athlete> {
+  const response = await request<{ data: Athlete }>(`/api/v1/athletes/${id}/unarchive`, {
+    method: 'POST',
+  });
+  return response.data;
 }

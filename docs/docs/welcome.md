@@ -35,6 +35,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Backend shell** — Express + TypeScript, `/api/v1` resource routers, standard error shape, Auth0 JWT protection that resolves every resource request to a typed application-user context, Neon PostgreSQL with checksum-tracked migrations, and pure result-derivation services.
 - **100m data/API contract** — the authoritative MVP contract is defined in `docs/api-reference/contract`, encoded in the aligned backend/frontend TypeScript domain types (fixed to 100m/seconds at the API/service boundary), and backed by the forward-only migration `0002_contract_100m.sql` (athlete archival, result outcomes, override audit timestamp, note storage, constraints and indexes). The schema now distinguishes no result, a valid finish, DQ, DNF and DNS.
 - **Ownership foundation** — verified Auth0 subjects resolve to `users.id` and role before protected resource handlers run. Unsynchronized identities receive a structured recovery error, while reusable athlete/event/timeline/participant/result checks scope access to the current user and return the same generic not-found response for missing and cross-coach resources.
+- **Athlete roster CRUD** — the `/api/v1/athletes` routes are live against PostgreSQL: coach-scoped list with name/squad filtering and stable ordering, create (server-derived owner), detail, full replacement, plus reversible archival (`DELETE` = archive, `POST /:id/unarchive`) that preserves timeline entries and results. Covered by API, service, and a `TEST_DATABASE_URL`-gated integration suite.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, Docusaurus build and a Playwright smoke test all green. CI workflow committed in `.gitea/workflows/ci.yml`, executed by a registered Gitea Actions runner on the university instance.
@@ -43,7 +44,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
-- Build the CRUD features: roster, events (with Open-Meteo weather), live logging, results/dashboard.
+- Build the remaining CRUD features: events (with Open-Meteo weather), live logging, results/dashboard, and wire the athlete roster UI to the API.
 
 ## Keeping these docs current
 

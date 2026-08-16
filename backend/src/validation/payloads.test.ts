@@ -3,6 +3,7 @@ import { ApiError } from '../middleware/errors.js';
 import {
   applyTimelineEntryPatch,
   parseAthleteCreatePayload,
+  parseAthleteListQuery,
   parseAthleteReplacementPayload,
   parseEventCreatePayload,
   parseEventReplacementPayload,
@@ -88,6 +89,31 @@ describe('athlete payloads', () => {
     expectValidationError(() => parseAthleteCreatePayload([]), [
       { path: '$', code: 'invalid_type', message: 'Expected payload to be an object' },
     ]);
+  });
+});
+
+describe('athlete list queries', () => {
+  it('defaults to the active roster with no filters', () => {
+    expect(parseAthleteListQuery({})).toEqual({ includeArchived: false });
+  });
+
+  it('parses includeArchived and trimmed name and squad filters', () => {
+    expect(
+      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ', squad: ' Sprint ' }),
+    ).toEqual({ includeArchived: true, name: 'ari', squad: 'Sprint' });
+    expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
+  });
+
+  it('rejects unknown, malformed, blank, and non-string query values', () => {
+    expectValidationError(
+      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squad: 5 }),
+      [
+        { path: 'includeArchived', code: 'invalid_value', message: 'Expected "true" or "false"' },
+        { path: 'name', code: 'blank', message: 'Must not be blank' },
+        { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'squad', code: 'invalid_type', message: 'Expected a string' },
+      ],
+    );
   });
 });
 

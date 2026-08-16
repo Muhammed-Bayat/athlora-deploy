@@ -47,6 +47,12 @@ export interface AthleteReplacementPayload {
   notes: string | null;
 }
 
+export interface AthleteListQuery {
+  includeArchived: boolean;
+  name?: string;
+  squad?: string;
+}
+
 export interface EventCreatePayload {
   type: EventType;
   discipline: Discipline | null;
@@ -105,6 +111,7 @@ export interface ResultOverridePayload {
 }
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -214,6 +221,24 @@ function nullableString(
   return normalized.length === 0 ? null : normalized;
 }
 
+function optionalQueryString(
+  query: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): string | undefined {
+  if (!hasOwn(query, field)) return undefined;
+  if (typeof query[field] !== 'string') {
+    issues.push(issue(field, 'invalid_type', 'Expected a string'));
+    return undefined;
+  }
+  const normalized = normalizeRequiredString(query[field]);
+  if (normalized === null) {
+    issues.push(issue(field, 'blank', 'Must not be blank'));
+    return undefined;
+  }
+  return normalized;
+}
+
 function requiredEnum<const Values extends readonly string[]>(
   payload: PayloadObject,
   field: string,
@@ -316,6 +341,31 @@ export function parseAthleteCreatePayload(input: unknown): AthleteCreatePayload 
 
 export function parseAthleteReplacementPayload(input: unknown): AthleteReplacementPayload {
   return parseAthlete(input);
+}
+
+export function parseAthleteListQuery(input: Record<string, unknown>): AthleteListQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, ATHLETE_LIST_QUERY_FIELDS, issues);
+
+  let includeArchived = false;
+  if (hasOwn(input, 'includeArchived')) {
+    if (input.includeArchived === 'true' || input.includeArchived === 'false') {
+      includeArchived = input.includeArchived === 'true';
+    } else {
+      issues.push(issue('includeArchived', 'invalid_value', 'Expected "true" or "false"'));
+    }
+  }
+
+  const name = optionalQueryString(input, 'name', issues);
+  const squad = optionalQueryString(input, 'squad', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+
+  return {
+    includeArchived,
+    ...(name === undefined ? {} : { name }),
+    ...(squad === undefined ? {} : { squad }),
+  };
 }
 
 function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload {

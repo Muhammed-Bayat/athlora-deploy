@@ -46,11 +46,11 @@ All checks pass locally at the scaffold stage, and the same gates run in Gitea A
 | Package | Checks | Result |
 |---------|--------|--------|
 | `frontend` | lint, typecheck, test, build | passing (14 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (128 Vitest/Supertest tests; 6 database tests skipped when unconfigured) |
+| `backend` | lint, typecheck, test, build | passing (163 Vitest/Supertest tests; 11 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 smoke test) |
 
-The backend suite includes 6 migration integration tests that exercise real SQL against PostgreSQL (fresh application, baseline upgrade, constraints, checksums). They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database:
+The backend suite includes 11 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests (fresh application, baseline upgrade, constraints, checksums) and 5 athlete-persistence tests (coach-scoped create/list/filter, and archival preserving timeline entries and results). They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database:
 
 ## Definition of done
 

@@ -103,9 +103,30 @@ id, coachId, name, dob (ISO date|null), gender (string|null), squad (string|null
 notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 ```
 
-**Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion. Archived athletes are excluded from roster and dashboard summaries by default.
+**Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion, and it preserves the athlete's event participation, timeline entries, and results. Archived athletes are excluded from roster and dashboard summaries by default.
 
-Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`. `archivedAt` is set via a dedicated archive/unarchive action, not through the generic update.
+**Endpoints:**
+
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes` | List the coach's roster (active by default) |
+| `POST /athletes` | Create an athlete; returns `201` with `{ data: athlete }` |
+| `GET /athletes/:id` | Fetch one owned athlete |
+| `PUT /athletes/:id` | Full replacement of mutable fields |
+| `DELETE /athletes/:id` | Archive (sets `archivedAt`); returns `{ data: athlete }` |
+| `POST /athletes/:id/unarchive` | Restore (clears `archivedAt`); returns `{ data: athlete }` |
+
+`GET /athletes` accepts strict query parameters (unknown parameters are rejected with `400`):
+
+| Parameter | Behavior |
+|---|---|
+| `includeArchived` | `'true'` or `'false'` (default `'false'`). When `false`, archived athletes are excluded. |
+| `name` | Case-insensitive substring match on `name` |
+| `squad` | Exact match on `squad` |
+
+Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable.
+
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`; it never touches `archivedAt`. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
 ### 4.3 Event
 
@@ -213,7 +234,8 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
 - `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
-- Feature endpoints (athletes/events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
+- `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, archival, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
+- Feature endpoints (events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
 
 ## AI declaration
 
