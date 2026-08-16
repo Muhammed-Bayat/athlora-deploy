@@ -60,7 +60,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Implementation status
 
-Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Athlete roster CRUD is now live end-to-end (`src/services/athletes.ts` + controllers + routes, with archival that preserves timeline entries and results). Still to build in Stage 1: real CRUD for events, Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Athlete roster CRUD is live end-to-end (`src/services/athletes.ts` + controllers + routes, with archival that preserves timeline entries and results), and event CRUD is live (`src/services/events.ts` + controllers + routes, with filters, forward-only status transitions, cancellation-as-delete, and an in-progress logging guard on the timeline routes). Still to build in Stage 1: Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 

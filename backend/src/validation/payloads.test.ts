@@ -6,6 +6,7 @@ import {
   parseAthleteListQuery,
   parseAthleteReplacementPayload,
   parseEventCreatePayload,
+  parseEventListQuery,
   parseEventReplacementPayload,
   parseResultOverridePayload,
   parseTimelineEntryCreatePayload,
@@ -163,7 +164,7 @@ describe('event payloads', () => {
       }),
     ).toEqual({
       type: 'training',
-      discipline: null,
+      discipline: '100m',
       title: 'Starts',
       date: '2026-08-14',
       time: null,
@@ -216,6 +217,52 @@ describe('event payloads', () => {
           date: '2026-08-14',
         }),
       [{ path: 'discipline', code: 'invalid_value', message: 'Expected 100m or null' }],
+    );
+  });
+});
+
+describe('event list queries', () => {
+  it('defaults to no filters', () => {
+    expect(parseEventListQuery({})).toEqual({});
+  });
+
+  it('parses type, status, and inclusive date range filters', () => {
+    expect(
+      parseEventListQuery({ type: 'competition', status: 'completed', dateFrom: ' 2026-01-01 ' }),
+    ).toEqual({ type: 'competition', status: 'completed', dateFrom: '2026-01-01' });
+    expect(parseEventListQuery({ dateTo: '2026-12-31' })).toEqual({ dateTo: '2026-12-31' });
+  });
+
+  it('rejects unknown, invalid-enum, blank, and malformed-date values', () => {
+    expectValidationError(
+      () =>
+        parseEventListQuery({
+          type: 'race',
+          status: 'done',
+          dateFrom: '2026-02-29',
+          dateTo: 'not-a-date',
+          page: '1',
+        }),
+      [
+        { path: 'dateFrom', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
+        { path: 'dateTo', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
+        { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'status', code: 'invalid_value', message: 'Expected one of: scheduled, in_progress, completed, cancelled' },
+        { path: 'type', code: 'invalid_value', message: 'Expected one of: competition, training' },
+      ],
+    );
+  });
+
+  it('rejects an inverted date range', () => {
+    expectValidationError(
+      () => parseEventListQuery({ dateFrom: '2026-08-14', dateTo: '2026-08-01' }),
+      [
+        {
+          path: 'dateFrom',
+          code: 'invalid_range',
+          message: 'dateFrom must not be after dateTo',
+        },
+      ],
     );
   });
 });

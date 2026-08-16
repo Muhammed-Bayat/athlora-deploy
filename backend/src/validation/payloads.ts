@@ -55,7 +55,7 @@ export interface AthleteListQuery {
 
 export interface EventCreatePayload {
   type: EventType;
-  discipline: Discipline | null;
+  discipline: Discipline;
   title: string;
   date: string;
   time: string | null;
@@ -67,7 +67,7 @@ export interface EventCreatePayload {
 
 export interface EventReplacementPayload {
   type: EventType;
-  discipline: Discipline | null;
+  discipline: Discipline;
   title: string;
   date: string;
   time: string | null;
@@ -75,6 +75,13 @@ export interface EventReplacementPayload {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+}
+
+export interface EventListQuery {
+  type?: EventType;
+  status?: EventStatus;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface TimelineEntryCreatePayload {
@@ -112,6 +119,7 @@ export interface ResultOverridePayload {
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
+const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -237,6 +245,35 @@ function optionalQueryString(
     return undefined;
   }
   return normalized;
+}
+
+function optionalQueryEnum<const Values extends readonly string[]>(
+  query: PayloadObject,
+  field: string,
+  values: Values,
+  issues: ValidationIssue[],
+): Values[number] | undefined {
+  const value = optionalQueryString(query, field, issues);
+  if (value === undefined) return undefined;
+  if (!isEnumValue(value, values)) {
+    issues.push(issue(field, 'invalid_value', `Expected one of: ${values.join(', ')}`));
+    return undefined;
+  }
+  return value;
+}
+
+function optionalQueryDate(
+  query: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): string | undefined {
+  if (!hasOwn(query, field)) return undefined;
+  const value = typeof query[field] === 'string' ? query[field].trim() : query[field];
+  if (!isGregorianDate(value)) {
+    issues.push(issue(field, 'invalid_format', 'Expected a real date in YYYY-MM-DD format'));
+    return undefined;
+  }
+  return value;
 }
 
 function requiredEnum<const Values extends readonly string[]>(
@@ -373,7 +410,7 @@ function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload 
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, EVENT_FIELDS, issues);
 
-  let discipline: Discipline | null = null;
+  let discipline: Discipline = DISCIPLINE_100M;
   if (hasOwn(payload, 'discipline') && payload.discipline !== null) {
     if (payload.discipline === DISCIPLINE_100M) {
       discipline = DISCIPLINE_100M;
@@ -409,6 +446,29 @@ export function parseEventCreatePayload(input: unknown): EventCreatePayload {
 
 export function parseEventReplacementPayload(input: unknown): EventReplacementPayload {
   return parseEvent(input, true);
+}
+
+export function parseEventListQuery(input: Record<string, unknown>): EventListQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, EVENT_LIST_QUERY_FIELDS, issues);
+
+  const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
+  const status = optionalQueryEnum(input, 'status', EVENT_STATUSES, issues);
+  const dateFrom = optionalQueryDate(input, 'dateFrom', issues);
+  const dateTo = optionalQueryDate(input, 'dateTo', issues);
+
+  if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
+    issues.push(issue('dateFrom', 'invalid_range', 'dateFrom must not be after dateTo'));
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+
+  return {
+    ...(type === undefined ? {} : { type }),
+    ...(status === undefined ? {} : { status }),
+    ...(dateFrom === undefined ? {} : { dateFrom }),
+    ...(dateTo === undefined ? {} : { dateTo }),
+  };
 }
 
 function timelineStateIssues(state: TimelineEntryState): ValidationIssue[] {
