@@ -6,6 +6,7 @@ import { createApp } from '../app.js';
 
 const timelineService = vi.hoisted(() => ({
   createTimelineEntry: vi.fn(),
+  listTimelineEntries: vi.fn(),
   updateTimelineEntry: vi.fn(),
   removeTimelineEntry: vi.fn(),
 }));
@@ -77,6 +78,7 @@ beforeEach(() => {
   process.env.AUTH0_AUDIENCE = 'https://api.example.com';
   vi.mocked(jwtVerify).mockResolvedValue({ payload: { sub: 'auth0|coach-1' } } as never);
   timelineService.createTimelineEntry.mockResolvedValue(entry);
+  timelineService.listTimelineEntries.mockResolvedValue([entry]);
   timelineService.updateTimelineEntry.mockResolvedValue({ ...entry, value: 11.1, version: 2 });
   timelineService.removeTimelineEntry.mockResolvedValue(undefined);
 });
@@ -86,11 +88,20 @@ afterEach(() => {
   delete process.env.AUTH0_AUDIENCE;
 });
 
-function authorized(method: 'post' | 'patch' | 'delete', path: string) {
+function authorized(method: 'get' | 'post' | 'patch' | 'delete', path: string) {
   return request(app)[method](path).set('Authorization', 'Bearer valid');
 }
 
 describe('timeline routes', () => {
+  it('lists active entries with the standard count envelope', async () => {
+    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce(eventRow());
+    const response = await authorized('get', `/api/v1/events/${EVENT_ID}/entries`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [entry], meta: { count: 1 } });
+    expect(timelineService.listTimelineEntries).toHaveBeenCalledWith(USER_ID, EVENT_ID);
+  });
+
   it('creates a normalized timeline entry and returns 201', async () => {
     query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] }).mockResolvedValueOnce(eventRow());
     const response = await authorized('post', `/api/v1/events/${EVENT_ID}/entries`).send({
@@ -117,45 +128,63 @@ describe('timeline routes', () => {
   it('patches through the sparse parsed payload', async () => {
     query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] }).mockResolvedValueOnce(eventRow());
     const response = await authorized('patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
-      .send({ value: 11.1, deviceId: ' watch-1 ' });
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ value: 11.1, version: 2 });
     expect(timelineService.updateTimelineEntry).toHaveBeenCalledWith(USER_ID, EVENT_ID, ENTRY_ID, {
+      expectedVersion: 1,
       value: 11.1,
-      deviceId: 'watch-1',
     });
   });
 
   it('soft-deletes through the service and returns 204', async () => {
-    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] }).mockResolvedValueOnce(eventRow());
-    const response = await authorized('delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`);
+    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] });
+    const response = await authorized('delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
+      .send({ expectedVersion: 1 });
 
     expect(response.status).toBe(204);
     expect(response.text).toBe('');
-    expect(timelineService.removeTimelineEntry).toHaveBeenCalledWith(USER_ID, EVENT_ID, ENTRY_ID);
+    expect(timelineService.removeTimelineEntry).toHaveBeenCalledWith(USER_ID, EVENT_ID, ENTRY_ID, {
+      expectedVersion: 1,
+    });
   });
 
-  it('validates create and patch bodies before ownership queries', async () => {
+  it('validates create before ownership and patch after entry ownership', async () => {
     query.mockResolvedValueOnce(userRow());
     const invalidCreate = await authorized('post', `/api/v1/events/${EVENT_ID}/entries`).send({});
     expect(invalidCreate.status).toBe(400);
     expect(invalidCreate.body.error.code).toBe('VALIDATION_ERROR');
     expect(query).toHaveBeenCalledOnce();
 
-    query.mockResolvedValueOnce(userRow());
+    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] });
     const invalidPatch = await authorized('patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`).send({});
     expect(invalidPatch.status).toBe(400);
     expect(invalidPatch.body.error.details.issues).toEqual([
       expect.objectContaining({ path: '$', code: 'empty_payload' }),
+      expect.objectContaining({ path: 'expectedVersion', code: 'required' }),
     ]);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not reveal a foreign entry through patch or delete validation', async () => {
+    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [] });
+    const patch = await authorized('patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`).send({});
+
+    query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [] });
+    const deletion = await authorized('delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`).send({});
+
+    expect([patch.status, deletion.status]).toEqual([404, 404]);
+    expect([patch.body, deletion.body]).toEqual([
+      { error: { code: 'NOT_FOUND', message: 'Resource not found', details: {} } },
+      { error: { code: 'NOT_FOUND', message: 'Resource not found', details: {} } },
+    ]);
   });
 
   it('keeps foreign resources behind the generic not-found response', async () => {
     query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [] });
     const response = await authorized('patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
-      .send({ value: 11.1 });
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
@@ -166,7 +195,8 @@ describe('timeline routes', () => {
 
   it('rejects logging when the owned event is not in progress', async () => {
     query.mockResolvedValueOnce(userRow()).mockResolvedValueOnce({ rows: [{}] }).mockResolvedValueOnce(eventRow('scheduled'));
-    const response = await authorized('delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`);
+    const response = await authorized('patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(response.status).toBe(409);
     expect(response.body.error).toEqual({
@@ -174,6 +204,6 @@ describe('timeline routes', () => {
       message: 'Logging is only open while the event is in progress',
       details: { status: 'scheduled' },
     });
-    expect(timelineService.removeTimelineEntry).not.toHaveBeenCalled();
+    expect(timelineService.updateTimelineEntry).not.toHaveBeenCalled();
   });
 });

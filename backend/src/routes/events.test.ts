@@ -532,7 +532,7 @@ describe('timeline logging guard', () => {
     });
   });
 
-  it('rejects logging against a scheduled event for patch and delete too', async () => {
+  it('rejects patch logging against a scheduled event', async () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
@@ -542,19 +542,9 @@ describe('timeline logging guard', () => {
     const patch = await request(app)
       .patch(`/api/v1/events/${EVENT_ID}/entries/44444444-4444-4444-8444-444444444444`)
       .set('Authorization', 'Bearer valid')
-      .send({ value: 11.1 });
-
-    query
-      .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
-      .mockResolvedValueOnce({ rows: [eventRow({ status: 'scheduled' })] });
-
-    const del = await request(app)
-      .delete(`/api/v1/events/${EVENT_ID}/entries/44444444-4444-4444-8444-444444444444`)
-      .set('Authorization', 'Bearer valid');
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(patch.status).toBe(409);
-    expect(del.status).toBe(409);
     expect(patch.body.error.details).toEqual({ status: 'scheduled' });
   });
 

@@ -125,6 +125,30 @@ export interface TimelineEntry {
   deletedAt: string | null;
 }
 
+export interface TimelineEntryCreatePayload {
+  athleteId: string;
+  discipline?: Discipline;
+  entryType: EntryType;
+  value?: number | null;
+  unit?: ResultUnit | null;
+  isFoul?: false;
+  incidentType?: IncidentType;
+  noteText?: string | null;
+  deviceId?: string | null;
+}
+
+export interface TimelineEntryPatchPayload {
+  expectedVersion: number;
+  entryType?: EntryType;
+  value?: number | null;
+  incidentType?: IncidentType;
+  noteText?: string | null;
+}
+
+export interface TimelineEntryDeletePayload {
+  expectedVersion: number;
+}
+
 export interface Result {
   eventId: string;
   athleteId: string;

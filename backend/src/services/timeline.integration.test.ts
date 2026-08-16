@@ -8,6 +8,7 @@ import type { TimelineEntryCreatePayload } from '../validation/payloads.js';
 import { cancelEvent, replaceEvent } from './events.js';
 import {
   createTimelineEntry,
+  listTimelineEntries,
   removeTimelineEntry,
   updateTimelineEntry,
 } from './timeline.js';
@@ -150,7 +151,7 @@ describeDB('timeline entries against a real database', () => {
       coachId,
       eventId,
       first.id,
-      { value: 11.5 },
+      { expectedVersion: first.version, value: 11.5 },
       runTransaction,
     );
     expect(updated).toMatchObject({ value: 11.5, version: 2 });
@@ -159,6 +160,84 @@ describeDB('timeline entries against a real database', () => {
       [eventId, athleteId],
     );
     expect(rows[0].final_result).toBe('11.4');
+  });
+
+  it('edits incidents and notes while preserving the original audit metadata', async () => {
+    const coachId = await seedCoach('content-edits');
+    const eventId = await seedEvent(coachId, 'Content edits');
+    const athleteId = await seedAthlete(coachId, 'Content Runner');
+    const finish = await createTimelineEntry(
+      coachId,
+      eventId,
+      attempt(athleteId, 10.9),
+      runTransaction,
+    );
+    const note = await createTimelineEntry(coachId, eventId, {
+      ...attempt(athleteId, 10.9),
+      entryType: 'note',
+      value: null,
+      unit: null,
+      noteText: 'Check start',
+    }, runTransaction);
+
+    const incident = await updateTimelineEntry(
+      coachId,
+      eventId,
+      finish.id,
+      { expectedVersion: finish.version, value: null, incidentType: 'dq' },
+      runTransaction,
+    );
+    expect(incident).toMatchObject({ incidentType: 'dq', value: null, version: 2 });
+
+    const correctedNote = await updateTimelineEntry(
+      coachId,
+      eventId,
+      note.id,
+      { expectedVersion: note.version, noteText: 'Check reaction time' },
+      runTransaction,
+    );
+    expect(correctedNote).toMatchObject({
+      noteText: 'Check reaction time',
+      recordedBy: coachId,
+      deviceId: null,
+      version: 2,
+    });
+    expect(correctedNote.updatedAt).not.toBe(correctedNote.createdAt);
+  });
+
+  it('rejects stale edits and deletes without changing persisted state', async () => {
+    const coachId = await seedCoach('stale');
+    const eventId = await seedEvent(coachId, 'Stale');
+    const athleteId = await seedAthlete(coachId, 'Stale Runner');
+    const entry = await createTimelineEntry(coachId, eventId, attempt(athleteId, 11.2), runTransaction);
+    const corrected = await updateTimelineEntry(
+      coachId,
+      eventId,
+      entry.id,
+      { expectedVersion: entry.version, value: 11.1 },
+      runTransaction,
+    );
+
+    await expect(updateTimelineEntry(
+      coachId,
+      eventId,
+      entry.id,
+      { expectedVersion: entry.version, value: 12 },
+      runTransaction,
+    )).rejects.toMatchObject({ status: 409, code: 'TIMELINE_ENTRY_VERSION_CONFLICT' });
+    await expect(removeTimelineEntry(
+      coachId,
+      eventId,
+      entry.id,
+      { expectedVersion: entry.version },
+      runTransaction,
+    )).rejects.toMatchObject({ status: 409, code: 'TIMELINE_ENTRY_VERSION_CONFLICT' });
+
+    const persisted = await pool.query(
+      `SELECT value, version, deleted_at FROM timeline_entries WHERE id = $1`,
+      [entry.id],
+    );
+    expect(persisted.rows[0]).toEqual({ value: '11.1', version: corrected.version, deleted_at: null });
   });
 
   it('voids a result for DQ and restores it when the incident is soft-deleted', async () => {
@@ -180,7 +259,7 @@ describeDB('timeline entries against a real database', () => {
     );
     expect(result.rows[0]).toEqual({ outcome: 'dq', final_result: null, placing: null });
 
-    await removeTimelineEntry(coachId, eventId, dq.id, runTransaction);
+    await removeTimelineEntry(coachId, eventId, dq.id, { expectedVersion: dq.version }, runTransaction);
     result = await pool.query(
       `SELECT outcome, final_result, placing FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
@@ -192,6 +271,48 @@ describeDB('timeline entries against a real database', () => {
     );
     expect(tombstone.rows[0].version).toBe(2);
     expect(tombstone.rows[0].deleted_at).not.toBeNull();
+
+    const deletedAt = tombstone.rows[0].deleted_at;
+    await pool.query(`UPDATE events SET status = 'completed' WHERE id = $1`, [eventId]);
+    await removeTimelineEntry(coachId, eventId, dq.id, { expectedVersion: dq.version }, runTransaction);
+    const repeated = await pool.query(
+      `SELECT version, deleted_at FROM timeline_entries WHERE id = $1`,
+      [dq.id],
+    );
+    expect(repeated.rows[0]).toEqual({ version: 2, deleted_at: deletedAt });
+    await expect(listTimelineEntries(coachId, eventId, pool)).resolves.toEqual([
+      expect.objectContaining({ value: 10.9, deletedAt: null }),
+    ]);
+  });
+
+  it('rejects mismatched parents and cross-coach timeline mutations', async () => {
+    const coachId = await seedCoach('mutation-owner');
+    const otherCoachId = await seedCoach('mutation-other');
+    const eventId = await seedEvent(coachId, 'Owned');
+    const otherEventId = await seedEvent(coachId, 'Wrong parent');
+    const athleteId = await seedAthlete(coachId, 'Owned Runner');
+    const entry = await createTimelineEntry(coachId, eventId, attempt(athleteId, 11.2), runTransaction);
+
+    await expect(updateTimelineEntry(
+      coachId,
+      otherEventId,
+      entry.id,
+      { expectedVersion: entry.version, value: 11.1 },
+      runTransaction,
+    )).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    await expect(removeTimelineEntry(
+      otherCoachId,
+      eventId,
+      entry.id,
+      { expectedVersion: entry.version },
+      runTransaction,
+    )).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+
+    const persisted = await pool.query(
+      `SELECT value, version, deleted_at FROM timeline_entries WHERE id = $1`,
+      [entry.id],
+    );
+    expect(persisted.rows[0]).toEqual({ value: '11.2', version: 1, deleted_at: null });
   });
 
   it('preserves override audit and effective statistics when the derived attempt is undone', async () => {
@@ -209,7 +330,13 @@ describeDB('timeline entries against a real database', () => {
       [coachId, eventId, athleteId],
     );
 
-    await removeTimelineEntry(coachId, eventId, entry.id, runTransaction);
+    await removeTimelineEntry(
+      coachId,
+      eventId,
+      entry.id,
+      { expectedVersion: entry.version },
+      runTransaction,
+    );
     const { rows } = await pool.query<ResultRow>(
       `SELECT event_id, athlete_id, discipline, outcome, final_result, unit, placing,
               is_pb, is_sb, manual_override, override_reason, overridden_by, override_at, updated_at

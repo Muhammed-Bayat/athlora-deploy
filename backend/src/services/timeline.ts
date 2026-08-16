@@ -1,4 +1,4 @@
-import type { DbExecutor } from '../db/client.js';
+import { getPool, type DbExecutor } from '../db/client.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
@@ -20,6 +20,7 @@ import {
 import {
   applyTimelineEntryPatch,
   type TimelineEntryCreatePayload,
+  type TimelineEntryDeletePayload,
   type TimelineEntryPatchPayload,
 } from '../validation/payloads.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
@@ -73,6 +74,21 @@ function assertLoggingOpen(status: EventStatus): void {
       'Logging is only open while the event is in progress',
       { status },
     );
+  }
+}
+
+function versionConflict(expectedVersion: number, actualVersion: number): ApiError {
+  return new ApiError(
+    409,
+    'TIMELINE_ENTRY_VERSION_CONFLICT',
+    'Timeline entry has been modified',
+    { expectedVersion, actualVersion },
+  );
+}
+
+function assertExpectedVersion(entry: TimelineEntry, expectedVersion: number): void {
+  if (entry.version !== expectedVersion) {
+    throw versionConflict(expectedVersion, entry.version);
   }
 }
 
@@ -247,7 +263,7 @@ async function lockOwnedEntry(
   userId: string,
   eventId: string,
   entryId: string,
-): Promise<{ entry: TimelineEntry; eventType: EventType }> {
+): Promise<{ entry: TimelineEntry; eventType: EventType; eventStatus: EventStatus }> {
   const result = await client.query<LockedEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS},
             e.type AS event_type,
@@ -257,7 +273,6 @@ async function lockOwnedEntry(
      JOIN athletes a ON a.id = te.athlete_id
      WHERE te.id = $1
        AND te.event_id = $2
-       AND te.deleted_at IS NULL
        AND e.created_by = $3
        AND a.coach_id = $3
      FOR UPDATE OF e, a, te`,
@@ -265,8 +280,32 @@ async function lockOwnedEntry(
   );
   const row = result.rows[0];
   if (!row) throw notFound();
-  assertLoggingOpen(row.event_status);
-  return { entry: mapTimelineEntryRow(row), eventType: row.event_type };
+  return {
+    entry: mapTimelineEntryRow(row),
+    eventType: row.event_type,
+    eventStatus: row.event_status,
+  };
+}
+
+export async function listTimelineEntries(
+  userId: string,
+  eventId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<TimelineEntry[]> {
+  const [ownedEventId] = ownedIds(userId, eventId);
+  const result = await executor.query<TimelineEntryRow>(
+    `SELECT ${TIMELINE_SELECT_COLUMNS}
+     FROM timeline_entries te
+     JOIN events e ON e.id = te.event_id
+     JOIN athletes a ON a.id = te.athlete_id
+     WHERE te.event_id = $1
+       AND te.deleted_at IS NULL
+       AND e.created_by = $2
+       AND a.coach_id = $2
+     ORDER BY te.created_at ASC, te.id ASC`,
+    [ownedEventId, userId],
+  );
+  return result.rows.map(mapTimelineEntryRow);
 }
 
 export async function createTimelineEntry(
@@ -323,7 +362,15 @@ export async function updateTimelineEntry(
 ): Promise<TimelineEntry> {
   const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
   return runTransaction(async (client) => {
-    const { entry, eventType } = await lockOwnedEntry(client, userId, ownedEventId, ownedEntryId);
+    const { entry, eventType, eventStatus } = await lockOwnedEntry(
+      client,
+      userId,
+      ownedEventId,
+      ownedEntryId,
+    );
+    if (entry.deletedAt !== null) throw notFound();
+    assertLoggingOpen(eventStatus);
+    assertExpectedVersion(entry, patch.expectedVersion);
     const state = applyTimelineEntryPatch({
       entryType: entry.entryType,
       value: entry.value,
@@ -338,10 +385,9 @@ export async function updateTimelineEntry(
            unit = $3,
            incident_type = $4,
            note_text = $5,
-           device_id = $6,
            version = version + 1,
            updated_at = now()
-       WHERE id = $7 AND event_id = $8 AND deleted_at IS NULL
+       WHERE id = $6 AND event_id = $7 AND deleted_at IS NULL AND version = $8
        RETURNING ${TIMELINE_COLUMNS}`,
       [
         state.entryType,
@@ -349,9 +395,9 @@ export async function updateTimelineEntry(
         state.unit,
         state.incidentType,
         state.noteText,
-        patch.deviceId === undefined ? entry.deviceId : patch.deviceId,
         ownedEntryId,
         ownedEventId,
+        patch.expectedVersion,
       ],
     );
     const row = updated.rows[0];
@@ -366,17 +412,29 @@ export async function removeTimelineEntry(
   userId: string,
   eventId: unknown,
   entryId: unknown,
+  payload: TimelineEntryDeletePayload,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<void> {
   const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
   await runTransaction(async (client) => {
-    const { entry, eventType } = await lockOwnedEntry(client, userId, ownedEventId, ownedEntryId);
+    const { entry, eventType, eventStatus } = await lockOwnedEntry(
+      client,
+      userId,
+      ownedEventId,
+      ownedEntryId,
+    );
+    if (entry.deletedAt !== null) {
+      if (entry.version === payload.expectedVersion + 1) return;
+      throw versionConflict(payload.expectedVersion, entry.version);
+    }
+    assertLoggingOpen(eventStatus);
+    assertExpectedVersion(entry, payload.expectedVersion);
     const removed = await client.query(
       `UPDATE timeline_entries
        SET deleted_at = now(), version = version + 1, updated_at = now()
-       WHERE id = $1 AND event_id = $2 AND deleted_at IS NULL
+       WHERE id = $1 AND event_id = $2 AND deleted_at IS NULL AND version = $3
        RETURNING id`,
-      [ownedEntryId, ownedEventId],
+      [ownedEntryId, ownedEventId, payload.expectedVersion],
     );
     if (removed.rows.length === 0) throw notFound();
     await recomputeResult(client, ownedEventId, entry.athleteId, eventType);

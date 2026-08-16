@@ -107,11 +107,15 @@ export interface TimelineEntryCreatePayload {
 }
 
 export interface TimelineEntryPatchPayload {
+  expectedVersion: number;
   entryType?: EntryType;
   value?: number | null;
   incidentType?: IncidentType | null;
   noteText?: string | null;
-  deviceId?: string | null;
+}
+
+export interface TimelineEntryDeletePayload {
+  expectedVersion: number;
 }
 
 export interface TimelineEntryState {
@@ -155,15 +159,17 @@ const TIMELINE_CREATE_FIELDS = [
   'deviceId',
 ] as const;
 const TIMELINE_PATCH_FIELDS = [
+  'expectedVersion',
   'entryType',
   'value',
   'incidentType',
   'noteText',
-  'deviceId',
 ] as const;
+const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
 
 type PayloadObject = Record<string, unknown>;
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 function issue(path: string, code: string, message: string): ValidationIssue {
   return { path, code, message };
@@ -335,6 +341,26 @@ function requiredEnum<const Values extends readonly string[]>(
     return values[0];
   }
   return payload[field];
+}
+
+function requiredPositiveInteger(
+  payload: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): number {
+  if (!hasOwn(payload, field)) {
+    issues.push(issue(field, 'required', 'Field is required'));
+    return 0;
+  }
+  if (
+    !Number.isSafeInteger(payload[field])
+    || Number(payload[field]) <= 0
+    || Number(payload[field]) > POSTGRES_INTEGER_MAX
+  ) {
+    issues.push(issue(field, 'invalid_value', 'Expected a positive integer'));
+    return 0;
+  }
+  return payload[field] as number;
 }
 
 function requiredDate(
@@ -554,7 +580,8 @@ export function applyTimelineEntryPatch(
   state: TimelineEntryState,
   patch: TimelineEntryPatchPayload,
 ): TimelineEntryState {
-  const merged = { ...state, ...patch };
+  const { expectedVersion: _expectedVersion, ...editable } = patch;
+  const merged = { ...state, ...editable };
   const result = {
     entryType: merged.entryType,
     value: merged.value,
@@ -669,11 +696,13 @@ export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPat
   const payload = payloadObject(input);
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, TIMELINE_PATCH_FIELDS, issues);
-  if (Object.keys(payload).length === 0) {
-    issues.push(issue('$', 'empty_payload', 'At least one field is required'));
+  if (!TIMELINE_PATCH_FIELDS.slice(1).some((field) => hasOwn(payload, field))) {
+    issues.push(issue('$', 'empty_payload', 'At least one editable field is required'));
   }
 
-  const result: TimelineEntryPatchPayload = {};
+  const result: TimelineEntryPatchPayload = {
+    expectedVersion: requiredPositiveInteger(payload, 'expectedVersion', issues),
+  };
   if (hasOwn(payload, 'entryType')) {
     if (!isEnumValue(payload.entryType, ENTRY_TYPES)) {
       issues.push(issue('entryType', 'invalid_value', `Expected one of: ${ENTRY_TYPES.join(', ')}`));
@@ -719,19 +748,18 @@ export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPat
     }
   }
 
-  if (hasOwn(payload, 'deviceId')) {
-    if (payload.deviceId === null) {
-      result.deviceId = null;
-    } else if (typeof payload.deviceId !== 'string') {
-      issues.push(issue('deviceId', 'invalid_type', 'Expected a string or null'));
-    } else {
-      const normalized = payload.deviceId.trim();
-      result.deviceId = normalized.length === 0 ? null : normalized;
-    }
-  }
-
   if (issues.length > 0) throwValidation(issues);
   return result;
+}
+
+export function parseTimelineEntryDeletePayload(input: unknown): TimelineEntryDeletePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, TIMELINE_DELETE_FIELDS, issues);
+  const expectedVersion = requiredPositiveInteger(payload, 'expectedVersion', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { expectedVersion };
 }
 
 export function parseResultOverridePayload(input: unknown): ResultOverridePayload {

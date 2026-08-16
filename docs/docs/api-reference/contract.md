@@ -183,7 +183,7 @@ Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `cre
 
 Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
 
-**Logging guard:** the timeline routes (`POST`/`PATCH`/`DELETE /events/:eventId/entries`) reject log writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`); only an `in_progress` event accepts live log writes.
+**Logging guard:** timeline creation, edits, and the first undo reject writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`). An exact retry of an undo that already succeeded remains a `204` no-op even if the event has since closed; it does not write again.
 
 ### 4.4 Event participant
 
@@ -217,9 +217,20 @@ recordedBy, version, deviceId (string|null), createdAt, updatedAt, deletedAt (IS
 - `noteText` stores the free-text body of `note` entries (and is null otherwise).
 - `isFoul` applies to field-event attempts only; it is always `false` for 100m.
 - `deletedAt` is the soft-delete tombstone — undo is `deleted_at = now()`, never `DELETE`.
-- `version` starts at 1 and bumps on every edit (Stage 3 merge conflict detection); `deviceId` is set when the entry originated offline.
+- `version` starts at 1 and is the required optimistic-concurrency precondition for edits and undo. A successful mutation bumps it once; an exact repeated undo does not. `deviceId` records the originating device and is not editable.
 
-Create request DTO: `athleteId`, `discipline` (optional, only exact `'100m'` accepted), `entryType`, `value`, `unit` (optional, only exact `'seconds'` accepted when a value is present), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). Discipline and unit are normalized to server constants rather than trusted as client-controlled values. `recordedBy` is taken from the authenticated user. A note requires non-blank `noteText` and cannot carry a value, unit, or incident. `isFoul` is always false for 100m. Edit uses a sparse, non-empty `PATCH`; omitted fields remain unchanged, explicit `null` clears nullable fields, and the merged entry state is revalidated. Undo uses `DELETE /events/:eventId/entries/:entryId` as a soft delete.
+| Method & path | Purpose |
+|---|---|
+| `GET /events/:eventId/entries` | List active entries in stable `createdAt`, `id` order; tombstones are excluded |
+| `POST /events/:eventId/entries` | Create a normalized entry; returns `201` |
+| `PATCH /events/:eventId/entries/:entryId` | Correct observation content using the expected version |
+| `DELETE /events/:eventId/entries/:entryId` | Create a versioned tombstone using the expected version; returns `204` |
+
+Create request DTO: `athleteId`, `discipline` (optional, only exact `'100m'` accepted), `entryType`, `value`, `unit` (optional, only exact `'seconds'` accepted when a value is present), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). Discipline and unit are normalized to server constants rather than trusted as client-controlled values. `recordedBy` is taken from the authenticated user. A note requires non-blank `noteText` and cannot carry a value, unit, or incident. `isFoul` is always false for 100m.
+
+Edit uses a sparse `PATCH` body containing required positive-integer `expectedVersion` plus at least one of `entryType`, `value`, `incidentType`, or `noteText`. Omitted content fields remain unchanged, explicit `null` clears nullable fields, and the merged entry state is revalidated. Audit and identity fields, including `deviceId`, are rejected. DELETE accepts only `{ expectedVersion }` and sets `deletedAt`; it never physically deletes a timeline row. A repeated DELETE with the same pre-delete version returns `204` without another version/timestamp bump or result recomputation.
+
+A stale active edit or undo returns `409 TIMELINE_ENTRY_VERSION_CONFLICT` with `details: { expectedVersion, actualVersion }`. Version comparison, ownership, event/entry parent matching, lifecycle enforcement, persistence, and result recomputation occur under the same transaction lock, so a stale request cannot overwrite newer state. Missing, deleted-for-PATCH, wrong-parent, and cross-coach resources retain the generic `404 NOT_FOUND` response.
 
 ### 4.6 Result
 
@@ -284,7 +295,8 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
 - `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.4 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
-- `backend/src/services/timeline.ts` implements the §4.5 timeline create/sparse-edit/soft-delete workflow with repeated transactional ownership/lifecycle checks and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, merged-state edits, tombstones and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers competition/training timing, void/undo, ranking, best flags and cross-coach isolation.
+- `backend/src/services/timeline.ts` implements the §4.5 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
+- `frontend/src/api/timeline.ts` and the aligned request types expose the active list, normalized create, version-aware PATCH, and body-bearing DELETE contract. API-wrapper tests assert the exact methods, paths, and bodies; the live logging screen remains pending.
 - Remaining result read/override, statistics and dashboard endpoints implement against this contract in Stage 1.
 
 ## AI declaration
