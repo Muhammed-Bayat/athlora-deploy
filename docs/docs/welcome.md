@@ -40,6 +40,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Event management UI** — the coach console event view now consumes the typed event API with responsive list/calendar views, date/type/status filters, async and empty states, strict create/edit forms, detail participant counts, and confirmed start/complete/history-preserving cancel actions. API-wrapper and RTL tests cover filters, payloads, validation, details and lifecycle failures.
 - **Event athlete assignments** — authenticated event routes can list assigned athletes with logger-ready summaries, assign active owned athletes, idempotently update RSVP status, and remove assignments without deleting timeline/results history. Duplicate assignments and archived new assignments return explicit conflicts; all ownership failures remain non-enumerating. Covered by API, service, row-mapper, validation and gated PostgreSQL integration tests.
 - **Event assignment UI** — event detail lists assigned athletes and RSVP state, keeps archived historical participants visible, loads active roster candidates, assigns athletes, replaces RSVP status, and confirms relationship removal with preserved-history messaging. Independent loading/retry states and mutation focus/locking behavior are covered by API-wrapper and RTL tests.
+- **Live timeline API** — authenticated in-progress events accept normalized 100m entry creation, sparse merged-state edits, and versioned soft-delete undo. Mutations repeat ownership and lifecycle checks under transaction locks, derive competition/training outcomes, preserve correction audit, and atomically refresh event placings plus chronological PB/SB flags. Event type/date/time/status changes and cancellation also refresh affected materialized results.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest and the Docusaurus build are green. A Playwright smoke test is present; local execution requires the documented Chromium system dependencies. CI workflow is committed in `.gitea/workflows/ci.yml` and executed by a registered Gitea Actions runner on the university instance.
@@ -48,7 +49,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
-- Build the remaining CRUD features: Open-Meteo weather for events, live logging endpoints + UI, results/dashboard, and athlete performance detail.
+- Build the remaining CRUD features: Open-Meteo weather for events, the live logging UI, results/dashboard, and athlete performance detail.
 
 ## Keeping these docs current
 

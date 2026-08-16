@@ -576,6 +576,28 @@ describe('relationship consistency', () => {
     );
   });
 
+  it('keeps complete override audit alongside a derived no-result outcome', () => {
+    expect(mapResultRow(changed(resultRow, {
+      outcome: 'no_result',
+      final_result: null,
+      unit: null,
+      placing: 1,
+      is_pb: true,
+      is_sb: true,
+      manual_override: '11.10',
+      override_reason: 'Correction',
+      overridden_by: OVERRIDER_ID,
+      override_at: INPUT_TIMESTAMP,
+    }))).toMatchObject({
+      outcome: 'no_result',
+      finalResult: null,
+      manualOverride: 11.1,
+      placing: 1,
+      isPb: true,
+      isSb: true,
+    });
+  });
+
   it('requires athlete-statistics latest outcome and value to agree', () => {
     expectMappingError(() =>
       mapAthleteStatisticsRow(changed(statisticsRow, { latest_result: null })),

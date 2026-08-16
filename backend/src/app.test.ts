@@ -208,15 +208,6 @@ describe('owned resource scaffolds', () => {
     configureAuth();
     const cases = [
       ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
-      [
-        'post',
-        `/api/v1/events/${EVENT_ID}/entries`,
-        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
-        501,
-        true,
-      ],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }, 501, true],
-      ['delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, undefined, 501, true],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 501, false],
       [
         'put',

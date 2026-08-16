@@ -120,6 +120,9 @@ export interface TimelineEntry {
   recordedBy: string;
   version: number;
   deviceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface Result {

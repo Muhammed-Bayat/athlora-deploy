@@ -7,6 +7,15 @@ import { withTransaction } from '../db/transaction.js';
 import type { AthleticsEvent } from '../types/domain.js';
 import { createApp } from '../app.js';
 
+const timelineService = vi.hoisted(() => ({
+  createTimelineEntry: vi.fn(),
+  updateTimelineEntry: vi.fn(),
+  removeTimelineEntry: vi.fn(),
+  recomputeEventResults: vi.fn(),
+}));
+
+vi.mock('../services/timeline.js', () => timelineService);
+
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(() => 'keyset'),
   jwtVerify: vi.fn(),
@@ -472,6 +481,7 @@ describe('DELETE /api/v1/events/:id', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const response = await request(app)
@@ -480,7 +490,7 @@ describe('DELETE /api/v1/events/:id', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('cancelled');
-    const [sql, parameters] = query.mock.calls[2] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[3] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
@@ -548,19 +558,4 @@ describe('timeline logging guard', () => {
     expect(patch.body.error.details).toEqual({ status: 'scheduled' });
   });
 
-  it('falls through to the scaffolded handler when the event is in progress', async () => {
-    configureAuth();
-    query
-      .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
-      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
-
-    const response = await request(app)
-      .post(`/api/v1/events/${EVENT_ID}/entries`)
-      .set('Authorization', 'Bearer valid')
-      .send({ athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 });
-
-    expect(response.status).toBe(501);
-    expect(response.body.error.code).toBe('NOT_IMPLEMENTED');
-  });
 });

@@ -109,6 +109,17 @@ describe('deriveEffectiveResult', () => {
     expect(effective.value).toBe(11.2);
     expect(effective.outcome).toBe('valid');
   });
+
+  it('promotes no result but does not override a void outcome', () => {
+    expect(deriveEffectiveResult(
+      { value: null, incident: null, outcome: 'no_result' },
+      10.95,
+    )).toEqual({ value: 10.95, incident: null, outcome: 'valid' });
+    expect(deriveEffectiveResult(
+      { value: null, incident: 'dq', outcome: 'dq' },
+      10.95,
+    )).toEqual({ value: null, incident: 'dq', outcome: 'dq' });
+  });
 });
 
 describe('calculatePlacings', () => {

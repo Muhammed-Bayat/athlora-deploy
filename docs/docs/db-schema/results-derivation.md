@@ -43,11 +43,11 @@ Coaches can correct a derived result with `manual_override`, `override_reason`, 
 
 ## Placings
 
-`calculatePlacings(results)` ranks valid results in ascending time (fastest first) within an event. Athletes with an identical time share a place, and voided outcomes (`dq`/`dnf`/`dns`) or `no_result` entries receive `null`.
+`calculatePlacings(results)` ranks effective valid results in ascending time (fastest first) within an event. Athletes with an identical time share a place. Voided outcomes (`dq`/`dnf`/`dns`), uncorrected `no_result` entries, and every result in a cancelled event receive `null`; a `no_result` promoted by an override can rank.
 
 ## PB/SB rules
 
-`is_pb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `is_sb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count — voided outcomes never set PB/SB. When a manual override is present, statistics are computed from the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season.
+`is_pb` is true when the athlete's effective result is better (lower time) than every previously recorded effective result for the same discipline; `is_sb` is true when it beats the best effective result recorded in the current season. A derived valid result or a `no_result` promoted by an override can count; voided outcomes never set PB/SB. The stored `outcome` and `final_result` remain the raw derivation for auditability while statistics use the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season.
 
 ## Implementation status
 

@@ -4,6 +4,7 @@ import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { recomputeEventResults } from './timeline.js';
 import type {
   EventCreatePayload,
   EventListQuery,
@@ -149,7 +150,8 @@ export async function replaceEvent(
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
 
-    assertValidTransition(mapEventRow(currentRow).status, payload.status);
+    const currentEvent = mapEventRow(currentRow);
+    assertValidTransition(currentEvent.status, payload.status);
 
     const result = await client.query<EventRow>(
       `UPDATE events
@@ -179,28 +181,50 @@ export async function replaceEvent(
         userId,
       ],
     );
-    return mapEventRow(result.rows[0]);
+    const updated = mapEventRow(result.rows[0]);
+    if (
+      currentEvent.type !== updated.type ||
+      currentEvent.date !== updated.date ||
+      currentEvent.time !== updated.time ||
+      currentEvent.status !== updated.status
+    ) {
+      await recomputeEventResults(client, eventId, updated.type);
+    }
+    return updated;
   });
 }
 
 export async function cancelEvent(
   userId: string,
   eventId: unknown,
-  executor: DbExecutor = getPool(),
+  runTransaction: TransactionRunner = withTransaction,
 ): Promise<AthleticsEvent> {
   requireOwnedId(userId, eventId);
-
-  const result = await executor.query<EventRow>(
-    `UPDATE events
-     SET status = 'cancelled',
-         updated_at = now()
-     WHERE id = $1 AND created_by = $2
-     RETURNING ${EVENT_COLUMNS}`,
-    [eventId, userId],
-  );
-  const row = result.rows[0];
-  if (!row) throw notFound();
-  return mapEventRow(row);
+  return runTransaction(async (client) => {
+    const current = await client.query<EventRow>(
+      `SELECT ${EVENT_COLUMNS}
+       FROM events
+       WHERE id = $1 AND created_by = $2
+       FOR UPDATE`,
+      [eventId, userId],
+    );
+    const currentRow = current.rows[0];
+    if (!currentRow) throw notFound();
+    const currentEvent = mapEventRow(currentRow);
+    const result = await client.query<EventRow>(
+      `UPDATE events
+       SET status = 'cancelled',
+           updated_at = now()
+       WHERE id = $1 AND created_by = $2
+       RETURNING ${EVENT_COLUMNS}`,
+      [eventId, userId],
+    );
+    const cancelled = mapEventRow(result.rows[0]);
+    if (currentEvent.status !== 'cancelled') {
+      await recomputeEventResults(client, eventId, cancelled.type);
+    }
+    return cancelled;
+  });
 }
 
 export async function assertEventLoggingOpen(
