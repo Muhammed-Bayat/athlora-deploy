@@ -231,7 +231,7 @@ describeDB('events against a real database', () => {
       [eventId, athleteId],
     );
 
-    const cancelled = await cancelEvent(coachId, eventId, pool);
+    const cancelled = await cancelEvent(coachId, eventId, runTransaction);
     expect(cancelled.status).toBe('cancelled');
 
     const entries = await pool.query('SELECT 1 FROM timeline_entries WHERE event_id = $1', [

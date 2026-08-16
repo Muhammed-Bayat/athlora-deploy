@@ -233,9 +233,9 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 - `isPb`/`isSb` are derived flags, not manually logged.
 - Override fields record a coach correction: `manualOverride` (positive finite seconds), `overrideReason`, `overriddenBy` (user id), `overrideAt` (timestamp). An override request supplies a non-blank reason with the value, or paired nulls to clear it. An override is stored alongside the derived `finalResult`, never replacing it.
 
-**PB/SB rules:** `isPb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `isSb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count toward PB/SB; voided outcomes do not. A manual override is what the statistic is computed from when present.
+**PB/SB rules:** `isPb` is true when the athlete's effective result is better (lower time) than every previously recorded effective result for the same discipline; `isSb` is true when it beats the best effective result recorded in the current season. A derived `valid` result or a `no_result` promoted by a manual override can count; voided outcomes do not. A manual override is what the statistic is computed from when present, while the response's `outcome` and `finalResult` remain the raw derived values for auditability.
 
-**Placings:** `placing` is derived per event — valid results rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or `no_result` entries carry `placing = null`.
+**Placings:** `placing` is derived per event from effective results — derived valid results and `no_result` entries promoted by an override rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or uncorrected `no_result` entries carry `placing = null`.
 
 ### 4.7 Statistics
 
@@ -284,7 +284,8 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
 - `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.4 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
-- Remaining feature endpoints (timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
+- `backend/src/services/timeline.ts` implements the §4.5 timeline create/sparse-edit/soft-delete workflow with repeated transactional ownership/lifecycle checks and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, merged-state edits, tombstones and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers competition/training timing, void/undo, ranking, best flags and cross-coach isolation.
+- Remaining result read/override, statistics and dashboard endpoints implement against this contract in Stage 1.
 
 ## AI declaration
 

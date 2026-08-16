@@ -3,6 +3,7 @@ import { getPool } from '../db/client.js';
 import { type EventRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import type { AthleticsEvent } from '../types/domain.js';
+import { recomputeEventResults } from './timeline.js';
 import {
   assertEventLoggingOpen,
   assertValidTransition,
@@ -19,6 +20,10 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../db/transaction.js', () => ({
   withTransaction: vi.fn(),
+}));
+
+vi.mock('./timeline.js', () => ({
+  recomputeEventResults: vi.fn(),
 }));
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -220,6 +225,7 @@ describe('replaceEvent', () => {
     const [updateSql, updateParameters] = query.mock.calls[1] as [string, unknown[]];
     expect(updateSql).toContain('UPDATE events');
     expect(updateParameters[8]).toBe('in_progress');
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
   });
 
   it('rejects an invalid transition before writing', async () => {
@@ -266,15 +272,20 @@ describe('replaceEvent', () => {
 
 describe('cancelEvent', () => {
   it('cancels an owned event with an update, never a delete', async () => {
-    query.mockResolvedValue({ rows: [eventRow({ status: 'cancelled' })] });
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const event = await cancelEvent(USER_ID, EVENT_ID);
 
     expect(event.status).toBe('cancelled');
-    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    const [lockSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(lockSql).toContain('FOR UPDATE');
+    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
   });
 
   it('returns the generic not-found error when no owned row exists', async () => {
