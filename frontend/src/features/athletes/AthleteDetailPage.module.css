@@ -1,0 +1,47 @@
+.detail { display: grid; gap: var(--space-5); }
+.backButton { width: fit-content; min-height: 44px; }
+.hero { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); }
+.hero p, .profileCard header p, .metricsCard header p, .historyCard header p { margin: 0 0 var(--space-1); color: var(--console-cyan); font: var(--font-weight-bold) 0.625rem/1.2 var(--font-family-mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.hero h1 { margin: 0; color: var(--console-ink); font: 2.4rem/1 var(--font-display); text-transform: uppercase; }
+.summaryGrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: var(--space-4); }
+.profileCard, .metricsCard, .historyCard { border-color: var(--console-edge); background: var(--console-surface); box-shadow: var(--console-shadow); }
+.profileCard > header, .metricsCard > header, .historyCard > header, .historySection > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.profileCard h2, .metricsCard h2, .historyCard h2, .historySection h3 { margin: 0; color: var(--console-ink); }
+.profileDetails { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-5) 0 0; }
+.profileDetails div { padding-top: var(--space-3); border-top: 1px solid var(--console-line); }
+.profileDetails dt, .metrics dt { color: var(--console-faint); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.profileDetails dd { margin: var(--space-1) 0 0; color: var(--console-ink); line-height: 1.5; }
+.profileDetails .notes { grid-column: 1 / -1; }
+.metrics { display: grid; gap: var(--space-3); margin: var(--space-5) 0 0; }
+.metrics div { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: var(--space-3); border: 1px solid var(--console-line); border-radius: var(--radius-sm); }
+.metrics dd { grid-row: 1 / 3; grid-column: 2; margin: 0; color: var(--console-ink); font: var(--font-weight-bold) 1.6rem var(--font-family-mono); }
+.metrics span { color: var(--console-muted); font-size: 0.72rem; }
+.sectionError { margin-top: var(--space-4); color: var(--console-muted); }
+.sectionError strong { color: var(--color-danger); }
+.historyGrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); margin-top: var(--space-5); }
+.historySection > header { padding-bottom: var(--space-3); border-bottom: 1px solid var(--console-line); }
+.historySection > header span { color: var(--console-muted); font-size: var(--font-size-sm); }
+.historySection ol { display: grid; gap: var(--space-3); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
+.historyRow { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(150px, 0.8fr); gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--console-line); border-radius: var(--radius-sm); }
+.eventIdentity, .effectiveResult { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.eventIdentity time, .effectiveResult > span, .auditContext { color: var(--console-muted); font-size: 0.72rem; }
+.eventIdentity strong, .effectiveResult > strong { color: var(--console-ink); }
+.effectiveResult > strong { font: var(--font-weight-bold) 1.25rem var(--font-family-mono); }
+.badges { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+.auditContext { grid-column: 1 / -1; padding-top: var(--space-2); border-top: 1px solid var(--console-line); }
+.auditContext p { margin: 0 0 var(--space-1); }
+.auditContext strong { color: var(--console-ink); }
+.emptyHistory, .historyUnavailable { color: var(--console-muted); }
+
+@media (max-width: 980px) {
+  .summaryGrid, .historyGrid { grid-template-columns: 1fr; }
+  .hero { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 560px) {
+  .hero h1 { font-size: 2rem; }
+  .profileDetails, .historyRow { grid-template-columns: 1fr; }
+  .profileDetails .notes, .auditContext { grid-column: 1; }
+  .profileCard > header { align-items: flex-start; flex-direction: column; }
+  .profileCard > header button { width: 100%; min-height: 44px; }
+}

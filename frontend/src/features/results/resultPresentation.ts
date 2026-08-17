@@ -1,4 +1,7 @@
 import type { Athlete, IncidentType, Result, ResultOutcome } from '../../types';
+import { formatOutcome } from '../../utils/formatting';
+
+export { format100mSeconds } from '../../utils/formatting';
 
 export interface EffectiveResult {
   value: number | null;
@@ -12,14 +15,6 @@ export interface ResultPresentationRow {
   result: Result;
   effective: EffectiveResult;
 }
-
-const RESULT_OUTCOME_LABELS: Record<ResultOutcome, string> = {
-  no_result: 'No result',
-  valid: 'Valid result',
-  dq: 'Disqualified',
-  dnf: 'Did not finish',
-  dns: 'Did not start',
-};
 
 const INCIDENT_TYPE_LABELS: Record<Exclude<IncidentType, null>, string> = {
   false_start: 'False start',
@@ -78,16 +73,12 @@ export function createResultPresentationRow(
   };
 }
 
-export function format100mSeconds(seconds: number): string {
-  return `${seconds.toFixed(2)}s`;
-}
-
 export function has100mHundredthPrecision(value: string): boolean {
   return /^\d+(?:\.\d{1,2})?$/.test(value.trim());
 }
 
 export function getResultOutcomeLabel(outcome: ResultOutcome): string {
-  return RESULT_OUTCOME_LABELS[outcome];
+  return formatOutcome(outcome);
 }
 
 export function getIncidentTypeLabel(incidentType: IncidentType): string {
