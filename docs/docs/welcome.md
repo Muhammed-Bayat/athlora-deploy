@@ -43,6 +43,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Event results and corrections UI** — event detail and the live logger now share an authoritative 100m outcome board. Competition finishers are ordered by effective time while preserving backend tied placings, training omits misleading places, penalties/incidents and partial results remain distinct, and PB/SB plus archived history stay visible. In-progress/completed events provide an accessible correction workflow that keeps the derived value read-only, records the corrected time/reason/actor/time, confirms clearing, and refreshes the full event after every override.
 - **Live timeline API** — authenticated coaches can read the active log, create normalized 100m entries, correct finish/incident/note content with optimistic `expectedVersion` checks, and undo through versioned tombstones. Stale requests conflict instead of overwriting newer state, exact repeated undo is a no-op, and tombstones are hidden from normal timeline/results views. Mutations enforce ownership, parent IDs and lifecycle under transaction locks while atomically refreshing outcomes, placings and PB/SB flags.
 - **Statistics and dashboard aggregates** — `GET /api/v1/athletes/:id/statistics` returns owner-scoped PB, calendar-year SB, effective-result counts, latest result and separate recent competition/training history. `GET /api/v1/dashboard/summary` returns one stable summary/live shape with deterministic active-event selection, progress and latest entries, roster counts/snapshot, scheduled upcoming events, recent results and PBs. Cancelled events do not score, archived athletes remain named in history but not in the active roster, and empty accounts receive zero counts and empty arrays.
+- **Athlete performance detail UI** — every real roster athlete opens a responsive profile and 100m history view with editable shared profile fields, DOB/current age, PB, calendar-year SB/counts, and recent competition/training outcomes. Effective times, manual overrides, incidents, PB/SB and cancelled/non-scoring states remain explicit in text, while profile and statistics failures retry independently.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, the Chromium Playwright smoke test and the Docusaurus build are green. CI workflow is committed in `.gitea/workflows/ci.yml` and executed by a registered Gitea Actions runner on the university instance.
@@ -51,7 +52,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
-- Build the remaining Stage 1 integrations: Open-Meteo weather, the API-backed dashboard UI, and athlete performance detail UI.
+- Build the remaining Stage 1 integrations: Open-Meteo weather and the API-backed dashboard UI.
 
 ## Keeping these docs current
 
