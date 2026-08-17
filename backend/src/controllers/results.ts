@@ -4,6 +4,7 @@ import { mapResultRow } from '../db/row-mappers.js';
 import { DISCIPLINE_100M } from '../types/domain.js';
 import { withTransaction } from '../db/transaction.js';
 import { recomputeAndUpsertResult } from '../services/resultRecomputation.js';
+import { lockEventResultAthletes } from '../services/timeline.js';
 import { getApplicationUserContext } from '../middleware/auth.js';
 
 export const getEventResults: RequestHandler = async (req, res, next) => {
@@ -32,11 +33,16 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
     const { manualOverride, overrideReason } = req.body;
 
     const result = await withTransaction(async (client) => {
-      const existingRes = await client.query(
-        `SELECT discipline FROM results WHERE event_id = $1 AND athlete_id = $2`,
-         [eventId, athleteId],
+      // Match timeline/event mutation lock order: event first, then result rows.
+      await client.query(
+        `SELECT id
+         FROM events
+         WHERE id = $1
+         FOR UPDATE`,
+        [eventId],
       );
-      const discipline = existingRes.rows[0]?.discipline ?? DISCIPLINE_100M;
+      await lockEventResultAthletes(client, eventId);
+      const discipline = DISCIPLINE_100M;
 
       if (manualOverride === null || manualOverride === undefined) {
         await client.query(
@@ -52,7 +58,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
       } else {
         await client.query(
           `INSERT INTO results (
-             event_id, athlete_id, discipline, outcome, final_result, unit, placing, is_pb, is_sb,
+             event_id, athlete_id, discipline, outcome, final_result, unit, "placing", is_pb, is_sb,
              manual_override, override_reason, overridden_by, override_at, updated_at
            ) VALUES ($1, $2, $3, 'no_result', NULL, NULL, NULL, false, false, $4, $5, $6, NOW(), NOW())
            ON CONFLICT (event_id, athlete_id, discipline)

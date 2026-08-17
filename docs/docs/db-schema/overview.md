@@ -66,6 +66,8 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 - `timeline_entries`: `entry_type`, `incident_type` and `unit` domain checks; `value >= 0` when present; index on `(event_id, athlete_id, discipline)`.
 - `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
 
+Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
+
 The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -76,9 +78,9 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` — the full authoritative base schema, followed by `0002_contract_100m.sql` which adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes). Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the MVP contract state; `0003_aggregate_indexes.sql` adds query indexes without changing the data model. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
-Status: applied to the Neon development database and tracked in `schema_migrations`. New databases and pending migrations are handled with:
+Status: the first two migrations are applied to Neon; the pending aggregate index migration is checksum-tracked and is applied by the normal migration command or production startup:
 
 ```bash
 cd backend

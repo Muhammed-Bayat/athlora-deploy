@@ -49,9 +49,11 @@ Coaches can correct a derived result with `manual_override`, `override_reason`, 
 
 `is_pb` is true when the athlete's effective result is better (lower time) than every previously recorded effective result for the same discipline; `is_sb` is true when it beats the best effective result recorded in the current season. A derived valid result or a `no_result` promoted by an override can count; voided outcomes never set PB/SB. The stored `outcome` and `final_result` remain the raw derivation for auditability while statistics use the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season.
 
+The statistics and dashboard services repeat the same effective-result precedence in owner-scoped SQL: DQ/DNF/DNS remain void before an override is considered, then a positive override may replace a valid value or promote `no_result`. Athlete history retains cancelled rows with `countsTowardsStatistics: false`; PB, SB, counts, roster PBs and dashboard recent feeds exclude cancelled events.
+
 ## Implementation status
 
-`backend/src/services/resultDerivation.ts` implements `deriveFieldBest`, `deriveTrackTime` (competition vs training rules), `deriveResult`, `deriveEffectiveResult`, `calculatePlacings` and `checkPbSb` — including DQ/DNF/DNS voiding, penalty retention, soft-delete handling and the derived `outcome`. It is covered by Vitest unit tests (best-valid-field-attempt, competition single-finish and training fastest-rep rules, foul-only attempts, DQ/DNF/DNS voiding, penalty retention, soft-deleted/invalid values, no-result semantics, manual override, tied placings, and PB/SB). Database access utilities (`backend/src/db/row-mappers.ts`, `backend/src/db/transaction.ts`) now exist to feed these functions, and the engine aligns with the `results.outcome` column added by migration `0002_contract_100m.sql`.
+`backend/src/services/resultDerivation.ts` implements the pure derivation/effective-result/placing/PB-SB rules. Timeline and override mutations now share canonical whole-event recomputation so raw result fields remain auditable while downstream effective metadata converges. `backend/src/services/statistics.ts` and `dashboard.ts` expose the same semantics through tested aggregates, and `backend/src/db/transaction.ts` supplies a repeatable-read, read-only snapshot for multi-query responses.
 
 ## Design note
 
@@ -59,4 +61,4 @@ These rules are deliberately small and pure so they can be unit-tested exhaustiv
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and maintained with opencode[gpt-5.6-sol].

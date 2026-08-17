@@ -132,6 +132,50 @@ export interface AthleteStatistics {
   updatedAt: string;
 }
 
+export interface AggregateAthleteIdentity {
+  id: string;
+  name: string;
+  squad: string | null;
+  archivedAt: string | null;
+}
+
+export interface AggregateEventIdentity {
+  id: string;
+  title: string;
+  type: EventType;
+  discipline: Discipline;
+  date: string;
+  time: string | null;
+  locationName: string | null;
+  status: EventStatus;
+}
+
+export interface AthleteResultHistoryEntry {
+  athlete: AggregateAthleteIdentity;
+  event: AggregateEventIdentity;
+  result: Result;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+}
+
+export interface AthleteResultCounts {
+  allTime: number;
+  currentYear: number;
+  competitionAllTime: number;
+  trainingAllTime: number;
+}
+
+export interface AthleteStatisticsDetail extends AthleteStatistics {
+  athlete: AggregateAthleteIdentity;
+  resultCounts: AthleteResultCounts;
+  latest: AthleteResultHistoryEntry | null;
+  recentResults: {
+    competitions: AthleteResultHistoryEntry[];
+    training: AthleteResultHistoryEntry[];
+  };
+}
+
 export interface RosterSnapshotEntry {
   athleteId: string;
   name: string;
@@ -144,16 +188,42 @@ export interface DashboardUpcomingEvent {
   eventId: string;
   title: string;
   type: EventType;
+  discipline: Discipline;
   date: string;
+  time: string | null;
+  locationName: string | null;
   status: EventStatus;
   athleteCount: number;
 }
 
+export interface DashboardTimelineEntry {
+  entry: TimelineEntry;
+  athlete: AggregateAthleteIdentity;
+}
+
+export interface DashboardActiveEvent {
+  event: AggregateEventIdentity;
+  progress: {
+    participantCount: number;
+    athletesWithEntriesCount: number;
+    resolvedResultsCount: number;
+    entryCount: number;
+    completionPercent: number;
+  };
+  latestEntries: DashboardTimelineEntry[];
+}
+
 export interface DashboardSummary {
+  state: 'live' | 'summary';
+  asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  archivedAthletesCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
+  activeEvent: DashboardActiveEvent | null;
   rosterSnapshot: RosterSnapshotEntry[];
   upcomingEvents: DashboardUpcomingEvent[];
+  recentResults: AthleteResultHistoryEntry[];
+  recentPbs: AthleteResultHistoryEntry[];
 }

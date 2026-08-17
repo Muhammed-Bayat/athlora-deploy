@@ -250,29 +250,65 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 
 ### 4.7 Statistics
 
-```
-athleteId, discipline ('100m'), unit ('seconds'), pb (number|null), sb (number|null),
-resultsCount, latestResult (number|null), latestOutcome, updatedAt
-```
-
-- `pb`/`sb` follow the PB/SB rules above.
-- `resultsCount` counts scoring (non-voided) results for the athlete in the current season.
-- `latestResult`/`latestOutcome` describe the athlete's most recent result by event date.
-
-### 4.8 Dashboard data
+`GET /api/v1/athletes/:athleteId/statistics` returns one owner-scoped 100m summary and its purpose-built history in `{ data }`:
 
 ```
 {
-  athletesCount, activeAthletesCount, upcomingEventCount, seasonPbs,
-  rosterSnapshot: RosterSnapshotEntry[],      // { athleteId, name, squad, discipline, pb }
-  upcomingEvents: DashboardUpcomingEvent[]    // { eventId, title, type, date, status, athleteCount }
+  athleteId, discipline ('100m'), unit ('seconds'), pb (number|null), sb (number|null),
+  resultsCount, latestResult (number|null), latestOutcome, updatedAt,
+  athlete: { id, name, squad, archivedAt },
+  resultCounts: { allTime, currentYear, competitionAllTime, trainingAllTime },
+  latest: AthleteResultHistoryEntry|null,
+  recentResults: {
+    competitions: AthleteResultHistoryEntry[],
+    training: AthleteResultHistoryEntry[]
+  }
 }
 ```
 
-- `activeAthletesCount` counts non-archived athletes.
-- `upcomingEvents` are non-cancelled events with `date >= today`, ordered ascending; `upcomingEventCount` mirrors its length.
-- `seasonPbs` counts results flagged `isPb` this season across the squad.
-- `rosterSnapshot` excludes archived athletes.
+- `pb` is the all-time fastest effective result; `sb` and `resultsCount` use the calendar year containing the server's UTC as-of date. The half-open year window is January 1 through January 1 of the next year.
+- Counts include only effective `valid` results from non-cancelled events. A positive override can promote `no_result`; DQ/DNF/DNS remain void even when an override exists. Competition and training both contribute.
+- `latestResult`/`latestOutcome` describe the most recent non-cancelled row. `latest` provides that row's event, athlete, raw `Result`, effective value/outcome and `countsTowardsStatistics` flag.
+- Each recent collection returns at most ten rows. History includes cancelled rows with `countsTowardsStatistics: false` so preserved records remain visible, while aggregates exclude them.
+- Direct access to an owned archived athlete remains available and preserves `archivedAt`; archival does not delete history.
+- Ordering is event date descending, local time descending with nulls last, event creation descending, then event ID descending.
+- An athlete without history receives null PB/SB/latest values, `latestOutcome: 'no_result'`, zero counts and empty competition/training arrays. Missing and cross-coach athletes use the standard non-enumerating `404`.
+
+`AthleteResultHistoryEntry` has this stable shape:
+
+```
+{
+  athlete: { id, name, squad, archivedAt },
+  event: { id, title, type, discipline, date, time, locationName, status },
+  result: Result,
+  effectiveResult, effectiveOutcome, countsTowardsStatistics
+}
+```
+
+### 4.8 Dashboard data
+
+`GET /api/v1/dashboard/summary` returns one `{ data }` object with the same keys in summary and live modes:
+
+```
+{
+  state ('summary'|'live'), asOfDate,
+  athletesCount, activeAthletesCount, archivedAthletesCount,
+  upcomingEventCount, seasonPbs,
+  activeEvent: DashboardActiveEvent|null,
+  rosterSnapshot: RosterSnapshotEntry[],      // { athleteId, name, squad, discipline, pb }
+  upcomingEvents: DashboardUpcomingEvent[],
+  recentResults: AthleteResultHistoryEntry[],
+  recentPbs: AthleteResultHistoryEntry[]
+}
+```
+
+- `athletesCount` counts all owned athletes; `activeAthletesCount` and `rosterSnapshot` exclude archived athletes; `archivedAthletesCount` makes the difference explicit. Historical recent result/PB rows retain archived athlete identity.
+- `upcomingEvents` are owned 100m `scheduled` events with `date >= asOfDate`; cancelled, completed, active and legacy non-100m events are not upcoming. Ordering is date/time/creation/ID ascending and `upcomingEventCount` mirrors the array length.
+- `seasonPbs` counts non-cancelled `isPb` rows in the current calendar year. `recentResults` returns ten non-cancelled rows and `recentPbs` returns five non-cancelled PB rows, both in deterministic reverse event order.
+- One active event is selected from owned 100m `in_progress` events by date ascending, time ascending with nulls last, creation ascending, then ID ascending. This is a presentation rule; multiple events may remain in progress.
+- A live `activeEvent` contains the event identity, ten latest active timeline entries with athlete identity, and progress over its current participant set: participant count, distinct participants with active entries, resolved participant result count, active participant entry count, and rounded completion percentage. Effective valid/DQ/DNF/DNS outcomes are resolved; `no_result` is unresolved.
+- No active event produces `state: 'summary'` and `activeEvent: null`. All collections remain present as empty arrays and all absent counts are zero, so clients never branch on missing keys.
+- Dashboard subqueries execute in one read-only repeatable-read transaction and every athlete/event join is scoped to the authenticated application user.
 
 ## 5. 100m timing rules
 
@@ -285,7 +321,7 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 
 ## 6. Implementation status
 
-- Migration `0002_contract_100m.sql` applies the column additions, constraints and indexes described above; applied to fresh and existing databases via the checksum-tracked runner.
+- Migrations `0002_contract_100m.sql` and `0003_aggregate_indexes.sql` apply the contract state and athlete/event/timeline aggregate lookup indexes through the checksum-tracked runner.
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
 - `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
@@ -296,8 +332,9 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 - `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.4 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
 - `backend/src/services/timeline.ts` implements the §4.5 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
-- `frontend/src/api/timeline.ts` and the aligned request types expose the active list, normalized create, version-aware PATCH, and body-bearing DELETE contract. API-wrapper tests assert the exact methods, paths, and bodies; the live logging screen remains pending.
-- Remaining result read/override, statistics and dashboard endpoints implement against this contract in Stage 1.
+- `frontend/src/api/timeline.ts` and `LiveLoggingPage` expose the active list, normalized create, version-aware correction/undo, finish/incident logging and live standings.
+- Result read/override is live; override writes retain raw derivation and invoke canonical whole-event recomputation.
+- `backend/src/services/statistics.ts` and `dashboard.ts` implement §§4.7-4.8 with owner-scoped effective-result SQL and repeatable-read snapshots. Route/service/mapper tests plus a `TEST_DATABASE_URL`-gated PostgreSQL suite cover empty/populated data, calendar boundaries, overrides, incidents, archives, cancellations, live selection and ownership. Mirrored frontend DTOs and API wrappers are ready for athlete-detail and dashboard UI integration.
 
 ## AI declaration
 
