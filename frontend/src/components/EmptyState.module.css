@@ -6,12 +6,13 @@
   gap: var(--space-2);
   text-align: center;
   padding: var(--space-8) var(--space-4);
-  color: var(--color-text-muted);
+  color: var(--console-text-muted, color-mix(in srgb, var(--ink-900) 62%, transparent));
 }
 
 .title {
   font-size: var(--font-size-lg);
   margin: 0;
+  color: var(--console-component-text, var(--ink-900));
 }
 
 .description {

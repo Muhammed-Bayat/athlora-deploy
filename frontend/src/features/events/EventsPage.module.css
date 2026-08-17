@@ -41,13 +41,13 @@
 .segmented,
 .viewToggle {
   min-height: 44px;
-  border: 1px solid var(--console-line);
+  border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
-  background: var(--console-surface);
+  background: var(--console-control-surface);
 }
 
 .controls select {
-  color: var(--console-teal);
+  color: var(--console-control-text);
   padding-inline: var(--space-3);
 }
 
@@ -71,8 +71,8 @@
 
 .segmented button[aria-pressed='true'],
 .viewToggle button[aria-pressed='true'] {
-  background: linear-gradient(135deg, var(--blue-500), var(--teal-700));
-  color: var(--white);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .controls select:focus-visible,
@@ -80,7 +80,7 @@
 .viewToggle button:focus-visible,
 .eventOpen:focus-visible,
 .calendar button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline: 3px solid var(--console-focus);
   outline-offset: 2px;
 }
 
@@ -110,7 +110,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--console-cyan);
   animation: pulse 0.9s var(--ease) infinite alternate;
 }
 
@@ -192,8 +192,9 @@
 }
 
 .calendarGrid > button[aria-pressed='true'] {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
+  border-color: var(--console-focus);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .calendarGrid > button.today > span {
@@ -202,8 +203,8 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: var(--white);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .calendarGrid button > i {
@@ -215,11 +216,11 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--console-cyan);
 }
 
 .calendarGrid button > i > i[data-type='training'] {
-  background: var(--color-secondary-dark);
+  background: var(--console-teal);
 }
 
 .dayHeading {
@@ -258,8 +259,8 @@
   place-items: center;
   min-height: 64px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(160deg, var(--ink-900), var(--teal-800));
-  color: var(--color-text-light);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .dateBlock b {
@@ -297,33 +298,33 @@
 }
 
 [data-type='competition'] {
-  color: var(--color-primary-dark);
-  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--console-badge-pb-text);
+  background: var(--console-badge-pb-surface);
 }
 
 [data-type='training'] {
-  color: var(--teal-700);
-  background: color-mix(in srgb, var(--cyan-400) 18%, transparent);
+  color: var(--console-badge-sb-text);
+  background: var(--console-badge-sb-surface);
 }
 
 [data-status='scheduled'] {
-  color: var(--color-info);
-  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--console-badge-neutral-text);
+  background: var(--console-badge-neutral-surface);
 }
 
 [data-status='in_progress'] {
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--console-selected-text);
+  background: var(--console-selected-surface);
 }
 
 [data-status='completed'] {
-  color: var(--color-text-muted);
-  background: var(--mist-100);
+  color: var(--console-badge-neutral-text);
+  background: var(--console-badge-neutral-surface);
 }
 
 [data-status='cancelled'] {
-  color: var(--color-danger);
-  background: var(--alert-soft);
+  color: var(--console-badge-danger-text);
+  background: var(--console-badge-danger-surface);
 }
 
 .eventBody small {
@@ -346,11 +347,11 @@
   min-height: 76px;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
+  background: var(--console-row-surface);
 }
 
 .detailGrid dt {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -358,12 +359,12 @@
 
 .detailGrid dd {
   margin: var(--space-1) 0 0;
-  color: var(--color-text);
+  color: var(--console-ink);
   font-weight: var(--font-weight-bold);
 }
 
 .coordinates {
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   font: 0.75rem var(--font-family-mono);
 }
 
@@ -372,14 +373,14 @@
   gap: var(--space-3);
   margin-top: var(--space-5);
   padding: var(--space-4);
-  border: 1px solid var(--console-border);
+  border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--console-surface);
 }
 
 .participants > header p {
   margin: 0 0 var(--space-1);
-  color: var(--color-primary);
+  color: var(--console-cyan);
   font-size: 0.68rem;
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
@@ -388,7 +389,7 @@
 
 .participants h3 {
   margin: 0;
-  color: var(--color-text);
+  color: var(--console-ink);
   font-size: 1rem;
 }
 
@@ -399,8 +400,8 @@
   margin-left: var(--space-2);
   place-items: center;
   border-radius: var(--radius-pill);
-  background: var(--mist-100);
-  color: var(--color-primary-dark);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
   font: 0.75rem var(--font-family-mono);
 }
 
@@ -419,7 +420,8 @@
   align-items: center;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
+  border: 1px solid var(--console-line);
+  background: var(--console-row-surface);
 }
 
 .participantIdentity {
@@ -430,7 +432,7 @@
 
 .participantIdentity b {
   overflow: hidden;
-  color: var(--color-text);
+  color: var(--console-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -439,14 +441,14 @@
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  color: var(--color-text-muted);
+  color: var(--console-muted);
 }
 
 .participantIdentity i {
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius-pill);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-badge-danger-surface);
+  color: var(--console-badge-danger-text);
   font-style: normal;
   font-weight: var(--font-weight-bold);
 }
@@ -459,11 +461,11 @@
   display: grid;
   gap: var(--space-2);
   padding-top: var(--space-3);
-  border-top: 1px solid var(--console-border);
+  border-top: 1px solid var(--console-line);
 }
 
 .assignment > label {
-  color: var(--teal-700);
+  color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
 }
@@ -480,14 +482,15 @@
   margin: 0;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  background: var(--console-row-surface);
+  color: var(--console-muted);
   font-size: var(--font-size-sm);
 }
 
 .participantFeedback {
-  background: color-mix(in srgb, var(--color-success) 12%, transparent);
-  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--console-teal) 45%, var(--console-line));
+  background: color-mix(in srgb, var(--console-teal) 14%, var(--console-soft));
+  color: var(--console-ink);
 }
 
 .inlineError,
@@ -497,10 +500,10 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   font-size: var(--font-size-sm);
 }
 
@@ -532,13 +535,13 @@
 
 .form label {
   margin-top: var(--space-2);
-  color: var(--teal-700);
+  color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
 }
 
 .form label span {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-weight: var(--font-weight-normal);
 }
 
@@ -548,12 +551,12 @@
   margin: 0 0 var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  background: var(--console-row-surface);
+  color: var(--console-muted);
 }
 
 .fixedDiscipline strong {
-  color: var(--color-primary-dark);
+  color: var(--console-teal);
   font-family: var(--font-family-mono);
 }
 
@@ -569,27 +572,55 @@
 }
 
 .fieldError {
-  color: var(--color-danger);
+  color: var(--console-danger-surface);
   font-size: 0.75rem;
 }
 
 .formError {
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   font-size: var(--font-size-sm);
 }
 
 .confirmation {
   max-width: 560px;
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   line-height: 1.6;
 }
 
 .confirmation strong {
-  color: var(--color-text);
+  color: var(--console-ink);
+}
+
+.form input,
+.form select,
+.assignment select,
+.participantList select {
+  border-color: var(--console-control-border);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+}
+
+.form input::placeholder {
+  color: var(--console-placeholder);
+}
+
+.form input:focus-visible,
+.form select:focus-visible,
+.assignment select:focus-visible,
+.participantList select:focus-visible {
+  outline-color: var(--console-focus);
+}
+
+.form input:disabled,
+.form select:disabled,
+.assignment select:disabled,
+.participantList select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .srOnly {

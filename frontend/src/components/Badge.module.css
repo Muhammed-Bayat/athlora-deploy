@@ -11,29 +11,29 @@
 }
 
 .pb {
-  background-color: var(--mist-100);
-  color: var(--teal-700);
+  background-color: var(--console-badge-pb-surface, var(--cyan-200));
+  color: var(--console-badge-pb-text, var(--ink-900));
 }
 
 .sb {
-  background-color: var(--mist-100);
-  color: var(--blue-500);
-  box-shadow: inset 0 0 0 1.5px var(--blue-500);
+  background-color: var(--console-badge-sb-surface, var(--mist-100));
+  color: var(--console-badge-sb-text, var(--blue-500));
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
 .foul {
-  background-color: var(--alert-soft);
-  color: var(--color-danger);
+  background-color: var(--console-badge-danger-surface, var(--alert-soft));
+  color: var(--console-badge-danger-text, var(--ink-900));
 }
 
 .dq,
 .dnf,
 .dns {
-  background-color: var(--alert-soft);
-  color: var(--color-danger);
+  background-color: var(--console-badge-danger-surface, var(--alert-soft));
+  color: var(--console-badge-danger-text, var(--ink-900));
 }
 
 .neutral {
-  background-color: var(--mist-100);
-  color: var(--color-text-muted);
+  background-color: var(--console-badge-neutral-surface, var(--mist-100));
+  color: var(--console-badge-neutral-text, var(--ink-700));
 }

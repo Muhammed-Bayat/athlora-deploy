@@ -15,7 +15,9 @@
   max-height: 90vh;
   overflow: auto;
   border-radius: var(--radius-lg);
-  background-color: var(--color-surface);
+  background-color: var(--console-component-surface, var(--white));
+  color: var(--console-component-text, var(--ink-900));
+  border: 1px solid var(--console-control-border, color-mix(in srgb, var(--teal-700) 22%, transparent));
   box-shadow: var(--shadow-soft);
   padding: var(--space-6);
 }

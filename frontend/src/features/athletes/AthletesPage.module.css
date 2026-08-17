@@ -40,10 +40,10 @@
 .controls select,
 .search {
   min-height: 44px;
-  border: 1px solid var(--console-line);
+  border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
-  background: var(--console-surface);
-  color: var(--console-teal);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
   font: var(--font-weight-medium) var(--font-size-sm) var(--font-family-base);
 }
 
@@ -63,14 +63,18 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--console-ink);
+  color: var(--console-control-text);
   width: 100%;
   font: inherit;
 }
 
+.search input::placeholder {
+  color: var(--console-muted);
+}
+
 .search:focus-within,
 .controls select:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline: 3px solid var(--console-focus);
   outline-offset: 2px;
 }
 
@@ -129,13 +133,13 @@
 }
 
 .activeBadge {
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--console-teal);
+  background: var(--console-soft);
 }
 
 .archivedBadge {
-  color: var(--color-danger);
-  background: var(--alert-soft);
+  color: var(--console-danger-text);
+  background: var(--console-danger-surface);
 }
 
 .card h2 {
@@ -191,11 +195,22 @@
 }
 
 .cardActions {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
   margin-top: auto;
   padding-top: var(--space-6);
+}
+
+.cardActions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: var(--space-2);
+}
+
+.performanceAction {
+  grid-column: 1 / -1;
 }
 
 .loading,
@@ -224,7 +239,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--console-cyan);
   animation: pulse 0.9s var(--ease) infinite alternate;
 }
 
@@ -253,10 +268,10 @@
 .actionError,
 .formError {
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-danger-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   font-size: var(--font-size-sm);
 }
 
@@ -273,12 +288,12 @@
 
 .confirmation {
   max-width: 520px;
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   line-height: 1.6;
 }
 
 .confirmation strong {
-  color: var(--color-text);
+  color: var(--console-ink);
 }
 
 .srOnly {

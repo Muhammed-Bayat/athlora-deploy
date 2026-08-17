@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { getAthlete, updateAthlete } from '../../api/athletes';
 import { getAthleteStatistics } from '../../api/statistics';
 import { Badge, Button, Card, Modal, Toast } from '../../components';
@@ -20,6 +20,19 @@ interface AthleteDetailPageProps {
   onAthleteUpdated: (athlete: Athlete) => void;
 }
 
+type HistoryTab = 'competitions' | 'training';
+
+const historyTabs: HistoryTab[] = ['competitions', 'training'];
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
 function outcomeVariant(outcome: ResultOutcome): 'dq' | 'dnf' | 'dns' | 'neutral' {
   return outcome === 'dq' || outcome === 'dnf' || outcome === 'dns' ? outcome : 'neutral';
 }
@@ -36,21 +49,26 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
       <div className={styles.eventIdentity}>
         <time dateTime={event.date}>{formatDateOnly(event.date)}</time>
         <strong>{event.title}</strong>
-        <div className={styles.badges}>
+        <div className={styles.labels}>
           <Badge>{event.type === 'competition' ? 'Competition' : 'Training'}</Badge>
           {event.status === 'cancelled' && <Badge variant="foul">Cancelled event</Badge>}
         </div>
       </div>
       <div className={styles.effectiveResult}>
         <span>Effective result</span>
-        {effectiveOutcome === 'valid' && effectiveResult !== null
-          ? <strong>{format100mSeconds(effectiveResult)}</strong>
-          : <Badge variant={outcomeVariant(effectiveOutcome)}>{formatOutcome(effectiveOutcome)}</Badge>}
-        <div className={styles.badges}>
-          {effectiveOutcome === 'valid' && <Badge>Valid result</Badge>}
-          {hasOverride && <Badge variant="neutral">Manually overridden</Badge>}
+        {effectiveOutcome === 'valid' && effectiveResult !== null ? (
+          <>
+            <strong>{format100mSeconds(effectiveResult)}</strong>
+            <small>Valid 100m result</small>
+          </>
+        ) : (
+          <Badge variant={outcomeVariant(effectiveOutcome)}>{formatOutcome(effectiveOutcome)}</Badge>
+        )}
+        <div className={styles.labels}>
+          {hasOverride && <Badge variant="neutral">Override</Badge>}
           {result.isPb && <Badge variant="pb">Personal best (PB)</Badge>}
           {result.isSb && <Badge variant="sb">Season best (SB)</Badge>}
+          {!entry.countsTowardsStatistics && event.status !== 'cancelled' && <Badge variant="neutral">Non-scoring</Badge>}
         </div>
       </div>
       <div className={styles.auditContext}>
@@ -69,21 +87,6 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
   );
 }
 
-function HistorySection({ title, entries }: { title: string; entries: AthleteResultHistoryEntry[] }) {
-  const resultType = title === 'Competitions' ? 'competition' : 'training';
-  return (
-    <section className={styles.historySection} aria-labelledby={`${title.toLowerCase()}-heading`}>
-      <header>
-        <h3 id={`${title.toLowerCase()}-heading`}>{title}</h3>
-        <span>{entries.length} recent</span>
-      </header>
-      {entries.length === 0
-        ? <p className={styles.emptyHistory}>No {resultType} results yet.</p>
-        : <ol>{entries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}</ol>}
-    </section>
-  );
-}
-
 export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: AthleteDetailPageProps) {
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -93,10 +96,17 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
   const [statisticsRetry, setStatisticsRetry] = useState(0);
+  const [activeTab, setActiveTab] = useState<HistoryTab | null>(null);
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
+  const tabRefs = useRef<Record<HistoryTab, HTMLButtonElement | null>>({ competitions: null, training: null });
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     let current = true;
@@ -120,6 +130,15 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
     return () => { current = false; };
   }, [athleteId, statisticsRetry]);
 
+  useEffect(() => {
+    if (!statistics) return;
+    setActiveTab((current) => current ?? (
+      statistics.recentResults.competitions.length === 0 && statistics.recentResults.training.length > 0
+        ? 'training'
+        : 'competitions'
+    ));
+  }, [statistics]);
+
   const save = async (payload: AthleteMutationPayload) => {
     const updated = await updateAthlete(athleteId, payload);
     setAthlete(updated);
@@ -128,60 +147,138 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
     setNotice(`${updated.name} updated.`);
   };
 
+  const selectTab = (tab: HistoryTab, focus = false) => {
+    setActiveTab(tab);
+    if (focus) tabRefs.current[tab]?.focus();
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = historyTabs.indexOf(activeTab ?? 'competitions');
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % historyTabs.length;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + historyTabs.length) % historyTabs.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = historyTabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    selectTab(historyTabs[nextIndex], true);
+  };
+
   const displayName = athlete?.name ?? statistics?.athlete.name ?? 'Athlete performance';
   const age = calculateAge(athlete?.dob ?? null);
+  const defaultTab: HistoryTab = statistics?.recentResults.competitions.length === 0
+    && statistics.recentResults.training.length > 0 ? 'training' : 'competitions';
+  const selectedTab = activeTab ?? defaultTab;
+  const activeEntries = statistics?.recentResults[selectedTab] ?? [];
+  const activeResultType = selectedTab === 'competitions' ? 'competition' : 'training';
 
   return (
-    <section className={styles.detail} aria-labelledby="athlete-detail-heading">
+    <section
+      className={styles.detail}
+      aria-labelledby="athlete-detail-heading"
+      aria-busy={profileLoading || statisticsLoading}
+    >
       <Button variant="ghost" className={styles.backButton} onClick={onBack}>Back to roster</Button>
-      <header className={styles.hero}>
-        <div>
-          <p>100m athlete profile</p>
-          <h1 id="athlete-detail-heading">{displayName}</h1>
-        </div>
-        {athlete && <Badge variant={athlete.archivedAt ? 'foul' : 'neutral'}>{athlete.archivedAt ? 'Archived athlete' : 'Active athlete'}</Badge>}
-      </header>
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
-      <div className={styles.summaryGrid}>
-        <Card className={styles.profileCard}>
-          <header><div><p>Profile</p><h2>Personal details</h2></div>{athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}</header>
-          {profileLoading && <p role="status">Loading athlete profile...</p>}
-          {!profileLoading && profileError && <div className={styles.sectionError} role="alert"><strong>Profile unavailable</strong><p>{profileError}</p><Button onClick={() => setProfileRetry((value) => value + 1)}>Retry profile</Button></div>}
-          {!profileLoading && athlete && (
-            <dl className={styles.profileDetails}>
-              <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
-              <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
-              <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
-              <div><dt>Squad</dt><dd>{athlete.squad ?? 'Not provided'}</dd></div>
-              <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
-            </dl>
+      <header className={styles.hero}>
+        <span className={styles.avatar} aria-hidden="true">{initials(displayName)}</span>
+        <div className={styles.identity}>
+          <p>Featured athlete</p>
+          <h1 id="athlete-detail-heading" ref={headingRef} tabIndex={-1}>{displayName}</h1>
+          <div className={styles.heroMeta}>
+            <span>100m</span>
+            <span>{athlete?.squad ?? statistics?.athlete.squad ?? 'Squad not provided'}</span>
+            <span>{age === null ? 'Age not provided' : `${age} years`}</span>
+          </div>
+        </div>
+        <div className={styles.heroActions}>
+          {athlete && (
+            <span className={athlete.archivedAt ? styles.archivedState : styles.activeState}>
+              {athlete.archivedAt ? 'Archived athlete' : 'Active athlete'}
+            </span>
           )}
-        </Card>
+          {athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+        </div>
+      </header>
 
-        <Card className={styles.metricsCard}>
-          <header><div><p>Current season</p><h2>100m performance</h2></div></header>
-          {statisticsLoading && <p role="status">Loading performance statistics...</p>}
-          {!statisticsLoading && statisticsError && <div className={styles.sectionError} role="alert"><strong>Statistics unavailable</strong><p>{statisticsError}</p><Button onClick={() => setStatisticsRetry((value) => value + 1)}>Retry statistics</Button></div>}
-          {!statisticsLoading && statistics && (
-            <dl className={styles.metrics}>
-              <div><dt>Personal best</dt><dd>{statistics.pb === null ? 'No valid result' : format100mSeconds(statistics.pb)}</dd><span>100m PB</span></div>
-              <div><dt>Season best</dt><dd>{statistics.sb === null ? 'No valid result this year' : format100mSeconds(statistics.sb)}</dd><span>Current calendar year</span></div>
-              <div><dt>Valid results</dt><dd>{statistics.resultCounts.currentYear}</dd><span>Current calendar year</span></div>
-            </dl>
-          )}
-        </Card>
-      </div>
+      <section className={styles.kpiStrip} aria-label="100m performance summary">
+        {statisticsLoading && <p role="status">Loading performance statistics...</p>}
+        {!statisticsLoading && statisticsError && (
+          <div className={styles.sectionError} role="alert">
+            <strong>Statistics unavailable</strong><p>{statisticsError}</p>
+            <Button onClick={() => setStatisticsRetry((value) => value + 1)}>Retry statistics</Button>
+          </div>
+        )}
+        {!statisticsLoading && statistics && (
+          <dl className={styles.metrics}>
+            <div><dt>Personal best</dt><dd>{statistics.pb === null ? 'No valid result' : format100mSeconds(statistics.pb)}</dd><span>100m PB</span></div>
+            <div><dt>Season best</dt><dd>{statistics.sb === null ? 'No valid result this year' : format100mSeconds(statistics.sb)}</dd><span>Current calendar year</span></div>
+            <div><dt>Valid results</dt><dd>{statistics.resultCounts.currentYear}</dd><span>Current calendar year</span></div>
+          </dl>
+        )}
+      </section>
+
+      <Card className={styles.profileCard}>
+        <header><div><p>Profile</p><h2>Personal details</h2></div></header>
+        {profileLoading && <p role="status">Loading athlete profile...</p>}
+        {!profileLoading && profileError && (
+          <div className={styles.sectionError} role="alert">
+            <strong>Profile unavailable</strong><p>{profileError}</p>
+            <Button onClick={() => setProfileRetry((value) => value + 1)}>Retry profile</Button>
+          </div>
+        )}
+        {!profileLoading && athlete && (
+          <dl className={styles.profileDetails}>
+            <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
+            <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
+            <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
+            <div><dt>Squad</dt><dd>{athlete.squad ?? 'Not provided'}</dd></div>
+            <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
+          </dl>
+        )}
+      </Card>
 
       <Card className={styles.historyCard}>
         <header><div><p>Performance log</p><h2>Recent results</h2></div></header>
         {statisticsLoading && <p role="status">Loading recent results...</p>}
         {!statisticsLoading && statisticsError && <p className={styles.historyUnavailable}>Recent results are unavailable until statistics can be loaded.</p>}
         {!statisticsLoading && statistics && (
-          <div className={styles.historyGrid}>
-            <HistorySection title="Competitions" entries={statistics.recentResults.competitions} />
-            <HistorySection title="Training" entries={statistics.recentResults.training} />
-          </div>
+          <>
+            <div className={styles.tabs} role="tablist" aria-label="Result history">
+              {historyTabs.map((tab) => {
+                const selected = selectedTab === tab;
+                const label = tab === 'competitions' ? 'Competitions' : 'Training';
+                return (
+                  <button
+                    key={tab}
+                    ref={(node) => { tabRefs.current[tab] = node; }}
+                    type="button"
+                    role="tab"
+                    id={`${tab}-tab`}
+                    aria-selected={selected}
+                    aria-controls={`${tab}-panel`}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => selectTab(tab)}
+                    onKeyDown={handleTabKeyDown}
+                  >
+                    <span>{label}</span><strong>{statistics.recentResults[tab].length}</strong>
+                  </button>
+                );
+              })}
+            </div>
+            <section
+              className={styles.tabPanel}
+              role="tabpanel"
+              id={`${selectedTab}-panel`}
+              aria-labelledby={`${selectedTab}-tab`}
+              tabIndex={0}
+            >
+              {activeEntries.length === 0
+                ? <p className={styles.emptyHistory}>No {activeResultType} results yet.</p>
+                : <ol>{activeEntries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}</ol>}
+            </section>
+          </>
         )}
       </Card>
 
