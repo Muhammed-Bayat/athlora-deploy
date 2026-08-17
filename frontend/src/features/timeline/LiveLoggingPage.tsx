@@ -1,12 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { listAthletes } from '../../api/athletes';
 import { listEvents, updateEvent } from '../../api/events';
 import { listEventParticipants } from '../../api/participants';
 import { listTimelineEntries, createTimelineEntry, updateTimelineEntry, deleteTimelineEntry } from '../../api/timeline';
 import { listResults } from '../../api/results';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
+import { useCurrentUser } from '../auth/CurrentUserContext';
+import { EventResultsView } from '../results/EventResultsView';
+import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import type {
   AthleticsEvent,
+  Athlete,
   EventParticipantSummary,
   TimelineEntry,
   Result,
@@ -15,13 +20,16 @@ import type {
 import styles from './LiveLoggingPage.module.css';
 
 export function LiveLoggingPage() {
+  const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [results, setResults] = useState<Result[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventDataLoading, setEventDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -36,9 +44,10 @@ export function LiveLoggingPage() {
   const [editIncident, setEditIncident] = useState<IncidentType>(null);
   const [editNote, setEditNote] = useState('');
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
+  const eventDataRequestRef = useRef(0);
 
   const loadEvents = async () => {
-    setLoading(true);
+    setEventsLoading(true);
     setError(null);
     try {
       const res = await listEvents();
@@ -46,28 +55,34 @@ export function LiveLoggingPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events');
     } finally {
-      setLoading(false);
+      setEventsLoading(false);
     }
   };
 
   const loadEventData = async (eventId: string) => {
-    setLoading(true);
+    const requestId = ++eventDataRequestRef.current;
+    setEventDataLoading(true);
     setError(null);
     try {
-      const [eventRes, participantsRes, timelineRes, resultsRes] = await Promise.all([
+      const [eventRes, participantsRes, timelineRes, resultsRes, athletesRes] = await Promise.all([
         listEvents().then(res => res.data.find(e => e.id === eventId) ?? null),
         listEventParticipants(eventId),
         listTimelineEntries(eventId),
         listResults(eventId),
+        listAthletes({ includeArchived: true }),
       ]);
+      if (requestId !== eventDataRequestRef.current) return;
       if (eventRes) setActiveEvent(eventRes);
       setParticipants(participantsRes.data);
       setTimeline(timelineRes.data);
       setResults(resultsRes.data);
+      setAthletes(athletesRes.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load event data');
+      if (requestId === eventDataRequestRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load event data');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === eventDataRequestRef.current) setEventDataLoading(false);
     }
   };
 
@@ -79,8 +94,12 @@ export function LiveLoggingPage() {
     if (selectedEventId) {
       void loadEventData(selectedEventId);
     } else {
+      eventDataRequestRef.current += 1;
+      setEventDataLoading(false);
+      setError(null);
       setActiveEvent(null);
       setParticipants([]);
+      setAthletes([]);
       setTimeline([]);
       setResults([]);
     }
@@ -134,8 +153,8 @@ export function LiveLoggingPage() {
     if (!selectedEventId) return;
     const rawVal = finishInputs[athleteId] ?? '';
     const num = Number(rawVal);
-    if (!rawVal.trim() || !Number.isFinite(num) || num <= 0 || num > 99.99) {
-      setError('Please enter a valid finish time in seconds (e.g. 10.25).');
+    if (!rawVal.trim() || !Number.isFinite(num) || num <= 0 || num > 99.99 || !has100mHundredthPrecision(rawVal)) {
+      setError('Enter a finish time from 0.01 to 99.99 seconds using no more than two decimal places.');
       return;
     }
 
@@ -181,7 +200,7 @@ export function LiveLoggingPage() {
         incidentType,
         value: null,
       });
-      setToast(`Recorded incident: ${incidentType?.replace('_', ' ')}`);
+      setToast(`Recorded incident: ${getIncidentTypeLabel(incidentType)}`);
       await loadEventData(selectedEventId);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -207,8 +226,8 @@ export function LiveLoggingPage() {
     if (!selectedEventId || !editingEntry) return;
 
     const valNum = editValue.trim() ? Number(editValue) : null;
-    if (editValue.trim() && (!Number.isFinite(valNum) || valNum! <= 0)) {
-      setError('Please enter a valid numeric value.');
+    if (editValue.trim() && (!Number.isFinite(valNum) || valNum! <= 0 || !has100mHundredthPrecision(editValue))) {
+      setError('Enter a positive value using no more than two decimal places.');
       return;
     }
 
@@ -270,8 +289,8 @@ export function LiveLoggingPage() {
         {error && <div className={styles.errorAlert} role="alert">{error}</div>}
         {toast && <Toast onDismiss={() => setToast(null)}>{toast}</Toast>}
 
-        {loading ? (
-          <p aria-busy="true">Loading events...</p>
+        {eventsLoading || (selectedEventId !== null && eventDataLoading) ? (
+          <p aria-busy="true">{eventsLoading ? 'Loading events...' : 'Loading event data...'}</p>
         ) : activeOrScheduled.length === 0 ? (
           <EmptyState
             title="No events available"
@@ -293,7 +312,10 @@ export function LiveLoggingPage() {
                   {ev.status === 'in_progress' ? (
                     <Button
                       variant="primary"
-                      onClick={() => setSelectedEventId(ev.id)}
+                      onClick={() => {
+                        if (selectedEventId === ev.id) void loadEventData(ev.id);
+                        else setSelectedEventId(ev.id);
+                      }}
                       style={{ minHeight: '44px', minWidth: '44px' }}
                     >
                       Open Live Logger ›
@@ -461,10 +483,10 @@ export function LiveLoggingPage() {
                       </div>
                       <div className={styles.timelineBody}>
                         {entry.entryType === 'attempt' && entry.value !== null && (
-                          <span className={styles.successBadge}>Finish: {entry.value}s</span>
+                          <span className={styles.successBadge}>Finish: {format100mSeconds(entry.value)}</span>
                         )}
                         {entry.entryType === 'penalty' && entry.incidentType && (
-                          <span className={styles.dangerBadge}>Incident: {entry.incidentType.replace('_', ' ')}</span>
+                          <span className={styles.dangerBadge}>Incident: {getIncidentTypeLabel(entry.incidentType)}</span>
                         )}
                         {entry.noteText && <p>Note: {entry.noteText}</p>}
                         <small>Recorded by {entry.recordedBy} · v{entry.version}</small>
@@ -495,26 +517,21 @@ export function LiveLoggingPage() {
           </div>
 
           <div className={styles.feedCard} style={{ marginTop: 'var(--space-4)' }}>
-            <h3>Live Results & Standings</h3>
-            {results.length === 0 ? (
-              <p className={styles.mutedText}>Results reconcile automatically as events are logged.</p>
-            ) : (
-              <ul className={styles.resultsList}>
-                {results.map(res => {
-                  const athlete = participants.find(p => p.athleteId === res.athleteId)?.athlete;
-                  const name = athlete?.name ?? res.athleteId;
-                  return (
-                    <li key={res.athleteId} className={styles.resultRow}>
-                      <span>
-                        <b>{res.placing ? `${res.placing}. ` : ''}{name}</b>
-                        <small>{res.outcome}{res.isPb ? ' · PB' : ''}{res.isSb ? ' · SB' : ''}</small>
-                      </span>
-                      <strong>{res.finalResult !== null ? `${res.finalResult}s` : '—'}</strong>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <div className={styles.feedHeading}>
+              <h3>Live Results & Standings</h3>
+              <Button variant="ghost" onClick={() => void loadEventData(activeEvent.id)} disabled={eventDataLoading}>
+                {eventDataLoading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
+            <EventResultsView
+              event={activeEvent}
+              results={results}
+              participants={participants}
+              timeline={timeline}
+              athletes={athletes}
+              currentUser={currentUser}
+              compact
+            />
           </div>
         </aside>
       </div>

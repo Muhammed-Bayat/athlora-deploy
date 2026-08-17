@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types';
 import { Auth0TokenBridge } from './Auth0TokenBridge';
+import { useCurrentUser } from './CurrentUserContext';
 
 const mocks = vi.hoisted(() => ({
   auth: {
@@ -48,6 +49,12 @@ function renderBridge(children: ReactNode = <div>Private application</div>) {
   return render(<Auth0TokenBridge>{children}</Auth0TokenBridge>);
 }
 
+function CurrentUserName() {
+  const currentUser = useCurrentUser();
+
+  return <div>{currentUser?.name ?? 'Anonymous user'}</div>;
+}
+
 beforeEach(() => {
   mocks.auth.isAuthenticated = false;
   mocks.auth.user = undefined;
@@ -58,10 +65,10 @@ beforeEach(() => {
 });
 
 describe('Auth0TokenBridge', () => {
-  it('renders anonymous children without synchronizing', () => {
-    renderBridge();
+  it('renders anonymous children with no current user without synchronizing', () => {
+    renderBridge(<CurrentUserName />);
 
-    expect(screen.getByText('Private application')).toBeInTheDocument();
+    expect(screen.getByText('Anonymous user')).toBeInTheDocument();
     expect(mocks.syncCurrentUser).not.toHaveBeenCalled();
     expect(mocks.setAccessTokenGetter).toHaveBeenCalledWith(undefined);
   });
@@ -72,16 +79,16 @@ describe('Auth0TokenBridge', () => {
     mocks.auth.user = { sub: 'auth0|user-1' };
     mocks.syncCurrentUser.mockReturnValue(synchronization.promise);
 
-    renderBridge();
+    renderBridge(<CurrentUserName />);
 
-    expect(screen.queryByText('Private application')).not.toBeInTheDocument();
+    expect(screen.queryByText('Coach One')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Preparing your account');
     expect(mocks.syncCurrentUser).toHaveBeenCalledTimes(1);
     expect(mocks.auth.getAccessTokenSilently).not.toHaveBeenCalled();
 
     await act(async () => synchronization.resolve(synchronizedUser));
 
-    expect(screen.getByText('Private application')).toBeInTheDocument();
+    expect(screen.getByText('Coach One')).toBeInTheDocument();
   });
 
   it('renders an accessible error and retries synchronization', async () => {

@@ -1,4 +1,4 @@
-import type { Result, ApiList } from '../types';
+import type { ApiList, Result, ResultOverridePayload } from '../types';
 import { list, update } from './client';
 
 export async function listResults(eventId: string): Promise<ApiList<Result>> {
@@ -8,7 +8,7 @@ export async function listResults(eventId: string): Promise<ApiList<Result>> {
 export async function overrideResult(
   eventId: string,
   athleteId: string,
-  payload: unknown,
+  payload: ResultOverridePayload,
 ): Promise<Result> {
   return update<Result>(`events/${eventId}/results`, athleteId, payload);
 }

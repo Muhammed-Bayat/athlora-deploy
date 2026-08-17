@@ -1,0 +1,429 @@
+.resultBoard {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resultCard {
+  display: grid;
+  grid-template-columns: 58px minmax(120px, 1.1fr) minmax(108px, 0.8fr) minmax(108px, 0.8fr) minmax(180px, 1.4fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.resultCard[data-outcome='dq'],
+.resultCard[data-outcome='dnf'],
+.resultCard[data-outcome='dns'] {
+  border-left-color: var(--color-danger);
+}
+
+.resultCard[data-outcome='no_result'] {
+  border-left-color: var(--color-text-faint);
+}
+
+.placing,
+.identity,
+.officialResult,
+.derivedResult,
+.resultMarks,
+.resultAction {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.placing span,
+.officialResult > span,
+.derivedResult > span,
+.resultMarks > span {
+  color: var(--color-text-faint);
+  font-size: 0.65rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.placing strong,
+.officialResult > strong,
+.derivedResult > strong {
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+}
+
+.placing strong {
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-xl);
+}
+
+.identity > strong {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+}
+
+.identity > span,
+.noMarks,
+.resultAction small {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.identityBadges,
+.performanceBadges {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.officialResult > strong {
+  color: var(--teal-700);
+  font-size: var(--font-size-lg);
+}
+
+.derivedResult > strong {
+  font-size: var(--font-size-sm);
+}
+
+.audit {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--mist-100);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
+.audit p,
+.audit q,
+.audit small {
+  margin: 0;
+}
+
+.audit p strong,
+.audit q {
+  color: var(--color-text);
+}
+
+.audit small {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+}
+
+.resultAction {
+  justify-items: end;
+}
+
+.resultAction button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.resultAction small {
+  max-width: 150px;
+  text-align: right;
+}
+
+.contextNote,
+.cancelledNote,
+.emptyResults {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--mist-100);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.cancelledNote {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  background: var(--alert-soft);
+  color: var(--color-danger);
+}
+
+.emptyResults {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: 0;
+  text-align: center;
+}
+
+.emptyResults strong {
+  color: var(--color-text);
+}
+
+.compact .resultCard {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.compact .officialResult,
+.compact .derivedResult,
+.compact .resultMarks,
+.compact .resultAction {
+  grid-column: 2;
+}
+
+.compact .resultAction {
+  justify-items: start;
+}
+
+.compact .resultAction small {
+  text-align: left;
+}
+
+.compact[data-event-type='training'] .resultCard {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.compact[data-event-type='training'] .identity,
+.compact[data-event-type='training'] .officialResult,
+.compact[data-event-type='training'] .derivedResult,
+.compact[data-event-type='training'] .resultMarks,
+.compact[data-event-type='training'] .resultAction {
+  grid-column: 1;
+}
+
+.resultsSection {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--mist-50);
+}
+
+.resultsHeader {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.resultsHeader p,
+.resultsHeader h3 {
+  margin: 0;
+}
+
+.resultsHeader p {
+  color: var(--color-primary);
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.resultsHeader h3 {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.resultsHeader > div:last-child {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.resultsHeader button {
+  min-height: 44px;
+}
+
+.inlineStatus,
+.inlineError {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+
+.inlineStatus {
+  background: var(--color-surface);
+}
+
+.inlineError {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  background: var(--alert-soft);
+  color: var(--color-danger);
+}
+
+.correctionForm {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 560px;
+}
+
+.correctionSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.correctionSummary div {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--mist-100);
+}
+
+.correctionSummary dt {
+  color: var(--color-text-faint);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.correctionSummary dd {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-bold);
+}
+
+.correctionField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.correctionField label {
+  color: var(--color-primary-dark);
+  font-size: 0.78rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.correctionField textarea {
+  min-height: 100px;
+  resize: vertical;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.correctionField textarea[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.fieldError,
+.formError,
+.voidWarning {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.78rem;
+}
+
+.formError,
+.voidWarning,
+.clearConfirmation {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--alert-soft);
+}
+
+.correctionAudit,
+.clearConfirmation {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.correctionAudit p,
+.clearConfirmation p {
+  margin: 0;
+}
+
+.correctionAudit strong,
+.clearConfirmation strong {
+  color: var(--color-text);
+}
+
+.correctionActions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1050px) {
+  .resultCard {
+    grid-template-columns: 48px minmax(120px, 1fr) minmax(108px, 0.8fr);
+  }
+
+  .derivedResult,
+  .resultMarks,
+  .resultAction {
+    grid-column: 2 / -1;
+  }
+
+  .resultAction {
+    justify-items: start;
+  }
+
+  .resultAction small {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (max-width: 620px) {
+  .resultCard,
+  .compact .resultCard {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .officialResult,
+  .derivedResult,
+  .resultMarks,
+  .resultAction,
+  .compact .officialResult,
+  .compact .derivedResult,
+  .compact .resultMarks,
+  .compact .resultAction {
+    grid-column: 2;
+  }
+
+  .resultsHeader,
+  .inlineError {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resultsHeader > div:last-child,
+  .resultsHeader button,
+  .inlineError button {
+    width: 100%;
+  }
+
+  .correctionForm {
+    width: auto;
+  }
+
+  .correctionSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .correctionActions {
+    flex-direction: column;
+  }
+
+  .correctionActions button {
+    width: 100%;
+  }
+}

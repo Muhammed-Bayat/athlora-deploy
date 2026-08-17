@@ -166,6 +166,10 @@ export interface Result {
   updatedAt: string;
 }
 
+export type ResultOverridePayload =
+  | { manualOverride: number; overrideReason: string }
+  | { manualOverride: null; overrideReason: null };
+
 export interface AthleteStatistics {
   athleteId: string;
   discipline: Discipline;

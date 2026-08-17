@@ -4,6 +4,7 @@ import { setAccessTokenGetter, syncCurrentUser } from '../../api/client';
 import { Button } from '../../components';
 import type { User } from '../../types';
 import styles from './Auth0TokenBridge.module.css';
+import { CurrentUserProvider } from './CurrentUserProvider';
 
 interface Auth0TokenBridgeProps {
   children: ReactNode;
@@ -71,7 +72,7 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
   }, [isAuthenticated, retry, subject]);
 
   if (!isAuthenticated) {
-    return children;
+    return <CurrentUserProvider user={null}>{children}</CurrentUserProvider>;
   }
 
   if (
@@ -79,7 +80,9 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
     synchronization.status === 'ready' &&
     synchronization.subject === subject
   ) {
-    return children;
+    return (
+      <CurrentUserProvider user={synchronization.user}>{children}</CurrentUserProvider>
+    );
   }
 
   if (
