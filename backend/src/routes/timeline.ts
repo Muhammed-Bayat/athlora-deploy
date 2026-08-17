@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { notImplemented } from '../middleware/notImplemented.js';
+import * as timeline from '../controllers/timeline.js';
 import {
   requireEventAthleteOwnership,
   requireTimelineEntryOwnership,
@@ -10,20 +10,20 @@ import {
   parseTimelineEntryPatchPayload,
 } from '../validation/payloads.js';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 router.post(
   '/:eventId/entries',
   validateBody(parseTimelineEntryCreatePayload),
   requireEventAthleteOwnership,
-  notImplemented,
+  timeline.createTimelineEntry,
 );
 router.patch(
   '/:eventId/entries/:entryId',
   validateBody(parseTimelineEntryPatchPayload),
   requireTimelineEntryOwnership,
-  notImplemented,
+  timeline.updateTimelineEntry,
 );
-router.delete('/:eventId/entries/:entryId', requireTimelineEntryOwnership, notImplemented);
+router.delete('/:eventId/entries/:entryId', requireTimelineEntryOwnership, timeline.deleteTimelineEntry);
 
 export default router;

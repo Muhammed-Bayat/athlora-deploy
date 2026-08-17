@@ -19,11 +19,74 @@ const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const ATHLETE_ID = '33333333-3333-4333-8333-333333333333';
 const ENTRY_ID = '44444444-4444-4444-8444-444444444444';
 const query = vi.fn();
+const release = vi.fn();
+const client = { query, release };
+const connect = vi.fn().mockResolvedValue(client);
 const app = createApp();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getPool).mockReturnValue({ query } as unknown as ReturnType<typeof getPool>);
+  vi.mocked(getPool).mockReturnValue({ query, connect } as unknown as ReturnType<typeof getPool>);
+  query.mockImplementation(async (sql: string) => {
+    if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+      return { rows: [] };
+    }
+    if (sql.includes('SELECT 1')) {
+      return { rows: [{ owned: 1 }] };
+    }
+    if (sql.includes('SELECT athlete_id, discipline')) {
+      return { rows: [{ athlete_id: ATHLETE_ID, discipline: '100m', entry_type: 'attempt', value: 11.2, unit: 'seconds', is_foul: false, incident_type: null, note_text: null, version: 1 }] };
+    }
+    if (sql.includes('SELECT discipline FROM results')) {
+      return { rows: [{ discipline: '100m' }] };
+    }
+    if (sql.includes('SELECT type, date FROM events')) {
+      return { rows: [{ type: 'competition', date: '2026-09-01' }] };
+    }
+    if (sql.includes('SELECT * FROM results') || sql.includes('SELECT r.*')) {
+      return {
+        rows: [{
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          outcome: 'valid',
+          final_result: 11.2,
+          unit: 'seconds',
+          placing: 1,
+          is_pb: true,
+          is_sb: true,
+          manual_override: null,
+          override_reason: null,
+          overridden_by: null,
+          override_at: null,
+          updated_at: new Date().toISOString(),
+        }],
+      };
+    }
+    if (sql.includes('INSERT INTO timeline_entries') || sql.includes('UPDATE timeline_entries') || sql.includes('SELECT entry_type, value') || sql.includes('SELECT r.final_result') || sql.includes('SELECT athlete_id, final_result') || sql.includes('INSERT INTO results') || sql.includes('UPDATE results')) {
+      return {
+        rows: [{
+          id: ENTRY_ID,
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          entry_type: 'attempt',
+          value: 11.2,
+          unit: 'seconds',
+          is_foul: false,
+          incident_type: null,
+          note_text: null,
+          recorded_by: USER_ID,
+          version: 1,
+          device_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+        }],
+      };
+    }
+    return { rows: [] };
+  });
 });
 
 afterEach(() => {
@@ -203,21 +266,21 @@ describe('owned resource scaffolds', () => {
       ],
       ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501],
       ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501],
-      [
-        'post',
-        `/api/v1/events/${EVENT_ID}/entries`,
-        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
-        501,
-      ],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }, 501],
-      ['delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, undefined, 501],
-      ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 501],
-      [
-        'put',
-        `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
-        { manualOverride: 11.1, overrideReason: 'Photo finish' },
-        501,
-      ],
+       [
+         'post',
+         `/api/v1/events/${EVENT_ID}/entries`,
+         { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
+         201,
+       ],
+       ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }, 200],
+       ['delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, undefined, 200],
+       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200],
+       [
+         'put',
+         `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
+         { manualOverride: 11.1, overrideReason: 'Photo finish' },
+         200,
+       ],
     ] as const;
     const statuses: number[] = [];
 
