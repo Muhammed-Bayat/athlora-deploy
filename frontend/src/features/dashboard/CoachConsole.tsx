@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AthletesPage } from '../athletes/AthletesPage';
 import { EventsPage } from '../events/EventsPage';
+import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import {
   FIXTURE_TODAY,
   STATUSES,
@@ -22,6 +23,7 @@ const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; i
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
+  { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
 ];
 const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; temperature: number }> = [
   { id: 'clear', label: 'Sunny', temperature: 27 }, { id: 'partly', label: 'Partly cloudy', temperature: 24 },
@@ -34,6 +36,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
+  live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
 };
 
 function ConsoleIcon({ name }: { name: IconName }) {
@@ -119,7 +122,7 @@ export function CoachConsole() {
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>
-      <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}</main>
+       <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}{view === 'live' && <LiveLoggingPage />}</main>
     </div>
     <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
   </div>;
