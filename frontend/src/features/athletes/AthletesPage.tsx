@@ -61,6 +61,8 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const returnFocusAthleteId = useRef<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -88,6 +90,13 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
       onActiveCountChange?.(athletes.filter((athlete) => athlete.archivedAt === null).length);
     }
   }, [athletes, loadError, loading, onActiveCountChange]);
+
+  useEffect(() => {
+    if (selectedAthleteId !== null || returnFocusAthleteId.current === null) return;
+    const athleteId = returnFocusAthleteId.current;
+    returnFocusAthleteId.current = null;
+    window.setTimeout(() => performanceButtonRefs.current.get(athleteId)?.focus(), 0);
+  }, [selectedAthleteId]);
 
   const storeAthlete = (athlete: Athlete) => {
     setAthletes((current) => {
@@ -159,7 +168,10 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
     return (
       <AthleteDetailPage
         athleteId={selectedAthleteId}
-        onBack={() => setSelectedAthleteId(null)}
+        onBack={() => {
+          returnFocusAthleteId.current = selectedAthleteId;
+          setSelectedAthleteId(null);
+        }}
         onAthleteUpdated={storeAthlete}
       />
     );
@@ -266,7 +278,15 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
               </dl>
               {athlete.notes && <p className={styles.notes}>{athlete.notes}</p>}
               <div className={styles.cardActions}>
-                <Button variant="ghost" onClick={() => setSelectedAthleteId(athlete.id)} disabled={pendingId !== null}>
+                <Button
+                  ref={(node) => {
+                    if (node) performanceButtonRefs.current.set(athlete.id, node);
+                    else performanceButtonRefs.current.delete(athlete.id);
+                  }}
+                  className={styles.performanceAction}
+                  onClick={() => setSelectedAthleteId(athlete.id)}
+                  disabled={pendingId !== null}
+                >
                   View performance
                 </Button>
                 <Button

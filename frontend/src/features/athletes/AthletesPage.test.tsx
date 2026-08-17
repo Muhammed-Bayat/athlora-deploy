@@ -65,16 +65,23 @@ beforeEach(() => {
 });
 
 describe('AthletesPage', () => {
-  it('opens API roster athlete performance and returns to the same roster', async () => {
+  it('opens API roster athlete performance and restores focus to the exact roster trigger', async () => {
     const user = userEvent.setup();
     render(<AthletesPage />);
     await screen.findByRole('heading', { name: 'Ari Runner' });
 
-    await user.click(screen.getAllByRole('button', { name: 'View performance' })[0]);
+    const ariCard = screen.getByRole('heading', { name: 'Ari Runner' }).closest('article')
+      ?? screen.getByRole('heading', { name: 'Ari Runner' }).parentElement!;
+    const ariPerformanceButton = within(ariCard).getByRole('button', { name: 'View performance' });
+    await user.click(ariPerformanceButton);
     expect(await screen.findByText('Personal details')).toBeInTheDocument();
     expect(athleteApi.getAthlete).toHaveBeenCalledWith(ARI_ID);
     await user.click(screen.getByRole('button', { name: 'Back to roster' }));
     expect(screen.getByRole('heading', { name: 'Athletes' })).toBeInTheDocument();
+    const returnedAriCard = screen.getByRole('heading', { name: 'Ari Runner' }).closest('article')
+      ?? screen.getByRole('heading', { name: 'Ari Runner' }).parentElement!;
+    await waitFor(() => expect(within(returnedAriCard).getByRole('button', { name: 'View performance' })).toHaveFocus());
+    expect(screen.getAllByRole('button', { name: 'View performance' })[1]).not.toHaveFocus();
     expect(athleteApi.listAthletes).toHaveBeenCalledOnce();
   });
 

@@ -216,8 +216,8 @@
   height: 18px;
 }
 .metrics header small {
-  color: var(--blue-500);
-  background: #0092bc13;
+  color: var(--console-selected-text);
+  background: var(--console-selected-surface);
   border-radius: 99px;
   padding: 4px 8px;
   font: 700 9.5px var(--font-family-mono);
@@ -244,7 +244,7 @@
 }
 .metrics footer>i {
   height: 4px;
-  background: #005e8312;
+  background: var(--console-soft);
   border-radius: 99px;
 }
 .metrics footer>i>i {
@@ -307,7 +307,7 @@
 .panel header button {
   border: 0;
   background: transparent;
-  color: var(--blue-500);
+  color: var(--console-cyan);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -320,8 +320,8 @@
   padding: 11px 8px;
   margin: 0 -8px;
   border: 0;
-  border-bottom: 1px solid #005e830e;
-  background: transparent;
+  border-bottom: 1px solid var(--console-line);
+  background: var(--console-row-surface);
   color: var(--console-ink);
   text-align: left;
   border-radius: 8px;

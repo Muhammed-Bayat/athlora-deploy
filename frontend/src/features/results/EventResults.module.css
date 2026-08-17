@@ -12,21 +12,21 @@
   gap: var(--space-3);
   align-items: start;
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-left: 4px solid var(--color-primary);
+  border: 1px solid var(--console-line);
+  border-left: 4px solid var(--console-cyan);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--console-row-surface);
+  box-shadow: var(--console-shadow);
 }
 
 .resultCard[data-outcome='dq'],
 .resultCard[data-outcome='dnf'],
 .resultCard[data-outcome='dns'] {
-  border-left-color: var(--color-danger);
+  border-left-color: var(--console-danger-surface);
 }
 
 .resultCard[data-outcome='no_result'] {
-  border-left-color: var(--color-text-faint);
+  border-left-color: var(--console-faint);
 }
 
 .placing,
@@ -44,7 +44,7 @@
 .officialResult > span,
 .derivedResult > span,
 .resultMarks > span {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-size: 0.65rem;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.06em;
@@ -54,24 +54,24 @@
 .placing strong,
 .officialResult > strong,
 .derivedResult > strong {
-  color: var(--color-text);
+  color: var(--console-ink);
   font-family: var(--font-family-mono);
 }
 
 .placing strong {
-  color: var(--color-primary-dark);
+  color: var(--console-teal);
   font-size: var(--font-size-xl);
 }
 
 .identity > strong {
   overflow-wrap: anywhere;
-  color: var(--color-text);
+  color: var(--console-ink);
 }
 
 .identity > span,
 .noMarks,
 .resultAction small {
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   font-size: 0.75rem;
 }
 
@@ -84,7 +84,7 @@
 }
 
 .officialResult > strong {
-  color: var(--teal-700);
+  color: var(--console-teal);
   font-size: var(--font-size-lg);
 }
 
@@ -98,8 +98,9 @@
   margin-top: var(--space-2);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  border: 1px solid var(--console-line);
+  background: var(--console-soft);
+  color: var(--console-muted);
   font-size: 0.72rem;
 }
 
@@ -111,11 +112,11 @@
 
 .audit p strong,
 .audit q {
-  color: var(--color-text);
+  color: var(--console-ink);
 }
 
 .audit small {
-  color: var(--color-danger);
+  color: var(--console-danger-surface);
   font-weight: var(--font-weight-bold);
 }
 
@@ -139,15 +140,15 @@
   margin: 0 0 var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  background: var(--console-soft);
+  color: var(--console-muted);
   font-size: var(--font-size-sm);
 }
 
 .cancelledNote {
-  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
 }
 
 .emptyResults {
@@ -158,7 +159,7 @@
 }
 
 .emptyResults strong {
-  color: var(--color-text);
+  color: var(--console-ink);
 }
 
 .compact .resultCard {
@@ -197,9 +198,9 @@
   gap: var(--space-3);
   margin-top: var(--space-6);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
-  background: var(--mist-50);
+  background: var(--console-surface);
 }
 
 .resultsHeader {
@@ -215,7 +216,7 @@
 }
 
 .resultsHeader p {
-  color: var(--color-primary);
+  color: var(--console-cyan);
   font-size: 0.68rem;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.09em;
@@ -223,7 +224,7 @@
 }
 
 .resultsHeader h3 {
-  color: var(--color-text);
+  color: var(--console-ink);
   font-size: 1rem;
 }
 
@@ -242,11 +243,11 @@
   margin: 0;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  color: var(--console-muted);
 }
 
 .inlineStatus {
-  background: var(--color-surface);
+  background: var(--console-row-surface);
 }
 
 .inlineError {
@@ -254,9 +255,9 @@
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
 }
 
 .correctionForm {
@@ -276,11 +277,12 @@
 .correctionSummary div {
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
+  border: 1px solid var(--console-line);
+  background: var(--console-row-surface);
 }
 
 .correctionSummary dt {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-size: 0.7rem;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.06em;
@@ -289,7 +291,7 @@
 
 .correctionSummary dd {
   margin: var(--space-1) 0 0;
-  color: var(--color-text);
+  color: var(--console-ink);
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-bold);
 }
@@ -300,7 +302,7 @@
 }
 
 .correctionField label {
-  color: var(--color-primary-dark);
+  color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
 }
@@ -309,39 +311,54 @@
   min-height: 100px;
   resize: vertical;
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
   font: inherit;
 }
 
 .correctionField textarea[aria-invalid='true'] {
-  border-color: var(--color-danger);
+  border-color: var(--console-danger-surface);
 }
 
 .fieldError,
 .formError,
 .voidWarning {
   margin: 0;
-  color: var(--color-danger);
+  color: var(--console-error-text);
   font-size: 0.78rem;
 }
 
+.fieldError {
+  color: var(--console-danger-surface);
+}
+
 .formError,
-.voidWarning,
+.voidWarning {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
+  border-radius: var(--radius-sm);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
+}
+
 .clearConfirmation {
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-danger-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
+  background: var(--console-danger-surface);
+  color: var(--console-danger-text);
 }
 
 .correctionAudit,
 .clearConfirmation {
-  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   line-height: 1.5;
+}
+
+.correctionAudit {
+  color: var(--console-muted);
 }
 
 .correctionAudit p,
@@ -349,9 +366,45 @@
   margin: 0;
 }
 
-.correctionAudit strong,
+.correctionAudit strong {
+  color: var(--console-ink);
+}
+
 .clearConfirmation strong {
-  color: var(--color-text);
+  color: var(--console-danger-text);
+}
+
+.correctionField textarea::placeholder {
+  color: var(--console-placeholder);
+}
+
+.correctionField input {
+  border-color: var(--console-control-border);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+}
+
+.correctionField input::placeholder {
+  color: var(--console-placeholder);
+}
+
+.correctionField textarea:focus-visible,
+.correctionField input:focus-visible,
+.resultAction button:focus-visible,
+.resultsHeader button:focus-visible,
+.inlineError button:focus-visible,
+.correctionActions button:focus-visible {
+  outline: 3px solid var(--console-focus);
+  outline-offset: 2px;
+}
+
+.correctionField textarea:disabled,
+.correctionField input:disabled,
+.resultAction button:disabled,
+.resultsHeader button:disabled,
+.correctionActions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .correctionActions {

@@ -45,7 +45,7 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (148 Vitest/RTL tests) |
+| `frontend` | lint, typecheck, test, build | passing (151 Vitest/RTL tests) |
 | `backend` | lint, typecheck, test, build | passing (269 Vitest/Supertest tests; 34 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 Chromium smoke test) |

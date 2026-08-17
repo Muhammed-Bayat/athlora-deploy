@@ -44,13 +44,13 @@
   text-transform: uppercase;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
-  background: var(--mist-100);
-  color: var(--console-teal);
+  background: var(--console-badge-neutral-surface);
+  color: var(--console-badge-neutral-text);
 }
 
 .badge[data-status="in_progress"] {
-  background: var(--cyan-200);
-  color: var(--ink-900);
+  background: var(--console-badge-pb-surface);
+  color: var(--console-badge-pb-text);
 }
 
 .date {
@@ -98,8 +98,9 @@
 }
 
 .errorAlert {
-  background: var(--alert-soft);
-  color: var(--alert);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-4);
@@ -107,8 +108,9 @@
 }
 
 .conflictAlert {
-  background: #FEF3C7;
-  color: #92400E;
+  border: 1px solid color-mix(in srgb, var(--console-cyan) 45%, var(--console-line));
+  background: color-mix(in srgb, var(--console-cyan) 16%, var(--console-soft));
+  color: var(--console-ink);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-4);
@@ -171,9 +173,9 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--mist-50);
+  background: var(--console-row-surface);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--console-line);
 }
 
 .athleteInfo b {
@@ -221,9 +223,9 @@
 
 .timelineItem {
   padding: var(--space-3);
-  background: var(--mist-50);
+  background: var(--console-row-surface);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--console-line);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -241,8 +243,8 @@
 
 .successBadge {
   display: inline-block;
-  background: var(--teal-700);
-  color: var(--white);
+  background: var(--console-badge-pb-surface);
+  color: var(--console-badge-pb-text);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   font-size: 0.75rem;
@@ -251,8 +253,8 @@
 
 .dangerBadge {
   display: inline-block;
-  background: var(--alert);
-  color: var(--white);
+  background: var(--console-badge-danger-surface);
+  color: var(--console-badge-danger-text);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   font-size: 0.75rem;
@@ -281,7 +283,7 @@
 }
 
 .linkButton {
-  color: var(--color-primary);
+  color: var(--console-cyan);
 }
 
 .linkButton:hover {
@@ -289,7 +291,7 @@
 }
 
 .dangerLinkButton {
-  color: var(--alert);
+  color: var(--console-danger-surface);
 }
 
 .dangerLinkButton:hover {
@@ -315,7 +317,8 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--space-2) var(--space-3);
-  background: var(--mist-50);
+  border: 1px solid var(--console-line);
+  background: var(--console-row-surface);
   border-radius: var(--radius-sm);
 }
 
@@ -348,10 +351,10 @@
 .selectInput {
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
-  background: var(--console-surface);
-  color: var(--console-ink);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
   font: inherit;
 }
 
@@ -365,6 +368,27 @@
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline: 3px solid var(--console-focus);
   outline-offset: 2px;
+}
+
+.finishInputGroup input,
+.editForm input {
+  border-color: var(--console-control-border);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+}
+
+.finishInputGroup input::placeholder,
+.editForm input::placeholder,
+.selectInput::placeholder {
+  color: var(--console-placeholder);
+}
+
+.finishInputGroup input:disabled,
+.editForm input:disabled,
+.selectInput:disabled,
+.incidentButtonGroup button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

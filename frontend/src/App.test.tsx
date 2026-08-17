@@ -32,6 +32,7 @@ describe('App', () => {
     authState.isLoading = false;
     authState.loginWithRedirect.mockReset();
     window.history.replaceState({}, '', '/');
+    window.localStorage.clear();
     athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
   });
 
@@ -70,6 +71,24 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: /add athlete/i }));
     expect(screen.getByRole('dialog', { name: 'Add athlete' })).toBeInTheDocument();
+  });
+
+  it('applies and clears the night weather theme state', async () => {
+    const user = userEvent.setup();
+    authState.isAuthenticated = true;
+    authState.isLoading = false;
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Night' }));
+
+    const consoleRoot = document.querySelector('[data-weather-enabled]');
+    expect(consoleRoot).toHaveAttribute('data-weather', 'night');
+    expect(consoleRoot).toHaveAttribute('data-weather-enabled', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Weather FX' }));
+    expect(consoleRoot).not.toHaveAttribute('data-weather');
+    expect(consoleRoot).toHaveAttribute('data-weather-enabled', 'false');
   });
 
   it('starts Auth0 login instead of exposing the protected console', async () => {
