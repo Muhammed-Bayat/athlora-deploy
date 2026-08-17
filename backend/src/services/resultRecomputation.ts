@@ -8,7 +8,10 @@ export async function recomputeAndUpsertResult(
   athleteId: string,
   discipline: Discipline = DISCIPLINE_100M,
 ): Promise<void> {
-  const eventRes = await client.query('SELECT type, date FROM events WHERE id = $1', [eventId]);
+  const eventRes = await client.query(
+    'SELECT type, date FROM events WHERE id = $1',
+    [eventId]
+  );
   if (eventRes.rows.length === 0) return;
   const event = eventRes.rows[0] as { type: EventType; date: string };
 
@@ -16,7 +19,7 @@ export async function recomputeAndUpsertResult(
     `SELECT entry_type, value, is_foul, incident_type, deleted_at
      FROM timeline_entries
      WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
-    [eventId, athleteId, discipline],
+    [eventId, athleteId, discipline]
   );
 
   const entryInputs = entriesRes.rows.map((r) => ({
@@ -31,7 +34,7 @@ export async function recomputeAndUpsertResult(
     `SELECT manual_override, override_reason, overridden_by, override_at
      FROM results
      WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
-    [eventId, athleteId, discipline],
+    [eventId, athleteId, discipline]
   );
   const existingResult = existingResultRes.rows[0] as {
     manual_override: string | number | null;
@@ -49,6 +52,12 @@ export async function recomputeAndUpsertResult(
   const effective = deriveEffectiveResult(derived, manualOverride);
   const finalResult = effective.value;
   const outcome = effective.outcome;
+<<<<<<< HEAD
+
+  const historyRes = await client.query(
+    `SELECT r.final_result AS value, r.manual_override, e.date, r.outcome
+=======
+  const unit = finalResult !== null ? 'seconds' : null;
 
   const historyRes = await client.query(
     `SELECT r.final_result AS value, r.manual_override, e.date, r.outcome
@@ -57,18 +66,19 @@ export async function recomputeAndUpsertResult(
      WHERE r.athlete_id = $1
        AND r.discipline = $2
        AND r.outcome = 'valid'
+       AND r.final_result IS NOT NULL
        AND (e.date < $3 OR (e.date = $3 AND r.event_id != $4))`,
-    [athleteId, discipline, event.date, eventId],
+    [athleteId, discipline, event.date, eventId]
   );
 
-  const historicalResults = historyRes.rows.map((r) => {
-    const val = r.manual_override !== null && r.manual_override !== undefined ? Number(r.manual_override) : Number(r.value);
+  const historicalResults = historyRes.rows.map((r: { value: string | number | null; manual_override: string | number | null; date: string; outcome: string }) => {
+    const val = r.manual_override !== null && r.manual_override !== undefined ? Number(r.manual_override) : (r.value !== null ? Number(r.value) : null);
     return {
       value: val,
       date: r.date,
       outcome: r.outcome,
     };
-  });
+  }).filter((r) => r.value !== null);
 
   const { isPb, isSb } = checkPbSb(finalResult, outcome, event.date, historicalResults);
 
@@ -90,15 +100,15 @@ export async function recomputeAndUpsertResult(
       athleteId,
       discipline,
       outcome,
-      derived.value, // underlying derived result is kept distinct from manual override
-      derived.value !== null ? 'seconds' : null,
-      isPb,
-      isSb,
-      manualOverride,
-      existingResult?.override_reason ?? null,
-      existingResult?.overridden_by ?? null,
-      existingResult?.override_at ?? null,
-    ],
+       finalResult,
+       unit,
+       isPb,
+       isSb,
+       manualOverride,
+       existingResult?.override_reason ?? null,
+       existingResult?.overridden_by ?? null,
+       existingResult?.override_at ?? null,
+    ]
   );
 
   if (event.type === 'competition') {
@@ -106,7 +116,7 @@ export async function recomputeAndUpsertResult(
       `SELECT athlete_id, final_result, manual_override, outcome FROM results WHERE event_id = $1 AND discipline = $2`,
       [eventId, discipline],
     );
-    const resultsForPlacing = allResultsRes.rows.map((r) => {
+    const resultsForPlacing = allResultsRes.rows.map((r: { athlete_id: string; final_result: string | number | null; manual_override: string | number | null; outcome: string }) => {
       const effVal = r.manual_override !== null && r.manual_override !== undefined ? Number(r.manual_override) : (r.final_result !== null ? Number(r.final_result) : null);
       return {
         athleteId: r.athlete_id,

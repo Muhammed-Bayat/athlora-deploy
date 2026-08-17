@@ -13,7 +13,7 @@ import {
   parseTimelineEntryPatchPayload,
 } from '../validation/payloads.js';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 router.get(
   '/:eventId/entries',

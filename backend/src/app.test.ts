@@ -2,7 +2,7 @@ import request from 'supertest';
 import { jwtVerify } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from './db/client.js';
-import { type EventRow } from './db/row-mappers.js';
+import { type AthleteRow, type EventRow } from './db/row-mappers.js';
 import { createApp } from './app.js';
 
 vi.mock('jose', () => ({
@@ -35,7 +35,48 @@ beforeEach(() => {
     if (sql.includes('SELECT 1')) {
       return { rows: [{ owned: 1 }] };
     }
-    if (sql.includes('SELECT discipline FROM results') || sql.includes('SELECT r.*') || sql.includes('SELECT * FROM results')) {
+    if (sql.includes('SELECT athlete_id, discipline')) {
+      return { rows: [{ athlete_id: ATHLETE_ID, discipline: '100m', entry_type: 'attempt', value: 11.2, unit: 'seconds', is_foul: false, incident_type: null, note_text: null, version: 1 }] };
+    }
+    if (sql.includes('SELECT discipline FROM results')) {
+      return { rows: [{ discipline: '100m' }] };
+    }
+    if (sql.toLowerCase().includes('from events') && !sql.includes('SELECT 1')) {
+      return { rows: [eventRow()] };
+    }
+    if (sql.toLowerCase().includes('from athletes') && !sql.includes('SELECT 1')) {
+      return { rows: [athleteRow()] };
+    }
+    if (sql.includes('event_status') || sql.includes('e.status')) {
+      return {
+        rows: [{
+          id: ENTRY_ID,
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          entry_type: 'attempt',
+          value: 11.2,
+          unit: 'seconds',
+          is_foul: false,
+          incident_type: null,
+          note_text: null,
+          recorded_by: USER_ID,
+          version: 1,
+          device_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          type: 'competition',
+          status: 'in_progress',
+          event_type: 'competition',
+          event_status: 'in_progress',
+        }],
+      };
+    }
+    if (sql.includes('SELECT type, date FROM events')) {
+      return { rows: [{ type: 'competition', date: '2026-09-01' }] };
+    }
+    if (sql.includes('SELECT * FROM results') || sql.includes('SELECT r.*')) {
       return {
         rows: [{
           event_id: EVENT_ID,
@@ -55,11 +96,32 @@ beforeEach(() => {
         }],
       };
     }
-    if (sql.includes('SELECT type, date FROM events')) {
-      return { rows: [{ type: 'competition', date: '2026-09-01' }] };
+    if (sql.includes('INSERT INTO timeline_entries') || sql.includes('UPDATE timeline_entries') || sql.includes('SELECT entry_type, value') || sql.includes('SELECT manual_override') || sql.includes('SELECT r.final_result') || sql.includes('SELECT athlete_id, final_result') || sql.includes('INSERT INTO results') || sql.includes('UPDATE results')) {
+      return {
+        rows: [{
+          id: ENTRY_ID,
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          entry_type: 'attempt',
+          value: 11.2,
+          unit: 'seconds',
+          is_foul: false,
+          incident_type: null,
+          note_text: null,
+          recorded_by: USER_ID,
+          version: 1,
+          device_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          manual_override: 11.1,
+          override_reason: 'Photo finish',
+          overridden_by: USER_ID,
+          override_at: new Date().toISOString(),
+        }],
+      };
     }
-    if (sql.includes('SELECT entry_type, value') || sql.includes('SELECT manual_override') || sql.includes('SELECT r.final_result AS value')) {
-      return { rows: [] };
     }
     return { rows: [] };
   });
@@ -98,6 +160,22 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     status: 'scheduled',
     created_at: new Date('2026-08-14T10:00:00.000Z'),
     updated_at: new Date('2026-08-14T10:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
+  return {
+    id: ATHLETE_ID,
+    coach_id: USER_ID,
+    name: 'Ari Runner',
+    dob: '2010-04-12',
+    gender: null,
+    squad: 'Sprint',
+    notes: null,
+    archived_at: null,
+    created_at: new Date('2026-08-01T09:00:00.000Z'),
+    updated_at: new Date('2026-08-01T09:00:00.000Z'),
     ...overrides,
   };
 }
@@ -245,7 +323,45 @@ describe('owned resource scaffolds', () => {
   it('keeps every currently scaffolded owned route reachable', async () => {
     configureAuth();
     const cases = [
+      ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200, false],
+      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501, false],
+      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501, false],
+      ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200, false],
+      [
+        'put',
+        `/api/v1/events/${EVENT_ID}`,
+        {
+          type: 'competition',
+          title: 'City Sprint Meet',
+          date: '2026-09-01',
+          status: 'scheduled',
+        },
+        501,
+        false,
+      ],
+      ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501, false],
       ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
+      [
+        'post',
+        `/api/v1/events/${EVENT_ID}/entries`,
+        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
+        201,
+        true,
+      ],
+      [
+        'patch',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1, value: 11.1 },
+        200,
+        true,
+      ],
+      [
+        'delete',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1 },
+        204,
+        true,
+      ],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
       [
         'put',

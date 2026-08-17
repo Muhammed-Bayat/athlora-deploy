@@ -14,7 +14,7 @@ export const getEventResults: RequestHandler = async (req, res, next) => {
       `SELECT r.*
        FROM results r
        WHERE r.event_id = $1 AND r.discipline = $2`,
-      [eventId, DISCIPLINE_100M],
+       [eventId, DISCIPLINE_100M],
     );
 
     const results = resultRes.rows.map(mapResultRow);
@@ -34,7 +34,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
     const result = await withTransaction(async (client) => {
       const existingRes = await client.query(
         `SELECT discipline FROM results WHERE event_id = $1 AND athlete_id = $2`,
-        [eventId, athleteId],
+         [eventId, athleteId],
       );
       const discipline = existingRes.rows[0]?.discipline ?? DISCIPLINE_100M;
 
@@ -47,7 +47,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
                override_at = NULL,
                updated_at = NOW()
            WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
-          [eventId, athleteId, discipline],
+           [eventId, athleteId, discipline],
         );
       } else {
         await client.query(

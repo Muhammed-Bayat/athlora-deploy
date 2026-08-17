@@ -49,10 +49,10 @@ router.use(
   '/events',
   verifyAuth0Token,
   resolveApplicationUser,
-  eventsRouter,
   participantsRouter,
   timelineRouter,
   resultsRouter,
+  eventsRouter,
 );
 
 export default router;
