@@ -59,7 +59,7 @@ cp .env.example .env   # fill in DATABASE_URL and Auth0 values
 npm run dev
 ```
 
-A Postgres instance (Neon or similar) and an Auth0 tenant are required for the live features; the initial migration lives in `backend/src/db/migrations`.
+A Postgres instance (Neon or similar) and an Auth0 tenant are required for the live features. Checksum-tracked sequential migrations live in `backend/src/db/migrations` and are applied with `npm run db:migrate` from `backend`.
 
 ### Docs
 
@@ -79,7 +79,7 @@ This project follows the course AI policy. The tools below have contributed to t
 
 - **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
 - **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
-- **Code review:** none used — not used for code review
+- **Code review:** `opencode[gpt-5.6-sol]`
 - Every commit where AI generated code includes an `Assisted-by:` footer naming every contributing tool and model.
 - Every submitted document ends with an AI usage/non-usage declaration.
 - This section is kept current as tools and models change.

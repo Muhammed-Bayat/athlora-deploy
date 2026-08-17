@@ -45,12 +45,12 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (66 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (253 Vitest/Supertest tests; 32 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, build | passing (72 Vitest/RTL tests) |
+| `backend` | lint, typecheck, test, build | passing (269 Vitest/Supertest tests; 34 database tests skipped when unconfigured) |
 | `docs` | build | passing |
-| `e2e` | against frontend via Playwright | smoke test present; not run locally because Chromium system libraries are unavailable |
+| `e2e` | against frontend via Playwright | passing (1 Chromium smoke test) |
 
-The backend suite includes 32 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests (fresh application, baseline upgrade, constraints, checksums), 5 athlete-persistence tests (coach-scoped create/list/filter, and archival preserving timeline entries and results), 6 event-persistence tests (coach-scoped create/list/filter, the full lifecycle with transition enforcement, cancellation preserving timeline entries and results, and cross-coach isolation), 5 participant-persistence tests (assignment/list/update, duplicate and archive handling, ownership isolation, and removal preserving timeline/results history), and 10 timeline-persistence tests (competition/training derivation, finish/incident/note corrections, stale versions, retry-safe undo, tombstone exclusion, override preservation, placings/PB/SB, event-change recomputation, lifecycle, parent matching and ownership isolation). They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database:
+The backend suite includes 34 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, and 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 
 ## Definition of done
 

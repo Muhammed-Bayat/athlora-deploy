@@ -80,6 +80,7 @@ describe('LiveLoggingPage', () => {
     overrideReason: null,
     overriddenBy: null,
     overrideAt: null,
+    updatedAt: new Date().toISOString(),
   };
 
   beforeEach(() => {

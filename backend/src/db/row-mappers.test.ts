@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DatabaseMappingError,
   mapApplicationUserContextRow,
+  mapAthleteResultHistoryRow,
   mapAthleteRow,
   mapAthleteStatisticsRow,
+  mapDashboardActiveEventRow,
   mapDashboardMetricsRow,
+  mapDashboardTimelineEntryRow,
   mapDashboardUpcomingEventRow,
   mapEventParticipantRow,
   mapEventParticipantSummaryRow,
@@ -14,9 +17,12 @@ import {
   mapTimelineEntryRow,
   mapUserRow,
   type ApplicationUserContextRow,
+  type AthleteResultHistoryRow,
   type AthleteRow,
   type AthleteStatisticsRow,
+  type DashboardActiveEventRow,
   type DashboardMetricsRow,
+  type DashboardTimelineEntryRow,
   type DashboardUpcomingEventRow,
   type EventParticipantRow,
   type EventParticipantSummaryRow,
@@ -153,7 +159,10 @@ const upcomingEventRow: DashboardUpcomingEventRow = {
   event_id: EVENT_ID,
   title: 'City Sprint Meet',
   type: 'competition',
+  discipline: '100m',
   date: '2026-09-01',
+  time: '09:30:00',
+  location_name: 'Central Track',
   status: 'scheduled',
   athlete_count: '18',
 };
@@ -161,8 +170,48 @@ const upcomingEventRow: DashboardUpcomingEventRow = {
 const metricsRow: DashboardMetricsRow = {
   athletes_count: '30',
   active_athletes_count: 28,
+  archived_athletes_count: 2,
   upcoming_event_count: '3',
   season_pbs: 7,
+};
+
+const historyRow: AthleteResultHistoryRow = {
+  ...resultRow,
+  athlete_name: 'Ari Runner',
+  athlete_squad: 'Senior A',
+  athlete_archived_at: INPUT_TIMESTAMP,
+  event_title: 'City Sprint Meet',
+  event_type: 'competition',
+  event_discipline: '100m',
+  event_date: '2026-09-01',
+  event_time: '09:30:00',
+  event_location_name: 'Central Track',
+  event_status: 'completed',
+  effective_result: '11.240',
+  effective_outcome: 'valid',
+  counts_towards_statistics: true,
+};
+
+const activeEventRow: DashboardActiveEventRow = {
+  event_id: EVENT_ID,
+  event_title: 'City Sprint Meet',
+  event_type: 'competition',
+  event_discipline: '100m',
+  event_date: '2026-09-01',
+  event_time: '09:30:00',
+  event_location_name: 'Central Track',
+  event_status: 'in_progress',
+  participant_count: '4',
+  athletes_with_entries_count: '3',
+  resolved_results_count: '2',
+  entry_count: '7',
+};
+
+const dashboardTimelineRow: DashboardTimelineEntryRow = {
+  ...timelineRow,
+  athlete_name: 'Ari Runner',
+  athlete_squad: 'Senior A',
+  athlete_archived_at: null,
 };
 
 function changed<Row>(row: Row, values: Record<string, unknown>): Row {
@@ -400,6 +449,26 @@ describe('PostgreSQL row mapping', () => {
     });
   });
 
+  it('maps athlete history with raw and effective result data', () => {
+    expect(mapAthleteResultHistoryRow(historyRow)).toMatchObject({
+      athlete: {
+        id: ATHLETE_ID,
+        name: 'Ari Runner',
+        squad: 'Senior A',
+        archivedAt: ISO_TIMESTAMP,
+      },
+      event: {
+        id: EVENT_ID,
+        type: 'competition',
+        status: 'completed',
+      },
+      result: { finalResult: 11.24, outcome: 'valid' },
+      effectiveResult: 11.24,
+      effectiveOutcome: 'valid',
+      countsTowardsStatistics: true,
+    });
+  });
+
   it('maps a roster snapshot row with a nullable PB', () => {
     expect(mapRosterSnapshotRow(changed(rosterRow, { pb: null }))).toEqual({
       athleteId: ATHLETE_ID,
@@ -415,7 +484,10 @@ describe('PostgreSQL row mapping', () => {
       eventId: EVENT_ID,
       title: 'City Sprint Meet',
       type: 'competition',
+      discipline: '100m',
       date: '2026-09-01',
+      time: '09:30:00',
+      locationName: 'Central Track',
       status: 'scheduled',
       athleteCount: 18,
     });
@@ -425,8 +497,26 @@ describe('PostgreSQL row mapping', () => {
     expect(mapDashboardMetricsRow(metricsRow)).toEqual({
       athletesCount: 30,
       activeAthletesCount: 28,
+      archivedAthletesCount: 2,
       upcomingEventCount: 3,
       seasonPbs: 7,
+    });
+  });
+
+  it('maps live dashboard progress and latest-entry identity', () => {
+    expect(mapDashboardActiveEventRow(activeEventRow)).toMatchObject({
+      event: { id: EVENT_ID, status: 'in_progress' },
+      progress: {
+        participantCount: 4,
+        athletesWithEntriesCount: 3,
+        resolvedResultsCount: 2,
+        entryCount: 7,
+        completionPercent: 50,
+      },
+    });
+    expect(mapDashboardTimelineEntryRow(dashboardTimelineRow)).toMatchObject({
+      entry: { id: ENTRY_ID },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
     });
   });
 });

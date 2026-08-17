@@ -41,15 +41,16 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Event athlete assignments** — authenticated event routes can list assigned athletes with logger-ready summaries, assign active owned athletes, idempotently update RSVP status, and remove assignments without deleting timeline/results history. Duplicate assignments and archived new assignments return explicit conflicts; all ownership failures remain non-enumerating. Covered by API, service, row-mapper, validation and gated PostgreSQL integration tests.
 - **Event assignment UI** — event detail lists assigned athletes and RSVP state, keeps archived historical participants visible, loads active roster candidates, assigns athletes, replaces RSVP status, and confirms relationship removal with preserved-history messaging. Independent loading/retry states and mutation focus/locking behavior are covered by API-wrapper and RTL tests.
 - **Live timeline API** — authenticated coaches can read the active log, create normalized 100m entries, correct finish/incident/note content with optimistic `expectedVersion` checks, and undo through versioned tombstones. Stale requests conflict instead of overwriting newer state, exact repeated undo is a no-op, and tombstones are hidden from normal timeline/results views. Mutations enforce ownership, parent IDs and lifecycle under transaction locks while atomically refreshing outcomes, placings and PB/SB flags.
+- **Statistics and dashboard aggregates** — `GET /api/v1/athletes/:id/statistics` returns owner-scoped PB, calendar-year SB, effective-result counts, latest result and separate recent competition/training history. `GET /api/v1/dashboard/summary` returns one stable summary/live shape with deterministic active-event selection, progress and latest entries, roster counts/snapshot, scheduled upcoming events, recent results and PBs. Cancelled events do not score, archived athletes remain named in history but not in the active roster, and empty accounts receive zero counts and empty arrays.
 - **Backend deployment** — the Render service is live at `https://athlora-deploy.onrender.com` and its `/health` check is verified.
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
-- **Quality gate** — lint, typecheck, Vitest/RTL, Supertest and the Docusaurus build are green. A Playwright smoke test is present; local execution requires the documented Chromium system dependencies. CI workflow is committed in `.gitea/workflows/ci.yml` and executed by a registered Gitea Actions runner on the university instance.
+- **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, the Chromium Playwright smoke test and the Docusaurus build are green. CI workflow is committed in `.gitea/workflows/ci.yml` and executed by a registered Gitea Actions runner on the university instance.
 - **Docs deployment** — the Docusaurus site is live at `https://athlora-deploy.pages.dev`.
 
 Pending for Stage 1 (needs accounts/credentials you hold):
 
 - Implement account deletion and complete the remaining password/account lifecycle requirements.
-- Build the remaining CRUD features: Open-Meteo weather for events, the live logging UI, results/dashboard, and athlete performance detail.
+- Build the remaining Stage 1 integrations: Open-Meteo weather, the API-backed dashboard UI, and athlete performance detail UI.
 
 ## Keeping these docs current
 
@@ -68,7 +69,7 @@ This documentation site and the repository follow the course AI policy.
 
 - **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
 - **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
-- **Code review:** none used — not used for code review
+- **Code review:** `opencode[gpt-5.6-sol]`
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.
 

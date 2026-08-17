@@ -9,9 +9,15 @@ import {
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
   USER_ROLES,
+  type AggregateAthleteIdentity,
+  type AggregateEventIdentity,
   type Athlete,
+  type AthleteResultHistoryEntry,
+  type AthleteResultCounts,
   type AthleteStatistics,
   type AthleticsEvent,
+  type DashboardActiveEvent,
+  type DashboardTimelineEntry,
   type DashboardUpcomingEvent,
   type EventParticipant,
   type EventParticipantSummary,
@@ -137,6 +143,29 @@ export interface AthleteStatisticsRow {
   updated_at: TimestampValue;
 }
 
+export interface AthleteStatisticsAggregateRow extends AthleteStatisticsRow {
+  all_time_count: CountValue;
+  current_year_count: CountValue;
+  competition_all_time_count: CountValue;
+  training_all_time_count: CountValue;
+}
+
+export interface AthleteResultHistoryRow extends ResultRow {
+  athlete_name: string;
+  athlete_squad: string | null;
+  athlete_archived_at: TimestampValue | null;
+  event_title: string;
+  event_type: string;
+  event_discipline: string;
+  event_date: DateValue;
+  event_time: string | null;
+  event_location_name: string | null;
+  event_status: string;
+  effective_result: NumericValue | null;
+  effective_outcome: string;
+  counts_towards_statistics: boolean;
+}
+
 export interface RosterSnapshotRow {
   athlete_id: string;
   name: string;
@@ -149,14 +178,39 @@ export interface DashboardUpcomingEventRow {
   event_id: string;
   title: string;
   type: string;
+  discipline: string;
   date: DateValue;
+  time: string | null;
+  location_name: string | null;
   status: string;
   athlete_count: CountValue;
+}
+
+export interface DashboardActiveEventRow {
+  event_id: string;
+  event_title: string;
+  event_type: string;
+  event_discipline: string;
+  event_date: DateValue;
+  event_time: string | null;
+  event_location_name: string | null;
+  event_status: string;
+  participant_count: CountValue;
+  athletes_with_entries_count: CountValue;
+  resolved_results_count: CountValue;
+  entry_count: CountValue;
+}
+
+export interface DashboardTimelineEntryRow extends TimelineEntryRow {
+  athlete_name: string;
+  athlete_squad: string | null;
+  athlete_archived_at: TimestampValue | null;
 }
 
 export interface DashboardMetricsRow {
   athletes_count: CountValue;
   active_athletes_count: CountValue;
+  archived_athletes_count: CountValue;
   upcoming_event_count: CountValue;
   season_pbs: CountValue;
 }
@@ -164,6 +218,7 @@ export interface DashboardMetricsRow {
 export interface DashboardMetrics {
   athletesCount: number;
   activeAthletesCount: number;
+  archivedAthletesCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
 }
@@ -612,6 +667,110 @@ export function mapAthleteStatisticsRow(row: AthleteStatisticsRow): AthleteStati
   };
 }
 
+export function mapAthleteResultCounts(
+  row: AthleteStatisticsAggregateRow,
+): AthleteResultCounts {
+  return {
+    allTime: count(row.all_time_count, 'athlete statistics.all_time_count'),
+    currentYear: count(row.current_year_count, 'athlete statistics.current_year_count'),
+    competitionAllTime: count(
+      row.competition_all_time_count,
+      'athlete statistics.competition_all_time_count',
+    ),
+    trainingAllTime: count(
+      row.training_all_time_count,
+      'athlete statistics.training_all_time_count',
+    ),
+  };
+}
+
+function mapAggregateAthleteIdentity(
+  athleteId: unknown,
+  name: unknown,
+  squad: unknown,
+  archivedAt: unknown,
+  context: string,
+): AggregateAthleteIdentity {
+  return {
+    id: uuid(athleteId, `${context}.id`),
+    name: nonemptyString(name, `${context}.name`),
+    squad: nullableString(squad, `${context}.squad`),
+    archivedAt: nullableTimestamp(archivedAt, `${context}.archived_at`),
+  };
+}
+
+function mapAggregateEventIdentity(
+  row: {
+    event_id: unknown;
+    event_title: unknown;
+    event_type: unknown;
+    event_discipline: unknown;
+    event_date: unknown;
+    event_time: unknown;
+    event_location_name: unknown;
+    event_status: unknown;
+  },
+  context: string,
+): AggregateEventIdentity {
+  return {
+    id: uuid(row.event_id, `${context}.id`),
+    title: nonemptyString(row.event_title, `${context}.title`),
+    type: enumValue(row.event_type, EVENT_TYPES, `${context}.type`),
+    discipline: discipline(row.event_discipline, `${context}.discipline`),
+    date: databaseDate(row.event_date, `${context}.date`),
+    time: nullableDatabaseTime(row.event_time, `${context}.time`),
+    locationName: nullableString(row.event_location_name, `${context}.location_name`),
+    status: enumValue(row.event_status, EVENT_STATUSES, `${context}.status`),
+  };
+}
+
+export function mapAthleteResultHistoryRow(
+  row: AthleteResultHistoryRow,
+): AthleteResultHistoryEntry {
+  const event = mapAggregateEventIdentity(row, 'athlete history.event');
+  const effectiveResult = nullablePositiveNumeric(
+    row.effective_result,
+    'athlete history.effective_result',
+  );
+  const effectiveOutcome = enumValue(
+    row.effective_outcome,
+    RESULT_OUTCOMES,
+    'athlete history.effective_outcome',
+  );
+  if ((effectiveOutcome === 'valid') !== (effectiveResult !== null)) {
+    invalid(
+      'athlete history effective outcome/result',
+      'only a valid effective outcome may have an effective result',
+    );
+  }
+
+  const countsTowardsStatistics = booleanValue(
+    row.counts_towards_statistics,
+    'athlete history.counts_towards_statistics',
+  );
+  if (countsTowardsStatistics !== (event.status !== 'cancelled' && effectiveOutcome === 'valid')) {
+    invalid(
+      'athlete history.counts_towards_statistics',
+      'expected non-cancelled effective valid result semantics',
+    );
+  }
+
+  return {
+    athlete: mapAggregateAthleteIdentity(
+      row.athlete_id,
+      row.athlete_name,
+      row.athlete_squad,
+      row.athlete_archived_at,
+      'athlete history.athlete',
+    ),
+    event,
+    result: mapResultRow(row),
+    effectiveResult,
+    effectiveOutcome,
+    countsTowardsStatistics,
+  };
+}
+
 export function mapRosterSnapshotRow(row: RosterSnapshotRow): RosterSnapshotEntry {
   return {
     athleteId: uuid(row.athlete_id, 'roster snapshot.athlete_id'),
@@ -629,9 +788,63 @@ export function mapDashboardUpcomingEventRow(
     eventId: uuid(row.event_id, 'dashboard upcoming event.event_id'),
     title: nonemptyString(row.title, 'dashboard upcoming event.title'),
     type: enumValue(row.type, EVENT_TYPES, 'dashboard upcoming event.type'),
+    discipline: discipline(row.discipline, 'dashboard upcoming event.discipline'),
     date: databaseDate(row.date, 'dashboard upcoming event.date'),
+    time: nullableDatabaseTime(row.time, 'dashboard upcoming event.time'),
+    locationName: nullableString(
+      row.location_name,
+      'dashboard upcoming event.location_name',
+    ),
     status: enumValue(row.status, EVENT_STATUSES, 'dashboard upcoming event.status'),
     athleteCount: count(row.athlete_count, 'dashboard upcoming event.athlete_count'),
+  };
+}
+
+export function mapDashboardActiveEventRow(
+  row: DashboardActiveEventRow,
+): Omit<DashboardActiveEvent, 'latestEntries'> {
+  const event = mapAggregateEventIdentity(row, 'dashboard active event');
+  if (event.status !== 'in_progress') {
+    invalid('dashboard active event.status', 'expected in_progress');
+  }
+  const participantCount = count(
+    row.participant_count,
+    'dashboard active event.participant_count',
+  );
+  const resolvedResultsCount = count(
+    row.resolved_results_count,
+    'dashboard active event.resolved_results_count',
+  );
+
+  return {
+    event,
+    progress: {
+      participantCount,
+      athletesWithEntriesCount: count(
+        row.athletes_with_entries_count,
+        'dashboard active event.athletes_with_entries_count',
+      ),
+      resolvedResultsCount,
+      entryCount: count(row.entry_count, 'dashboard active event.entry_count'),
+      completionPercent: participantCount === 0
+        ? 0
+        : Math.min(100, Math.round((resolvedResultsCount / participantCount) * 100)),
+    },
+  };
+}
+
+export function mapDashboardTimelineEntryRow(
+  row: DashboardTimelineEntryRow,
+): DashboardTimelineEntry {
+  return {
+    entry: mapTimelineEntryRow(row),
+    athlete: mapAggregateAthleteIdentity(
+      row.athlete_id,
+      row.athlete_name,
+      row.athlete_squad,
+      row.athlete_archived_at,
+      'dashboard timeline entry.athlete',
+    ),
   };
 }
 
@@ -641,6 +854,10 @@ export function mapDashboardMetricsRow(row: DashboardMetricsRow): DashboardMetri
     activeAthletesCount: count(
       row.active_athletes_count,
       'dashboard metrics.active_athletes_count',
+    ),
+    archivedAthletesCount: count(
+      row.archived_athletes_count,
+      'dashboard metrics.archived_athletes_count',
     ),
     upcomingEventCount: count(
       row.upcoming_event_count,

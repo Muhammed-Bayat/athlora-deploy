@@ -144,7 +144,7 @@ async function recomputePlacings(
   for (const row of result.rows) {
     await client.query(
       `UPDATE results
-       SET placing = $1, updated_at = now()
+       SET "placing" = $1, updated_at = now()
        WHERE event_id = $2 AND athlete_id = $3 AND discipline = $4`,
       [placings.get(row.athlete_id) ?? null, eventId, row.athlete_id, DISCIPLINE_100M],
     );
@@ -204,13 +204,13 @@ async function recomputeResult(
   const derived = deriveTrackTime(entries.rows.map(mapTimelineEntryRow), eventType);
   await client.query(
     `INSERT INTO results
-       (event_id, athlete_id, discipline, outcome, final_result, unit, placing, is_pb, is_sb)
+       (event_id, athlete_id, discipline, outcome, final_result, unit, "placing", is_pb, is_sb)
      VALUES ($1, $2, $3, $4, $5, $6, NULL, false, false)
      ON CONFLICT (event_id, athlete_id, discipline)
      DO UPDATE SET outcome = EXCLUDED.outcome,
                    final_result = EXCLUDED.final_result,
                    unit = EXCLUDED.unit,
-                   placing = NULL,
+                    "placing" = NULL,
                    is_pb = false,
                    is_sb = false,
                    updated_at = now()`,
@@ -227,11 +227,10 @@ async function recomputeResult(
   await recomputeBestFlags(client, athleteId);
 }
 
-export async function recomputeEventResults(
+export async function lockEventResultAthletes(
   client: DbExecutor,
   eventId: string,
-  eventType: EventType,
-): Promise<void> {
+): Promise<string[]> {
   const athletes = await client.query<{ athlete_id: string }>(
     `SELECT athlete_id
      FROM timeline_entries
@@ -253,8 +252,17 @@ export async function recomputeEventResults(
       [athletes.rows.map((row) => row.athlete_id)],
     );
   }
-  for (const row of athletes.rows) {
-    await recomputeResult(client, eventId, row.athlete_id, eventType);
+  return athletes.rows.map((row) => row.athlete_id);
+}
+
+export async function recomputeEventResults(
+  client: DbExecutor,
+  eventId: string,
+  eventType: EventType,
+): Promise<void> {
+  const athleteIds = await lockEventResultAthletes(client, eventId);
+  for (const athleteId of athleteIds) {
+    await recomputeResult(client, eventId, athleteId, eventType);
   }
 }
 
