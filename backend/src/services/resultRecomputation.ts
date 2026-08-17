@@ -52,10 +52,15 @@ export async function recomputeAndUpsertResult(
   const effective = deriveEffectiveResult(derived, manualOverride);
   const finalResult = effective.value;
   const outcome = effective.outcome;
+<<<<<<< HEAD
+
+  const historyRes = await client.query(
+    `SELECT r.final_result AS value, r.manual_override, e.date, r.outcome
+=======
   const unit = finalResult !== null ? 'seconds' : null;
 
   const historyRes = await client.query(
-    `SELECT r.final_result AS value, e.date, r.outcome
+    `SELECT r.final_result AS value, r.manual_override, e.date, r.outcome
      FROM results r
      JOIN events e ON e.id = r.event_id
      WHERE r.athlete_id = $1
@@ -66,11 +71,14 @@ export async function recomputeAndUpsertResult(
     [athleteId, discipline, event.date, eventId]
   );
 
-  const historicalResults = historyRes.rows.map((r) => ({
-    value: Number(r.value),
-    date: r.date,
-    outcome: r.outcome,
-  }));
+  const historicalResults = historyRes.rows.map((r: { value: string | number | null; manual_override: string | number | null; date: string; outcome: string }) => {
+    const val = r.manual_override !== null && r.manual_override !== undefined ? Number(r.manual_override) : (r.value !== null ? Number(r.value) : null);
+    return {
+      value: val,
+      date: r.date,
+      outcome: r.outcome,
+    };
+  }).filter((r) => r.value !== null);
 
   const { isPb, isSb } = checkPbSb(finalResult, outcome, event.date, historicalResults);
 
@@ -92,39 +100,42 @@ export async function recomputeAndUpsertResult(
       athleteId,
       discipline,
       outcome,
-      finalResult,
-      unit,
-      isPb,
-      isSb,
-      manualOverride,
-      existingResult?.override_reason ?? null,
-      existingResult?.overridden_by ?? null,
-      existingResult?.override_at ?? null,
+       finalResult,
+       unit,
+       isPb,
+       isSb,
+       manualOverride,
+       existingResult?.override_reason ?? null,
+       existingResult?.overridden_by ?? null,
+       existingResult?.override_at ?? null,
     ]
   );
 
   if (event.type === 'competition') {
     const allResultsRes = await client.query(
-      `SELECT athlete_id, final_result, outcome FROM results WHERE event_id = $1 AND discipline = $2`,
-      [eventId, discipline]
+      `SELECT athlete_id, final_result, manual_override, outcome FROM results WHERE event_id = $1 AND discipline = $2`,
+      [eventId, discipline],
     );
-    const resultsForPlacing = allResultsRes.rows.map((r) => ({
-      athleteId: r.athlete_id,
-      value: r.final_result !== null ? Number(r.final_result) : null,
-      outcome: r.outcome,
-    }));
+    const resultsForPlacing = allResultsRes.rows.map((r: { athlete_id: string; final_result: string | number | null; manual_override: string | number | null; outcome: string }) => {
+      const effVal = r.manual_override !== null && r.manual_override !== undefined ? Number(r.manual_override) : (r.final_result !== null ? Number(r.final_result) : null);
+      return {
+        athleteId: r.athlete_id,
+        value: effVal,
+        outcome: r.outcome,
+      };
+    });
     const placings = calculatePlacings(resultsForPlacing);
 
     for (const [athId, placing] of placings.entries()) {
       await client.query(
         `UPDATE results SET placing = $1, updated_at = NOW() WHERE event_id = $2 AND athlete_id = $3 AND discipline = $4`,
-        [placing, eventId, athId, discipline]
+        [placing, eventId, athId, discipline],
       );
     }
   } else {
     await client.query(
       `UPDATE results SET placing = NULL, updated_at = NOW() WHERE event_id = $1 AND discipline = $2`,
-      [eventId, discipline]
+      [eventId, discipline],
     );
   }
 }

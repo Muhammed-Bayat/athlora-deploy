@@ -14,7 +14,7 @@ export const getEventResults: RequestHandler = async (req, res, next) => {
       `SELECT r.*
        FROM results r
        WHERE r.event_id = $1 AND r.discipline = $2`,
-      [eventId, DISCIPLINE_100M]
+       [eventId, DISCIPLINE_100M],
     );
 
     const results = resultRes.rows.map(mapResultRow);
@@ -34,7 +34,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
     const result = await withTransaction(async (client) => {
       const existingRes = await client.query(
         `SELECT discipline FROM results WHERE event_id = $1 AND athlete_id = $2`,
-        [eventId, athleteId]
+         [eventId, athleteId],
       );
       const discipline = existingRes.rows[0]?.discipline ?? DISCIPLINE_100M;
 
@@ -47,14 +47,14 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
                override_at = NULL,
                updated_at = NOW()
            WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
-          [eventId, athleteId, discipline]
+           [eventId, athleteId, discipline],
         );
       } else {
         await client.query(
           `INSERT INTO results (
              event_id, athlete_id, discipline, outcome, final_result, unit, placing, is_pb, is_sb,
              manual_override, override_reason, overridden_by, override_at, updated_at
-           ) VALUES ($1, $2, $3, 'valid', $4, 'seconds', NULL, false, false, $4, $5, $6, NOW(), NOW())
+           ) VALUES ($1, $2, $3, 'no_result', NULL, NULL, NULL, false, false, $4, $5, $6, NOW(), NOW())
            ON CONFLICT (event_id, athlete_id, discipline)
            DO UPDATE SET
              manual_override = EXCLUDED.manual_override,
@@ -62,7 +62,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
              overridden_by = EXCLUDED.overridden_by,
              override_at = EXCLUDED.override_at,
              updated_at = NOW()`,
-          [eventId, athleteId, discipline, manualOverride, overrideReason, userId]
+          [eventId, athleteId, discipline, manualOverride, overrideReason, userId],
         );
       }
 
@@ -70,7 +70,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
 
       const finalRes = await client.query(
         `SELECT * FROM results WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
-        [eventId, athleteId, discipline]
+        [eventId, athleteId, discipline],
       );
       return mapResultRow(finalRes.rows[0]);
     });

@@ -88,15 +88,15 @@ beforeEach(() => {
           placing: 1,
           is_pb: true,
           is_sb: true,
-          manual_override: null,
-          override_reason: null,
-          overridden_by: null,
-          override_at: null,
+          manual_override: 11.1,
+          override_reason: 'Photo finish',
+          overridden_by: USER_ID,
+          override_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }],
       };
     }
-    if (sql.includes('INSERT INTO timeline_entries') || sql.includes('UPDATE timeline_entries') || sql.includes('SELECT entry_type, value') || sql.includes('SELECT r.final_result') || sql.includes('SELECT athlete_id, final_result') || sql.includes('INSERT INTO results') || sql.includes('UPDATE results')) {
+    if (sql.includes('INSERT INTO timeline_entries') || sql.includes('UPDATE timeline_entries') || sql.includes('SELECT entry_type, value') || sql.includes('SELECT manual_override') || sql.includes('SELECT r.final_result') || sql.includes('SELECT athlete_id, final_result') || sql.includes('INSERT INTO results') || sql.includes('UPDATE results')) {
       return {
         rows: [{
           id: ENTRY_ID,
@@ -115,8 +115,13 @@ beforeEach(() => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           deleted_at: null,
+          manual_override: 11.1,
+          override_reason: 'Photo finish',
+          overridden_by: USER_ID,
+          override_at: new Date().toISOString(),
         }],
       };
+    }
     }
     return { rows: [] };
   });
