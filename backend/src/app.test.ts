@@ -20,11 +20,49 @@ const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const ATHLETE_ID = '33333333-3333-4333-8333-333333333333';
 const ENTRY_ID = '44444444-4444-4444-8444-444444444444';
 const query = vi.fn();
+const release = vi.fn();
+const client = { query, release };
+const connect = vi.fn().mockResolvedValue(client);
 const app = createApp();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getPool).mockReturnValue({ query } as unknown as ReturnType<typeof getPool>);
+  vi.mocked(getPool).mockReturnValue({ query, connect } as unknown as ReturnType<typeof getPool>);
+  query.mockImplementation(async (sql: string) => {
+    if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+      return { rows: [] };
+    }
+    if (sql.includes('SELECT 1')) {
+      return { rows: [{ owned: 1 }] };
+    }
+    if (sql.includes('SELECT discipline FROM results') || sql.includes('SELECT r.*') || sql.includes('SELECT * FROM results')) {
+      return {
+        rows: [{
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          outcome: 'valid',
+          final_result: 11.2,
+          unit: 'seconds',
+          placing: 1,
+          is_pb: true,
+          is_sb: true,
+          manual_override: 11.1,
+          override_reason: 'Photo finish',
+          overridden_by: USER_ID,
+          override_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }],
+      };
+    }
+    if (sql.includes('SELECT type, date FROM events')) {
+      return { rows: [{ type: 'competition', date: '2026-09-01' }] };
+    }
+    if (sql.includes('SELECT entry_type, value') || sql.includes('SELECT manual_override') || sql.includes('SELECT r.final_result AS value')) {
+      return { rows: [] };
+    }
+    return { rows: [] };
+  });
 });
 
 afterEach(() => {
@@ -208,12 +246,12 @@ describe('owned resource scaffolds', () => {
     configureAuth();
     const cases = [
       ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
-      ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 501, false],
+      ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
       [
         'put',
         `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
         { manualOverride: 11.1, overrideReason: 'Photo finish' },
-        501,
+        200,
         false,
       ],
     ] as const;
