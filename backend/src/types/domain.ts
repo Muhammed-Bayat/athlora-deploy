@@ -67,6 +67,17 @@ export interface EventParticipant {
   rsvpStatus: RsvpStatus;
 }
 
+export interface EventParticipantAthleteSummary {
+  id: string;
+  name: string;
+  squad: string | null;
+  archivedAt: string | null;
+}
+
+export interface EventParticipantSummary extends EventParticipant {
+  athlete: EventParticipantAthleteSummary;
+}
+
 export const ENTRY_TYPES = ['attempt', 'split', 'penalty', 'note'] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
 

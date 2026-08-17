@@ -3,6 +3,7 @@ import * as athletes from '../controllers/athletes.js';
 import * as events from '../controllers/events.js';
 import timelineRouter from './timeline.js';
 import resultsRouter from './results.js';
+import participantsRouter from './participants.js';
 import authRouter from './auth.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -27,6 +28,7 @@ athletesRouter.put(
   athletes.updateAthlete,
 );
 athletesRouter.delete('/:id', requireAthleteOwnership, athletes.deleteAthlete);
+athletesRouter.post('/:id/unarchive', requireAthleteOwnership, athletes.unarchiveAthlete);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);
@@ -47,9 +49,10 @@ router.use(
   '/events',
   verifyAuth0Token,
   resolveApplicationUser,
-  eventsRouter,
+  participantsRouter,
   timelineRouter,
   resultsRouter,
+  eventsRouter,
 );
 
 export default router;

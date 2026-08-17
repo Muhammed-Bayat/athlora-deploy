@@ -6,12 +6,14 @@ import {
   EVENT_TYPES,
   INCIDENT_TYPES,
   RESULT_UNIT_SECONDS,
+  RSVP_STATUSES,
   type Discipline,
   type EntryType,
   type EventStatus,
   type EventType,
   type IncidentType,
   type ResultUnit,
+  type RsvpStatus,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -47,9 +49,15 @@ export interface AthleteReplacementPayload {
   notes: string | null;
 }
 
+export interface AthleteListQuery {
+  includeArchived: boolean;
+  name?: string;
+  squad?: string;
+}
+
 export interface EventCreatePayload {
   type: EventType;
-  discipline: Discipline | null;
+  discipline: Discipline;
   title: string;
   date: string;
   time: string | null;
@@ -61,7 +69,7 @@ export interface EventCreatePayload {
 
 export interface EventReplacementPayload {
   type: EventType;
-  discipline: Discipline | null;
+  discipline: Discipline;
   title: string;
   date: string;
   time: string | null;
@@ -69,6 +77,21 @@ export interface EventReplacementPayload {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+}
+
+export interface EventListQuery {
+  type?: EventType;
+  status?: EventStatus;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface EventParticipantCreatePayload {
+  athleteId: string;
+}
+
+export interface EventParticipantReplacementPayload {
+  rsvpStatus: RsvpStatus;
 }
 
 export interface TimelineEntryCreatePayload {
@@ -84,11 +107,15 @@ export interface TimelineEntryCreatePayload {
 }
 
 export interface TimelineEntryPatchPayload {
+  expectedVersion: number;
   entryType?: EntryType;
   value?: number | null;
   incidentType?: IncidentType | null;
   noteText?: string | null;
-  deviceId?: string | null;
+}
+
+export interface TimelineEntryDeletePayload {
+  expectedVersion: number;
 }
 
 export interface TimelineEntryState {
@@ -105,6 +132,8 @@ export interface ResultOverridePayload {
 }
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
+const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -116,6 +145,8 @@ const EVENT_FIELDS = [
   'longitude',
   'status',
 ] as const;
+const EVENT_PARTICIPANT_CREATE_FIELDS = ['athleteId'] as const;
+const EVENT_PARTICIPANT_REPLACEMENT_FIELDS = ['rsvpStatus'] as const;
 const TIMELINE_CREATE_FIELDS = [
   'athleteId',
   'discipline',
@@ -128,15 +159,17 @@ const TIMELINE_CREATE_FIELDS = [
   'deviceId',
 ] as const;
 const TIMELINE_PATCH_FIELDS = [
+  'expectedVersion',
   'entryType',
   'value',
   'incidentType',
   'noteText',
-  'deviceId',
 ] as const;
+const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
 
 type PayloadObject = Record<string, unknown>;
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 function issue(path: string, code: string, message: string): ValidationIssue {
   return { path, code, message };
@@ -164,6 +197,38 @@ function payloadObject(input: unknown): PayloadObject {
 
 function hasOwn(payload: PayloadObject, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, field);
+}
+
+export function parseEventParticipantCreatePayload(
+  input: unknown,
+): EventParticipantCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, EVENT_PARTICIPANT_CREATE_FIELDS, issues);
+
+  let athleteId = '';
+  if (!hasOwn(payload, 'athleteId')) {
+    issues.push(issue('athleteId', 'required', 'Field is required'));
+  } else if (!isCanonicalUuid(payload.athleteId)) {
+    issues.push(issue('athleteId', 'invalid_format', 'Expected a canonical UUID'));
+  } else {
+    athleteId = payload.athleteId;
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { athleteId };
+}
+
+export function parseEventParticipantReplacementPayload(
+  input: unknown,
+): EventParticipantReplacementPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, EVENT_PARTICIPANT_REPLACEMENT_FIELDS, issues);
+  const rsvpStatus = requiredEnum(payload, 'rsvpStatus', RSVP_STATUSES, issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { rsvpStatus };
 }
 
 function rejectUnknownFields(
@@ -214,6 +279,53 @@ function nullableString(
   return normalized.length === 0 ? null : normalized;
 }
 
+function optionalQueryString(
+  query: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): string | undefined {
+  if (!hasOwn(query, field)) return undefined;
+  if (typeof query[field] !== 'string') {
+    issues.push(issue(field, 'invalid_type', 'Expected a string'));
+    return undefined;
+  }
+  const normalized = normalizeRequiredString(query[field]);
+  if (normalized === null) {
+    issues.push(issue(field, 'blank', 'Must not be blank'));
+    return undefined;
+  }
+  return normalized;
+}
+
+function optionalQueryEnum<const Values extends readonly string[]>(
+  query: PayloadObject,
+  field: string,
+  values: Values,
+  issues: ValidationIssue[],
+): Values[number] | undefined {
+  const value = optionalQueryString(query, field, issues);
+  if (value === undefined) return undefined;
+  if (!isEnumValue(value, values)) {
+    issues.push(issue(field, 'invalid_value', `Expected one of: ${values.join(', ')}`));
+    return undefined;
+  }
+  return value;
+}
+
+function optionalQueryDate(
+  query: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): string | undefined {
+  if (!hasOwn(query, field)) return undefined;
+  const value = typeof query[field] === 'string' ? query[field].trim() : query[field];
+  if (!isGregorianDate(value)) {
+    issues.push(issue(field, 'invalid_format', 'Expected a real date in YYYY-MM-DD format'));
+    return undefined;
+  }
+  return value;
+}
+
 function requiredEnum<const Values extends readonly string[]>(
   payload: PayloadObject,
   field: string,
@@ -229,6 +341,26 @@ function requiredEnum<const Values extends readonly string[]>(
     return values[0];
   }
   return payload[field];
+}
+
+function requiredPositiveInteger(
+  payload: PayloadObject,
+  field: string,
+  issues: ValidationIssue[],
+): number {
+  if (!hasOwn(payload, field)) {
+    issues.push(issue(field, 'required', 'Field is required'));
+    return 0;
+  }
+  if (
+    !Number.isSafeInteger(payload[field])
+    || Number(payload[field]) <= 0
+    || Number(payload[field]) > POSTGRES_INTEGER_MAX
+  ) {
+    issues.push(issue(field, 'invalid_value', 'Expected a positive integer'));
+    return 0;
+  }
+  return payload[field] as number;
 }
 
 function requiredDate(
@@ -318,12 +450,37 @@ export function parseAthleteReplacementPayload(input: unknown): AthleteReplaceme
   return parseAthlete(input);
 }
 
+export function parseAthleteListQuery(input: Record<string, unknown>): AthleteListQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, ATHLETE_LIST_QUERY_FIELDS, issues);
+
+  let includeArchived = false;
+  if (hasOwn(input, 'includeArchived')) {
+    if (input.includeArchived === 'true' || input.includeArchived === 'false') {
+      includeArchived = input.includeArchived === 'true';
+    } else {
+      issues.push(issue('includeArchived', 'invalid_value', 'Expected "true" or "false"'));
+    }
+  }
+
+  const name = optionalQueryString(input, 'name', issues);
+  const squad = optionalQueryString(input, 'squad', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+
+  return {
+    includeArchived,
+    ...(name === undefined ? {} : { name }),
+    ...(squad === undefined ? {} : { squad }),
+  };
+}
+
 function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload {
   const payload = payloadObject(input);
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, EVENT_FIELDS, issues);
 
-  let discipline: Discipline | null = null;
+  let discipline: Discipline = DISCIPLINE_100M;
   if (hasOwn(payload, 'discipline') && payload.discipline !== null) {
     if (payload.discipline === DISCIPLINE_100M) {
       discipline = DISCIPLINE_100M;
@@ -359,6 +516,29 @@ export function parseEventCreatePayload(input: unknown): EventCreatePayload {
 
 export function parseEventReplacementPayload(input: unknown): EventReplacementPayload {
   return parseEvent(input, true);
+}
+
+export function parseEventListQuery(input: Record<string, unknown>): EventListQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, EVENT_LIST_QUERY_FIELDS, issues);
+
+  const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
+  const status = optionalQueryEnum(input, 'status', EVENT_STATUSES, issues);
+  const dateFrom = optionalQueryDate(input, 'dateFrom', issues);
+  const dateTo = optionalQueryDate(input, 'dateTo', issues);
+
+  if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
+    issues.push(issue('dateFrom', 'invalid_range', 'dateFrom must not be after dateTo'));
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+
+  return {
+    ...(type === undefined ? {} : { type }),
+    ...(status === undefined ? {} : { status }),
+    ...(dateFrom === undefined ? {} : { dateFrom }),
+    ...(dateTo === undefined ? {} : { dateTo }),
+  };
 }
 
 function timelineStateIssues(state: TimelineEntryState): ValidationIssue[] {
@@ -400,7 +580,8 @@ export function applyTimelineEntryPatch(
   state: TimelineEntryState,
   patch: TimelineEntryPatchPayload,
 ): TimelineEntryState {
-  const merged = { ...state, ...patch };
+  const { expectedVersion: _expectedVersion, ...editable } = patch;
+  const merged = { ...state, ...editable };
   const result = {
     entryType: merged.entryType,
     value: merged.value,
@@ -515,11 +696,13 @@ export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPat
   const payload = payloadObject(input);
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, TIMELINE_PATCH_FIELDS, issues);
-  if (Object.keys(payload).length === 0) {
-    issues.push(issue('$', 'empty_payload', 'At least one field is required'));
+  if (!TIMELINE_PATCH_FIELDS.slice(1).some((field) => hasOwn(payload, field))) {
+    issues.push(issue('$', 'empty_payload', 'At least one editable field is required'));
   }
 
-  const result: TimelineEntryPatchPayload = {};
+  const result: TimelineEntryPatchPayload = {
+    expectedVersion: requiredPositiveInteger(payload, 'expectedVersion', issues),
+  };
   if (hasOwn(payload, 'entryType')) {
     if (!isEnumValue(payload.entryType, ENTRY_TYPES)) {
       issues.push(issue('entryType', 'invalid_value', `Expected one of: ${ENTRY_TYPES.join(', ')}`));
@@ -565,19 +748,18 @@ export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPat
     }
   }
 
-  if (hasOwn(payload, 'deviceId')) {
-    if (payload.deviceId === null) {
-      result.deviceId = null;
-    } else if (typeof payload.deviceId !== 'string') {
-      issues.push(issue('deviceId', 'invalid_type', 'Expected a string or null'));
-    } else {
-      const normalized = payload.deviceId.trim();
-      result.deviceId = normalized.length === 0 ? null : normalized;
-    }
-  }
-
   if (issues.length > 0) throwValidation(issues);
   return result;
+}
+
+export function parseTimelineEntryDeletePayload(input: unknown): TimelineEntryDeletePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, TIMELINE_DELETE_FIELDS, issues);
+  const expectedVersion = requiredPositiveInteger(payload, 'expectedVersion', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { expectedVersion };
 }
 
 export function parseResultOverridePayload(input: unknown): ResultOverridePayload {

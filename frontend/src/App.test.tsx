@@ -6,10 +6,20 @@ import App from './App';
 const authState = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
+  loginWithRedirect: vi.fn(),
+}));
+
+const athleteApi = vi.hoisted(() => ({
+  listAthletes: vi.fn(),
 }));
 
 vi.mock('@auth0/auth0-react', () => ({
   useAuth0: () => authState,
+}));
+
+vi.mock('./api/athletes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./api/athletes')>()),
+  listAthletes: athleteApi.listAthletes,
 }));
 
 describe('App', () => {
@@ -20,7 +30,9 @@ describe('App', () => {
   beforeEach(() => {
     authState.isAuthenticated = false;
     authState.isLoading = false;
+    authState.loginWithRedirect.mockReset();
     window.history.replaceState({}, '', '/');
+    athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -57,17 +69,19 @@ describe('App', () => {
     expect(screen.getAllByRole('heading', { name: 'Athletes' }).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /add athlete/i }));
-    expect(screen.getByRole('dialog', { name: 'Add Athlete' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add athlete' })).toBeInTheDocument();
   });
 
-  it('routes a landing-page login to the temporary console route', async () => {
+  it('starts Auth0 login instead of exposing the protected console', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getAllByRole('button', { name: 'Log in' })[0]);
 
-    expect(window.location.pathname).toBe('/console');
-    expect(screen.getByText('Performance.')).toBeInTheDocument();
+    expect(authState.loginWithRedirect).toHaveBeenCalledWith({
+      appState: { returnTo: '/console' },
+    });
+    expect(screen.queryByText('Performance.')).not.toBeInTheDocument();
   });
 
   it('shows an accessible loading state while authentication initializes', () => {

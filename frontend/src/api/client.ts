@@ -60,12 +60,31 @@ async function readBody(response: Response): Promise<unknown> {
   }
 
   const body = await response.text();
-  return body.trim() ? (JSON.parse(body) as unknown) : undefined;
+  if (!body.trim()) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    throw new ApiError(response.status, 'MALFORMED_RESPONSE', 'Response body is not valid JSON');
+  }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const tokenGetter = getAccessToken;
-  const accessToken = tokenGetter ? await tokenGetter() : undefined;
+  let accessToken: string | undefined;
+  if (tokenGetter) {
+    try {
+      accessToken = await tokenGetter();
+    } catch (error) {
+      throw new ApiError(
+        401,
+        'AUTH_TOKEN_ACQUISITION_FAILED',
+        error instanceof Error ? error.message : 'Failed to acquire access token',
+      );
+    }
+  }
+
   const headers = new Headers(init?.headers);
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -74,10 +93,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
+  }
 
   let payload: unknown;
   try {

@@ -2,6 +2,7 @@ import request from 'supertest';
 import { jwtVerify } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from './db/client.js';
+import { type AthleteRow, type EventRow } from './db/row-mappers.js';
 import { createApp } from './app.js';
 
 vi.mock('jose', () => ({
@@ -39,6 +40,38 @@ beforeEach(() => {
     }
     if (sql.includes('SELECT discipline FROM results')) {
       return { rows: [{ discipline: '100m' }] };
+    }
+    if (sql.toLowerCase().includes('from events') && !sql.includes('SELECT 1')) {
+      return { rows: [eventRow()] };
+    }
+    if (sql.toLowerCase().includes('from athletes') && !sql.includes('SELECT 1')) {
+      return { rows: [athleteRow()] };
+    }
+    if (sql.includes('event_status') || sql.includes('e.status')) {
+      return {
+        rows: [{
+          id: ENTRY_ID,
+          event_id: EVENT_ID,
+          athlete_id: ATHLETE_ID,
+          discipline: '100m',
+          entry_type: 'attempt',
+          value: 11.2,
+          unit: 'seconds',
+          is_foul: false,
+          incident_type: null,
+          note_text: null,
+          recorded_by: USER_ID,
+          version: 1,
+          device_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          type: 'competition',
+          status: 'in_progress',
+          event_type: 'competition',
+          event_status: 'in_progress',
+        }],
+      };
     }
     if (sql.includes('SELECT type, date FROM events')) {
       return { rows: [{ type: 'competition', date: '2026-09-01' }] };
@@ -104,6 +137,41 @@ function configureAuth(subject = 'auth0|coach-1'): void {
 function synchronizedUser(): { rows: Array<{ user_id: string; auth0_id: string; role: string }> } {
   return {
     rows: [{ user_id: USER_ID, auth0_id: 'auth0|coach-1', role: 'coach' }],
+  };
+}
+
+function eventRow(overrides: Partial<EventRow> = {}): EventRow {
+  return {
+    id: EVENT_ID,
+    created_by: USER_ID,
+    type: 'competition',
+    discipline: '100m',
+    title: 'City Sprint Meet',
+    date: '2026-09-01',
+    time: null,
+    location_name: null,
+    latitude: null,
+    longitude: null,
+    status: 'scheduled',
+    created_at: new Date('2026-08-14T10:00:00.000Z'),
+    updated_at: new Date('2026-08-14T10:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
+  return {
+    id: ATHLETE_ID,
+    coach_id: USER_ID,
+    name: 'Ari Runner',
+    dob: '2010-04-12',
+    gender: null,
+    squad: 'Sprint',
+    notes: null,
+    archived_at: null,
+    created_at: new Date('2026-08-01T09:00:00.000Z'),
+    updated_at: new Date('2026-08-01T09:00:00.000Z'),
+    ...overrides,
   };
 }
 
@@ -175,6 +243,7 @@ describe('athletes', () => {
   it('allows a synchronized application user', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser());
+    query.mockResolvedValueOnce({ rows: [] });
 
     const response = await request(app)
       .get('/api/v1/athletes')
@@ -249,10 +318,10 @@ describe('owned resource scaffolds', () => {
   it('keeps every currently scaffolded owned route reachable', async () => {
     configureAuth();
     const cases = [
-      ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200],
-      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501],
-      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501],
-      ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200],
+      ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200, false],
+      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501, false],
+      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501, false],
+      ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200, false],
       [
         'put',
         `/api/v1/events/${EVENT_ID}`,
@@ -263,29 +332,47 @@ describe('owned resource scaffolds', () => {
           status: 'scheduled',
         },
         501,
+        false,
       ],
-      ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501],
-      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501],
-       [
-         'post',
-         `/api/v1/events/${EVENT_ID}/entries`,
-         { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
-         201,
-       ],
-       ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }, 200],
-       ['delete', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, undefined, 200],
-       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200],
-       [
-         'put',
-         `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
-         { manualOverride: 11.1, overrideReason: 'Photo finish' },
-         200,
-       ],
+      ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501, false],
+      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
+      [
+        'post',
+        `/api/v1/events/${EVENT_ID}/entries`,
+        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
+        201,
+        true,
+      ],
+      [
+        'patch',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1, value: 11.1 },
+        200,
+        true,
+      ],
+      [
+        'delete',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1 },
+        204,
+        true,
+      ],
+      ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
+      [
+        'put',
+        `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
+        { manualOverride: 11.1, overrideReason: 'Photo finish' },
+        200,
+        false,
+      ],
     ] as const;
     const statuses: number[] = [];
 
-    for (const [method, path, body, expectedStatus] of cases) {
+    for (const [method, path, body, expectedStatus, loggingGuard] of cases) {
       query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+      if (loggingGuard) {
+        query.mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+      }
       let testRequest = request(app)[method](path).set('Authorization', 'Bearer valid');
       if (body !== undefined) testRequest = testRequest.send(body);
       const response = await testRequest;
@@ -308,7 +395,11 @@ describe('ownership non-disclosure', () => {
         `/api/v1/events/${EVENT_ID}/entries`,
         { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
       ],
-      ['patch', `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`, { value: 11.1 }],
+      [
+        'patch',
+        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
+        { expectedVersion: 1, value: 11.1 },
+      ],
       [
         'put',
         `/api/v1/events/${EVENT_ID}/results/${ATHLETE_ID}`,
@@ -346,7 +437,7 @@ describe('ownership non-disclosure', () => {
     const wrongParent = await request(app)
       .patch(`/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ value: 11.1 });
+      .send({ expectedVersion: 1, value: 11.1 });
 
     expect(malformed.status).toBe(404);
     expect(malformed.body).toEqual(resourceNotFound);

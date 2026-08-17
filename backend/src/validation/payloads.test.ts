@@ -3,11 +3,16 @@ import { ApiError } from '../middleware/errors.js';
 import {
   applyTimelineEntryPatch,
   parseAthleteCreatePayload,
+  parseAthleteListQuery,
   parseAthleteReplacementPayload,
   parseEventCreatePayload,
+  parseEventListQuery,
+  parseEventParticipantCreatePayload,
+  parseEventParticipantReplacementPayload,
   parseEventReplacementPayload,
   parseResultOverridePayload,
   parseTimelineEntryCreatePayload,
+  parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
   validateTimelineEntryState,
   type ValidationIssue,
@@ -40,6 +45,51 @@ function expectValidationError(action: () => unknown, issues: ValidationIssue[])
     details: { issues },
   });
 }
+
+describe('event participant payloads', () => {
+  it('parses strict assignment and RSVP replacement payloads', () => {
+    expect(parseEventParticipantCreatePayload({ athleteId: ATHLETE_ID })).toEqual({
+      athleteId: ATHLETE_ID,
+    });
+    expect(parseEventParticipantReplacementPayload({ rsvpStatus: 'yes' })).toEqual({
+      rsvpStatus: 'yes',
+    });
+  });
+
+  it('rejects malformed identifiers and server-controlled assignment fields', () => {
+    expectValidationError(
+      () =>
+        parseEventParticipantCreatePayload({
+          athleteId: 'not-a-uuid',
+          eventId: ATHLETE_ID,
+          rsvpStatus: 'yes',
+        }),
+      [
+        {
+          path: 'athleteId',
+          code: 'invalid_format',
+          message: 'Expected a canonical UUID',
+        },
+        { path: 'eventId', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'rsvpStatus', code: 'unknown_field', message: 'Field is not allowed' },
+      ],
+    );
+  });
+
+  it('requires a supported RSVP status for replacement', () => {
+    expectValidationError(
+      () => parseEventParticipantReplacementPayload({ rsvpStatus: 'maybe', athleteId: ATHLETE_ID }),
+      [
+        { path: 'athleteId', code: 'unknown_field', message: 'Field is not allowed' },
+        {
+          path: 'rsvpStatus',
+          code: 'invalid_value',
+          message: 'Expected one of: pending, yes, no',
+        },
+      ],
+    );
+  });
+});
 
 describe('athlete payloads', () => {
   it('normalizes create and replacement payloads with omitted nullable fields', () => {
@@ -91,6 +141,31 @@ describe('athlete payloads', () => {
   });
 });
 
+describe('athlete list queries', () => {
+  it('defaults to the active roster with no filters', () => {
+    expect(parseAthleteListQuery({})).toEqual({ includeArchived: false });
+  });
+
+  it('parses includeArchived and trimmed name and squad filters', () => {
+    expect(
+      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ', squad: ' Sprint ' }),
+    ).toEqual({ includeArchived: true, name: 'ari', squad: 'Sprint' });
+    expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
+  });
+
+  it('rejects unknown, malformed, blank, and non-string query values', () => {
+    expectValidationError(
+      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squad: 5 }),
+      [
+        { path: 'includeArchived', code: 'invalid_value', message: 'Expected "true" or "false"' },
+        { path: 'name', code: 'blank', message: 'Must not be blank' },
+        { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'squad', code: 'invalid_type', message: 'Expected a string' },
+      ],
+    );
+  });
+});
+
 describe('event payloads', () => {
   it('defaults create status and normalizes optional fields', () => {
     expect(
@@ -137,7 +212,7 @@ describe('event payloads', () => {
       }),
     ).toEqual({
       type: 'training',
-      discipline: null,
+      discipline: '100m',
       title: 'Starts',
       date: '2026-08-14',
       time: null,
@@ -190,6 +265,52 @@ describe('event payloads', () => {
           date: '2026-08-14',
         }),
       [{ path: 'discipline', code: 'invalid_value', message: 'Expected 100m or null' }],
+    );
+  });
+});
+
+describe('event list queries', () => {
+  it('defaults to no filters', () => {
+    expect(parseEventListQuery({})).toEqual({});
+  });
+
+  it('parses type, status, and inclusive date range filters', () => {
+    expect(
+      parseEventListQuery({ type: 'competition', status: 'completed', dateFrom: ' 2026-01-01 ' }),
+    ).toEqual({ type: 'competition', status: 'completed', dateFrom: '2026-01-01' });
+    expect(parseEventListQuery({ dateTo: '2026-12-31' })).toEqual({ dateTo: '2026-12-31' });
+  });
+
+  it('rejects unknown, invalid-enum, blank, and malformed-date values', () => {
+    expectValidationError(
+      () =>
+        parseEventListQuery({
+          type: 'race',
+          status: 'done',
+          dateFrom: '2026-02-29',
+          dateTo: 'not-a-date',
+          page: '1',
+        }),
+      [
+        { path: 'dateFrom', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
+        { path: 'dateTo', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
+        { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'status', code: 'invalid_value', message: 'Expected one of: scheduled, in_progress, completed, cancelled' },
+        { path: 'type', code: 'invalid_value', message: 'Expected one of: competition, training' },
+      ],
+    );
+  });
+
+  it('rejects an inverted date range', () => {
+    expectValidationError(
+      () => parseEventListQuery({ dateFrom: '2026-08-14', dateTo: '2026-08-01' }),
+      [
+        {
+          path: 'dateFrom',
+          code: 'invalid_range',
+          message: 'dateFrom must not be after dateTo',
+        },
+      ],
     );
   });
 });
@@ -334,24 +455,48 @@ describe('timeline patch and merged state', () => {
   it('preserves explicit nulls and omits absent fields', () => {
     expect(
       parseTimelineEntryPatchPayload({
+        expectedVersion: 2,
         value: null,
         incidentType: null,
         noteText: null,
-        deviceId: null,
       }),
-    ).toEqual({ value: null, incidentType: null, noteText: null, deviceId: null });
-    expect(parseTimelineEntryPatchPayload({ entryType: 'split' })).toEqual({ entryType: 'split' });
-    expect(parseTimelineEntryPatchPayload({ deviceId: '   ' })).toEqual({ deviceId: null });
+    ).toEqual({ expectedVersion: 2, value: null, incidentType: null, noteText: null });
+    expect(parseTimelineEntryPatchPayload({ expectedVersion: 3, entryType: 'split' })).toEqual({
+      expectedVersion: 3,
+      entryType: 'split',
+    });
   });
 
-  it('rejects an empty patch and immutable/server-controlled fields', () => {
+  it('requires a positive expected version and at least one editable field', () => {
     expectValidationError(() => parseTimelineEntryPatchPayload({}), [
-      { path: '$', code: 'empty_payload', message: 'At least one field is required' },
+      { path: '$', code: 'empty_payload', message: 'At least one editable field is required' },
+      { path: 'expectedVersion', code: 'required', message: 'Field is required' },
     ]);
+    expectValidationError(() => parseTimelineEntryPatchPayload({ expectedVersion: 0 }), [
+      { path: '$', code: 'empty_payload', message: 'At least one editable field is required' },
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+    expectValidationError(() => parseTimelineEntryPatchPayload({
+      expectedVersion: 2_147_483_648,
+      value: 10.9,
+    }), [
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+  });
+
+  it('rejects immutable, audit, and server-controlled fields', () => {
     expectValidationError(
-      () => parseTimelineEntryPatchPayload({ athleteId: ATHLETE_ID, unit: 'seconds', version: 2 }),
+      () => parseTimelineEntryPatchPayload({
+        expectedVersion: 2,
+        value: 10.9,
+        athleteId: ATHLETE_ID,
+        deviceId: 'watch-1',
+        unit: 'seconds',
+        version: 2,
+      }),
       [
         { path: 'athleteId', code: 'unknown_field', message: 'Field is not allowed' },
+        { path: 'deviceId', code: 'unknown_field', message: 'Field is not allowed' },
         { path: 'unit', code: 'unknown_field', message: 'Field is not allowed' },
         { path: 'version', code: 'unknown_field', message: 'Field is not allowed' },
       ],
@@ -359,14 +504,19 @@ describe('timeline patch and merged state', () => {
   });
 
   it('validates cross-field state separately after a sparse patch is merged', () => {
-    const patch = parseTimelineEntryPatchPayload({ entryType: 'note', noteText: '  Review video ' });
+    const patch = parseTimelineEntryPatchPayload({
+      expectedVersion: 1,
+      entryType: 'note',
+      noteText: '  Review video ',
+    });
+    const { expectedVersion: _expectedVersion, ...editable } = patch;
     const merged = {
       entryType: 'attempt' as const,
       value: 10.9,
       unit: 'seconds' as const,
       incidentType: null,
       noteText: null,
-      ...patch,
+      ...editable,
     };
 
     expectValidationError(() => validateTimelineEntryState(merged), [
@@ -424,12 +574,26 @@ describe('timeline patch and merged state', () => {
       noteText: null,
     };
 
-    expect(applyTimelineEntryPatch(state, { value: null, incidentType: 'dns' })).toEqual({
+    expect(applyTimelineEntryPatch(state, {
+      expectedVersion: 1,
+      value: null,
+      incidentType: 'dns',
+    })).toEqual({
       ...state,
       value: null,
       unit: null,
       incidentType: 'dns',
     });
+  });
+
+  it('parses a strict version-aware delete payload', () => {
+    expect(parseTimelineEntryDeletePayload({ expectedVersion: 4 })).toEqual({ expectedVersion: 4 });
+    expectValidationError(() => parseTimelineEntryDeletePayload({ expectedVersion: 1.5 }), [
+      { path: 'expectedVersion', code: 'invalid_value', message: 'Expected a positive integer' },
+    ]);
+    expectValidationError(() => parseTimelineEntryDeletePayload({ expectedVersion: 4, id: ATHLETE_ID }), [
+      { path: 'id', code: 'unknown_field', message: 'Field is not allowed' },
+    ]);
   });
 });
 

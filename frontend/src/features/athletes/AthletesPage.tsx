@@ -1,129 +1,515 @@
-import { useState, type FormEvent } from 'react';
-import { ConsoleDialog } from '../dashboard/ConsoleDialog';
+import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  DISCIPLINES,
-  SQUADS,
-  STATUSES,
-  fixtureAthletes,
-  fixtureEvents,
-  formatDate,
-  initials,
-  type Athlete,
-  type AthleteStatus,
-  type ConsoleEvent,
-  type Squad,
-} from '../dashboard/consoleData';
+  archiveAthlete,
+  createAthlete,
+  listAthletes,
+  unarchiveAthlete,
+  updateAthlete,
+} from '../../api/athletes';
+import { ApiError } from '../../api/client';
+import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import type { Athlete, AthleteMutationPayload } from '../../types';
 import styles from './AthletesPage.module.css';
 
+type ArchiveFilter = 'active' | 'archived' | 'all';
+type Editor = 'new' | Athlete | null;
+
+interface AthleteDraft {
+  name: string;
+  dob: string;
+  gender: string;
+  squad: string;
+  notes: string;
+}
+
+type FieldErrors = Partial<Record<keyof AthleteDraft, string>>;
+
 export interface AthletesPageProps {
-  athletes?: Athlete[];
-  events?: ConsoleEvent[];
-  onChange?: (athletes: Athlete[]) => void;
-  onRemoveFromEvents?: (athleteId: number) => void;
+  onActiveCountChange?: (count: number) => void;
 }
 
-type FormModel = Omit<Athlete, 'id' | 'history'>;
-const newForm = (athletes: Athlete[]): FormModel => ({
-  name: '', bib: Math.max(0, ...athletes.map((athlete) => athlete.bib)) + 1,
-  discipline: '100m', squad: 'Sprint', status: 'Active', pb: '', notes: '',
-});
-
-function Sparkline({ values }: { values: number[] }) {
-  const min = Math.min(...values);
-  const range = Math.max(1, Math.max(...values) - min);
-  const points = values.map((value, index) => `${index * 46.6},${52 - ((value - min) / range) * 44}`).join(' ');
-  return <svg className={styles.sparkline} viewBox="0 0 280 56" role="img" aria-label="Seven trial performance trend"><polyline points={points} /></svg>;
+function draftFor(athlete?: Athlete): AthleteDraft {
+  return {
+    name: athlete?.name ?? '',
+    dob: athlete?.dob ?? '',
+    gender: athlete?.gender ?? '',
+    squad: athlete?.squad ?? '',
+    notes: athlete?.notes ?? '',
+  };
 }
 
-export function AthletesPage({ athletes: controlled, events = fixtureEvents, onChange, onRemoveFromEvents }: AthletesPageProps = {}) {
-  const [localAthletes, setLocalAthletes] = useState(() => fixtureAthletes.map((athlete) => ({ ...athlete, history: [...athlete.history] })));
-  const athletes = controlled ?? localAthletes;
-  const update = (next: Athlete[]) => onChange ? onChange(next) : setLocalAthletes(next);
-  const [query, setQuery] = useState('');
-  const [squad, setSquad] = useState<'all' | Squad>('all');
-  const [status, setStatus] = useState<'all' | AthleteStatus>('all');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<Athlete | 'new' | null>(null);
-  const [form, setForm] = useState<FormModel>(() => newForm(athletes));
+function toPayload(draft: AthleteDraft): AthleteMutationPayload {
+  const nullable = (value: string) => value.trim() || null;
+  return {
+    name: draft.name.trim(),
+    dob: draft.dob || null,
+    gender: nullable(draft.gender),
+    squad: nullable(draft.squad),
+    notes: nullable(draft.notes),
+  };
+}
 
-  const selected = athletes.find((athlete) => athlete.id === selectedId);
-  const filtered = athletes.filter((athlete) => {
-    const term = query.trim().toLowerCase();
-    return (!term || `${athlete.name} ${athlete.discipline}`.toLowerCase().includes(term))
-      && (squad === 'all' || athlete.squad === squad)
-      && (status === 'all' || athlete.status === status);
+function sorted(athletes: Athlete[]): Athlete[] {
+  return [...athletes].sort((left, right) =>
+    left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
+  );
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return 'DOB not recorded';
+  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
   });
+}
 
-  const beginAdd = () => { setForm(newForm(athletes)); setEditing('new'); };
-  const beginEdit = (athlete: Athlete) => {
-    setForm({ name: athlete.name, bib: athlete.bib, discipline: athlete.discipline, squad: athlete.squad, status: athlete.status, pb: athlete.pb, notes: athlete.notes });
-    setSelectedId(null);
-    setEditing(athlete);
-  };
-  const setField = <K extends keyof FormModel>(field: K, value: FormModel[K]) => setForm((current) => ({ ...current, [field]: value }));
-  const save = (event: FormEvent) => {
-    event.preventDefault();
-    if (!form.name.trim()) return;
-    if (editing === 'new') {
-      const id = Math.max(199, ...athletes.map((athlete) => athlete.id)) + 1;
-      update([...athletes, { ...form, name: form.name.trim(), pb: form.pb.trim() || '-', notes: form.notes.trim() || 'No notes yet.', id, history: [60, 62, 63, 65, 64, 66, 68] }]);
-    } else if (editing) {
-      update(athletes.map((athlete) => athlete.id === editing.id ? { ...athlete, ...form, name: form.name.trim(), pb: form.pb.trim() || '-' } : athlete));
+function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
+    if (error.status === 401) return 'Your session could not be authorized. Please sign in again.';
+    return error.message;
+  }
+  return 'Something went wrong. Please try again.';
+}
+
+function validationErrors(error: unknown): FieldErrors {
+  if (!(error instanceof ApiError) || error.code !== 'VALIDATION_ERROR') return {};
+  const issues = error.details.issues;
+  if (!Array.isArray(issues)) return {};
+  const fields: FieldErrors = {};
+  for (const value of issues) {
+    if (typeof value !== 'object' || value === null) continue;
+    const path = 'path' in value ? value.path : undefined;
+    const message = 'message' in value ? value.message : undefined;
+    if (
+      typeof path === 'string' &&
+      typeof message === 'string' &&
+      ['name', 'dob', 'gender', 'squad', 'notes'].includes(path)
+    ) {
+      fields[path as keyof AthleteDraft] ??= message;
     }
-    setEditing(null);
+  }
+  return fields;
+}
+
+interface AthleteFormProps {
+  athlete?: Athlete;
+  onSave: (payload: AthleteMutationPayload) => Promise<void>;
+  onCancel: () => void;
+  onSubmittingChange: (submitting: boolean) => void;
+}
+
+function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: AthleteFormProps) {
+  const [draft, setDraft] = useState(() => draftFor(athlete));
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const setField = <K extends keyof AthleteDraft>(field: K, value: AthleteDraft[K]) => {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: undefined }));
   };
-  const remove = (athlete: Athlete) => {
-    update(athletes.filter((item) => item.id !== athlete.id));
-    onRemoveFromEvents?.(athlete.id);
-    setSelectedId(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const nextErrors: FieldErrors = {};
+    if (!draft.name.trim()) nextErrors.name = 'Athlete name is required.';
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      nameRef.current?.focus();
+      return;
+    }
+
+    setSubmitting(true);
+    onSubmittingChange(true);
+    setSubmitError(null);
+    try {
+      await onSave(toPayload(draft));
+    } catch (error) {
+      const fields = validationErrors(error);
+      setErrors(fields);
+      setSubmitError(errorMessage(error));
+      if (fields.name) nameRef.current?.focus();
+    } finally {
+      setSubmitting(false);
+      onSubmittingChange(false);
+    }
   };
 
   return (
-    <section aria-labelledby="athletes-heading">
+    <form className={styles.formFields} onSubmit={submit} noValidate>
+      {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
+      <label htmlFor="athlete-name">Athlete name</label>
+      <Input
+        ref={nameRef}
+        id="athlete-name"
+        value={draft.name}
+        onChange={(event) => setField('name', event.target.value)}
+        invalid={Boolean(errors.name)}
+        aria-invalid={Boolean(errors.name)}
+        aria-describedby={errors.name ? 'athlete-name-error' : undefined}
+        required
+        aria-required="true"
+        disabled={submitting}
+      />
+      {errors.name && <span id="athlete-name-error" className={styles.fieldError}>{errors.name}</span>}
+
+      <div className={styles.formRow}>
+        <div>
+          <label htmlFor="athlete-dob">Date of birth <span>Optional</span></label>
+          <Input
+            id="athlete-dob"
+            type="date"
+            value={draft.dob}
+            onChange={(event) => setField('dob', event.target.value)}
+            invalid={Boolean(errors.dob)}
+            aria-invalid={Boolean(errors.dob)}
+            aria-describedby={errors.dob ? 'athlete-dob-error' : undefined}
+            disabled={submitting}
+          />
+          {errors.dob && <span id="athlete-dob-error" className={styles.fieldError}>{errors.dob}</span>}
+        </div>
+        <div>
+          <label htmlFor="athlete-gender">Gender category <span>Optional</span></label>
+          <Input
+            id="athlete-gender"
+            value={draft.gender}
+            onChange={(event) => setField('gender', event.target.value)}
+            invalid={Boolean(errors.gender)}
+            aria-invalid={Boolean(errors.gender)}
+            aria-describedby={errors.gender ? 'athlete-gender-error' : undefined}
+            disabled={submitting}
+          />
+          {errors.gender && <span id="athlete-gender-error" className={styles.fieldError}>{errors.gender}</span>}
+        </div>
+      </div>
+
+      <label htmlFor="athlete-squad">Discipline group / squad <span>Optional</span></label>
+      <Input
+        id="athlete-squad"
+        value={draft.squad}
+        onChange={(event) => setField('squad', event.target.value)}
+        invalid={Boolean(errors.squad)}
+        aria-invalid={Boolean(errors.squad)}
+        aria-describedby={errors.squad ? 'athlete-squad-error' : undefined}
+        disabled={submitting}
+      />
+      {errors.squad && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squad}</span>}
+
+      <label htmlFor="athlete-notes">Coach notes <span>Optional</span></label>
+      <textarea
+        id="athlete-notes"
+        value={draft.notes}
+        onChange={(event) => setField('notes', event.target.value)}
+        aria-invalid={Boolean(errors.notes)}
+        aria-describedby={errors.notes ? 'athlete-notes-error' : undefined}
+        disabled={submitting}
+      />
+      {errors.notes && <span id="athlete-notes-error" className={styles.fieldError}>{errors.notes}</span>}
+
+      <div className={styles.formActions}>
+        <Button variant="secondary" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting ? 'Saving...' : athlete ? 'Save changes' : 'Add athlete'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const [squad, setSquad] = useState('');
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
+  const [editor, setEditor] = useState<Editor>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Athlete | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setLoadError(null);
+    void listAthletes({ includeArchived: true })
+      .then(({ data }) => {
+        if (!current) return;
+        const next = sorted(data);
+        setAthletes(next);
+      })
+      .catch((error: unknown) => {
+        if (current) setLoadError(errorMessage(error));
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!loading && !loadError) {
+      onActiveCountChange?.(athletes.filter((athlete) => athlete.archivedAt === null).length);
+    }
+  }, [athletes, loadError, loading, onActiveCountChange]);
+
+  const storeAthlete = (athlete: Athlete) => {
+    setAthletes((current) => {
+      const next = sorted([...current.filter((item) => item.id !== athlete.id), athlete]);
+      return next;
+    });
+  };
+
+  const activeQuery = deferredQuery.trim().toLowerCase();
+  const visible = athletes.filter((athlete) => {
+    const archiveMatches =
+      archiveFilter === 'all' ||
+      (archiveFilter === 'active' ? athlete.archivedAt === null : athlete.archivedAt !== null);
+    const queryMatches = !activeQuery || athlete.name.toLowerCase().includes(activeQuery);
+    const squadMatches = !squad || athlete.squad === squad;
+    return archiveMatches && queryMatches && squadMatches;
+  });
+  const squads = [...new Set(athletes.map((athlete) => athlete.squad).filter((value): value is string => Boolean(value)))].sort();
+  const hasFilters = Boolean(query || squad || archiveFilter !== 'active');
+
+  const saveEditor = async (payload: AthleteMutationPayload) => {
+    const athlete = editor === 'new'
+      ? await createAthlete(payload)
+      : await updateAthlete(editor!.id, payload);
+    storeAthlete(athlete);
+    setEditor(null);
+    setNotice(editor === 'new' ? `${athlete.name} added to the roster.` : `${athlete.name} updated.`);
+  };
+
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    setPendingId(archiveTarget.id);
+    setActionError(null);
+    try {
+      const archived = await archiveAthlete(archiveTarget.id);
+      storeAthlete(archived);
+      setArchiveTarget(null);
+      setNotice(`${archived.name} archived. Their event history is preserved.`);
+      window.setTimeout(() => addButtonRef.current?.focus(), 0);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const restore = async (athlete: Athlete) => {
+    setPendingId(athlete.id);
+    setActionError(null);
+    try {
+      const restored = await unarchiveAthlete(athlete.id);
+      storeAthlete(restored);
+      setNotice(`${restored.name} restored to the active roster.`);
+      window.setTimeout(() => addButtonRef.current?.focus(), 0);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const clearFilters = () => {
+    setQuery('');
+    setSquad('');
+    setArchiveFilter('active');
+  };
+
+  return (
+    <section aria-labelledby="athletes-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
-        <div><p className={styles.eyebrow}>Performance profiles</p><h1 id="athletes-heading">Athletes</h1><p>{filtered.length} of {athletes.length} athletes shown</p></div>
+        <div>
+          <p className={styles.eyebrow}>Coach-owned roster</p>
+          <h1 id="athletes-heading">Athletes</h1>
+          <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
+        </div>
         <div className={styles.controls}>
-          <label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>Search athletes</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." /></label>
+          <label className={styles.search}>
+            <span aria-hidden="true">⌕</span>
+            <span className={styles.srOnly}>Search athletes by name</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
+          </label>
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
-          <select id="squad-filter" value={squad} onChange={(event) => setSquad(event.target.value as 'all' | Squad)}><option value="all">All squads</option>{SQUADS.map((item) => <option key={item}>{item}</option>)}</select>
-          <label className={styles.srOnly} htmlFor="status-filter">Filter by status</label>
-          <select id="status-filter" value={status} onChange={(event) => setStatus(event.target.value as 'all' | AthleteStatus)}><option value="all">All statuses</option>{STATUSES.map((item) => <option key={item}>{item}</option>)}</select>
-          <button type="button" className={styles.primaryButton} onClick={beginAdd}><span aria-hidden="true">＋</span> Add athlete</button>
+          <Select
+            id="squad-filter"
+            value={squad}
+            onChange={(event) => setSquad(event.target.value)}
+            options={[{ value: '', label: 'All squads' }, ...squads.map((value) => ({ value, label: value }))]}
+          />
+          <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
+          <Select
+            id="archive-filter"
+            value={archiveFilter}
+            onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
+            options={[
+              { value: 'active', label: 'Active roster' },
+              { value: 'archived', label: 'Archived' },
+              { value: 'all', label: 'All athletes' },
+            ]}
+          />
+          <Button
+            ref={addButtonRef}
+            onClick={() => setEditor('new')}
+            disabled={loading || Boolean(loadError) || pendingId !== null}
+          >
+            Add athlete
+          </Button>
         </div>
       </header>
 
-      <div className={styles.grid}>
-        {filtered.map((athlete) => {
-          const formScore = athlete.status === 'Peaking' ? 94 : athlete.status === 'Active' ? 86 : athlete.status === 'Resting' ? 68 : 42;
-          return <button type="button" className={styles.card} key={athlete.id} onClick={() => setSelectedId(athlete.id)}>
-            <span className={styles.cardTop}><span className={`${styles.avatar} ${styles[`squad${athlete.squad.replace(/\s/g, '')}`]}`}>{initials(athlete.name)}</span><span className={styles.bib}>NO. {String(athlete.bib).padStart(3, '0')}</span></span>
-            <strong>{athlete.name}</strong><span className={styles.discipline}>{athlete.discipline} · {athlete.squad}</span>
-            <span className={styles.meta}><span className={`${styles.status} ${styles[`status${athlete.status}`]}`}><i />{athlete.status}</span><span>Performance profile</span></span>
-            <span className={styles.pb}><span><b>{athlete.pb}</b><small>Personal best</small></span><small>{athlete.squad}</small></span>
-            <span className={styles.form}><span>Recent form <b>{formScore}%</b></span><i><i style={{ width: `${formScore}%` }} /></i></span>
-          </button>;
-        })}
-        {!filtered.length && <div className={styles.empty}><span aria-hidden="true">⌕</span><h2>No athletes match your filters</h2><p>Try a different search term or clear your filters.</p><button type="button" onClick={() => { setQuery(''); setSquad('all'); setStatus('all'); }}>Clear filters</button></div>}
-      </div>
+      {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
+      {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
 
-      {selected && <ConsoleDialog title="Athlete Profile" onClose={() => setSelectedId(null)} footer={<><button type="button" className={styles.dangerButton} onClick={() => remove(selected)}>Delete athlete</button><button type="button" className={styles.secondaryButton} onClick={() => setSelectedId(null)}>Close</button><button type="button" className={styles.primaryButton} onClick={() => beginEdit(selected)}>Edit profile</button></>}>
-        <div className={styles.profileHead}><span className={styles.avatar}>{initials(selected.name)}</span><div><h3>{selected.name}</h3><p>{selected.discipline} · Bib NO. {String(selected.bib).padStart(3, '0')}</p><span className={`${styles.status} ${styles[`status${selected.status}`]}`}><i />{selected.status}</span></div></div>
-        <div className={styles.profileStats}><div><b>{selected.pb}</b><span>Personal best</span></div><div><b>{selected.squad}</b><span>Squad</span></div><div><b>{events.filter((item) => item.athleteIds.includes(selected.id) && item.date >= '2026-08-14').length}</b><span>Upcoming events</span></div></div>
-        <h4 className={styles.sectionTitle}>Recent trial trend</h4><Sparkline values={selected.history} />
-        <p className={selected.history.at(-1)! >= selected.history[0]! ? styles.positive : styles.negative}>{selected.history.at(-1)! >= selected.history[0]! ? '▲' : '▼'} {Math.abs(selected.history.at(-1)! - selected.history[0]!)}pt movement over 7 trials</p>
-        <h4 className={styles.sectionTitle}>Upcoming events</h4><div className={styles.chips}>{events.filter((item) => item.athleteIds.includes(selected.id) && item.date >= '2026-08-14').map((item) => <span key={item.id}>{item.name} · {formatDate(item.date)}</span>)}</div>
-        <h4 className={styles.sectionTitle}>Coach notes</h4><p className={styles.notes}>{selected.notes}</p>
-      </ConsoleDialog>}
+      {loading && (
+        <div className={styles.loading} role="status" aria-live="polite">
+          <span /> <span /> <span />
+          <p>Loading your roster...</p>
+        </div>
+      )}
 
-      {editing && <ConsoleDialog title={editing === 'new' ? 'Add Athlete' : 'Edit Athlete'} onClose={() => setEditing(null)} footer={<><button type="button" className={styles.secondaryButton} onClick={() => setEditing(null)}>Cancel</button><button type="submit" form="athlete-form" className={styles.primaryButton}>{editing === 'new' ? 'Add athlete' : 'Save changes'}</button></>}>
-        <form id="athlete-form" className={styles.formFields} onSubmit={save}>
-          <label>Athlete name<input required value={form.name} onChange={(event) => setField('name', event.target.value)} placeholder="e.g. Jordan Lee" /></label>
-          <div><label>Discipline<select value={form.discipline} onChange={(event) => { const discipline = DISCIPLINES.find((item) => item.name === event.target.value)!; setField('discipline', discipline.name); setField('squad', discipline.squad); }}>{DISCIPLINES.map((item) => <option key={item.name}>{item.name}</option>)}</select></label><label>Squad<select value={form.squad} onChange={(event) => setField('squad', event.target.value as Squad)}>{SQUADS.map((item) => <option key={item}>{item}</option>)}</select></label></div>
-          <div><label>Bib number<input required min="0" type="number" value={form.bib} onChange={(event) => setField('bib', Number(event.target.value))} /></label><label>Status<select value={form.status} onChange={(event) => setField('status', event.target.value as AthleteStatus)}>{STATUSES.map((item) => <option key={item}>{item}</option>)}</select></label></div>
-          <label>Personal best<input value={form.pb} onChange={(event) => setField('pb', event.target.value)} placeholder={DISCIPLINES.find((item) => item.name === form.discipline)?.placeholder} /></label>
-          <label>Coach notes<textarea value={form.notes} onChange={(event) => setField('notes', event.target.value)} placeholder="Training focus, injury history, goals..." /></label>
-        </form>
-      </ConsoleDialog>}
+      {!loading && loadError && (
+        <div className={styles.loadError} role="alert">
+          <h2>Roster unavailable</h2>
+          <p>{loadError}</p>
+          <Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button>
+        </div>
+      )}
+
+      {!loading && !loadError && athletes.length === 0 && (
+        <div className={styles.emptyPanel}>
+          <EmptyState title="No athletes yet" description="Add your first athlete to start building the roster." />
+          <Button onClick={() => setEditor('new')}>Add your first athlete</Button>
+        </div>
+      )}
+
+      {!loading && !loadError && athletes.length > 0 && visible.length === 0 && (
+        <div className={styles.emptyPanel}>
+          <EmptyState
+            title={
+              !query && !squad && archiveFilter === 'active'
+                ? 'No active athletes'
+                : !query && !squad && archiveFilter === 'archived'
+                  ? 'No archived athletes'
+                  : 'No athletes match your filters'
+            }
+            description="Adjust the roster filters or clear them to see more athletes."
+          />
+          {hasFilters && <Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
+        </div>
+      )}
+
+      {!loading && !loadError && visible.length > 0 && (
+        <div className={styles.grid} aria-label="Athlete roster">
+          {visible.map((athlete) => (
+            <Card className={styles.card} key={athlete.id}>
+              <div className={styles.cardTop}>
+                <span className={styles.avatar} aria-hidden="true">{initials(athlete.name)}</span>
+                <span className={athlete.archivedAt ? styles.archivedBadge : styles.activeBadge}>
+                  {athlete.archivedAt ? 'Archived' : 'Active'}
+                </span>
+              </div>
+              <h2>{athlete.name}</h2>
+              <p className={styles.squad}>{athlete.squad ?? 'No squad assigned'}</p>
+              <dl className={styles.details}>
+                <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
+                <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>
+              </dl>
+              {athlete.notes && <p className={styles.notes}>{athlete.notes}</p>}
+              <div className={styles.cardActions}>
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditor(athlete)}
+                  disabled={pendingId !== null}
+                >
+                  Edit
+                </Button>
+                {athlete.archivedAt ? (
+                  <Button onClick={() => void restore(athlete)} disabled={pendingId !== null}>
+                    {pendingId === athlete.id ? 'Restoring...' : 'Restore'}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="danger"
+                    onClick={() => setArchiveTarget(athlete)}
+                    disabled={pendingId !== null}
+                  >
+                    Archive
+                  </Button>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        open={editor !== null}
+        title={editor === 'new' ? 'Add athlete' : 'Edit athlete'}
+        onClose={() => {
+          if (!editorBusy) setEditor(null);
+        }}
+        closeDisabled={editorBusy}
+      >
+        {editor && (
+          <AthleteForm
+            key={editor === 'new' ? 'new' : editor.id}
+            athlete={editor === 'new' ? undefined : editor}
+            onSave={saveEditor}
+            onCancel={() => setEditor(null)}
+            onSubmittingChange={setEditorBusy}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={archiveTarget !== null}
+        title="Archive athlete"
+        onClose={() => {
+          setArchiveTarget(null);
+          setActionError(null);
+        }}
+        closeDisabled={pendingId === archiveTarget?.id}
+      >
+        {archiveTarget && (
+          <div className={styles.confirmation}>
+            <p>
+              Archive <strong>{archiveTarget.name}</strong>? They will leave the active roster,
+              but their event assignments, timeline entries, and results will be preserved.
+              You can restore them later.
+            </p>
+            {actionError && <p className={styles.formError} role="alert">{actionError}</p>}
+            <div className={styles.formActions}>
+              <Button variant="secondary" onClick={() => setArchiveTarget(null)} disabled={pendingId === archiveTarget.id}>Cancel</Button>
+              <Button variant="danger" onClick={() => void confirmArchive()} disabled={pendingId === archiveTarget.id}>
+                {pendingId === archiveTarget.id ? 'Archiving...' : 'Archive athlete'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </section>
   );
 }

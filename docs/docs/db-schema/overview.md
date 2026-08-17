@@ -14,7 +14,7 @@ athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, n
                       archived_at, created_at, updated_at)
 events               (id UUID PK, created_by -> users, type, discipline, title, date, time,
                       location_name, latitude, longitude, status)
-event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id) — Stage 2
+event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
@@ -30,9 +30,18 @@ The append-only live log — the heart of the app.
 - `is_foul`: field-event foul attempts.
 - `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
 - `note_text`: free-text body for `note` entries.
-- `version`: bumped on every edit — used for merge-conflict detection (Stage 3).
+- `version`: starts at 1, is required as `expectedVersion` for PATCH/DELETE, and bumps once on each successful mutation. A mismatch is rejected before persistence.
 - `device_id`: originating device for offline merge (Stage 3).
-- `deleted_at`: "undo" is a soft delete, never `DELETE`.
+- `deleted_at`: "undo" is a soft delete, never `DELETE`; normal timeline reads and result derivation exclude tombstones. Repeating the same undo leaves its version and timestamps unchanged.
+
+### event_participants
+The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
+
+- New assignments require an active athlete owned by the event's coach.
+- Existing assignments remain visible if the athlete is later archived, preserving historical participation.
+- RSVP status replacement is idempotent.
+- Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
+- Participant reads join the athlete name, squad and archive state for event detail and live-logger selection.
 
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
@@ -58,6 +67,8 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 - `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
 
 The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
+
+The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
 
 ## Migration conventions
 

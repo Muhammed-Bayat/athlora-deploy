@@ -6,3 +6,4 @@ export { Badge, type BadgeVariant } from './Badge';
 export { Modal } from './Modal';
 export { Toast, type ToastVariant } from './Toast';
 export { EmptyState } from './EmptyState';
+export { AsyncBoundary } from './AsyncBoundary';

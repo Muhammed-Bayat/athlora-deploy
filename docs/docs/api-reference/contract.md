@@ -103,19 +103,40 @@ id, coachId, name, dob (ISO date|null), gender (string|null), squad (string|null
 notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 ```
 
-**Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion. Archived athletes are excluded from roster and dashboard summaries by default.
+**Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion, and it preserves the athlete's event participation, timeline entries, and results. Archived athletes are excluded from roster and dashboard summaries by default.
 
-Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`. `archivedAt` is set via a dedicated archive/unarchive action, not through the generic update.
+**Endpoints:**
+
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes` | List the coach's roster (active by default) |
+| `POST /athletes` | Create an athlete; returns `201` with `{ data: athlete }` |
+| `GET /athletes/:id` | Fetch one owned athlete |
+| `PUT /athletes/:id` | Full replacement of mutable fields |
+| `DELETE /athletes/:id` | Archive (sets `archivedAt`); returns `{ data: athlete }` |
+| `POST /athletes/:id/unarchive` | Restore (clears `archivedAt`); returns `{ data: athlete }` |
+
+`GET /athletes` accepts strict query parameters (unknown parameters are rejected with `400`):
+
+| Parameter | Behavior |
+|---|---|
+| `includeArchived` | `'true'` or `'false'` (default `'false'`). When `false`, archived athletes are excluded. |
+| `name` | Case-insensitive substring match on `name` |
+| `squad` | Exact match on `squad` |
+
+Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable.
+
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`; it never touches `archivedAt`. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
 ### 4.3 Event
 
 ```
-id, createdBy, type ('competition'|'training'), discipline ('100m'|null), title, date (ISO date),
+id, createdBy, type ('competition'|'training'), discipline ('100m'), title, date (ISO date),
 time (ISO|null), locationName (string|null), latitude (number|null), longitude (number|null),
 status, createdAt, updatedAt
 ```
 
-`discipline` is nullable to represent multi-discipline meets.
+The MVP discipline is fixed to **100m** at the API/service boundary: create/full-replacement accepts only `'100m'` or `null` and normalizes both to `'100m'` server-side; any other value is rejected with `400`. The database stays permissive (TEXT) so future disciplines are added by migration, not by loosening this contract.
 
 **Event states** (`status`, CHECK-constrained):
 
@@ -126,17 +147,61 @@ status, createdAt, updatedAt
 | `completed` | Logging closed; results finalised |
 | `cancelled` | Called off; results/entries for it are not scored |
 
-**Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete.
+**Status transitions** are forward-only and enforced server-side on every full replacement:
 
-Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`.
+| From → To | Allowed |
+|---|---|
+| `scheduled` | `scheduled`, `in_progress`, `completed`, `cancelled` |
+| `in_progress` | `in_progress`, `completed`, `cancelled` |
+| `completed` | `completed`, `cancelled` |
+| `cancelled` | `cancelled` (terminal) |
+
+Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to }`. In particular, `cancelled` is terminal — a cancelled event can never start again — and `completed` events cannot revert to `in_progress` or `scheduled`. There is no single-active-event constraint: a coach may run any number of `in_progress` events concurrently.
+
+**Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete — `DELETE /events/:id` only sets `status = 'cancelled'`.
+
+**Endpoints:**
+
+| Method & path | Purpose |
+|---|---|
+| `GET /events` | List the coach's events with optional filters |
+| `POST /events` | Create an event; returns `201` with `{ data: event }` |
+| `GET /events/:id` | Fetch one owned event |
+| `PUT /events/:id` | Full replacement of mutable fields + status transition |
+| `DELETE /events/:id` | Cancel (sets `status = 'cancelled'`); returns `{ data: event }` |
+
+`GET /events` accepts strict query parameters (unknown parameters are rejected with `400`):
+
+| Parameter | Behavior |
+|---|---|
+| `type` | Exact match on `type` (`'competition'` or `'training'`) |
+| `status` | Exact match on `status` |
+| `dateFrom` | Inclusive lower bound on `date` (Gregorian `YYYY-MM-DD`) |
+| `dateTo` | Inclusive upper bound on `date`; `dateFrom` must not be after `dateTo` |
+
+Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `createdAt`, then `id`, so the ordering is stable.
+
+Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
+
+**Logging guard:** timeline creation, edits, and the first undo reject writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`). An exact retry of an undo that already succeeded remains a `204` no-op even if the event has since closed; it does not write again.
 
 ### 4.4 Event participant
 
 ```
-eventId, athleteId, rsvpStatus ('pending'|'yes'|'no')
+eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'),
+athlete { id, name, squad, archivedAt }
 ```
 
-Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Used for fixtures and participation (Stage 2 wiring).
+Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /events/:eventId/participants` | List assigned athletes in stable name order |
+| `POST /events/:eventId/participants` | Assign an active owned athlete; body `{ athleteId }`, returns `201` |
+| `PUT /events/:eventId/participants/:athleteId` | Idempotently replace RSVP status; body `{ rsvpStatus }` |
+| `DELETE /events/:eventId/participants/:athleteId` | Remove the assignment; returns `204` |
+
+Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; an archived athlete cannot be newly assigned and returns `409 ATHLETE_ARCHIVED`. Archiving an already assigned athlete does not remove the assignment, so historical participation remains visible. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
 ### 4.5 Timeline entry (the live log)
 
@@ -152,9 +217,20 @@ recordedBy, version, deviceId (string|null), createdAt, updatedAt, deletedAt (IS
 - `noteText` stores the free-text body of `note` entries (and is null otherwise).
 - `isFoul` applies to field-event attempts only; it is always `false` for 100m.
 - `deletedAt` is the soft-delete tombstone — undo is `deleted_at = now()`, never `DELETE`.
-- `version` starts at 1 and bumps on every edit (Stage 3 merge conflict detection); `deviceId` is set when the entry originated offline.
+- `version` starts at 1 and is the required optimistic-concurrency precondition for edits and undo. A successful mutation bumps it once; an exact repeated undo does not. `deviceId` records the originating device and is not editable.
 
-Create request DTO: `athleteId`, `discipline` (optional, only exact `'100m'` accepted), `entryType`, `value`, `unit` (optional, only exact `'seconds'` accepted when a value is present), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). Discipline and unit are normalized to server constants rather than trusted as client-controlled values. `recordedBy` is taken from the authenticated user. A note requires non-blank `noteText` and cannot carry a value, unit, or incident. `isFoul` is always false for 100m. Edit uses a sparse, non-empty `PATCH`; omitted fields remain unchanged, explicit `null` clears nullable fields, and the merged entry state is revalidated. Undo uses `DELETE /events/:eventId/entries/:entryId` as a soft delete.
+| Method & path | Purpose |
+|---|---|
+| `GET /events/:eventId/entries` | List active entries in stable `createdAt`, `id` order; tombstones are excluded |
+| `POST /events/:eventId/entries` | Create a normalized entry; returns `201` |
+| `PATCH /events/:eventId/entries/:entryId` | Correct observation content using the expected version |
+| `DELETE /events/:eventId/entries/:entryId` | Create a versioned tombstone using the expected version; returns `204` |
+
+Create request DTO: `athleteId`, `discipline` (optional, only exact `'100m'` accepted), `entryType`, `value`, `unit` (optional, only exact `'seconds'` accepted when a value is present), `isFoul`, `incidentType`, `noteText`, `deviceId` (optional). Discipline and unit are normalized to server constants rather than trusted as client-controlled values. `recordedBy` is taken from the authenticated user. A note requires non-blank `noteText` and cannot carry a value, unit, or incident. `isFoul` is always false for 100m.
+
+Edit uses a sparse `PATCH` body containing required positive-integer `expectedVersion` plus at least one of `entryType`, `value`, `incidentType`, or `noteText`. Omitted content fields remain unchanged, explicit `null` clears nullable fields, and the merged entry state is revalidated. Audit and identity fields, including `deviceId`, are rejected. DELETE accepts only `{ expectedVersion }` and sets `deletedAt`; it never physically deletes a timeline row. A repeated DELETE with the same pre-delete version returns `204` without another version/timestamp bump or result recomputation.
+
+A stale active edit or undo returns `409 TIMELINE_ENTRY_VERSION_CONFLICT` with `details: { expectedVersion, actualVersion }`. Version comparison, ownership, event/entry parent matching, lifecycle enforcement, persistence, and result recomputation occur under the same transaction lock, so a stale request cannot overwrite newer state. Missing, deleted-for-PATCH, wrong-parent, and cross-coach resources retain the generic `404 NOT_FOUND` response.
 
 ### 4.6 Result
 
@@ -168,7 +244,9 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 - `isPb`/`isSb` are derived flags, not manually logged.
 - Override fields record a coach correction: `manualOverride` (positive finite seconds), `overrideReason`, `overriddenBy` (user id), `overrideAt` (timestamp). An override request supplies a non-blank reason with the value, or paired nulls to clear it. An override is stored alongside the derived `finalResult`, never replacing it.
 
-**PB/SB rules:** `isPb` is true when the athlete's result is better (lower time) than every previously recorded result for the same discipline; `isSb` is true when it beats the best result recorded in the current season. Only `outcome = 'valid'` results count toward PB/SB; voided outcomes do not. A manual override is what the statistic is computed from when present.
+**PB/SB rules:** `isPb` is true when the athlete's effective result is better (lower time) than every previously recorded effective result for the same discipline; `isSb` is true when it beats the best effective result recorded in the current season. A derived `valid` result or a `no_result` promoted by a manual override can count; voided outcomes do not. A manual override is what the statistic is computed from when present, while the response's `outcome` and `finalResult` remain the raw derived values for auditability.
+
+**Placings:** `placing` is derived per event from effective results — derived valid results and `no_result` entries promoted by an override rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or uncorrected `no_result` entries carry `placing = null`.
 
 ### 4.7 Statistics
 
@@ -199,18 +277,27 @@ resultsCount, latestResult (number|null), latestOutcome, updatedAt
 ## 5. 100m timing rules
 
 - Track (timed) recording produces time values in **seconds**.
-- The finishing time is the largest valid `attempt` value recorded for the athlete (the final time, later than any splits); splits are informational and are not aggregated into the result.
+- The finishing time is read by `deriveTrackTime(entries, eventType)`: for **competition** events it is the **latest** valid `attempt` in the timeline (the final time, recorded after any splits); for **training** events it is the **fastest** (lowest) valid positive attempt. Splits are informational and are not aggregated into the result.
+- Only active `attempt` entries count — soft-deleted entries and zero/negative/non-finite values are ignored.
 - Any `dq`/`dnf`/`dns` incident voids the result (`outcome` dq/dnf/dns, `final_result = NULL`).
-- `false_start` and `lane_infringement` are penalty incidents; a `dq` entry must be recorded to void the result.
+- `false_start` and `lane_infringement` are penalty incidents and do not void the result; a `dq` entry must be recorded to void it.
 - No valid attempt → `outcome = 'no_result'`, `final_result = NULL`.
 
 ## 6. Implementation status
 
 - Migration `0002_contract_100m.sql` applies the column additions, constraints and indexes described above; applied to fresh and existing databases via the checksum-tracked runner.
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
-- `backend/src/services/resultDerivation.ts` derives `{ value, incident, outcome }` per the §2 mapping.
+- `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
-- Feature endpoints (athletes/events/timeline/results/statistics/dashboard CRUD) implement against this contract in Stage 1.
+- `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, archival, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
+- `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/archived athletes, filter by name/squad/archive state, create, fully replace mutable fields, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
+- `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
+- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
+- `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
+- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.4 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
+- `backend/src/services/timeline.ts` implements the §4.5 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
+- `frontend/src/api/timeline.ts` and the aligned request types expose the active list, normalized create, version-aware PATCH, and body-bearing DELETE contract. API-wrapper tests assert the exact methods, paths, and bodies; the live logging screen remains pending.
+- Remaining result read/override, statistics and dashboard endpoints implement against this contract in Stage 1.
 
 ## AI declaration
 

@@ -24,14 +24,14 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 ## Frontend
 
 - **State & structure**: feature folders (`src/features/*`). Shared primitives in `src/components`.
-- **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; per-resource wrappers are added as features land. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user.
+- **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; the roster consumes `src/api/athletes.ts` for list/create/full-replacement/archive/restore operations. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user, and unauthenticated console entry invokes Auth0 rather than exposing protected views.
 - **Offline (Stage 2+)**: Dexie/IndexedDB mirror for live-logging writes, PWA service worker, background sync, Socket.IO live updates.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
 
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: pure, unit-testable functions for result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — never buried in route handlers.
+- **Services**: resource services own coach-scoped PostgreSQL behavior for athletes, events and event participants; pure, unit-testable functions own result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — business logic is never buried in route handlers.
 - **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. `0001_init.sql` and `0002_contract_100m.sql` are applied to Neon.
 - **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
 
@@ -60,7 +60,7 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Implementation status
 
-Implemented at the scaffold stage: frontend shell with feature placeholders and synchronized-auth gating, backend route/middleware/service shell with typed application-user resolution and centralized ownership guards, tokens, migrations, CI workflow and all automated checks. Still to build in Stage 1: real CRUD for athletes/events, Open-Meteo weather, live timeline logging endpoints + UI, and results/dashboard wiring (see the dev plan).
+Implemented in Stage 1: synchronized-auth gating; an API-backed responsive roster (`AthletesPage` → typed client → Express/PostgreSQL) with filtering, reusable create/edit forms and reversible archival; an API-backed event list/calendar with strict create/full-replacement edit payloads and confirmed lifecycle transitions; and end-to-end event assignment management with athlete summaries, active-athlete/duplicate guards, RSVP replacement, archived-history visibility and history-preserving removal. Backend event CRUD enforces filters, forward-only status transitions, cancellation-as-delete and the in-progress logging guard. Timeline list/create/edit/undo now excludes tombstones from normal reads, requires lock-protected optimistic versions for corrections, makes exact undo retries no-ops, and atomically rematerializes 100m outcomes, placings and PB/SB flags; event changes that affect those calculations trigger the same recomputation. The dashboard still uses isolated preview data. Still to build: Open-Meteo weather, the live logging UI, and results/dashboard wiring (see the dev plan).
 
 ## AI declaration
 

@@ -14,6 +14,7 @@ import {
   type AthleticsEvent,
   type DashboardUpcomingEvent,
   type EventParticipant,
+  type EventParticipantSummary,
   type Result,
   type RosterSnapshotEntry,
   type TimelineEntry,
@@ -24,6 +25,7 @@ import {
   isGregorianDate,
   normalizeLocalTime,
 } from '../validation/primitives.js';
+import { deriveEffectiveResult } from '../services/resultDerivation.js';
 
 type NumericValue = string | number;
 type CountValue = string | number;
@@ -79,6 +81,12 @@ export interface EventParticipantRow {
   event_id: string;
   athlete_id: string;
   rsvp_status: string;
+}
+
+export interface EventParticipantSummaryRow extends EventParticipantRow {
+  athlete_name: string;
+  athlete_squad: string | null;
+  athlete_archived_at: TimestampValue | null;
 }
 
 export interface TimelineEntryRow {
@@ -461,6 +469,24 @@ export function mapEventParticipantRow(row: EventParticipantRow): EventParticipa
   };
 }
 
+export function mapEventParticipantSummaryRow(
+  row: EventParticipantSummaryRow,
+): EventParticipantSummary {
+  const participant = mapEventParticipantRow(row);
+  return {
+    ...participant,
+    athlete: {
+      id: participant.athleteId,
+      name: nonemptyString(row.athlete_name, 'athletes.name'),
+      squad: nullableString(row.athlete_squad, 'athletes.squad'),
+      archivedAt:
+        row.athlete_archived_at === null
+          ? null
+          : timestamp(row.athlete_archived_at, 'athletes.archived_at'),
+    },
+  };
+}
+
 export function mapTimelineEntryRow(row: TimelineEntryRow): TimelineEntry {
   const value = nullablePositiveNumeric(row.value, 'timeline_entries.value');
   const unit = nullableResultUnit(row.unit, 'timeline_entries.unit');
@@ -522,8 +548,12 @@ export function mapResultRow(row: ResultRow): Result {
   if ((outcome === 'valid') !== (finalResult !== null)) {
     invalid('results.outcome/final_result', 'only a valid outcome may have a final result');
   }
-  if (outcome !== 'valid' && (placing !== null || isPb || isSb)) {
-    invalid('results outcome metadata', 'placing, PB, and SB require a valid outcome');
+  const effective = deriveEffectiveResult(
+    { value: finalResult, outcome, incident: null },
+    manualOverride,
+  );
+  if (effective.outcome !== 'valid' && (placing !== null || isPb || isSb)) {
+    invalid('results outcome metadata', 'placing, PB, and SB require an effective valid result');
   }
 
   const hasCompleteOverrideAudit =
@@ -534,10 +564,6 @@ export function mapResultRow(row: ResultRow): Result {
       'manual_override, override_reason, overridden_by, and override_at must be present together',
     );
   }
-  if (manualOverride !== null && outcome !== 'valid') {
-    invalid('results.manual_override', 'an override requires a valid outcome');
-  }
-
   return {
     eventId: uuid(row.event_id, 'results.event_id'),
     athleteId: uuid(row.athlete_id, 'results.athlete_id'),

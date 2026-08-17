@@ -7,6 +7,7 @@ import {
   mapDashboardMetricsRow,
   mapDashboardUpcomingEventRow,
   mapEventParticipantRow,
+  mapEventParticipantSummaryRow,
   mapEventRow,
   mapResultRow,
   mapRosterSnapshotRow,
@@ -18,6 +19,7 @@ import {
   type DashboardMetricsRow,
   type DashboardUpcomingEventRow,
   type EventParticipantRow,
+  type EventParticipantSummaryRow,
   type EventRow,
   type ResultRow,
   type RosterSnapshotRow,
@@ -82,6 +84,13 @@ const participantRow: EventParticipantRow = {
   event_id: EVENT_ID,
   athlete_id: ATHLETE_ID,
   rsvp_status: 'yes',
+};
+
+const participantSummaryRow: EventParticipantSummaryRow = {
+  ...participantRow,
+  athlete_name: 'Ari Runner',
+  athlete_squad: 'Senior A',
+  athlete_archived_at: null,
 };
 
 const timelineRow: TimelineEntryRow = {
@@ -262,6 +271,28 @@ describe('PostgreSQL row mapping', () => {
       athleteId: ATHLETE_ID,
       rsvpStatus: 'yes',
     });
+  });
+
+  it('maps an event participant with its athlete summary', () => {
+    expect(mapEventParticipantSummaryRow(participantSummaryRow)).toEqual({
+      eventId: EVENT_ID,
+      athleteId: ATHLETE_ID,
+      rsvpStatus: 'yes',
+      athlete: {
+        id: ATHLETE_ID,
+        name: 'Ari Runner',
+        squad: 'Senior A',
+        archivedAt: null,
+      },
+    });
+    expect(
+      mapEventParticipantSummaryRow(
+        changed(participantSummaryRow, {
+          athlete_squad: null,
+          athlete_archived_at: INPUT_TIMESTAMP,
+        }),
+      ),
+    ).toMatchObject({ athlete: { squad: null, archivedAt: ISO_TIMESTAMP } });
   });
 
   it('maps a timeline entry row and converts its NUMERIC value', () => {
@@ -543,6 +574,28 @@ describe('relationship consistency', () => {
         }),
       ),
     );
+  });
+
+  it('keeps complete override audit alongside a derived no-result outcome', () => {
+    expect(mapResultRow(changed(resultRow, {
+      outcome: 'no_result',
+      final_result: null,
+      unit: null,
+      placing: 1,
+      is_pb: true,
+      is_sb: true,
+      manual_override: '11.10',
+      override_reason: 'Correction',
+      overridden_by: OVERRIDER_ID,
+      override_at: INPUT_TIMESTAMP,
+    }))).toMatchObject({
+      outcome: 'no_result',
+      finalResult: null,
+      manualOverride: 11.1,
+      placing: 1,
+      isPb: true,
+      isSb: true,
+    });
   });
 
   it('requires athlete-statistics latest outcome and value to agree', () => {

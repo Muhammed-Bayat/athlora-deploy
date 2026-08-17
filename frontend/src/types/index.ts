@@ -28,6 +28,22 @@ export interface Athlete {
   squad: string | null;
   notes: string | null;
   archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AthleteMutationPayload {
+  name: string;
+  dob: string | null;
+  gender: string | null;
+  squad: string | null;
+  notes: string | null;
+}
+
+export interface AthleteListFilters {
+  includeArchived?: boolean;
+  name?: string;
+  squad?: string;
 }
 
 export type EventType = 'competition' | 'training';
@@ -45,6 +61,27 @@ export interface AthleticsEvent {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventMutationPayload {
+  type: EventType;
+  discipline: Discipline;
+  title: string;
+  date: string;
+  time: string | null;
+  locationName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: EventStatus;
+}
+
+export interface EventListFilters {
+  type?: EventType;
+  status?: EventStatus;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export type RsvpStatus = 'pending' | 'yes' | 'no';
@@ -53,6 +90,17 @@ export interface EventParticipant {
   eventId: string;
   athleteId: string;
   rsvpStatus: RsvpStatus;
+}
+
+export interface EventParticipantAthleteSummary {
+  id: string;
+  name: string;
+  squad: string | null;
+  archivedAt: string | null;
+}
+
+export interface EventParticipantSummary extends EventParticipant {
+  athlete: EventParticipantAthleteSummary;
 }
 
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
@@ -72,6 +120,33 @@ export interface TimelineEntry {
   recordedBy: string;
   version: number;
   deviceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface TimelineEntryCreatePayload {
+  athleteId: string;
+  discipline?: Discipline;
+  entryType: EntryType;
+  value?: number | null;
+  unit?: ResultUnit | null;
+  isFoul?: false;
+  incidentType?: IncidentType;
+  noteText?: string | null;
+  deviceId?: string | null;
+}
+
+export interface TimelineEntryPatchPayload {
+  expectedVersion: number;
+  entryType?: EntryType;
+  value?: number | null;
+  incidentType?: IncidentType;
+  noteText?: string | null;
+}
+
+export interface TimelineEntryDeletePayload {
+  expectedVersion: number;
 }
 
 export interface Result {

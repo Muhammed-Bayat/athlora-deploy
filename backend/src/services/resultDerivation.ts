@@ -98,11 +98,14 @@ export function deriveEffectiveResult(
   derived: Derivation,
   manualOverride: number | null,
 ): { value: number | null; outcome: ResultOutcome; incident: IncidentType | null } {
+  if (derived.outcome === 'dq' || derived.outcome === 'dnf' || derived.outcome === 'dns') {
+    return derived;
+  }
   if (manualOverride !== null && isPositiveRaceTime(manualOverride)) {
     return {
       value: manualOverride,
-      outcome: derived.outcome === 'no_result' ? 'valid' : derived.outcome,
-      incident: derived.incident,
+      outcome: 'valid',
+      incident: null,
     };
   }
   return {
