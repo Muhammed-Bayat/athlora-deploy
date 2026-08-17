@@ -69,7 +69,7 @@ This documentation site and the repository follow the course AI policy.
 
 - **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
 - **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
-- **Code review:** none used — not used for code review
+- **Code review:** `opencode[gpt-5.6-sol]`
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.
 
