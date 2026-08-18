@@ -11,6 +11,7 @@ const eventApi = vi.hoisted(() => ({
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   cancelEvent: vi.fn(),
+  getEventWeather: vi.fn(),
 }));
 const participantApi = vi.hoisted(() => ({
   listEventParticipants: vi.fn(),
@@ -155,6 +156,15 @@ beforeEach(() => {
   eventApi.listEvents.mockResolvedValue({
     data: [past, cancelled, city, training],
     meta: { count: 4 },
+  });
+  eventApi.getEventWeather.mockResolvedValue({
+    date: city.date,
+    timezone: 'Africa/Johannesburg',
+    weatherCode: 2,
+    temperatureMinC: 13.4,
+    temperatureMaxC: 24.8,
+    precipitationProbabilityMaxPercent: 20,
+    windSpeedMaxKmh: 18.1,
   });
   participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
@@ -335,6 +345,8 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Scheduled');
     expect(detail).toHaveTextContent('100m');
     expect(detail).toHaveTextContent('Central Stadium');
+    expect(await within(detail).findByText('Partly cloudy')).toBeInTheDocument();
+    expect(eventApi.getEventWeather).toHaveBeenCalledWith(CITY_ID, expect.any(AbortSignal));
     expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
     expect(detail).toHaveTextContent('Assigned athletes 1');
     expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');

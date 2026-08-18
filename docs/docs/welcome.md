@@ -39,6 +39,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Athlete roster CRUD** — the `/api/v1/athletes` routes are live against PostgreSQL: coach-scoped list with name/squad filtering and stable ordering, create (server-derived owner), detail, full replacement, plus reversible archival (`DELETE` = archive, `POST /:id/unarchive`) that preserves timeline entries and results. Covered by API, service, and a `TEST_DATABASE_URL`-gated integration suite.
 - **Event CRUD & lifecycle** — the `/api/v1/events` routes are live against PostgreSQL: coach-scoped list with `type`/`status`/date-range filters and stable ordering, create (discipline fixed to 100m server-side), detail, full replacement with forward-only status transitions (`cancelled` is terminal), and cancellation-as-delete (`DELETE` sets `status = 'cancelled'`, preserving timeline entries and results). The timeline routes now reject logging against any event that is not `in_progress` (`409 EVENT_NOT_IN_PROGRESS`). Covered by API, service, and a `TEST_DATABASE_URL`-gated integration suite.
 - **Event management UI** — the coach console event view now consumes the typed event API with responsive list/calendar views, date/type/status filters, async and empty states, strict create/edit forms, detail participant counts, and confirmed start/complete/history-preserving cancel actions. API-wrapper and RTL tests cover filters, payloads, validation, details and lifecycle failures.
+- **Event weather** — owned event detail proxies the stored coordinates through keyless Open-Meteo and independently displays the venue-local event-day conditions, Celsius range, rain chance and wind. The boundary validates dates, units and provider data, maps outage/no-data cases safely, aborts stale UI requests and never blocks the rest of event detail.
 - **Event athlete assignments** — authenticated event routes can list assigned athletes with logger-ready summaries, assign active owned athletes, idempotently update RSVP status, and remove assignments without deleting timeline/results history. Duplicate assignments and archived new assignments return explicit conflicts; all ownership failures remain non-enumerating. Covered by API, service, row-mapper, validation and gated PostgreSQL integration tests.
 - **Event assignment UI** — event detail lists assigned athletes and RSVP state, keeps archived historical participants visible, loads active roster candidates, assigns athletes, replaces RSVP status, and confirms relationship removal with preserved-history messaging. Independent loading/retry states and mutation focus/locking behavior are covered by API-wrapper and RTL tests.
 - **Event results and corrections UI** — event detail and the live logger now share an authoritative 100m outcome board. Competition finishers are ordered by effective time while preserving backend tied placings, training omits misleading places, penalties/incidents and partial results remain distinct, and PB/SB plus archived history stay visible. In-progress/completed events provide an accessible correction workflow that keeps the derived value read-only, records the corrected time/reason/actor/time, confirms clearing, and refreshes the full event after every override.
@@ -53,7 +54,11 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 
 Pending for Stage 1 (needs accounts/credentials you hold):
 
+<<<<<<< HEAD
 - Build the remaining Stage 1 integration: Open-Meteo weather.
+=======
+- Build the remaining Stage 1 integration: the API-backed dashboard UI.
+>>>>>>> b2f0e66b54855a75b8c9010e0c3691f8f0638ea9
 
 ## Keeping these docs current
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AthleticsEvent, EventMutationPayload } from '../types';
-import { cancelEvent, createEvent, listEvents, updateEvent } from './events';
+import type { AthleticsEvent, EventMutationPayload, EventWeatherForecast } from '../types';
+import { cancelEvent, createEvent, getEventWeather, listEvents, updateEvent } from './events';
 
 const event: AthleticsEvent = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -28,6 +28,16 @@ const payload: EventMutationPayload = {
   latitude: event.latitude,
   longitude: event.longitude,
   status: event.status,
+};
+
+const forecast: EventWeatherForecast = {
+  date: event.date,
+  timezone: 'Africa/Johannesburg',
+  weatherCode: 2,
+  temperatureMinC: 13.4,
+  temperatureMaxC: 24.8,
+  precipitationProbabilityMaxPercent: 20,
+  windSpeedMaxKmh: 18.1,
 };
 
 afterEach(() => {
@@ -99,5 +109,17 @@ describe('event API', () => {
 
     await expect(cancelEvent(event.id)).resolves.toEqual(cancelled);
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('unwraps an event forecast and forwards cancellation', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: forecast })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    await expect(getEventWeather(event.id, controller.signal)).resolves.toEqual(forecast);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(`/api/v1/events/${event.id}/weather`);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ signal: controller.signal }));
   });
 });

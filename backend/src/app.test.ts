@@ -324,7 +324,7 @@ describe('owned resource routes', () => {
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200, false],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200, false],
-      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
+      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 422, false],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
       [
         'put',
@@ -450,7 +450,7 @@ describe('ownership non-disclosure', () => {
 });
 
 describe('event weather', () => {
-  it('is protected before reaching the scaffolded handler', async () => {
+  it('is protected before reaching the weather handler', async () => {
     const response = await request(app).get('/api/v1/events/abc-123/weather');
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('AUTH_NOT_CONFIGURED');

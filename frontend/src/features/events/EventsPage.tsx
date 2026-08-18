@@ -13,6 +13,7 @@ import { useCurrentUser } from '../auth/CurrentUserContext';
 import { EventResultsSection } from '../results/EventResultsSection';
 import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
+import { EventWeatherPanel } from './EventWeatherPanel';
 import {
   DISCIPLINE_100M,
   type Athlete,
@@ -783,6 +784,7 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
               <div><dt>Discipline</dt><dd>100m</dd></div>
             </dl>
             {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
+            <EventWeatherPanel key={`${selected.id}-${selected.updatedAt}`} event={selected} />
             <EventResultsSection
               event={selected}
               reloadKey={resultReloadKey}
