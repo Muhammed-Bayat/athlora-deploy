@@ -8,6 +8,7 @@ import {
   replaceEvent,
 } from '../services/events.js';
 import { parseEventListQuery } from '../validation/payloads.js';
+import { getEventWeatherForecast } from '../services/weather.js';
 
 export const listEvents: RequestHandler = async (req, res, next) => {
   try {
@@ -60,8 +61,12 @@ export const deleteEvent: RequestHandler = async (req, res, next) => {
   }
 };
 
-export const getWeather: RequestHandler = (_req, res) => {
-  res.status(501).json({
-    error: { code: 'NOT_IMPLEMENTED', message: 'Weather proxy arrives in Stage 1', details: {} },
-  });
+export const getWeather: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const forecast = await getEventWeatherForecast(userId, req.params.id);
+    res.json({ data: forecast });
+  } catch (error) {
+    next(error);
+  }
 };

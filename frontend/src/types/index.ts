@@ -65,6 +65,16 @@ export interface AthleticsEvent {
   updatedAt: string;
 }
 
+export interface EventWeatherForecast {
+  date: string;
+  timezone: string;
+  weatherCode: number;
+  temperatureMinC: number;
+  temperatureMaxC: number;
+  precipitationProbabilityMaxPercent: number | null;
+  windSpeedMaxKmh: number | null;
+}
+
 export interface EventMutationPayload {
   type: EventType;
   discipline: Discipline;

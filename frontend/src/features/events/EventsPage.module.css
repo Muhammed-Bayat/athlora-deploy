@@ -368,6 +368,73 @@
   font: 0.75rem var(--font-family-mono);
 }
 
+.weatherPanel {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-md);
+  background: var(--console-surface);
+}
+
+.weatherPanel > header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weatherPanel > header p {
+  margin: 0 0 var(--space-1);
+  color: var(--console-cyan);
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.weatherPanel h3 {
+  margin: 0;
+  color: var(--console-ink);
+  font-size: 1rem;
+}
+
+.weatherPanel > header > span {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.weatherMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.weatherMetrics div {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--console-row-surface);
+}
+
+.weatherMetrics dt {
+  color: var(--console-faint);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.weatherMetrics dd {
+  margin: var(--space-1) 0 0;
+  color: var(--console-ink);
+  font: var(--font-weight-bold) 0.82rem var(--font-family-mono);
+}
+
 .participants {
   display: grid;
   gap: var(--space-3);
@@ -696,6 +763,10 @@
 }
 
 @media (max-width: 620px) {
+  .weatherMetrics {
+    grid-template-columns: 1fr;
+  }
+
   .eventOpen {
     grid-template-columns: 52px 1fr;
   }

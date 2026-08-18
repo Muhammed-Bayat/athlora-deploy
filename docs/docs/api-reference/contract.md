@@ -167,6 +167,7 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 | `GET /events` | List the coach's events with optional filters |
 | `POST /events` | Create an event; returns `201` with `{ data: event }` |
 | `GET /events/:id` | Fetch one owned event |
+| `GET /events/:id/weather` | Fetch the owned event's Open-Meteo daily forecast |
 | `PUT /events/:id` | Full replacement of mutable fields + status transition |
 | `DELETE /events/:id` | Cancel (sets `status = 'cancelled'`); returns `{ data: event }` |
 
@@ -182,6 +183,15 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `createdAt`, then `id`, so the ordering is stable.
 
 Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
+
+Event weather is proxied server-side from Open-Meteo without an API key. The provider receives the stored coordinates and returns its venue-local 16-day daily series; Athlora selects the stored event date and exposes only this stable DTO:
+
+```
+date, timezone, weatherCode, temperatureMinC, temperatureMaxC,
+precipitationProbabilityMaxPercent (number|null), windSpeedMaxKmh (number|null)
+```
+
+The response is `{ data: forecast }`. Temperatures are Celsius, precipitation probability is percent, wind is km/h, and `weatherCode` is a validated WMO code. Both coordinates are required. Missing coordinates return `422 WEATHER_LOCATION_UNAVAILABLE`; a date outside the provider's local forecast series returns `422 WEATHER_DATE_UNAVAILABLE` with `details: { dateFrom, dateTo }`; a selected day whose required condition/temperature values are not yet available returns `404 WEATHER_FORECAST_NOT_FOUND`. Provider timeout, outage, or malformed data return safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, or `502 WEATHER_SERVICE_INVALID_RESPONSE` errors without exposing provider internals. Authentication and generic non-enumerating event ownership checks run before any provider request.
 
 **Logging guard:** timeline creation, edits, and the first undo reject writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`). An exact retry of an undo that already succeeded remains a `204` no-op even if the event has since closed; it does not write again.
 
