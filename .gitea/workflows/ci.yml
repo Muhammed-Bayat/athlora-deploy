@@ -52,3 +52,54 @@ jobs:
         run: npm ci --prefix docs
       - name: Build
         run: npm run build --prefix docs
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: athlora_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/athlora_e2e
+      VITE_AUTH0_DOMAIN: ${{ secrets.VITE_AUTH0_DOMAIN }}
+      VITE_AUTH0_CLIENT_ID: ${{ secrets.VITE_AUTH0_CLIENT_ID }}
+      VITE_AUTH0_AUDIENCE: ${{ secrets.VITE_AUTH0_AUDIENCE }}
+      E2E_AUTH0_EMAIL: ${{ secrets.E2E_AUTH0_EMAIL }}
+      E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm ci --prefix e2e
+      - name: Install Chromium
+        run: npx --prefix e2e playwright install --with-deps chromium
+      - name: Run end-to-end tests
+        if: ${{ secrets.VITE_AUTH0_DOMAIN != '' && secrets.VITE_AUTH0_CLIENT_ID != '' && secrets.VITE_AUTH0_AUDIENCE != '' && secrets.E2E_AUTH0_EMAIL != '' && secrets.E2E_AUTH0_PASSWORD != '' }}
+        run: npm test --prefix e2e
+      - name: Skip end-to-end tests (secrets not configured)
+        if: ${{ secrets.VITE_AUTH0_DOMAIN == '' || secrets.VITE_AUTH0_CLIENT_ID == '' || secrets.VITE_AUTH0_AUDIENCE == '' || secrets.E2E_AUTH0_EMAIL == '' || secrets.E2E_AUTH0_PASSWORD == '' }}
+        run: |
+          echo "Skipping the e2e job: the Auth0 / E2E credentials are not configured."
+          echo "Set VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE,"
+          echo "E2E_AUTH0_EMAIL, and E2E_AUTH0_PASSWORD as repository secrets to run the"
+          echo "full 100m vertical-slice suite (Playwright desktop + mobile + a11y)."
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() && secrets.VITE_AUTH0_DOMAIN != '' }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7

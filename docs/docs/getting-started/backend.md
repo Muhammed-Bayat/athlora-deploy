@@ -41,6 +41,8 @@ PORT=4000
 
 Real values are never committed — only `.env.example` templates are versioned.
 
+The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http://localhost:5174` (see the E2E section in `getting-started/scripts.md`).
+
 ## Scripts
 
 | Script | Purpose |
@@ -90,10 +92,11 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 - Errors use the standard `{ error: { code, message, details } }` shape via `src/middleware/errors.ts`.
 - `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience with `jose`, resolves synchronized application users, and provides non-optional typed context accessors to protected controllers. It returns `AUTH_NOT_CONFIGURED` until both `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set.
 - `src/middleware/ownership.ts` wraps `src/services/ownership.ts` as Express route guards, providing reusable athlete, event, event/athlete, timeline entry, participant and 100m result ownership checks. Route guards use the resolved application UUID rather than payload owner/audit IDs and use one generic `404 NOT_FOUND` response for malformed, missing, wrong-parent and cross-coach resources.
+- A `TEST_DATABASE_URL`-gated cross-coach authorization integration suite (`src/services/authorization.integration.test.ts`) seeds two coaches and proves that athlete, event, participant, timeline and statistics reads, mutations and the result-override guard all return the generic `404 NOT_FOUND` for a different coach while list endpoints return empty arrays and the owning coach's own operations still succeed.
 - `src/validation` provides strict shared payload parsers (camelCase create/replacement/PATCH DTOs that return ordered issue lists), `src/db/row-mappers.ts` owns snake-case PostgreSQL row mapping with deliberate numeric/timestamp conversion, and `src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; migrations are checksum-tracked and applied before production startup. `0002_contract_100m.sql` adds the MVP contract state, `0003_aggregate_indexes.sql` adds aggregate read indexes, and `0004_account_lifecycle.sql` adds durable account-deletion state and retry scheduling.
 - The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS — including competition/training timing rules, manual override, placings and PB/SB.
-- Tests: Vitest + Supertest cover app/resource/aggregate/account-lifecycle/weather routes, application-user resolution, ownership/non-disclosure, deletion state/reconciliation, Auth0 Management and Open-Meteo boundaries, athlete/event/participant/timeline/statistics/dashboard services, validation, row mapping, result derivation/recomputation and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test` (298 passing; 35 database integration tests skip when `TEST_DATABASE_URL` is unset).
+- Tests: Vitest + Supertest cover app/resource/aggregate/account-lifecycle/weather routes, application-user resolution, ownership/non-disclosure, deletion state/reconciliation, Auth0 Management and Open-Meteo boundaries, athlete/event/participant/timeline/statistics/dashboard services, validation, row mapping, result derivation/recomputation and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test` (301 passing; 38 database integration tests skip when `TEST_DATABASE_URL` is unset).
 
 ## Deployment
 

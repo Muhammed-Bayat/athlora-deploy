@@ -34,6 +34,8 @@ VITE_AUTH0_AUDIENCE=
 
 `VITE_API_BASE_URL` points at the backend (see the backend guide).
 
+The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5174` (strict port) with `VITE_API_BASE_URL=http://localhost:4100` and the same `VITE_AUTH0_*` variables — see `getting-started/scripts.md`.
+
 ## Scripts
 
 | Script | Purpose |
