@@ -44,6 +44,7 @@ type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
+  initialEventId?: string | null;
   today?: string;
 }
 
@@ -519,7 +520,7 @@ function ParticipantManager({
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
+export function EventsPage({ onUpcomingCountChange, initialEventId = null, today = localToday() }: EventsPageProps = {}) {
   const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -532,7 +533,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialEventId);
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [participantBusy, setParticipantBusy] = useState(false);
@@ -569,7 +570,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   useEffect(() => {
     if (!loading && !loadError) {
       onUpcomingCountChange?.(
-        events.filter((event) => event.status !== 'cancelled' && event.date >= today).length,
+        events.filter((event) => event.status === 'scheduled' && event.date >= today).length,
       );
     }
   }, [events, loadError, loading, onUpcomingCountChange, today]);

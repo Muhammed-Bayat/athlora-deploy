@@ -102,10 +102,10 @@ describe('LiveLoggingPage', () => {
     vi.mocked(athletesApi.listAthletes).mockResolvedValue({ data: [], meta: { count: 0 } });
   });
 
-  function renderPage() {
+  function renderPage(initialEventId?: string) {
     return render(
       <CurrentUserProvider user={currentUser}>
-        <LiveLoggingPage />
+        <LiveLoggingPage initialEventId={initialEventId} />
       </CurrentUserProvider>,
     );
   }
@@ -139,6 +139,32 @@ describe('LiveLoggingPage', () => {
     await waitFor(() => {
       expect(eventsApi.updateEvent).toHaveBeenCalledWith('ev-1', expect.objectContaining({ status: 'in_progress' }));
     });
+  });
+
+  it('resumes the active event supplied by dashboard navigation', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [mockTimelineEntry], meta: { count: 1 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [mockResult], meta: { count: 1 } });
+
+    renderPage(mockActiveEvent.id);
+
+    expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
+    expect(participantsApi.listEventParticipants).toHaveBeenCalledWith(mockActiveEvent.id);
+    expect(timelineApi.listTimelineEntries).toHaveBeenCalledWith(mockActiveEvent.id);
+  });
+
+  it('returns to event selection when a dashboard event is no longer live', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [{ ...mockActiveEvent, status: 'completed' }], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+
+    renderPage(mockActiveEvent.id);
+
+    expect(await screen.findByText(`${mockActiveEvent.title} is no longer live.`)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No events available' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Complete Event' })).not.toBeInTheDocument();
   });
 
   it('renders active event state with assigned athletes and records finish time', async () => {
