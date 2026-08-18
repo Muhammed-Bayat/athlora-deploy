@@ -65,6 +65,14 @@ beforeEach(() => {
 });
 
 describe('AthletesPage', () => {
+  it('opens an athlete detail supplied by dashboard navigation', async () => {
+    render(<AthletesPage initialAthleteId={ARI_ID} />);
+
+    expect(await screen.findByText('Personal details')).toBeInTheDocument();
+    expect(athleteApi.getAthlete).toHaveBeenCalledWith(ARI_ID);
+    expect(statisticsApi.getAthleteStatistics).toHaveBeenCalledWith(ARI_ID);
+  });
+
   it('opens API roster athlete performance and restores focus to the exact roster trigger', async () => {
     const user = userEvent.setup();
     render(<AthletesPage />);

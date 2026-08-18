@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DashboardSummary } from './types';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -13,6 +14,25 @@ const athleteApi = vi.hoisted(() => ({
   listAthletes: vi.fn(),
 }));
 
+const dashboardApi = vi.hoisted(() => ({
+  getDashboardSummary: vi.fn(),
+}));
+
+const emptyDashboard: DashboardSummary = {
+  state: 'summary',
+  asOfDate: '2026-08-18',
+  athletesCount: 0,
+  activeAthletesCount: 0,
+  archivedAthletesCount: 0,
+  upcomingEventCount: 0,
+  seasonPbs: 0,
+  activeEvent: null,
+  rosterSnapshot: [],
+  upcomingEvents: [],
+  recentResults: [],
+  recentPbs: [],
+};
+
 vi.mock('@auth0/auth0-react', () => ({
   useAuth0: () => authState,
 }));
@@ -21,6 +41,8 @@ vi.mock('./api/athletes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api/athletes')>()),
   listAthletes: athleteApi.listAthletes,
 }));
+
+vi.mock('./api/dashboard', () => dashboardApi);
 
 describe('App', () => {
   beforeAll(() => {
@@ -34,6 +56,8 @@ describe('App', () => {
     window.history.replaceState({}, '', '/');
     window.localStorage.clear();
     athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
+    dashboardApi.getDashboardSummary.mockReset();
+    dashboardApi.getDashboardSummary.mockResolvedValue(emptyDashboard);
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -56,15 +80,15 @@ describe('App', () => {
     expect(screen.getByText(/rosters with discipline/i)).toBeVisible();
   });
 
-  it('renders the fixture-driven console for an authenticated coach', async () => {
+  it('renders the API-backed console for an authenticated coach', async () => {
     const user = userEvent.setup();
     authState.isAuthenticated = true;
     authState.isLoading = false;
 
     render(<App />);
 
-    expect(screen.getByText('Performance.')).toBeInTheDocument();
-    expect(screen.getByText('In motion.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Performance in motion.' })).toBeInTheDocument();
+    expect(dashboardApi.getDashboardSummary).toHaveBeenCalledOnce();
 
     await user.click(screen.getAllByRole('button', { name: /athletes/i })[0]);
     expect(screen.getAllByRole('heading', { name: 'Athletes' }).length).toBeGreaterThan(0);

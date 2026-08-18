@@ -19,10 +19,14 @@ import type {
 } from '../../types';
 import styles from './LiveLoggingPage.module.css';
 
-export function LiveLoggingPage() {
+export interface LiveLoggingPageProps {
+  initialEventId?: string | null;
+}
+
+export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps = {}) {
   const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
@@ -72,7 +76,12 @@ export function LiveLoggingPage() {
         listAthletes({ includeArchived: true }),
       ]);
       if (requestId !== eventDataRequestRef.current) return;
-      if (eventRes) setActiveEvent(eventRes);
+      if (!eventRes || eventRes.status !== 'in_progress') {
+        setToast(eventRes ? `${eventRes.title} is no longer live.` : 'That event is no longer available.');
+        setSelectedEventId(null);
+        return;
+      }
+      setActiveEvent(eventRes);
       setParticipants(participantsRes.data);
       setTimeline(timelineRes.data);
       setResults(resultsRes.data);
