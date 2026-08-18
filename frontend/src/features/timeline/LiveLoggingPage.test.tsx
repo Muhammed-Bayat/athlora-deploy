@@ -99,6 +99,7 @@ describe('LiveLoggingPage', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(eventsApi.getEvent).mockResolvedValue(mockActiveEvent);
     vi.mocked(athletesApi.listAthletes).mockResolvedValue({ data: [], meta: { count: 0 } });
   });
 
@@ -155,15 +156,19 @@ describe('LiveLoggingPage', () => {
   });
 
   it('returns to event selection when a dashboard event is no longer live', async () => {
-    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [{ ...mockActiveEvent, status: 'completed' }], meta: { count: 1 } });
+    const completed = { ...mockActiveEvent, status: 'completed' as const };
+    vi.mocked(eventsApi.getEvent).mockResolvedValue(completed);
+    vi.mocked(eventsApi.listEvents)
+      .mockResolvedValueOnce({ data: [mockActiveEvent], meta: { count: 1 } })
+      .mockResolvedValueOnce({ data: [], meta: { count: 0 } });
     vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [], meta: { count: 0 } });
     vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
     vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
 
     renderPage(mockActiveEvent.id);
 
-    expect(await screen.findByText(`${mockActiveEvent.title} is no longer live.`)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'No events available' })).toBeInTheDocument();
+    expect(await screen.findByText(/no longer in progress/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'No events available' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Complete Event' })).not.toBeInTheDocument();
   });
 
@@ -196,7 +201,9 @@ describe('LiveLoggingPage', () => {
     const openButton = await screen.findByRole('button', { name: /Open Live Logger ›/i });
     await userEvent.click(openButton);
 
-    const input = await screen.findByRole('textbox', { name: /Finish time for Amara Chen/i });
+    const input = await screen.findByLabelText(/Finish time for Amara Chen/i);
+    expect(input).toHaveAttribute('inputmode', 'decimal');
+    expect(input).toHaveAttribute('step', '0.01');
     await userEvent.type(input, '10.45');
 
     const recordButton = screen.getByRole('button', { name: /^Record$/i });
@@ -223,7 +230,7 @@ describe('LiveLoggingPage', () => {
 
     renderPage();
     await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
-    await user.type(await screen.findByRole('textbox', { name: /Finish time for Amara Chen/ }), '10.987');
+    await user.type(await screen.findByLabelText(/Finish time for Amara Chen/), '10.987');
     await user.click(screen.getByRole('button', { name: /^Record$/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('no more than two decimal places');
@@ -244,7 +251,7 @@ describe('LiveLoggingPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Event data unavailable');
 
     await user.click(screen.getByRole('button', { name: /Open Live Logger/ }));
-    expect(await screen.findByRole('textbox', { name: /Finish time for Amara Chen/ })).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Finish time for Amara Chen/)).toBeInTheDocument();
     expect(participantsApi.listEventParticipants).toHaveBeenCalledTimes(2);
   });
 
@@ -260,7 +267,7 @@ describe('LiveLoggingPage', () => {
 
     renderPage();
     await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
-    await screen.findByRole('textbox', { name: /Finish time for Amara Chen/ });
+    await screen.findByLabelText(/Finish time for Amara Chen/);
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     await user.click(screen.getByRole('button', { name: 'Switch Event' }));
 
@@ -309,7 +316,7 @@ describe('LiveLoggingPage', () => {
     });
   });
 
-  it('handles stale-version conflict recovery (409 Conflict)', async () => {
+  it('reloads a stale entry and lets the coach continue with the latest version', async () => {
     vi.mocked(eventsApi.listEvents).mockResolvedValue({
       data: [mockActiveEvent],
       meta: { count: 1 },
@@ -318,17 +325,20 @@ describe('LiveLoggingPage', () => {
       data: [mockParticipant],
       meta: { count: 1 },
     });
-    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({
-      data: [mockTimelineEntry],
-      meta: { count: 1 },
-    });
+    vi.mocked(timelineApi.listTimelineEntries)
+      .mockResolvedValueOnce({ data: [mockTimelineEntry], meta: { count: 1 } })
+      .mockResolvedValue({ data: [{ ...mockTimelineEntry, version: 2 }], meta: { count: 1 } });
     vi.mocked(resultsApi.listResults).mockResolvedValue({
       data: [mockResult],
       meta: { count: 1 },
     });
-    vi.mocked(timelineApi.updateTimelineEntry).mockRejectedValueOnce(
-      new ApiError(409, 'CONFLICT', 'Stale version conflict', { message: 'Conflict' })
-    );
+    vi.mocked(timelineApi.updateTimelineEntry)
+      .mockRejectedValueOnce(new ApiError(
+        409,
+        'TIMELINE_ENTRY_VERSION_CONFLICT',
+        'Timeline entry version conflict',
+      ))
+      .mockResolvedValueOnce({ ...mockTimelineEntry, version: 3, value: 10.44 });
 
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: /Open Live Logger ›/i }));
@@ -339,7 +349,305 @@ describe('LiveLoggingPage', () => {
     const saveButton = screen.getByRole('button', { name: /Save Changes/i });
     await userEvent.click(saveButton);
 
-    expect(await screen.findByText(/Version conflict detected|Stale version conflict/i)).toBeInTheDocument();
+    expect(await screen.findByText(/changed on another device/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Edit Timeline Entry' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toHaveFocus());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await userEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
+    expect(timelineApi.updateTimelineEntry).toHaveBeenLastCalledWith(
+      'ev-1',
+      'entry-1',
+      { expectedVersion: 2, value: 10.45, incidentType: null },
+    );
+  });
+
+  it('locks a valid finish correction and sends no invalid note field', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [mockTimelineEntry], meta: { count: 1 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [mockResult], meta: { count: 1 } });
+    let resolveEdit!: (entry: typeof mockTimelineEntry) => void;
+    vi.mocked(timelineApi.updateTimelineEntry).mockReturnValueOnce(
+      new Promise((resolve) => { resolveEdit = resolve; }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const value = screen.getByLabelText('Finish Time / Value (seconds)');
+    await user.clear(value);
+    await user.type(value, '10.44');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    expect(timelineApi.updateTimelineEntry).toHaveBeenCalledWith(
+      'ev-1',
+      'entry-1',
+      { expectedVersion: 1, value: 10.44, incidentType: null },
+    );
+    resolveEdit({ ...mockTimelineEntry, value: 10.44, version: 2 });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Timeline Entry' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toHaveFocus());
+  });
+
+  it('edits notes with a note-only payload', async () => {
+    const noteEntry = {
+      ...mockTimelineEntry,
+      id: 'entry-note',
+      entryType: 'note' as const,
+      value: null,
+      unit: null,
+      noteText: 'Tailwind increasing',
+    };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [noteEntry], meta: { count: 1 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(timelineApi.updateTimelineEntry).mockResolvedValue({ ...noteEntry, noteText: 'Wind legal', version: 2 });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.queryByLabelText('Finish Time / Value (seconds)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Incident Type')).not.toBeInTheDocument();
+    const note = screen.getByLabelText('Note / Comment');
+    await user.clear(note);
+    await user.type(note, 'Wind legal');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(timelineApi.updateTimelineEntry).toHaveBeenCalledWith(
+      'ev-1',
+      'entry-note',
+      { expectedVersion: 1, noteText: 'Wind legal' },
+    );
+  });
+
+  it('confirms undo accessibly and sends the current version', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries)
+      .mockResolvedValueOnce({ data: [mockTimelineEntry], meta: { count: 1 } })
+      .mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [mockResult], meta: { count: 1 } });
+    vi.mocked(timelineApi.deleteTimelineEntry).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    const dialog = screen.getByRole('dialog', { name: 'Undo timeline entry' });
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
+    await user.click(within(dialog).getByRole('button', { name: 'Undo entry' }));
+
+    expect(timelineApi.deleteTimelineEntry).toHaveBeenCalledWith(
+      'ev-1',
+      'entry-1',
+      { expectedVersion: 1 },
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Undo timeline entry' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Chronological Timeline' })).toHaveFocus());
+  });
+
+  it('exits the logger when the backend reports that the event closed', async () => {
+    const completed = { ...mockActiveEvent, status: 'completed' as const };
+    vi.mocked(eventsApi.listEvents)
+      .mockResolvedValueOnce({ data: [mockActiveEvent], meta: { count: 1 } })
+      .mockResolvedValueOnce({ data: [completed], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(timelineApi.createTimelineEntry).mockRejectedValue(
+      new ApiError(409, 'EVENT_NOT_IN_PROGRESS', 'Logging is only open while the event is in progress'),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.type(await screen.findByLabelText(/Finish time for Amara Chen/), '10.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+
+    expect(await screen.findByText(/no longer in progress/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Finish time for Amara Chen/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/version conflict/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps core logging open when secondary standings data fails', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockRejectedValue(new Error('Results unavailable'));
+    vi.mocked(athletesApi.listAthletes).mockRejectedValue(new Error('History unavailable'));
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+
+    expect(await screen.findByLabelText(/Finish time for Amara Chen/)).toBeEnabled();
+    expect(await screen.findByRole('status')).toHaveTextContent('Logging remains open');
+  });
+
+  it('does not open controls when fresh event detail says the event already completed', async () => {
+    const completed = { ...mockActiveEvent, status: 'completed' as const };
+    vi.mocked(eventsApi.listEvents)
+      .mockResolvedValueOnce({ data: [mockActiveEvent], meta: { count: 1 } })
+      .mockResolvedValueOnce({ data: [completed], meta: { count: 1 } });
+    vi.mocked(eventsApi.getEvent).mockResolvedValue(completed);
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+
+    expect(await screen.findByText(/no longer in progress/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Finish time for Amara Chen/)).not.toBeInTheDocument();
+  });
+
+  it('removes a completed event from the local live-event list', async () => {
+    const completed = { ...mockActiveEvent, status: 'completed' as const };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(eventsApi.updateEvent).mockResolvedValue(completed);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(screen.getByRole('button', { name: 'Complete Event' }));
+
+    expect(await screen.findByText('No events available')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Live Logger/ })).not.toBeInTheDocument();
+  });
+
+  it('reports when a closed-event list refresh also fails', async () => {
+    vi.mocked(eventsApi.listEvents)
+      .mockResolvedValueOnce({ data: [mockActiveEvent], meta: { count: 1 } })
+      .mockRejectedValueOnce(new Error('Event list refresh failed'));
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(timelineApi.createTimelineEntry).mockRejectedValue(
+      new ApiError(409, 'EVENT_NOT_IN_PROGRESS', 'Logging closed'),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.type(await screen.findByLabelText(/Finish time for Amara Chen/), '10.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+
+    expect(await screen.findByText(/could not be refreshed/i)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Event list refresh failed');
+  });
+
+  it('keeps ordinary edit errors inside the modal and focuses the alert', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [mockTimelineEntry], meta: { count: 1 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [mockResult], meta: { count: 1 } });
+    vi.mocked(timelineApi.updateTimelineEntry).mockRejectedValue(new ApiError(500, 'SAVE_FAILED', 'Could not save entry'));
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Timeline Entry' });
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('Could not save entry');
+    await waitFor(() => expect(alert).toHaveFocus());
+  });
+
+  it('keeps mutation controls locked until refreshed standings settle', async () => {
+    let resultLoads = 0;
+    let resolveResults!: (value: { data: (typeof mockResult)[]; meta: { count: number } }) => void;
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockImplementation(() => {
+      resultLoads += 1;
+      if (resultLoads === 1) return Promise.resolve({ data: [], meta: { count: 0 } });
+      return new Promise((resolve) => { resolveResults = resolve; });
+    });
+    vi.mocked(timelineApi.createTimelineEntry).mockResolvedValue(mockTimelineEntry);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.type(await screen.findByLabelText(/Finish time for Amara Chen/), '10.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+
+    expect(await screen.findByRole('button', { name: 'Logging...' })).toBeDisabled();
+    expect(screen.getByText('Refreshing live standings...')).toBeInTheDocument();
+    resolveResults({ data: [mockResult], meta: { count: 1 } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'False Start' })).toBeEnabled());
+    expect(await screen.findByText('Finish time recorded successfully.')).toBeInTheDocument();
+  });
+
+  it('validates and sends an exact penalty correction payload', async () => {
+    const penalty = {
+      ...mockTimelineEntry,
+      id: 'entry-penalty',
+      entryType: 'penalty' as const,
+      value: null,
+      unit: null,
+      incidentType: 'false_start' as const,
+    };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [penalty], meta: { count: 1 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(timelineApi.updateTimelineEntry).mockResolvedValue({ ...penalty, incidentType: 'dq', version: 2 });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Timeline Entry' });
+    await user.selectOptions(within(dialog).getByLabelText('Incident Type'), '');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose an incident');
+    await user.selectOptions(within(dialog).getByLabelText('Incident Type'), 'dq');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+
+    expect(timelineApi.updateTimelineEntry).toHaveBeenCalledWith(
+      'ev-1',
+      'entry-penalty',
+      { expectedVersion: 1, value: null, incidentType: 'dq' },
+    );
+  });
+
+  it('acknowledges a committed finish when refresh fails and clears stale loading', async () => {
+    let resolveStaleResults!: (value: { data: (typeof mockResult)[]; meta: { count: number } }) => void;
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(eventsApi.getEvent)
+      .mockResolvedValueOnce(mockActiveEvent)
+      .mockRejectedValueOnce(new Error('Latest event data unavailable'));
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockReturnValue(
+      new Promise((resolve) => { resolveStaleResults = resolve; }),
+    );
+    vi.mocked(timelineApi.createTimelineEntry).mockResolvedValue(mockTimelineEntry);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+    const input = await screen.findByLabelText(/Finish time for Amara Chen/);
+    await user.type(input, '10.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+
+    expect(await screen.findByText(/Finish time recorded successfully.*Latest event data could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Latest event data unavailable');
+    expect(input).toHaveValue(null);
+    resolveStaleResults({ data: [mockResult], meta: { count: 1 } });
+    await waitFor(() => expect(screen.queryByText('Refreshing live standings...')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
   it('shows a manual override as effective while preserving the timeline-derived value', async () => {

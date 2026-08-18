@@ -82,6 +82,14 @@
   font-size: 2rem;
   margin: var(--space-1) 0;
   color: var(--console-ink);
+  overflow-wrap: anywhere;
+}
+
+.activeHeader > div:first-child,
+.athleteInfo,
+.timelineMeta > *,
+.timelineBody {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -182,6 +190,7 @@
   display: block;
   font-size: 1rem;
   color: var(--console-ink);
+  overflow-wrap: anywhere;
 }
 
 .athleteInfo small {
@@ -198,6 +207,10 @@
   display: flex;
   gap: var(--space-2);
   align-items: center;
+}
+
+.finishInputGroup input {
+  min-width: 0;
 }
 
 .incidentButtonGroup {
@@ -239,6 +252,11 @@
 
 .timelineMeta small {
   color: var(--console-muted);
+  overflow-wrap: anywhere;
+}
+
+.timelineBody {
+  overflow-wrap: anywhere;
 }
 
 .successBadge {
@@ -296,6 +314,13 @@
 
 .dangerLinkButton:hover {
   text-decoration: underline;
+}
+
+.linkButton:disabled,
+.dangerLinkButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .mutedText {
@@ -365,9 +390,55 @@
   margin-top: var(--space-4);
 }
 
+.undoConfirmation {
+  max-width: 520px;
+  color: var(--console-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 620px) {
+  .container {
+    padding: var(--space-2);
+  }
+
+  .eventGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .eventCard,
+  .activeHeader,
+  .consoleSection,
+  .feedCard {
+    padding: var(--space-4);
+  }
+
+  .headerButtons,
+  .finishInputGroup,
+  .modalActions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .eventActions button,
+  .headerButtons button,
+  .finishInputGroup button,
+  .modalActions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .incidentButtonGroup button {
+    flex: 1 1 calc(50% - var(--space-2));
+  }
+}
+
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+.header h1:focus-visible,
+.activeHeader h2:focus-visible,
+.feedCard h3:focus-visible {
   outline: 3px solid var(--console-focus);
   outline-offset: 2px;
 }
