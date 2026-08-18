@@ -41,6 +41,37 @@ function initials(name: string): string {
   return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
 
+function greetingForHour(hour: number): string {
+  if (hour < 12) return 'Good morning, Coach';
+  if (hour < 18) return 'Good afternoon, Coach';
+  return 'Good evening, Coach';
+}
+
+function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className={styles.summaryHeroCopy}>
+      <p className={styles.summaryKicker}><span aria-hidden="true" />{greetingForHour(now.getHours())}</p>
+      <h2 id="dashboard-summary-title">Performance.<br /><span>In<br />motion.</span></h2>
+      <p className={styles.summaryLead}>
+        <strong>{summary.activeAthletesCount} of {summary.athletesCount} athlete{summary.athletesCount === 1 ? '' : 's'}</strong> {summary.activeAthletesCount === 1 ? 'is' : 'are'} active,
+        with <strong>{summary.upcomingEventCount} upcoming event{summary.upcomingEventCount === 1 ? '' : 's'}</strong> and
+        <strong> {summary.seasonPbs} season PB{summary.seasonPbs === 1 ? '' : 's'}</strong> on the board.
+      </p>
+      <div className={styles.summaryMeta}>
+        <div><small>Local time</small><strong><time dateTime={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time></strong></div>
+        <div><small>Active roster</small><strong>{summary.activeAthletesCount}</strong></div>
+      </div>
+    </div>
+  );
+}
+
 function TimelineEntryRow({ item }: { item: DashboardTimelineEntry }) {
   const { entry, athlete } = item;
   const value = entry.value !== null && entry.unit === 'seconds'
@@ -168,18 +199,18 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
   return (
     <>
       <section className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
-        <div>
-          <p className={styles.eyebrow}>Squad overview · <time dateTime={summary.asOfDate}>{formatDateOnly(summary.asOfDate)}</time></p>
-          <h2 id="dashboard-summary-title">Performance in motion.</h2>
-          <p>A factual snapshot of your active roster, event calendar, and recorded results.</p>
+        <SummaryHeroCopy summary={summary} />
+        <div className={styles.summaryOrbit} aria-hidden="true">
+          <div className={styles.orbitTrack}>
+            <svg viewBox="0 0 290 180" fill="none">
+              <ellipse cx="145" cy="90" rx="118" ry="55" />
+              <ellipse cx="145" cy="90" rx="90" ry="40" />
+              <ellipse cx="145" cy="90" rx="60" ry="26" />
+            </svg>
+            <i /><i /><i />
+          </div>
+          <p><strong>{summary.activeAthletesCount}</strong> athlete{summary.activeAthletesCount === 1 ? '' : 's'} active in your roster</p>
         </div>
-        <dl className={styles.heroFacts}>
-          <div><dt>Active roster</dt><dd>{summary.activeAthletesCount}</dd></div>
-          <div><dt>Total athletes</dt><dd>{summary.athletesCount}</dd></div>
-          <div><dt>Archived</dt><dd>{summary.archivedAthletesCount}</dd></div>
-          <div><dt>Upcoming</dt><dd>{summary.upcomingEventCount}</dd></div>
-          <div><dt>Season PBs</dt><dd>{summary.seasonPbs}</dd></div>
-        </dl>
       </section>
 
       {(summary.athletesCount === 0 || summary.upcomingEventCount === 0) && (

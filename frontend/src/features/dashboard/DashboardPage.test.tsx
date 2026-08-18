@@ -118,7 +118,7 @@ describe('DashboardPage', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard');
     resolveSummary(EMPTY_SUMMARY);
-    expect(await screen.findByRole('heading', { name: 'Performance in motion.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Performance. In motion.' })).toBeInTheDocument();
     expect(props.onSummaryLoaded).toHaveBeenCalledWith(EMPTY_SUMMARY);
   });
 
@@ -157,6 +157,41 @@ describe('DashboardPage', () => {
     expect(props.onOpenEvent).toHaveBeenCalledWith('event-2');
   });
 
+  it('renders the signature summary hero with real aggregate values', async () => {
+    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
+    render(<DashboardPage {...callbacks()} />);
+
+    const hero = await screen.findByRole('region', { name: 'Performance. In motion.' });
+    expect(hero).toHaveTextContent(/Good (morning|afternoon|evening), Coach/);
+    expect(hero).toHaveTextContent(/2 of 3 athletes are active, with 2 upcoming events and 4 season PBs on the board/);
+    expect(within(hero).getByText('Local time')).toBeInTheDocument();
+    expect(within(hero).getByText('Active roster')).toBeInTheDocument();
+    expect(hero).toHaveTextContent('2 athletes active in your roster');
+  });
+
+  it('cleans up the summary hero clock when it unmounts', async () => {
+    const clearInterval = vi.spyOn(window, 'clearInterval');
+    const page = render(<DashboardPage {...callbacks()} />);
+    await screen.findByRole('heading', { name: 'Performance. In motion.' });
+
+    page.unmount();
+
+    expect(clearInterval).toHaveBeenCalled();
+    clearInterval.mockRestore();
+  });
+
+  it('uses singular summary copy for a one-athlete roster', async () => {
+    dashboardApi.getDashboardSummary.mockResolvedValue({
+      ...EMPTY_SUMMARY,
+      athletesCount: 1,
+      activeAthletesCount: 1,
+    });
+    render(<DashboardPage {...callbacks()} />);
+
+    const hero = await screen.findByRole('region', { name: 'Performance. In motion.' });
+    expect(hero).toHaveTextContent(/1 of 1 athlete is active/);
+  });
+
   it('shows effective outcomes, PBs, and archived historical athletes', async () => {
     dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
     const user = userEvent.setup();
@@ -188,6 +223,8 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Lane infringement')).toBeInTheDocument();
     expect(screen.getByText('Checked at 50m')).toBeInTheDocument();
     expect(screen.getByText('Archived')).toBeInTheDocument();
+    expect(screen.queryByText('Local time')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Good (morning|afternoon|evening), Coach/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume live logging' }));
     expect(props.onResumeLogging).toHaveBeenCalledWith('live-event');
   });
@@ -202,7 +239,7 @@ describe('DashboardPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Could not reach Athlora');
     await user.click(within(alert).getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Performance in motion.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Performance. In motion.' })).toBeInTheDocument();
     expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2);
   });
 
