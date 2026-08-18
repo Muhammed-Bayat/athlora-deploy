@@ -121,7 +121,7 @@ describeDB('account deletion against a real database', () => {
     );
     await pool.query(
       `INSERT INTO results
-         (event_id, athlete_id, discipline, outcome, final_result, unit, placing)
+         (event_id, athlete_id, discipline, outcome, final_result, unit, "placing")
        VALUES ($1, $2, '100m', 'valid', 10.9, 'seconds', 1)`,
       [other.eventId, target.athleteId],
     );
@@ -147,7 +147,7 @@ describeDB('account deletion against a real database', () => {
       [other.eventId, target.userId],
     )).rowCount).toBe(0);
     const preservedResult = await pool.query(
-      `SELECT final_result, placing, manual_override, override_reason, overridden_by, override_at
+      `SELECT final_result, "placing", manual_override, override_reason, overridden_by, override_at
        FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [other.eventId, other.athleteId],
     );
