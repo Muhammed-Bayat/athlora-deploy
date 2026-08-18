@@ -1,5 +1,6 @@
 export * from './client';
 export * as athletesApi from './athletes';
+export * as authApi from './auth';
 export * as eventsApi from './events';
 export * as participantsApi from './participants';
 export * as timelineApi from './timeline';

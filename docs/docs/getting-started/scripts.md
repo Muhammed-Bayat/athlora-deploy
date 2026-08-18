@@ -45,12 +45,12 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (151 Vitest/RTL tests) |
-| `backend` | lint, typecheck, test, build | passing (269 Vitest/Supertest tests; 34 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, build | passing (159 Vitest/RTL tests) |
+| `backend` | lint, typecheck, test, build | passing (288 Vitest/Supertest tests; 35 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | against frontend via Playwright | passing (1 Chromium smoke test) |
 
-The backend suite includes 34 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, and 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
+The backend suite includes 35 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests, 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, and 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 
 ## Definition of done
 

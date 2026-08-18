@@ -290,8 +290,9 @@ describe('auth bootstrap', () => {
         }),
       }),
     );
-    query.mockResolvedValueOnce({
-      rows: [
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [
         {
           id: USER_ID,
           auth0_id: 'auth0|new-coach',
@@ -301,8 +302,7 @@ describe('auth bootstrap', () => {
           created_at: new Date('2026-08-14T10:00:00.000Z'),
           updated_at: new Date('2026-08-14T10:00:00.000Z'),
         },
-      ],
-    });
+      ] });
 
     const response = await request(app)
       .put('/api/v1/auth/me')
@@ -310,8 +310,8 @@ describe('auth bootstrap', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ id: USER_ID, auth0Id: 'auth0|new-coach' });
-    expect(query).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO users');
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1]?.[0]).toContain('INSERT INTO users');
     expect(fetch).toHaveBeenCalledWith('https://example.auth0.com/userinfo', {
       headers: { Authorization: 'Bearer bootstrap-token' },
     });

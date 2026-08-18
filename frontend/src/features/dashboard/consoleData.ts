@@ -5,7 +5,7 @@ export const EVENT_TYPES = ['Meet', 'Time Trial', 'Training Camp', 'Away Meet'] 
 export type Squad = (typeof SQUADS)[number];
 export type AthleteStatus = (typeof STATUSES)[number];
 export type EventType = (typeof EVENT_TYPES)[number];
-export type ConsoleView = 'dashboard' | 'athletes' | 'events' | 'live';
+export type ConsoleView = 'dashboard' | 'athletes' | 'events' | 'live' | 'account';
 export type WeatherPreset = 'clear' | 'partly' | 'cloudy' | 'fog' | 'rain' | 'snow' | 'storm' | 'night' | 'night-rain';
 
 export interface Athlete {

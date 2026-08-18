@@ -9,6 +9,12 @@ export default function App() {
   const openConsole = () => {
     void loginWithRedirect({ appState: { returnTo: '/console' } });
   };
+  const createAccount = () => {
+    void loginWithRedirect({ authorizationParams: { screen_hint: 'signup' }, appState: { returnTo: '/console' } });
+  };
+  const openPasswordHelp = () => {
+    void loginWithRedirect({ authorizationParams: { prompt: 'login' }, appState: { returnTo: '/console' } });
+  };
 
   if (isLoading) {
     return (
@@ -22,6 +28,6 @@ export default function App() {
   return isAuthenticated ? (
     <CoachConsole />
   ) : (
-    <LandingPage onLogin={openConsole} />
+    <LandingPage onLogin={openConsole} onSignup={createAccount} onPasswordHelp={openPasswordHelp} />
   );
 }

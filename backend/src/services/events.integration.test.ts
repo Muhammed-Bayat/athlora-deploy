@@ -28,6 +28,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'account_deletions',
   'results',
   'timeline_entries',
   'event_participants',
