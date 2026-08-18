@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AthletesPage } from '../athletes/AthletesPage';
 import { EventsPage } from '../events/EventsPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
+import { AuthPage } from '../auth/AuthPage';
 import {
   FIXTURE_TODAY,
   STATUSES,
@@ -24,6 +25,7 @@ const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; i
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
   { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
+  { id: 'account', label: 'Account', shortLabel: 'Account', icon: 'athletes' },
 ];
 const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; temperature: number }> = [
   { id: 'clear', label: 'Sunny', temperature: 27 }, { id: 'partly', label: 'Partly cloudy', temperature: 24 },
@@ -37,6 +39,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
+  account: { title: 'Account', subtitle: 'Manage security, sign-out, and account deletion' },
 };
 
 function ConsoleIcon({ name }: { name: IconName }) {
@@ -107,7 +110,7 @@ export function CoachConsole() {
     <div className={styles.weatherScene} aria-hidden="true">{(weather.includes('rain') || weather === 'storm') && Array.from({ length: 36 }, (_, index) => <i className={styles.rain} style={{ left: `${(index * 17) % 101}%`, animationDelay: `${-(index % 13) / 3}s` }} key={index} />)}{weather === 'snow' && Array.from({ length: 30 }, (_, index) => <i className={styles.snow} style={{ left: `${(index * 23) % 101}%`, animationDelay: `${-(index % 11) / 2}s` }} key={index} />)}{weather === 'storm' && <i className={styles.lightning} />}</div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
-      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id !== 'dashboard' && <small>{item.id === 'athletes' ? (rosterCount ?? '—') : (eventUpcomingCount ?? '—')}</small>}</button></li>)}</ul></nav>
+      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && <small>{eventUpcomingCount ?? '—'}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness}><header><span>Squad Readiness</span><b>{readiness(athletes)}%</b></header><div><i style={{ width: `${readiness(athletes)}%` }} /></div>{STATUSES.map((status) => <p key={status}><i className={styles[`status${status}`]} />{status}<b>{counts[status]}</b></p>)}</section>
       <footer><span>C</span><div><b>Coach Console</b><small>Head Coach access</small></div></footer>
     </aside>
@@ -122,7 +125,7 @@ export function CoachConsole() {
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>
-       <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}{view === 'live' && <LiveLoggingPage />}</main>
+       <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}{view === 'live' && <LiveLoggingPage />}{view === 'account' && <AuthPage />}</main>
     </div>
     <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
   </div>;

@@ -4,6 +4,8 @@ import { mapUserRow, type UserRow } from '../db/row-mappers.js';
 import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 import { normalizeRequiredString } from '../validation/primitives.js';
+import { deleteCurrentAccount as deleteAccount } from '../services/accounts.js';
+import { createAuth0PasswordTicket } from '../services/auth0-management.js';
 
 interface Auth0Profile {
   sub?: unknown;
@@ -42,9 +44,22 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
     const name =
       normalizeRequiredString(profile.name) ?? normalizeRequiredString(profile.nickname) ?? email;
 
+    const deletion = await getPool().query<{ status: string }>(
+      `SELECT status FROM account_deletions
+       WHERE auth0_id = $1`,
+      [subject],
+    );
+    if (deletion.rows.length > 0) {
+      throw new ApiError(410, 'ACCOUNT_DELETED', 'This account is pending deletion or has been deleted');
+    }
+
     const result = await getPool().query<UserRow>(
       `INSERT INTO users (auth0_id, name, email)
-       VALUES ($1, $2, $3)
+       SELECT $1, $2, $3
+       WHERE NOT EXISTS (
+         SELECT 1 FROM account_deletions
+         WHERE auth0_id = $1
+       )
        ON CONFLICT (auth0_id) DO UPDATE
        SET name = EXCLUDED.name,
            email = EXCLUDED.email,
@@ -58,7 +73,30 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
                   updated_at`,
       [subject, name, email],
     );
+    if (!result.rows[0]) {
+      throw new ApiError(410, 'ACCOUNT_DELETED', 'This account is pending deletion or has been deleted');
+    }
     res.json({ data: mapUserRow(result.rows[0]) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteCurrentAccount: RequestHandler = async (req, res, next) => {
+  try {
+    const { auth0Id } = getVerifiedAuth0Context(req);
+    await deleteAccount(auth0Id);
+    res.status(202).json({ data: { status: 'pending' } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createPasswordTicket: RequestHandler = async (req, res, next) => {
+  try {
+    const { auth0Id } = getVerifiedAuth0Context(req);
+    const url = await createAuth0PasswordTicket(auth0Id);
+    res.status(201).json({ data: { url } });
   } catch (error) {
     next(error);
   }

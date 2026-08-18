@@ -32,8 +32,9 @@ npm run dev
 DATABASE_URL=
 AUTH0_DOMAIN=
 AUTH0_AUDIENCE=
-AUTH0_CLIENT_ID=
-AUTH0_CLIENT_SECRET=
+AUTH0_MANAGEMENT_CLIENT_ID=
+AUTH0_MANAGEMENT_CLIENT_SECRET=
+AUTH0_PASSWORD_RETURN_URL=http://localhost:5173
 CORS_ORIGINS=http://localhost:5173
 PORT=4000
 ```
@@ -76,7 +77,8 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 
 ## Current state
 
-- Public endpoint: `GET /health`. Legacy login/logout callback scaffolds under `/api/v1/auth` are public, while `PUT /api/v1/auth/me` verifies the Auth0 token, retrieves its `/userinfo` profile and upserts the matching application user. Application resource routes verify the token and then resolve its subject to a typed context containing the application user UUID, Auth0 ID and role. A verified identity without a `users` row receives `403 AUTH_USER_NOT_SYNCHRONIZED`.
+- Public endpoint: `GET /health`. Legacy login/logout callback scaffolds under `/api/v1/auth` are public, while `PUT /api/v1/auth/me` verifies the Auth0 token, retrieves its `/userinfo` profile and upserts the matching application user. `POST /api/v1/auth/me/password-ticket` creates a 15-minute Auth0-hosted password-change link and `DELETE /api/v1/auth/me` permanently removes only the verified subject's Auth0 identity and owned workspace. Application resource routes verify the token and then resolve its subject to a typed context containing the application user UUID, Auth0 ID and role. A verified identity without a `users` row receives `403 AUTH_USER_NOT_SYNCHRONIZED`.
+- Account deletion writes a durable `account_deletions` tombstone before calling Auth0, then transactionally purges local participants, results, timeline entries, events, athletes and the user. Pending, failed and completed tombstones block stale JWT resource access and prevent `PUT /auth/me` from recreating the account. The API retries interrupted deletion attempts at startup and every minute with bounded exponential scheduling; Auth0 `404` is treated as idempotent success.
 - The athlete roster is live: `GET /athletes` lists the coach's active roster (with `includeArchived`, `name` substring and `squad` filters and stable ordering), `POST /athletes` creates a coach-scoped athlete (`201`), `GET /athletes/:id` fetches one, `PUT /athletes/:id` fully replaces the mutable fields without touching `archivedAt`, `DELETE /athletes/:id` archives it (reversible via `POST /athletes/:id/unarchive`) while preserving its timeline entries and results. `src/services/athletes.ts` owns the SQL/mapping and returns the generic non-enumerating `404`; `src/validation/payloads.ts` adds the strict roster query parser.
 - Event CRUD is live: `GET /events` lists the coach's events (with `type`, `status`, `dateFrom` and `dateTo` filters and stable date/time ordering), `POST /events` creates one with the discipline fixed to `100m` server-side (`201`), `GET /events/:id` fetches one, `PUT /events/:id` fully replaces the mutable fields and enforces the forward-only status transition, and `DELETE /events/:id` cancels it (`status = 'cancelled'`, never a row delete) so its timeline entries and results survive. `src/services/events.ts` owns the SQL/mapping, the transition table (any departure from `cancelled`, plus backward moves, return `409 INVALID_EVENT_TRANSITION`), and the in-progress logging guard used by the timeline routes (`409 EVENT_NOT_IN_PROGRESS` for any event that is not `in_progress`).
 - Event participant assignment is live: `GET /events/:eventId/participants` returns stable name-ordered assignments with athlete summaries, `POST` assigns an active owned athlete with `pending` RSVP status, `PUT /events/:eventId/participants/:athleteId` idempotently replaces RSVP status, and `DELETE` removes only the assignment (`204`) while preserving timeline/results history. `src/services/participants.ts` rejects duplicate and archived new assignments with explicit `409` errors and keeps missing/cross-coach resources behind the generic `404` contract.
@@ -88,9 +90,9 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 - `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience with `jose`, resolves synchronized application users, and provides non-optional typed context accessors to protected controllers. It returns `AUTH_NOT_CONFIGURED` until both `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set.
 - `src/middleware/ownership.ts` wraps `src/services/ownership.ts` as Express route guards, providing reusable athlete, event, event/athlete, timeline entry, participant and 100m result ownership checks. Route guards use the resolved application UUID rather than payload owner/audit IDs and use one generic `404 NOT_FOUND` response for malformed, missing, wrong-parent and cross-coach resources.
 - `src/validation` provides strict shared payload parsers (camelCase create/replacement/PATCH DTOs that return ordered issue lists), `src/db/row-mappers.ts` owns snake-case PostgreSQL row mapping with deliberate numeric/timestamp conversion, and `src/db/transaction.ts` provides atomic mutation/recomputation transactions.
-- `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; migrations are checksum-tracked and applied before production startup. `0002_contract_100m.sql` adds the MVP contract state, and `0003_aggregate_indexes.sql` adds athlete-result, owner/event-order and active-timeline lookup indexes for the new read APIs.
+- `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; migrations are checksum-tracked and applied before production startup. `0002_contract_100m.sql` adds the MVP contract state, `0003_aggregate_indexes.sql` adds aggregate read indexes, and `0004_account_lifecycle.sql` adds durable account-deletion state and retry scheduling.
 - The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS — including competition/training timing rules, manual override, placings and PB/SB.
-- Tests: Vitest + Supertest cover app/resource/aggregate routes, application-user resolution, ownership/non-disclosure, athlete/event/participant/timeline/statistics/dashboard services, validation, row mapping, result derivation/recomputation and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test` (269 passing; 34 database integration tests skip when `TEST_DATABASE_URL` is unset).
+- Tests: Vitest + Supertest cover app/resource/aggregate/account-lifecycle routes, application-user resolution, ownership/non-disclosure, deletion state/reconciliation, Auth0 Management API boundaries, athlete/event/participant/timeline/statistics/dashboard services, validation, row mapping, result derivation/recomputation and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test` (288 passing; 35 database integration tests skip when `TEST_DATABASE_URL` is unset).
 
 ## Deployment
 
@@ -112,7 +114,9 @@ Start command: npm start
 Health check path: /health
 ```
 
-The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22`. Multiple allowed frontend origins can be provided as a comma-separated list. Secrets are configured in Render and are never committed.
+The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`, `AUTH0_PASSWORD_RETURN_URL=https://athlora-deploy.vercel.app`, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22`. Multiple allowed frontend origins can be provided as a comma-separated list. Secrets are configured in Render and are never committed.
+
+Create a dedicated Auth0 Machine-to-Machine application for the Auth0 Management API and grant only `delete:users` and `create:user_tickets`; the backend also requests exactly those scopes. Rotate its client secret in Auth0 and Render together, never expose it through `VITE_*`, and list the frontend origin in the Auth0 SPA application's allowed callback, logout and web-origin URLs.
 
 ## AI declaration
 

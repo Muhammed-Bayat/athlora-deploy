@@ -141,9 +141,11 @@ function AccountButton({ children, primary = false, light = false, large = false
 
 interface LandingPageProps {
   onLogin: () => void;
+  onSignup: () => void;
+  onPasswordHelp: () => void;
 }
 
-export function LandingPage({ onLogin }: LandingPageProps) {
+export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPageProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PreviewTab>('athletes');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -213,7 +215,7 @@ export function LandingPage({ onLogin }: LandingPageProps) {
           </nav>
           <div className={styles.navActions}>
             <AccountButton onClick={onLogin}>Log in</AccountButton>
-            <AccountButton primary>Get started</AccountButton>
+            <AccountButton primary onClick={onSignup}>Get started</AccountButton>
             <button
               ref={menuButtonRef}
               className={styles.navToggle}
@@ -249,7 +251,7 @@ export function LandingPage({ onLogin }: LandingPageProps) {
         </nav>
         <div className={styles.mobileActions}>
           <AccountButton large onClick={onLogin}>Log in</AccountButton>
-          <AccountButton primary large>Get started</AccountButton>
+          <AccountButton primary large onClick={onSignup}>Get started</AccountButton>
         </div>
       </div>
 
@@ -261,7 +263,7 @@ export function LandingPage({ onLogin }: LandingPageProps) {
               <h1 id="landing-title">Track the squad.<br />Run the <span>season.</span></h1>
               <p className={styles.lede}>Athlora replaces the spreadsheet, the group chat and the notebook in your kit bag with one live console - rosters, PBs, meets and training camps, updated in real time.</p>
               <div className={styles.heroActions}>
-                <AccountButton primary large>Get started free <Icon name="arrow" /></AccountButton>
+                <AccountButton primary large onClick={onSignup}>Get started free <Icon name="arrow" /></AccountButton>
                 <a className={`${styles.button} ${styles.buttonGhost} ${styles.buttonLarge} ${styles.onDark}`} href="#preview">See it in action</a>
               </div>
               <dl className={styles.heroMeta}>
@@ -377,7 +379,7 @@ export function LandingPage({ onLogin }: LandingPageProps) {
         </section>
 
         <section className={`${styles.section} ${styles.noTop}`} aria-labelledby="cta-title">
-          <div className={styles.wrap}><div className={styles.ctaBand}><h2 id="cta-title">Ready to run the season?</h2><p>Set up your squad in minutes and see the dashboard fill in as trials happen.</p><div className={styles.ctaActions}><AccountButton light large>Get started free</AccountButton><AccountButton large onClick={onLogin}>I already have an account</AccountButton></div></div></div>
+          <div className={styles.wrap}><div className={styles.ctaBand}><h2 id="cta-title">Ready to run the season?</h2><p>Set up your squad in minutes and see the dashboard fill in as trials happen.</p><div className={styles.ctaActions}><AccountButton light large onClick={onSignup}>Get started free</AccountButton><AccountButton large onClick={onLogin}>I already have an account</AccountButton></div></div></div>
         </section>
       </main>
 
@@ -386,7 +388,7 @@ export function LandingPage({ onLogin }: LandingPageProps) {
           <div className={styles.footerTop}>
             <div className={styles.footerBrand}><Brand /><p>The coach's console for rosters, PBs, meets and training camps - built for the track, not a spreadsheet.</p></div>
             <div className={styles.footerCol}><h2>Product</h2><a href="#features">Features</a><a href="#preview">Preview</a><a href="#how">How it works</a></div>
-            <div className={styles.footerCol}><h2>Account</h2><button type="button" onClick={onLogin}>Log in</button><button type="button">Get started</button><a href="#top">Forgot password</a></div>
+            <div className={styles.footerCol}><h2>Account</h2><button type="button" onClick={onLogin}>Log in</button><button type="button" onClick={onSignup}>Get started</button><button type="button" onClick={onPasswordHelp}>Forgot password</button></div>
             <div className={styles.footerCol}><h2>Company</h2><a href="#faq">FAQ</a><a href="#top">About</a><a href="#top">Contact</a></div>
           </div>
           <div className={styles.footerBottom}><span>© {new Date().getFullYear()} Athlora Athletics Coaching. All rights reserved.</span><span>Built for coaches who'd rather be on the track.</span></div>

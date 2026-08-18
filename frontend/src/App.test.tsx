@@ -103,6 +103,23 @@ describe('App', () => {
     expect(screen.queryByText('Performance.')).not.toBeInTheDocument();
   });
 
+  it('wires public sign-up and password help to Auth0 Universal Login', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Get started' })[0]);
+    expect(authState.loginWithRedirect).toHaveBeenCalledWith({
+      authorizationParams: { screen_hint: 'signup' },
+      appState: { returnTo: '/console' },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Forgot password' }));
+    expect(authState.loginWithRedirect).toHaveBeenLastCalledWith({
+      authorizationParams: { prompt: 'login' },
+      appState: { returnTo: '/console' },
+    });
+  });
+
   it('shows an accessible loading state while authentication initializes', () => {
     authState.isAuthenticated = false;
     authState.isLoading = true;

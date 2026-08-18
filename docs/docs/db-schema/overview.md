@@ -18,8 +18,10 @@ event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, ath
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
-                      is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
-                      — PK (event_id, athlete_id, discipline)
+                       is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
+                       — PK (event_id, athlete_id, discipline)
+account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
+                       requested_at, updated_at, completed_at)
 ```
 
 ### timeline_entries
@@ -68,6 +70,8 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 
 Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
 
+Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state survives removal of `users`, blocks stale-token synchronization and resource access, and schedules idempotent cleanup retries through `next_attempt_at`.
+
 The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -78,9 +82,9 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the MVP contract state; `0003_aggregate_indexes.sql` adds query indexes without changing the data model. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the MVP contract state; `0003_aggregate_indexes.sql` adds query indexes; and `0004_account_lifecycle.sql` adds durable deletion state. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
-Status: the first two migrations are applied to Neon; the pending aggregate index migration is checksum-tracked and is applied by the normal migration command or production startup:
+Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
 ```bash
 cd backend
