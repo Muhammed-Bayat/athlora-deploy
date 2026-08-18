@@ -13,8 +13,10 @@ const timelineService = vi.hoisted(() => ({
   removeTimelineEntry: vi.fn(),
   recomputeEventResults: vi.fn(),
 }));
+const weatherService = vi.hoisted(() => ({ getEventWeatherForecast: vi.fn() }));
 
 vi.mock('../services/timeline.js', () => timelineService);
+vi.mock('../services/weather.js', () => weatherService);
 
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(() => 'keyset'),
@@ -42,6 +44,15 @@ beforeEach(() => {
   vi.mocked(withTransaction).mockImplementation(async (operation) =>
     operation({ query } as never),
   );
+  weatherService.getEventWeatherForecast.mockResolvedValue({
+    date: '2026-09-01',
+    timezone: 'Africa/Johannesburg',
+    weatherCode: 2,
+    temperatureMinC: 13.4,
+    temperatureMaxC: 24.8,
+    precipitationProbabilityMaxPercent: 20,
+    windSpeedMaxKmh: 18.1,
+  });
 });
 
 afterEach(() => {
@@ -332,6 +343,38 @@ describe('GET /api/v1/events/:id', () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual(resourceNotFound);
     expect(query).toHaveBeenCalledOnce();
+  });
+});
+
+describe('GET /api/v1/events/:id/weather', () => {
+  it('returns the owned event forecast through the stable API envelope', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/weather`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      date: '2026-09-01',
+      weatherCode: 2,
+      temperatureMaxC: 24.8,
+    });
+    expect(weatherService.getEventWeatherForecast).toHaveBeenCalledWith(USER_ID, EVENT_ID);
+  });
+
+  it('does not contact the weather service for a foreign event', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/weather`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual(resourceNotFound);
+    expect(weatherService.getEventWeatherForecast).not.toHaveBeenCalled();
   });
 });
 

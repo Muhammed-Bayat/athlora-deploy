@@ -58,6 +58,16 @@ export interface AthleticsEvent {
   updatedAt: string;
 }
 
+export interface EventWeatherForecast {
+  date: string;
+  timezone: string;
+  weatherCode: number;
+  temperatureMinC: number;
+  temperatureMaxC: number;
+  precipitationProbabilityMaxPercent: number | null;
+  windSpeedMaxKmh: number | null;
+}
+
 export const RSVP_STATUSES = ['pending', 'yes', 'no'] as const;
 export type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
