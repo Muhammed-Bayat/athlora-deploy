@@ -61,7 +61,7 @@ results          (event_id, athlete_id, discipline, outcome[no_result|valid|dq|d
 
 **Stack used:** React + Vite + TypeScript, CSS, Node.js + Express, PostgreSQL (Neon/university), Auth0, Open-Meteo, Vitest, RTL, Supertest, Gitea Actions, Vercel, Render, Docusaurus + Cloudflare Pages.
 
-**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html` and `SDP-Coach-Console.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder: Bebas Neue headings, Inter body, Space Mono for results, deep-ink navy + teal/cyan/blue palette). All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
+**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html` and `SDP-Coach-Console.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder) plus the premium coach-console redesign `Athlora_Premium_Dashboard.html` (dark aurora default with a light "Aurora Mist/Ice" variant). The console uses Space Grotesk display/heading, Satoshi body, Space Grotesk mono for figures, and a deep-ink navy + teal/cyan/blue palette. All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
 
 ### 2.1 Setup (Week 1)
 1. Create Gitea repo, mono-repo layout: `/frontend`, `/backend`, `/docs`.

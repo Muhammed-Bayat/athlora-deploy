@@ -47,6 +47,62 @@ function greetingForHour(hour: number): string {
   return 'Good evening, Coach';
 }
 
+function weekStartOf(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+function isWithinDays(date: string, reference: string, maxDays: number): boolean {
+  const diff = (new Date(`${date}T00:00:00`).getTime() - new Date(`${reference}T00:00:00`).getTime()) / 86400000;
+  return diff >= 0 && diff <= maxDays;
+}
+
+function trendBuckets(summary: DashboardSummary): { labels: string[]; values: number[] } {
+  const labels = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'Now'];
+  const target = weekStartOf(summary.asOfDate);
+  const start = new Date(`${target}T00:00:00`);
+  start.setDate(start.getDate() - 42);
+  const weekStarts = Array.from({ length: 7 }, (_, index) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + index * 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const values = weekStarts.map(() => 0);
+  summary.recentPbs.forEach((item) => {
+    const index = weekStarts.indexOf(weekStartOf(item.event.date));
+    if (index !== -1) values[index] += 1;
+  });
+  return { labels, values };
+}
+
+function CountUp({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof window.requestAnimationFrame !== 'function') {
+      el.textContent = String(value);
+      return;
+    }
+    const start = Date.now();
+    let frame = 0;
+    const tick = () => {
+      const t = Math.min((Date.now() - start) / 750, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = String(Math.round(eased * value));
+      if (t < 1) frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <span className={styles.statNum} ref={ref}>{value}</span>;
+}
+
 function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
   const [now, setNow] = useState(() => new Date());
 
@@ -54,6 +110,10 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const readiness = summary.athletesCount > 0
+    ? Math.round((summary.activeAthletesCount / summary.athletesCount) * 100)
+    : 0;
 
   return (
     <div className={styles.summaryHeroCopy}>
@@ -67,6 +127,7 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
       <div className={styles.summaryMeta}>
         <div><small>Local time</small><strong><time dateTime={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time></strong></div>
         <div><small>Active roster</small><strong>{summary.activeAthletesCount}</strong></div>
+        <div><small>Squad readiness</small><strong>{readiness}%</strong></div>
       </div>
     </div>
   );
@@ -123,6 +184,106 @@ function ResultRow({ item, onOpenAthlete }: {
         </span>
       </button>
     </li>
+  );
+}
+
+function StatRow({ summary }: { summary: DashboardSummary }) {
+  const next14 = summary.upcomingEvents.filter((event) => isWithinDays(event.date, summary.asOfDate, 14)).length;
+  const stats = [
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19.5c0-3.2 2.4-5.5 5.5-5.5s5.5 2.3 5.5 5.5" /><circle cx="17.5" cy="9" r="2.4" /><path d="M15.4 14.2c2.2.3 4 2.3 4.1 5.1" /></svg>,
+      label: 'Athletes',
+      value: summary.athletesCount,
+      delta: `${summary.activeAthletesCount} active`,
+      context: `${summary.activeAthletesCount} active of ${summary.athletesCount} total`,
+      progress: summary.athletesCount > 0 ? Math.round((summary.activeAthletesCount / summary.athletesCount) * 100) : 0,
+      featured: true,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /></svg>,
+      label: 'Next 14 days',
+      value: next14,
+      delta: `${summary.upcomingEventCount} total`,
+      context: summary.upcomingEvents[0] ? `Next: ${summary.upcomingEvents[0].title}` : 'Calendar clear',
+      progress: Math.min(100, next14 * 18),
+      featured: false,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>,
+      label: 'Season PBs',
+      value: summary.seasonPbs,
+      delta: `${summary.recentPbs.length} recent`,
+      context: 'Performance momentum',
+      progress: Math.min(100, summary.seasonPbs * 25),
+      featured: false,
+    },
+    {
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
+      label: 'Events planned',
+      value: summary.upcomingEventCount,
+      delta: 'on calendar',
+      context: 'Competitions and training',
+      progress: Math.min(100, summary.upcomingEventCount * 18),
+      featured: false,
+    },
+  ];
+
+  return (
+    <section className={styles.statRow} aria-label="Season statistics">
+      {stats.map((stat) => (
+        <article className={stat.featured ? `${styles.statCard} ${styles.featured}` : styles.statCard} key={stat.label}>
+          <div className={styles.statTop}>
+            <span className={styles.statIcon} aria-hidden="true">{stat.icon}</span>
+            <span className={styles.statDelta}>{stat.delta}</span>
+          </div>
+          <CountUp value={stat.value} />
+          <div className={styles.statLabel}>{stat.label}</div>
+          <div className={styles.statExtra}>
+            <div className={styles.statTrack}><span style={{ width: `${stat.progress}%` }} /></div>
+            <div className={styles.statContext}>{stat.context}</div>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function TrendPanel({ summary }: { summary: DashboardSummary }) {
+  const { labels, values } = trendBuckets(summary);
+  const max = Math.max(...values, 1);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const momentum = values[6] - values[5];
+  const momentumLabel = total === 0 ? '—' : `${momentum >= 0 ? '+' : ''}${momentum}`;
+  const momentumCopy = total === 0
+    ? 'PB movement versus last week. No personal bests were recorded in the last 7 weeks — the next competition block will reset the trend.'
+    : momentum > 0
+      ? 'PB movement versus last week. The squad is carrying positive performance momentum into the next competition block.'
+      : momentum < 0
+        ? 'PB movement versus last week. A softer week — useful context for managing load and recovery.'
+        : 'PB movement versus last week. Steady output keeps the squad on plan.';
+
+  return (
+    <section className={`${styles.panel} ${styles.trendPanel}`} aria-labelledby="pb-trend-title">
+      <header className={styles.panelHead}>
+        <div><p className={styles.panelEyebrow}>Performance signal</p><h3 id="pb-trend-title">Squad PB Trend</h3></div>
+        <span className={styles.trendRange}>Last 7 weeks</span>
+      </header>
+      <div className={styles.trendLayout}>
+        <div className={styles.bars}>
+          {labels.map((label, index) => (
+            <div className={styles.barCol} key={label}>
+              <div className={styles.bar} style={{ height: `${(values[index] / max) * 100}%` }} />
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+        <aside className={styles.trendInsight}>
+          <small>Current momentum</small>
+          <strong>{momentumLabel}</strong>
+          <p>{momentumCopy}</p>
+        </aside>
+      </div>
+    </section>
   );
 }
 
@@ -213,6 +374,8 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
         </div>
       </section>
 
+      <StatRow summary={summary} />
+
       {(summary.athletesCount === 0 || summary.upcomingEventCount === 0) && (
         <section className={styles.onboarding} aria-label="Dashboard setup">
           {summary.athletesCount === 0 && <div><h2>No athletes yet</h2><p>Add athletes to build your roster and track their performances.</p><button type="button" onClick={onOpenRoster}>Open roster</button></div>}
@@ -220,9 +383,9 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
         </section>
       )}
 
-      <div className={styles.twoColumn}>
-        <section className={styles.apiPanel} aria-labelledby="roster-snapshot-title">
-          <header className={styles.panelHeader}><div><p>Roster intelligence</p><h2 id="roster-snapshot-title">Roster snapshot</h2></div><button type="button" onClick={onOpenRoster}>View all</button></header>
+      <div className={styles.dashGrid}>
+        <section className={styles.panel} aria-labelledby="roster-snapshot-title">
+          <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster intelligence</p><h3 id="roster-snapshot-title">Roster snapshot</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
           {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
             <ul className={styles.rowList}>{summary.rosterSnapshot.map((athlete) => (
               <li key={athlete.athleteId}><button type="button" className={styles.apiRosterRow} onClick={() => onOpenAthlete(athlete.athleteId)}><span className={styles.apiAvatar} aria-hidden="true">{initials(athlete.name)}</span><span className={styles.rowBody}><strong>{athlete.name}</strong><small>{athlete.discipline} · {athlete.squad ?? 'No squad assigned'}</small></span><span className={styles.resultValue}><strong>{athlete.pb === null ? 'No PB' : format100mSeconds(athlete.pb)}</strong><small>Personal best</small></span></button></li>
@@ -230,15 +393,17 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
           )}
         </section>
 
-        <section className={styles.apiPanel} aria-labelledby="upcoming-events-title">
-          <header className={styles.panelHeader}><div><p>Calendar</p><h2 id="upcoming-events-title">Upcoming events</h2></div><button type="button" onClick={onOpenEvents}>View all</button></header>
+        <section className={styles.panel} aria-labelledby="upcoming-events-title">
+          <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
           {summary.upcomingEvents.length === 0 ? <p className={styles.emptyCopy}>No upcoming events to show.</p> : (
             <ul className={styles.rowList}>{summary.upcomingEvents.map((event) => (
-              <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>
+              <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date} className={styles.eventDateBadge}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>
             ))}</ul>
           )}
         </section>
       </div>
+
+      <TrendPanel summary={summary} />
 
       <div className={styles.twoColumn}>
         <section className={styles.apiPanel} aria-labelledby="recent-results-title">
