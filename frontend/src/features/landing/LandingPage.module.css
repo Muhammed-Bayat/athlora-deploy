@@ -1,7 +1,7 @@
 .page {
   --landing-black: #000408;
   --landing-navy: #001b38;
-  --landing-cyan: #92eff7;
+  --landing-cyan: #b4f8fe;
   --landing-blue: #0098c2;
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-family-base: 'Satoshi', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -100,7 +100,7 @@
 .heroBadge span, .consoleTop b i { width: 7px; height: 7px; border-radius: 50%; background: var(--landing-cyan); box-shadow: 0 0 14px rgba(146, 239, 247, .7); animation: status 1.8s ease-in-out infinite; }
 @keyframes status { 50% { opacity: .5; transform: scale(.72); } }
 .hero h1 { min-height: 1.92em; max-width: 720px; color: #fbfeff; font-family: var(--font-display); font-size: clamp(54px, 6.5vw, 88px); font-weight: 700; letter-spacing: -.058em; line-height: .96; text-wrap: balance; }
-.hero h1 em { color: transparent; background: linear-gradient(95deg, #e5fdff, #9ef2f8 34%, #4bc9e2 66%, #419fff); background-clip: text; font-style: normal; }
+.hero h1 em { color: transparent; background: linear-gradient(95deg, #ecfdff, #b6f8fc 34%, #59d4ec 66%, #419fff); background-clip: text; font-style: normal; }
 .hero h1 i { display: inline-block; width: .055em; height: .78em; margin-left: .055em; vertical-align: -.04em; border-radius: 2px; }
 .hero h1 i.caret { background: var(--landing-cyan); box-shadow: 0 0 16px rgba(146, 239, 247, .42); animation: caret .72s steps(1) infinite; }
 @keyframes caret { 50% { opacity: .12; } }

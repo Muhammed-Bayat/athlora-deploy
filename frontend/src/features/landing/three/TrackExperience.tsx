@@ -60,10 +60,10 @@ function TrackModel() {
           <mesh key={index}>
             <tubeGeometry args={[curve, 192, edge ? .03 : .022, 6, true]} />
             <meshStandardMaterial
-              color={edge ? '#eafdff' : '#9fe8f0'}
+              color={edge ? '#eefcff' : '#b8f4f8'}
               roughness={.4}
-              emissive={edge ? '#3ea9bf' : '#1a7f9a'}
-              emissiveIntensity={.42}
+              emissive={edge ? '#4ec6d8' : '#2aa9c4'}
+              emissiveIntensity={.62}
             />
           </mesh>
         );
@@ -181,6 +181,7 @@ function TrackScene({ runtime }: { runtime: React.MutableRefObject<SceneRuntime>
   const initializedMode = useRef<SceneMode>('hidden');
   const lookAt = useRef(new THREE.Vector3());
   const cameraGoal = useRef(new THREE.Vector3());
+  const heading = useRef(Math.atan2(ovalTangent(0).x, ovalTangent(0).z));
 
   useEffect(() => {
     const currentRuntime = runtime.current;
@@ -206,19 +207,26 @@ function TrackScene({ runtime }: { runtime: React.MutableRefObject<SceneRuntime>
     }
 
     initializedMode.current = 'lap';
-    state.progress = smoothProgress(state.progress, state.targetProgress, Math.min(delta, .05));
+    const capped = Math.min(delta, .05);
+    state.progress = smoothProgress(state.progress, state.targetProgress, capped, 9);
     const point = ovalPoint(state.progress);
     const tangent = ovalTangent(state.progress);
     const runner = runnerRef.current;
     if (runner) {
       runner.position.set(point.x, START_Y, point.z);
-      runner.rotation.y = Math.atan2(tangent.x, tangent.z);
+      const targetHeading = Math.atan2(tangent.x, tangent.z);
+      const currentHeading = heading.current;
+      let turn = targetHeading - currentHeading;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      heading.current = currentHeading + turn * (1 - Math.exp(-12 * capped));
+      runner.rotation.y = heading.current;
     }
 
     const desiredX = point.x - tangent.x * 4.6;
     const desiredZ = point.z - tangent.z * 4.6;
     cameraGoal.current.set(desiredX, 3.2, desiredZ);
-    camera.position.lerp(cameraGoal.current, 1 - Math.exp(-5 * delta));
+    camera.position.lerp(cameraGoal.current, 1 - Math.exp(-5 * capped));
     lookAt.current.set(point.x + tangent.x * 1.4, .28, point.z + tangent.z * 1.4);
     camera.lookAt(lookAt.current);
 
