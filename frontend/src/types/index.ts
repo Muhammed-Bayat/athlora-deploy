@@ -75,6 +75,17 @@ export interface EventWeatherForecast {
   windSpeedMaxKmh: number | null;
 }
 
+export interface CurrentWeather {
+  timezone: string;
+  temperatureC: number;
+  apparentTemperatureC: number;
+  humidityPercent: number;
+  isDay: boolean;
+  precipitationMm: number;
+  weatherCode: number;
+  windSpeedKmh: number;
+}
+
 export interface EventMutationPayload {
   type: EventType;
   discipline: Discipline;

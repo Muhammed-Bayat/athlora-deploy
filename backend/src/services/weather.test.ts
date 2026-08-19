@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../types/domain.js';
 import { getEvent } from './events.js';
-import { getEventWeatherForecast } from './weather.js';
+import { getCurrentWeather, getEventWeatherForecast } from './weather.js';
 
 vi.mock('./events.js', () => ({ getEvent: vi.fn() }));
 
@@ -221,6 +221,167 @@ describe('Open-Meteo event forecast', () => {
       },
     }));
     await expect(getEventWeatherForecast(USER_ID, EVENT_ID, invalidRain)).rejects.toMatchObject({
+      code: 'WEATHER_SERVICE_INVALID_RESPONSE',
+    });
+  });
+});
+
+function currentResponse(overrides: Record<string, unknown> = {}): Response {
+  return new Response(JSON.stringify({
+    timezone: 'Africa/Johannesburg',
+    current_units: {
+      time: 'iso8601',
+      interval: 'seconds',
+      temperature_2m: '°C',
+      relative_humidity_2m: '%',
+      apparent_temperature: '°C',
+      is_day: '',
+      precipitation: 'mm',
+      weather_code: 'wmo code',
+      wind_speed_10m: 'km/h',
+    },
+    current: {
+      time: '2026-08-18T12:00',
+      interval: 900,
+      temperature_2m: 24.8,
+      relative_humidity_2m: 62,
+      apparent_temperature: 25.1,
+      is_day: 1,
+      precipitation: 0,
+      weather_code: 2,
+      wind_speed_10m: 12.4,
+    },
+    ...overrides,
+  }));
+}
+
+describe('Open-Meteo current weather', () => {
+  it('requests one local current condition set and maps provider data to the API contract', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(currentResponse());
+
+    await expect(getCurrentWeather(-26.2041, 28.0473, fetcher)).resolves.toEqual({
+      timezone: 'Africa/Johannesburg',
+      temperatureC: 24.8,
+      apparentTemperatureC: 25.1,
+      humidityPercent: 62,
+      isDay: true,
+      precipitationMm: 0,
+      weatherCode: 2,
+      windSpeedKmh: 12.4,
+    });
+
+    const url = new URL(String(fetcher.mock.calls[0]?.[0]));
+    expect(url.origin + url.pathname).toBe('https://api.open-meteo.com/v1/forecast');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      latitude: '-26.2041',
+      longitude: '28.0473',
+      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
+      timezone: 'auto',
+      forecast_days: '1',
+      temperature_unit: 'celsius',
+      wind_speed_unit: 'kmh',
+    });
+    expect(fetcher.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it('accepts zero coordinates and reports night-time conditions', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(currentResponse({
+      current: {
+        time: '2026-08-18T20:00',
+        interval: 900,
+        temperature_2m: 14.2,
+        relative_humidity_2m: 88,
+        apparent_temperature: 13.9,
+        is_day: 0,
+        precipitation: 1.5,
+        weather_code: 61,
+        wind_speed_10m: 6.3,
+      },
+    }));
+
+    const result = await getCurrentWeather(0, 0, fetcher);
+    expect(result.isDay).toBe(false);
+    expect(result.weatherCode).toBe(61);
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain('latitude=0&longitude=0');
+  });
+
+  it('rejects out-of-range coordinates before contacting Open-Meteo', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(getCurrentWeather(91, 0, fetcher)).rejects.toMatchObject({
+      status: 422,
+      code: 'WEATHER_COORDINATES_INVALID',
+    });
+    await expect(getCurrentWeather(0, -181, fetcher)).rejects.toMatchObject({
+      status: 422,
+      code: 'WEATHER_COORDINATES_INVALID',
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('maps upstream failures and timeouts without exposing provider details', async () => {
+    const unavailable = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('provider secret detail', { status: 503 }),
+    );
+    await expect(getCurrentWeather(-26.2, 28.05, unavailable)).rejects.toMatchObject({
+      status: 502,
+      code: 'WEATHER_SERVICE_UNAVAILABLE',
+      message: 'The weather service is temporarily unavailable',
+    });
+
+    const timeout = new Error('provider timeout detail');
+    timeout.name = 'TimeoutError';
+    await expect(
+      getCurrentWeather(-26.2, 28.05, vi.fn<typeof fetch>().mockRejectedValue(timeout)),
+    ).rejects.toMatchObject({ status: 504, code: 'WEATHER_SERVICE_TIMEOUT' });
+  });
+
+  it('rejects valid JSON with a malformed shape, units, or metric range', async () => {
+    const nullBody = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('null', { headers: { 'Content-Type': 'application/json' } }),
+    );
+    await expect(getCurrentWeather(-26.2, 28.05, nullBody)).rejects.toMatchObject({
+      status: 502,
+      code: 'WEATHER_SERVICE_INVALID_RESPONSE',
+    });
+
+    const wrongUnits = vi.fn<typeof fetch>().mockResolvedValue(currentResponse({
+      current_units: {
+        time: 'iso8601', interval: 'seconds', temperature_2m: '°F',
+        relative_humidity_2m: '%', apparent_temperature: '°C', is_day: '',
+        precipitation: 'mm', weather_code: 'wmo code', wind_speed_10m: 'km/h',
+      },
+    }));
+    await expect(getCurrentWeather(-26.2, 28.05, wrongUnits)).rejects.toMatchObject({
+      code: 'WEATHER_SERVICE_INVALID_RESPONSE',
+    });
+
+    const invalidTimezone = vi.fn<typeof fetch>().mockResolvedValue(currentResponse({
+      timezone: 'Not/A_Timezone',
+    }));
+    await expect(getCurrentWeather(-26.2, 28.05, invalidTimezone)).rejects.toMatchObject({
+      code: 'WEATHER_SERVICE_INVALID_RESPONSE',
+    });
+
+    const invalidHumidity = vi.fn<typeof fetch>().mockResolvedValue(currentResponse({
+      current: {
+        time: '2026-08-18T12:00', interval: 900, temperature_2m: 24.8,
+        relative_humidity_2m: 120, apparent_temperature: 25.1, is_day: 1,
+        precipitation: 0, weather_code: 2, wind_speed_10m: 12.4,
+      },
+    }));
+    await expect(getCurrentWeather(-26.2, 28.05, invalidHumidity)).rejects.toMatchObject({
+      code: 'WEATHER_SERVICE_INVALID_RESPONSE',
+    });
+
+    const invalidCode = vi.fn<typeof fetch>().mockResolvedValue(currentResponse({
+      current: {
+        time: '2026-08-18T12:00', interval: 900, temperature_2m: 24.8,
+        relative_humidity_2m: 62, apparent_temperature: 25.1, is_day: 1,
+        precipitation: 0, weather_code: 999, wind_speed_10m: 12.4,
+      },
+    }));
+    await expect(getCurrentWeather(-26.2, 28.05, invalidCode)).rejects.toMatchObject({
       code: 'WEATHER_SERVICE_INVALID_RESPONSE',
     });
   });
