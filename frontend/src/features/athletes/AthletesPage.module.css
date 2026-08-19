@@ -44,51 +44,6 @@
   font: var(--font-weight-medium) var(--font-size-sm) var(--font-family-base);
 }
 
-.controls select {
-  appearance: none;
-  -webkit-appearance: none;
-  min-width: 148px;
-  height: 46px;
-  padding: 0 38px 0 14px;
-  border: 1px solid rgba(138, 233, 242, 0.13);
-  border-radius: 14px;
-  background:
-    linear-gradient(90deg, transparent, rgba(138, 233, 242, 0.28), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%238AE9F2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
-    linear-gradient(145deg, rgba(8, 31, 45, 0.92), rgba(3, 20, 31, 0.88));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 12px 32px rgba(0, 0, 0, 0.16);
-  color: #C8DCE4;
-  font: 650 12.5px var(--font-family-base);
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  outline: none;
-  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), color 0.2s var(--ease);
-}
-
-.controls select:hover {
-  transform: translateY(-1px);
-  border-color: rgba(138, 233, 242, 0.25);
-  background:
-    linear-gradient(90deg, transparent, rgba(138, 233, 242, 0.28), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%238AE9F2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
-    linear-gradient(145deg, rgba(10, 39, 55, 0.96), rgba(4, 24, 36, 0.92));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 15px 36px rgba(0, 0, 0, 0.2), 0 0 22px rgba(69, 190, 215, 0.045);
-  color: #F1FBFD;
-}
-
-.controls select:focus,
-.controls select:focus-visible {
-  border-color: rgba(138, 233, 242, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 0 0 3px rgba(138, 233, 242, 0.07), 0 16px 38px rgba(0, 0, 0, 0.2), 0 0 26px rgba(69, 190, 215, 0.075);
-  outline: none;
-}
-
-.controls select option {
-  background: #061824;
-  color: #DDECF2;
-  font-family: var(--font-family-base);
-}
-
 .search {
   display: flex;
   align-items: center;

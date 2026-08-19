@@ -4,6 +4,14 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 let getAccessToken: (() => Promise<string>) | undefined;
 let accessTokenGetterRegistration: symbol | undefined;
 
+// Try to read a stored token from localStorage on startup
+{
+  const stored = typeof window !== 'undefined' && localStorage.getItem('athlora_access_token');
+  if (stored) {
+    getAccessToken = async () => stored;
+  }
+}
+
 interface ApiData<T> {
   data: T;
 }

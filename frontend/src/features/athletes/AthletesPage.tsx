@@ -195,6 +195,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
           <Select
             id="squad-filter"
+            icon="squad"
             value={squad}
             onChange={(event) => setSquad(event.target.value)}
             options={[{ value: '', label: 'All squads' }, ...squads.map((value) => ({ value, label: value }))]}
@@ -202,6 +203,8 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
           <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
           <Select
             id="archive-filter"
+            icon="status"
+            dotColors={{ active: '#0092BC', archived: '#6B8792' }}
             value={archiveFilter}
             onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
             options={[

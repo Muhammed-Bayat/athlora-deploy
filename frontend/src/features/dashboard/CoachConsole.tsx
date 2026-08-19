@@ -79,7 +79,7 @@ function WeatherCanvas({ layers, precipitation, reducedMotion }: { layers: Reado
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || layersKey.length === 0 || reducedMotion) return;
+    if (!canvas || reducedMotion) return;
     const context = canvas.getContext('2d');
     if (!context) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
