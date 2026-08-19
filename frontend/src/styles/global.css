@@ -19,7 +19,7 @@ html {
 }
 
 html.theme-light {
-  background: #F4FBFC;
+  background: #BDD8E0;
   color-scheme: light;
 }
 
@@ -38,7 +38,10 @@ body {
 }
 
 html.theme-light body {
-  background: var(--mist-50);
+  background:
+    radial-gradient(980px 660px at 86% -5%, rgba(73, 195, 216, 0.27), transparent 58%),
+    radial-gradient(760px 560px at 3% 72%, rgba(0, 125, 164, 0.16), transparent 67%),
+    linear-gradient(180deg, #C3DEE5 0%, #D0E6EB 48%, #BBD6DE 100%);
 }
 
 h1,
@@ -87,16 +90,16 @@ textarea {
 }
 
 html.theme-light ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #B9D5DD;
 }
 
 html.theme-light ::-webkit-scrollbar-thumb {
-  background: rgba(0, 94, 131, 0.35);
-  border-color: transparent;
+  background: #86B9C6;
+  border-color: #B9D5DD;
 }
 
 html.theme-light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 94, 131, 0.55);
+  background: #6AA8B8;
 }
 
 :focus-visible {

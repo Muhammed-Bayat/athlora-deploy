@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AthletesPage } from '../athletes/AthletesPage';
 import { EventsPage } from '../events/EventsPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
@@ -54,6 +54,156 @@ interface LiveWeather {
 interface Coordinates {
   latitude: number;
   longitude: number;
+}
+
+interface Particle {
+  kind: 'rain' | 'snow' | 'spark';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  len: number;
+  alpha: number;
+  size: number;
+  phase: number;
+}
+
+function seededNoise(index: number, salt = 0): number {
+  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function WeatherCanvas({ layers, precipitation, reducedMotion }: { layers: ReadonlyArray<string>; precipitation: number; reducedMotion: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const layersKey = layers.join(',');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || layersKey.length === 0 || reducedMotion) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0;
+    let height = 0;
+    let rafId = 0;
+
+    const resizeCanvas = () => {
+      const rect = canvas.getBoundingClientRect();
+      width = Math.max(1, rect.width);
+      height = Math.max(1, rect.height);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+
+    const particles: Particle[] = [];
+    const precip = Number(precipitation) || 0;
+
+    if (layersKey.includes('rain')) {
+      const count = Math.min(125, 70 + Math.round(precip * 10));
+      for (let index = 0; index < count; index += 1) {
+        particles.push({
+          kind: 'rain',
+          x: seededNoise(index, 1) * width,
+          y: seededNoise(index, 2) * height,
+          vx: -(38 + seededNoise(index, 3) * 55),
+          vy: 560 + seededNoise(index, 4) * 440,
+          len: 14 + seededNoise(index, 5) * 28,
+          alpha: 0.2 + seededNoise(index, 6) * 0.46,
+          size: 0,
+          phase: 0,
+        });
+      }
+    }
+    if (layersKey.includes('snow')) {
+      for (let index = 0; index < 64; index += 1) {
+        particles.push({
+          kind: 'snow',
+          x: seededNoise(index, 7) * width,
+          y: seededNoise(index, 8) * height,
+          vx: -10 + seededNoise(index, 9) * 20,
+          vy: 30 + seededNoise(index, 10) * 48,
+          len: 0,
+          alpha: 0.28 + seededNoise(index, 12) * 0.5,
+          size: 1.5 + seededNoise(index, 11) * 3.8,
+          phase: seededNoise(index, 13) * Math.PI * 2,
+        });
+      }
+    }
+    if (layersKey.includes('sparks')) {
+      for (let index = 0; index < 42; index += 1) {
+        particles.push({
+          kind: 'spark',
+          x: seededNoise(index, 14) * width,
+          y: seededNoise(index, 15) * height,
+          vx: -(8 + seededNoise(index, 16) * 16),
+          vy: 8 + seededNoise(index, 17) * 18,
+          len: 0,
+          alpha: 0.48 + seededNoise(index, 19) * 0.46,
+          size: 1.05 + seededNoise(index, 18) * 2.45,
+          phase: seededNoise(index, 20) * Math.PI * 2,
+        });
+      }
+    }
+
+    let last = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min(0.034, (now - last) / 1000 || 0.016);
+      last = now;
+      context.clearRect(0, 0, width, height);
+
+      for (const particle of particles) {
+        if (particle.kind === 'rain') {
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 40 || particle.x < -60) { particle.x = Math.random() * width + 50; particle.y = -40; }
+          const slope = particle.vx / particle.vy;
+          context.beginPath();
+          context.moveTo(particle.x, particle.y);
+          context.lineTo(particle.x - slope * particle.len, particle.y - particle.len);
+          context.strokeStyle = `rgba(69, 190, 215, ${particle.alpha})`;
+          context.lineWidth = 1.2;
+          context.stroke();
+        } else if (particle.kind === 'snow') {
+          particle.phase += dt * 0.8;
+          particle.x += (particle.vx + Math.sin(particle.phase) * 13) * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 12) { particle.y = -12; particle.x = Math.random() * width; }
+          if (particle.x < -15) particle.x = width + 10;
+          if (particle.x > width + 15) particle.x = -10;
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          context.fillStyle = `rgba(138, 233, 242, ${particle.alpha})`;
+          context.fill();
+        } else {
+          particle.phase += dt * 0.55;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 10 || particle.x < -10) { particle.x = width + Math.random() * 80; particle.y = Math.random() * height * 0.42; }
+          const twinkle = 0.72 + Math.sin(particle.phase) * 0.24;
+          context.save();
+          context.shadowBlur = 14;
+          context.shadowColor = 'rgba(69, 190, 215, 0.95)';
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          context.fillStyle = `rgba(69, 190, 215, ${Math.max(0.34, particle.alpha * twinkle)})`;
+          context.fill();
+          context.restore();
+        }
+      }
+      rafId = requestAnimationFrame(frame);
+    };
+    rafId = requestAnimationFrame(frame);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, [layersKey, precipitation, reducedMotion]);
+
+  return <canvas ref={canvasRef} className={styles.weatherCanvas} aria-hidden="true" />;
 }
 
 function ConsoleIcon({ name }: { name: IconName }) {
@@ -123,8 +273,11 @@ export function CoachConsole() {
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
+  const [isNight, setIsNight] = useState(false);
+  const [weatherPrecipitation, setWeatherPrecipitation] = useState(4);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
+  const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const navigate = (view: ConsoleView, targetId?: string) => { setDestination({ view, targetId }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const updateDashboardCounts = (summary: DashboardSummary) => {
@@ -159,6 +312,8 @@ export function CoachConsole() {
             const base = atmosphere === 'fog' ? 'fog' : atmosphere === 'rain' ? 'rain' : atmosphere === 'snow' ? 'snow' : atmosphere === 'storm' ? 'storm' : atmosphere === 'cloudy' ? 'cloudy' : atmosphere === 'partly' ? 'partly' : 'clear';
             return data.isDay ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
           });
+          setIsNight(!data.isDay);
+          setWeatherPrecipitation(data.precipitationMm);
         })
         .catch(() => { /* Live readout is best-effort; fall back to the preset label. */ });
     };
@@ -187,13 +342,14 @@ export function CoachConsole() {
     ? `${liveWeather.label} — current conditions from ${liveWeather.source === 'device' ? 'approximate device location' : 'timezone fallback'}`
     : 'Live weather unavailable; using local atmosphere';
 
-  return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-enabled={weatherEnabled}>
+  const sceneLayers: string[] = [];
+  if (isNight) sceneLayers.push('sparks');
+  if (weather === 'rain' || weather === 'night-rain' || weather === 'storm') sceneLayers.push('rain');
+  if (weather === 'snow') sceneLayers.push('snow');
+
+  return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-night={weatherEnabled && isNight ? true : undefined} data-weather-enabled={weatherEnabled}>
     <div className={styles.weatherScene} aria-hidden="true">
-      <div className={styles.sun} /><div className={styles.moon} />
-      <div className={styles.cloudOne} /><div className={styles.cloudTwo} />
-      <i className={styles.rayOne} /><i className={styles.rayTwo} /><i className={styles.rayThree} /><i className={styles.rayFour} />
-      {(weather.includes('rain') || weather === 'storm') && Array.from({ length: 36 }, (_, index) => <i className={styles.rain} style={{ left: `${(index * 17) % 101}%`, animationDelay: `${-(index % 13) / 3}s` }} key={index} />)}
-      {weather === 'snow' && Array.from({ length: 30 }, (_, index) => <i className={styles.snow} style={{ left: `${(index * 23) % 101}%`, animationDelay: `${-(index % 11) / 2}s` }} key={index} />)}
+      <WeatherCanvas layers={sceneLayers} precipitation={weatherPrecipitation} reducedMotion={reducedMotion} />
       {weather === 'storm' && <i className={styles.lightning} />}
     </div>
     <aside className={styles.sidebar}>
@@ -211,10 +367,10 @@ export function CoachConsole() {
         <div className={styles.title}><h1>{PAGE_COPY[destination.view].title}</h1><p>{PAGE_COPY[destination.view].subtitle}</p></div>
         <div className={styles.weatherOrigin} aria-hidden="true"><i className={styles.sun} /><i className={styles.moon} /><i className={styles.cloudOne} /><i className={styles.cloudTwo} /></div>
         <div className={styles.topControls}>
-          <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather}><span>Weather FX</span><i><i /></i></button>
-          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
+          <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
+          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
-          <button type="button" className={styles.themeToggle} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark theme' : 'Switch to light theme'}><i />{themeLight ? 'Light' : 'Dark'}</button>
+          <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>
