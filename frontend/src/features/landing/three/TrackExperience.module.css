@@ -1,0 +1,38 @@
+.layer {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  visibility: hidden;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out, visibility 180ms;
+  contain: strict;
+}
+
+.layer canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.layer[data-mode='lap'] {
+  visibility: visible;
+  opacity: .45;
+}
+
+.layer[data-mode='static'] {
+  visibility: visible;
+  opacity: .2;
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .layer {
+    transition: none;
+  }
+
+  .layer[data-mode='static'] {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

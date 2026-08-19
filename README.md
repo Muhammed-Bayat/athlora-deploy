@@ -27,6 +27,7 @@ Non-monolithic: a **React + Vite + TypeScript** frontend talks to a separate **E
 |------------------|----------------------------------------|-----|
 | Frontend         | React + Vite + TypeScript (strict)     | Fast dev/build, strict typing, team-standard React |
 | Styling          | Plain CSS (CSS variables + modules)    | Design tokens from approved mockups, no runtime dependency |
+| Landing 3D       | Three.js + React Three Fiber           | Lazy-loaded procedural track reveal and scroll-driven cinematic lap |
 | Backend          | Node.js + Express + TypeScript         | Small hand-written REST API, shared TS types with frontend |
 | Database         | PostgreSQL (Neon)                      | Relational results/log data, UUIDs for offline-safe keys |
 | Auth             | Auth0                                  | Never hand-roll auth; hosted identity + JWT verification |
