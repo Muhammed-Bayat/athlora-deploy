@@ -1,5 +1,5 @@
 import { ApiError } from '../middleware/errors.js';
-import type { EventWeatherForecast } from '../types/domain.js';
+import type { CurrentWeather, EventWeatherForecast } from '../types/domain.js';
 import { getEvent } from './events.js';
 
 const FORECAST_DAYS = 16;
@@ -164,5 +164,102 @@ export async function getEventWeatherForecast(
     temperatureMaxC,
     precipitationProbabilityMaxPercent: precipitationProbability,
     windSpeedMaxKmh: windSpeed,
+  };
+}
+
+function finiteMetric(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) invalidResponse();
+  return value;
+}
+
+function finiteMetricRange(value: unknown, minimum: number, maximum: number): number {
+  const metric = finiteMetric(value);
+  if (metric < minimum || metric > maximum) invalidResponse();
+  return metric;
+}
+
+export async function getCurrentWeather(
+  latitude: unknown,
+  longitude: unknown,
+  fetcher: typeof fetch = fetch,
+): Promise<CurrentWeather> {
+  if (
+    typeof latitude !== 'number' || !Number.isFinite(latitude) ||
+    typeof longitude !== 'number' || !Number.isFinite(longitude) ||
+    latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180
+  ) {
+    throw new ApiError(
+      422,
+      'WEATHER_COORDINATES_INVALID',
+      'Latitude must be from -90 to 90 and longitude from -180 to 180',
+    );
+  }
+
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', String(latitude));
+  url.searchParams.set('longitude', String(longitude));
+  url.searchParams.set(
+    'current',
+    'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
+  );
+  url.searchParams.set('timezone', 'auto');
+  url.searchParams.set('forecast_days', '1');
+  url.searchParams.set('temperature_unit', 'celsius');
+  url.searchParams.set('wind_speed_unit', 'kmh');
+
+  let response: Response;
+  try {
+    response = await fetcher(url, { signal: AbortSignal.timeout(5_000) });
+  } catch (error) {
+    if (isTimeout(error)) {
+      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
+    }
+    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
+  }
+  if (!response.ok) {
+    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json() as unknown;
+  } catch (error) {
+    if (isTimeout(error)) {
+      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
+    }
+    invalidResponse();
+  }
+  if (!isRecord(body) || typeof body.timezone !== 'string' || !validTimezone(body.timezone) ||
+      !isRecord(body.current_units) || !isRecord(body.current)) {
+    invalidResponse();
+  }
+  const units = body.current_units;
+  if (
+    units.time !== 'iso8601' || units.interval !== 'seconds' ||
+    units.temperature_2m !== '°C' || units.relative_humidity_2m !== '%' ||
+    units.apparent_temperature !== '°C' || units.is_day !== '' ||
+    units.precipitation !== 'mm' || units.weather_code !== 'wmo code' ||
+    units.wind_speed_10m !== 'km/h'
+  ) {
+    invalidResponse();
+  }
+  const current = body.current;
+  if (typeof current.time !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(current.time)) {
+    invalidResponse();
+  }
+  const weatherCode = finiteMetric(current.weather_code);
+  if (!Number.isInteger(weatherCode) || !WEATHER_CODES.has(weatherCode)) invalidResponse();
+  const isDay = current.is_day;
+  if (isDay !== 0 && isDay !== 1) invalidResponse();
+
+  return {
+    timezone: body.timezone,
+    temperatureC: finiteMetric(current.temperature_2m),
+    apparentTemperatureC: finiteMetric(current.apparent_temperature),
+    humidityPercent: finiteMetricRange(current.relative_humidity_2m, 0, 100),
+    isDay: isDay === 1,
+    precipitationMm: finiteMetricRange(current.precipitation, 0, 500),
+    weatherCode,
+    windSpeedKmh: finiteMetricRange(current.wind_speed_10m, 0, 600),
   };
 }

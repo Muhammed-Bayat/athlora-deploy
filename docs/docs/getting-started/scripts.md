@@ -9,7 +9,7 @@ A reference for the npm scripts and CI that keeps the repo green.
 ## Root
 
 - `.gitignore`, `.editorconfig`, `README.md` (with the **AI Usage** section) at the repo root.
-- Mockups `SDP-Landing.html` and `SDP-Coach-Console.html` are tracked at the root as the design source of truth.
+- Mockups `SDP-Landing.html`, `SDP-Coach-Console.html` and `Athlora_Premium_Dashboard.html` (premium console redesign) are tracked at the root as the design source of truth.
 
 ## CI (Gitea Actions)
 

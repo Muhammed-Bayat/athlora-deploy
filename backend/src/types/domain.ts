@@ -68,6 +68,17 @@ export interface EventWeatherForecast {
   windSpeedMaxKmh: number | null;
 }
 
+export interface CurrentWeather {
+  timezone: string;
+  temperatureC: number;
+  apparentTemperatureC: number;
+  humidityPercent: number;
+  isDay: boolean;
+  precipitationMm: number;
+  weatherCode: number;
+  windSpeedKmh: number;
+}
+
 export const RSVP_STATUSES = ['pending', 'yes', 'no'] as const;
 export type RsvpStatus = (typeof RSVP_STATUSES)[number];
 

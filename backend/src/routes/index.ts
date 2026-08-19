@@ -7,6 +7,7 @@ import participantsRouter from './participants.js';
 import authRouter from './auth.js';
 import dashboardRouter from './dashboard.js';
 import statisticsRouter from './statistics.js';
+import weatherRouter from './weather.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
@@ -54,6 +55,7 @@ router.use(
   athletesRouter,
 );
 router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
+router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use(
   '/events',
   verifyAuth0Token,

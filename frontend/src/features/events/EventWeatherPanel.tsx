@@ -3,20 +3,8 @@ import { getEventWeather } from '../../api/events';
 import { ApiError } from '../../api/client';
 import { Button } from '../../components';
 import type { AthleticsEvent, EventWeatherForecast } from '../../types';
+import { weatherLabel } from '../../utils/weatherConditions';
 import styles from './EventsPage.module.css';
-
-function conditionLabel(code: number): string {
-  if (code === 0) return 'Clear sky';
-  if (code <= 2) return 'Partly cloudy';
-  if (code === 3) return 'Overcast';
-  if (code === 45 || code === 48) return 'Fog';
-  if (code >= 51 && code <= 67) return 'Rain';
-  if (code >= 71 && code <= 77) return 'Snow';
-  if (code >= 80 && code <= 82) return 'Rain showers';
-  if (code === 85 || code === 86) return 'Snow showers';
-  if (code >= 95 && code <= 99) return 'Thunderstorms';
-  return 'Conditions unavailable';
-}
 
 function unavailableMessage(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
@@ -64,7 +52,7 @@ export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
     <section className={styles.weatherPanel} aria-labelledby="event-weather-heading" aria-busy={loading}>
       <header>
         <div><p>Open-Meteo forecast</p><h3 id="event-weather-heading">Event-day weather</h3></div>
-        {forecast && <span>{conditionLabel(forecast.weatherCode)}</span>}
+        {forecast && <span>{weatherLabel(forecast.weatherCode)}</span>}
       </header>
 
       {!hasCoordinates && <p className={styles.inlineEmpty}>Add latitude and longitude to view the forecast.</p>}

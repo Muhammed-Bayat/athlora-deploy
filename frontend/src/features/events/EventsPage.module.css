@@ -10,9 +10,9 @@
 .viewHeader h1 {
   margin: 0;
   font-family: var(--font-display);
-  text-transform: uppercase;
-  font-size: 2.4rem;
-  letter-spacing: 0.03em;
+  font-size: 1.875rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   color: var(--console-ink);
 }
 
@@ -37,18 +37,12 @@
   flex-wrap: wrap;
 }
 
-.controls select,
 .segmented,
 .viewToggle {
   min-height: 44px;
   border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
   background: var(--console-control-surface);
-}
-
-.controls select {
-  color: var(--console-control-text);
-  padding-inline: var(--space-3);
 }
 
 .segmented,
@@ -75,7 +69,6 @@
   color: var(--console-selected-text);
 }
 
-.controls select:focus-visible,
 .segmented button:focus-visible,
 .viewToggle button:focus-visible,
 .eventOpen:focus-visible,
@@ -184,6 +177,12 @@
   background: var(--console-soft);
   color: var(--console-ink);
   cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.calendarGrid > button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--console-cyan) 40%, transparent);
+  transform: translateY(-1px);
 }
 
 .calendarGrid > button:disabled {
@@ -238,6 +237,17 @@
   border-color: var(--console-edge);
   background: var(--console-surface);
   box-shadow: var(--console-shadow);
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.eventCard:hover {
+  border-color: color-mix(in srgb, var(--console-cyan) 45%, var(--console-edge));
+  transform: translateY(-1px);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--console-shadow) 82%, transparent);
+}
+
+.eventCard:focus-within {
+  border-color: color-mix(in srgb, var(--console-cyan) 55%, var(--console-edge));
 }
 
 .eventOpen {
@@ -259,7 +269,8 @@
   place-items: center;
   min-height: 64px;
   border-radius: var(--radius-sm);
-  background: var(--console-selected-surface);
+  background: linear-gradient(135deg, var(--console-selected-surface), color-mix(in srgb, var(--console-cyan) 14%, var(--console-soft)));
+  border: 1px solid color-mix(in srgb, var(--console-cyan) 26%, transparent);
   color: var(--console-selected-text);
 }
 
@@ -371,7 +382,7 @@
 .weatherPanel {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
   padding: var(--space-4);
   border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
@@ -438,7 +449,7 @@
 .participants {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
   padding: var(--space-4);
   border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
@@ -666,9 +677,17 @@
 .form select,
 .assignment select,
 .participantList select {
-  border-color: var(--console-control-border);
-  background: var(--console-control-surface);
-  color: var(--console-control-text);
+  border-color: rgba(138, 233, 242, 0.12);
+  background: #061824;
+  color: #E5F1F5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+}
+
+.form select option,
+.assignment select option,
+.participantList select option {
+  background: #061824;
+  color: #DDECF2;
 }
 
 .form input::placeholder {
@@ -707,6 +726,55 @@
   to { opacity: 1; transform: translateY(-2px); }
 }
 
+:global(html.theme-light) .controls select {
+  border-color: rgba(0, 94, 131, 0.10);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.22), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%230086AC' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
+    linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(237, 248, 250, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 10px 30px rgba(0, 48, 72, 0.055);
+  color: #315D6E;
+}
+
+:global(html.theme-light) .controls select:hover {
+  border-color: rgba(0, 146, 188, 0.21);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.22), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%230086AC' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
+    linear-gradient(145deg, #FFFFFF, #EAF8FA);
+  box-shadow: inset 0 1px 0 #fff, 0 14px 34px rgba(0, 48, 72, 0.08), 0 0 20px rgba(69, 190, 215, 0.04);
+  color: #123F50;
+}
+
+:global(html.theme-light) .controls select:focus,
+:global(html.theme-light) .controls select:focus-visible {
+  border-color: rgba(0, 146, 188, 0.36);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 3px rgba(0, 146, 188, 0.07), 0 14px 34px rgba(0, 48, 72, 0.08);
+  outline: none;
+}
+
+:global(html.theme-light) .controls select option {
+  background: #F7FCFD;
+  color: #173E50;
+}
+
+:global(html.theme-light) .form input,
+:global(html.theme-light) .form select,
+:global(html.theme-light) .assignment select,
+:global(html.theme-light) .participantList select {
+  border-color: rgba(0, 78, 105, 0.15);
+  background: #CBE4E9;
+  color: #173E50;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:global(html.theme-light) .form select option,
+:global(html.theme-light) .assignment select option,
+:global(html.theme-light) .participantList select option {
+  background: #F7FCFD;
+  color: #173E50;
+}
+
 @media (max-width: 980px) {
   .viewHeader {
     display: block;
@@ -725,7 +793,6 @@
     flex: 1;
   }
 
-  .controls select,
   .controls > button {
     flex: 1;
   }
