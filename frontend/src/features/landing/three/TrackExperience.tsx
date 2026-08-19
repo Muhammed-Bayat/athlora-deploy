@@ -13,8 +13,10 @@ interface SceneRuntime {
   invalidate: (() => void) | null;
 }
 
-const STATIC_POSITION = new THREE.Vector3(10, 10, 13);
-const HALF_STRAIGHT = 4.5;
+const STATIC_POSITION = new THREE.Vector3(12, 12, 15);
+const HALF_STRAIGHT = 5.2;
+const RUNNER_RADIUS = 4.5;
+const LANE_RADII = [3.7, 3.92, 4.14, 4.36, 4.58, 4.8, 5.02, 5.24];
 
 function stadiumShape(radius: number): THREE.Shape {
   const shape = new THREE.Shape();
@@ -29,12 +31,12 @@ function stadiumShape(radius: number): THREE.Shape {
 
 function TrackModel() {
   const trackShape = useMemo(() => {
-    const shape = stadiumShape(4.72);
-    shape.holes.push(stadiumShape(3.18));
+    const shape = stadiumShape(LANE_RADII[LANE_RADII.length - 1]);
+    shape.holes.push(stadiumShape(LANE_RADII[0]));
     return shape;
   }, []);
   const infieldShape = useMemo(() => stadiumShape(3.12), []);
-  const laneCurves = useMemo(() => [3.18, 3.4, 3.62, 3.84, 4.06, 4.28, 4.5, 4.72].map((radius) => {
+  const laneCurves = useMemo(() => LANE_RADII.map((radius) => {
     const points = Array.from({ length: 193 }, (_, index) => {
       const point = ovalPoint(index / 192, radius, HALF_STRAIGHT);
       return new THREE.Vector3(point.x, .11, point.z);
@@ -66,7 +68,7 @@ function TrackModel() {
           </mesh>
         );
       })}
-      <mesh position={[-HALF_STRAIGHT + .28, .13, -3.95]} rotation-x={-Math.PI / 2}>
+      <mesh position={[-HALF_STRAIGHT, .13, -RUNNER_RADIUS]} rotation-x={-Math.PI / 2}>
         <planeGeometry args={[.055, 1.48]} />
         <meshStandardMaterial color="#efffff" roughness={.45} emissive="#69d9e7" emissiveIntensity={.1} />
       </mesh>
@@ -78,9 +80,10 @@ const START_Y = 0.08;
 
 const SKIN = '#eabfa0';
 const SKIN_DARK = '#c9986f';
-const SINGLET = '#42d3df';
-const SHORTS = '#0f6b85';
-const INK = '#182e48';
+const SINGLET = '#5CCCFE'; // logo cyan
+const SHORTS = '#79F2E3'; // logo mint
+const INK = '#001D3C'; // logo navy / brand ink
+const SHOE = '#0E6F92'; // logo cyan-teal depth
 
 /** A stylized articulated humanoid sprinter built from primitives. Faces +Z (forward). */
 function Runner() {
@@ -170,7 +173,7 @@ function Runner() {
             </mesh>
             <mesh position-y={-.16} castShadow>
               <boxGeometry args={[.09, .05, .18]} />
-              <meshStandardMaterial color={INK} roughness={.6} />
+              <meshStandardMaterial color={SHOE} roughness={.6} />
             </mesh>
           </group>
         </group>
@@ -271,8 +274,7 @@ export function TrackExperience() {
     const measure = () => {
       const pageY = window.scrollY;
       featureTop = features.getBoundingClientRect().top + pageY;
-      const footerTop = footer.getBoundingClientRect().top + pageY;
-      lapEnd = Math.max(featureTop + 1, footerTop);
+      lapEnd = Math.max(featureTop + 1, document.documentElement.scrollHeight - window.innerHeight);
     };
 
     const setMode = (mode: SceneMode) => {
@@ -288,7 +290,7 @@ export function TrackExperience() {
         setMode(y >= featureTop && y < lapEnd ? 'static' : 'hidden');
         return;
       }
-      if (y >= featureTop && y < lapEnd) {
+      if (y >= featureTop) {
         runtime.current.targetProgress = lapProgress(y, featureTop, lapEnd);
         setMode('lap');
         runtime.current.invalidate?.();

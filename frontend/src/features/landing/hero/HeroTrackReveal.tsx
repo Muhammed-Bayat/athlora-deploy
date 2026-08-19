@@ -137,7 +137,7 @@ export function HeroTrackReveal() {
               <ellipse className={styles.infieldHi} cx="815" cy="496" rx="566" ry="204" />
 
               <g>
-                <g transform="translate(0 6)">
+                <g transform="translate(0 9)">
                   <path className={styles.throwDepth} d="M1070 486 L491 336" />
                   <path className={styles.throwDepth} d="M1070 514 L491 664" />
                   <path className={styles.throwDepth} d="M886.2 548.8 A195 195 0 0 1 886.2 451.2" />
@@ -171,7 +171,7 @@ export function HeroTrackReveal() {
                 <text className={styles.throwNum} x="486" y="488">90</text><text className={styles.throwUnit} x="511" y="488">m</text>
               </g>
 
-              <g transform="translate(0 7)">
+              <g transform="translate(0 10)">
                 <ellipse className={styles.laneDepth} cx="815" cy="500" rx="768" ry="398" />
                 <ellipse className={styles.laneDepth} cx="815" cy="500" rx="746" ry="376" />
                 <ellipse className={styles.laneDepth} cx="815" cy="500" rx="724" ry="354" />

@@ -3,8 +3,8 @@ export interface TrackPoint {
   z: number;
 }
 
-const DEFAULT_HALF_STRAIGHT = 4.5;
-const DEFAULT_RADIUS = 3.9;
+const DEFAULT_HALF_STRAIGHT = 5.2;
+const DEFAULT_RADIUS = 4.5;
 
 export function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
