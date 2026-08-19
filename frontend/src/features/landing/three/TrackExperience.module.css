@@ -1,6 +1,4 @@
 .layer {
-  --track-pointer-x: 76vw;
-  --track-pointer-y: 42vh;
   position: fixed;
   z-index: 2;
   inset: 0;
@@ -18,17 +16,9 @@
   height: 100% !important;
 }
 
-.layer[data-mode='hero'] {
-  z-index: 2;
-  visibility: visible;
-  opacity: .82;
-  -webkit-mask-image: radial-gradient(circle 210px at var(--track-pointer-x) var(--track-pointer-y), #000 58%, rgba(0, 0, 0, .75) 72%, transparent 100%);
-  mask-image: radial-gradient(circle 210px at var(--track-pointer-x) var(--track-pointer-y), #000 58%, rgba(0, 0, 0, .75) 72%, transparent 100%);
-}
-
 .layer[data-mode='lap'] {
   visibility: visible;
-  opacity: .25;
+  opacity: .45;
 }
 
 .layer[data-mode='static'] {

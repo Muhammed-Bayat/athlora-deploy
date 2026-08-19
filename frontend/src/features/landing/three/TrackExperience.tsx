@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import styles from './TrackExperience.module.css';
 import { lapProgress, ovalPoint, ovalTangent, smoothProgress } from './trackMath';
 
-type SceneMode = 'hidden' | 'hero' | 'lap' | 'static';
+type SceneMode = 'hidden' | 'lap' | 'static';
 
 interface SceneRuntime {
   mode: SceneMode;
@@ -13,8 +13,6 @@ interface SceneRuntime {
   invalidate: (() => void) | null;
 }
 
-const HERO_POSITION = new THREE.Vector3(11, 8.2, 12.5);
-const HERO_TARGET = new THREE.Vector3(0, 0, 0);
 const STATIC_POSITION = new THREE.Vector3(10, 10, 13);
 const HALF_STRAIGHT = 4.5;
 
@@ -54,16 +52,129 @@ function TrackModel() {
         <shapeGeometry args={[infieldShape, 64]} />
         <meshStandardMaterial color="#062d36" roughness={.98} metalness={0} />
       </mesh>
-      {laneCurves.map((curve, index) => (
-        <mesh key={index}>
-          <tubeGeometry args={[curve, 192, index === 0 || index === laneCurves.length - 1 ? .022 : .014, 5, true]} />
-          <meshStandardMaterial color={index === 0 || index === laneCurves.length - 1 ? '#dffcff' : '#78dce8'} roughness={.54} emissive="#0d5366" emissiveIntensity={.12} />
-        </mesh>
-      ))}
+      {laneCurves.map((curve, index) => {
+        const edge = index === 0 || index === laneCurves.length - 1;
+        return (
+          <mesh key={index}>
+            <tubeGeometry args={[curve, 192, edge ? .03 : .022, 6, true]} />
+            <meshStandardMaterial
+              color={edge ? '#eafdff' : '#9fe8f0'}
+              roughness={.4}
+              emissive={edge ? '#3ea9bf' : '#1a7f9a'}
+              emissiveIntensity={.42}
+            />
+          </mesh>
+        );
+      })}
       <mesh position={[-HALF_STRAIGHT + .28, .13, -3.95]} rotation-x={-Math.PI / 2}>
         <planeGeometry args={[.055, 1.48]} />
         <meshStandardMaterial color="#efffff" roughness={.45} emissive="#69d9e7" emissiveIntensity={.1} />
       </mesh>
+    </group>
+  );
+}
+
+const START_Y = 0.08;
+
+const SKIN = '#eabfa0';
+const SKIN_DARK = '#c9986f';
+const SINGLET = '#42d3df';
+const SHORTS = '#0f6b85';
+const INK = '#182e48';
+
+/** A stylized articulated humanoid sprinter built from primitives. Faces +Z (forward). */
+function Runner() {
+  const torso = useRef<THREE.Group>(null);
+  const armL = useRef<THREE.Group>(null);
+  const armR = useRef<THREE.Group>(null);
+  const foreL = useRef<THREE.Group>(null);
+  const foreR = useRef<THREE.Group>(null);
+  const legL = useRef<THREE.Group>(null);
+  const legR = useRef<THREE.Group>(null);
+  const shinL = useRef<THREE.Group>(null);
+  const shinR = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime() * 7.2;
+    const swing = Math.sin(t);
+    const opp = Math.sin(t + Math.PI);
+    const rotate = (target: THREE.Group | null, x: number) => {
+      if (target) target.rotation.x = x;
+    };
+    rotate(armL.current, swing * .85 - .08);
+    rotate(armR.current, opp * .85 - .08);
+    rotate(foreL.current, .18 + Math.max(0, -swing) * .45);
+    rotate(foreR.current, .18 + Math.max(0, -opp) * .45);
+    rotate(legL.current, opp * .72);
+    rotate(legR.current, swing * .72);
+    rotate(shinL.current, .08 - Math.max(0, -opp) * .5);
+    rotate(shinR.current, .08 - Math.max(0, -swing) * .5);
+    if (torso.current) {
+      torso.current.rotation.x = Math.sin(t * 2) * .03 - .13;
+      torso.current.position.y = .56 + Math.abs(Math.cos(t)) * .04;
+    }
+  });
+
+  return (
+    <group>
+      {/* Torso / singlet */}
+      <group ref={torso} position={[0, .56, 0]}>
+        <mesh position-y={.12} castShadow>
+          <capsuleGeometry args={[.085, .26, 6, 12]} />
+          <meshStandardMaterial color={SINGLET} roughness={.5} metalness={.05} />
+        </mesh>
+        {/* Head */}
+        <mesh position-y={.32} castShadow>
+          <sphereGeometry args={[.1, 16, 12]} />
+          <meshStandardMaterial color={INK} roughness={.7} />
+        </mesh>
+      </group>
+
+      {/* Shorts */}
+      <mesh position={[0, .37, 0]} castShadow>
+        <boxGeometry args={[.2, .08, .13]} />
+        <meshStandardMaterial color={SHORTS} roughness={.6} />
+      </mesh>
+
+      {/* Arms */}
+      {[{ ref: armL, side: -1 }, { ref: armR, side: 1 }].map(({ ref, side }) => (
+        <group key={side} ref={ref} position={[side * .14, .72, 0]}>
+          <mesh position-y={-.1} castShadow>
+            <capsuleGeometry args={[.042, .15, 4, 8]} />
+            <meshStandardMaterial color={SKIN} roughness={.55} />
+          </mesh>
+          <group ref={side === -1 ? foreL : foreR} position={[0, -.2, 0]}>
+            <mesh position-y={-.08} castShadow>
+              <capsuleGeometry args={[.036, .13, 4, 8]} />
+              <meshStandardMaterial color={SKIN_DARK} roughness={.55} />
+            </mesh>
+            <mesh position-y={-.165} castShadow>
+              <sphereGeometry args={[.045, 8, 6]} />
+              <meshStandardMaterial color={SKIN} roughness={.6} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+
+      {/* Legs */}
+      {[{ ref: legL, shin: shinL, side: -1 }, { ref: legR, shin: shinR, side: 1 }].map(({ ref, shin, side }) => (
+        <group key={side} ref={ref} position={[side * .075, .4, 0]}>
+          <mesh position-y={-.09} castShadow>
+            <capsuleGeometry args={[.05, .14, 4, 8]} />
+            <meshStandardMaterial color={SKIN} roughness={.55} />
+          </mesh>
+          <group ref={shin} position={[0, -.18, 0]}>
+            <mesh position-y={-.07} castShadow>
+              <capsuleGeometry args={[.042, .13, 4, 8]} />
+              <meshStandardMaterial color={SKIN_DARK} roughness={.55} />
+            </mesh>
+            <mesh position-y={-.16} castShadow>
+              <boxGeometry args={[.09, .05, .18]} />
+              <meshStandardMaterial color={INK} roughness={.6} />
+            </mesh>
+          </group>
+        </group>
+      ))}
     </group>
   );
 }
@@ -88,10 +199,10 @@ function TrackScene({ runtime }: { runtime: React.MutableRefObject<SceneRuntime>
     const state = runtime.current;
     if (state.mode === 'hidden') return;
 
-    if (state.mode === 'hero' || state.mode === 'static') {
+    if (state.mode === 'static') {
       if (initializedMode.current !== state.mode) {
-        camera.position.copy(state.mode === 'hero' ? HERO_POSITION : STATIC_POSITION);
-        camera.lookAt(HERO_TARGET);
+        camera.position.copy(STATIC_POSITION);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
         camera.updateProjectionMatrix();
         initializedMode.current = state.mode;
       }
@@ -104,7 +215,7 @@ function TrackScene({ runtime }: { runtime: React.MutableRefObject<SceneRuntime>
     const tangent = ovalTangent(state.progress);
     const runner = runnerRef.current;
     if (runner) {
-      runner.position.set(point.x, .08, point.z);
+      runner.position.set(point.x, START_Y, point.z);
       runner.rotation.y = Math.atan2(tangent.x, tangent.z);
     }
 
@@ -133,15 +244,8 @@ function TrackScene({ runtime }: { runtime: React.MutableRefObject<SceneRuntime>
       />
       <group>
         <TrackModel />
-        <group ref={runnerRef} position={[start.x, .08, start.z]}>
-          <mesh position-y={.42} castShadow>
-            <capsuleGeometry args={[.13, .45, 4, 8]} />
-            <meshStandardMaterial color="#42d3df" roughness={.5} />
-          </mesh>
-          <mesh position-y={.84} castShadow>
-            <sphereGeometry args={[.14, 12, 8]} />
-            <meshStandardMaterial color="#182e48" roughness={.72} />
-          </mesh>
+        <group ref={runnerRef} position={[start.x, START_Y, start.z]}>
+          <Runner />
         </group>
       </group>
     </>
@@ -154,36 +258,21 @@ export function TrackExperience() {
 
   useEffect(() => {
     const layer = layerRef.current;
-    const top = document.querySelector<HTMLElement>('#top');
     const features = document.querySelector<HTMLElement>('#features');
     const footer = document.querySelector<HTMLElement>('footer');
-    if (!layer || !top || !features || !footer) return;
+    if (!layer || !features || !footer) return;
     const currentRuntime = runtime.current;
 
     const compactQuery = window.matchMedia('(max-width: 900px)');
     const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const finePointerQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
     let featureTop = 0;
     let lapEnd = 0;
-    let heroTop = 0;
-    let heroBottom = 0;
-    let heroLeft = 0;
-    let heroRight = 0;
-    let pointerFrame = 0;
-    let pointerX = window.innerWidth * .76;
-    let pointerY = window.innerHeight * .42;
-    let pointerInside = false;
 
     const measure = () => {
       const pageY = window.scrollY;
       featureTop = features.getBoundingClientRect().top + pageY;
       const footerTop = footer.getBoundingClientRect().top + pageY;
       lapEnd = Math.max(featureTop + 1, footerTop);
-      const heroRect = top.getBoundingClientRect();
-      heroTop = heroRect.top + pageY;
-      heroBottom = heroRect.bottom + pageY;
-      heroLeft = heroRect.left;
-      heroRight = heroRect.right;
     };
 
     const setMode = (mode: SceneMode) => {
@@ -195,9 +284,6 @@ export function TrackExperience() {
 
     const updateFromScroll = () => {
       const y = window.scrollY;
-      const pointerPageY = pointerY + y;
-      pointerInside = pointerX >= heroLeft && pointerX <= heroRight && pointerPageY >= heroTop && pointerPageY <= heroBottom;
-
       if (compactQuery.matches || reducedQuery.matches) {
         setMode(y >= featureTop && y < lapEnd ? 'static' : 'hidden');
         return;
@@ -206,32 +292,9 @@ export function TrackExperience() {
         runtime.current.targetProgress = lapProgress(y, featureTop, lapEnd);
         setMode('lap');
         runtime.current.invalidate?.();
-      } else if (pointerInside && finePointerQuery.matches && y >= heroTop && y < heroBottom) {
-        setMode('hero');
       } else {
         setMode('hidden');
       }
-    };
-
-    const updatePointer = () => {
-      pointerFrame = 0;
-      layer.style.setProperty('--track-pointer-x', `${pointerX}px`);
-      layer.style.setProperty('--track-pointer-y', `${pointerY}px`);
-      updateFromScroll();
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (!finePointerQuery.matches || compactQuery.matches || reducedQuery.matches) return;
-      pointerX = event.clientX;
-      pointerY = event.clientY;
-      const pointerPageY = event.clientY + window.scrollY;
-      pointerInside = event.clientX >= heroLeft && event.clientX <= heroRight && pointerPageY >= heroTop && pointerPageY <= heroBottom;
-      if (!pointerFrame) pointerFrame = window.requestAnimationFrame(updatePointer);
-    };
-
-    const onHeroLeave = () => {
-      pointerInside = false;
-      setMode('hidden');
     };
 
     const onResize = () => {
@@ -242,26 +305,20 @@ export function TrackExperience() {
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
 
     measure();
-    updatePointer();
     updateFromScroll();
     window.addEventListener('scroll', updateFromScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    top.addEventListener('pointerleave', onHeroLeave, { passive: true });
     compactQuery.addEventListener('change', onResize);
     reducedQuery.addEventListener('change', onResize);
-    resizeObserver?.observe(top);
+    resizeObserver?.observe(features);
     resizeObserver?.observe(footer);
 
     return () => {
       window.removeEventListener('scroll', updateFromScroll);
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('pointermove', onPointerMove);
-      top.removeEventListener('pointerleave', onHeroLeave);
       compactQuery.removeEventListener('change', onResize);
       reducedQuery.removeEventListener('change', onResize);
       resizeObserver?.disconnect();
-      if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
       currentRuntime.mode = 'hidden';
     };
   }, []);
@@ -273,7 +330,7 @@ export function TrackExperience() {
         frameloop="demand"
         dpr={[1, 1.5]}
         shadows
-        camera={{ fov: 38, near: .1, far: 80, position: HERO_POSITION.toArray() }}
+        camera={{ fov: 38, near: .1, far: 80, position: STATIC_POSITION.toArray() }}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;

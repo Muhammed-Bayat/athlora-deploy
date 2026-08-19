@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import styles from './LandingPage.module.css';
+import { HeroTrackReveal } from './hero/HeroTrackReveal';
 
 const TrackExperience = lazy(() =>
   import('./three/TrackExperience').then((module) => ({ default: module.TrackExperience })),
@@ -245,6 +246,7 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
 
       <main>
         <section id="top" className={styles.hero} aria-labelledby="landing-title">
+          <HeroTrackReveal />
           <div className={styles.heroInner}>
             <div className={styles.heroCopy}>
               <p className={styles.heroBadge}><span/>Built for track & field coaches</p>
