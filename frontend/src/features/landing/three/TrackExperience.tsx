@@ -78,14 +78,13 @@ function TrackModel() {
 
 const START_Y = 0.08;
 
-const SKIN = '#eabfa0';
-const SKIN_DARK = '#c9986f';
-const SINGLET = '#5CCCFE'; // logo cyan
-const SHORTS = '#79F2E3'; // logo mint
-const INK = '#001D3C'; // logo navy / brand ink
-const SHOE = '#0E6F92'; // logo cyan-teal depth
+const LOGO_NAVY = '#001D3C';
+const LOGO_CYAN = '#5CCCFE';
+const LOGO_MINT = '#79F2E3';
 
-/** A stylized articulated humanoid sprinter built from primitives. Faces +Z (forward). */
+/** A stylized humanoid sprinter built from overlapping primitives so every joint
+ *  connects. Painted entirely in the logo palette (no clothes, no skin) and
+ *  faces +Z (forward). */
 function Runner() {
   const torso = useRef<THREE.Group>(null);
   const armL = useRef<THREE.Group>(null);
@@ -114,70 +113,64 @@ function Runner() {
     rotate(shinR.current, .08 - Math.max(0, -swing) * .5);
     if (torso.current) {
       torso.current.rotation.x = Math.sin(t * 2) * .03 - .13;
-      torso.current.position.y = .56 + Math.abs(Math.cos(t)) * .04;
+      torso.current.position.y = .58 + Math.abs(Math.cos(t)) * .04;
     }
   });
 
   return (
     <group>
-      {/* Torso / singlet */}
-      <group ref={torso} position={[0, .56, 0]}>
-        <mesh position-y={.12} castShadow>
-          <capsuleGeometry args={[.085, .26, 6, 12]} />
-          <meshStandardMaterial color={SINGLET} roughness={.5} metalness={.05} />
+      <group ref={torso} position={[0, .58, 0]}>
+        {/* Torso */}
+        <mesh position-y={0} castShadow>
+          <capsuleGeometry args={[.11, .24, 8, 16]} />
+          <meshStandardMaterial color={LOGO_CYAN} roughness={.45} metalness={.05} />
         </mesh>
-        {/* Head */}
-        <mesh position-y={.32} castShadow>
-          <sphereGeometry args={[.1, 16, 12]} />
-          <meshStandardMaterial color={INK} roughness={.7} />
+        {/* Head (sits into the torso top) */}
+        <mesh position-y={.30} castShadow>
+          <sphereGeometry args={[.10, 20, 14]} />
+          <meshStandardMaterial color={LOGO_NAVY} roughness={.6} />
         </mesh>
+
+        {/* Arms pivot on the shoulder, overlapping the torso */}
+        {[{ ref: armL, fore: foreL, side: -1 }, { ref: armR, fore: foreR, side: 1 }].map(({ ref, fore, side }) => (
+          <group key={side} ref={ref} position={[side * .15, .13, 0]}>
+            <mesh position-y={-.11} castShadow>
+              <capsuleGeometry args={[.04, .16, 6, 10]} />
+              <meshStandardMaterial color={LOGO_CYAN} roughness={.45} />
+            </mesh>
+            <group ref={fore} position={[0, -.2, 0]}>
+              <mesh position-y={-.07} castShadow>
+                <capsuleGeometry args={[.036, .13, 6, 10]} />
+                <meshStandardMaterial color={LOGO_MINT} roughness={.45} />
+              </mesh>
+              <mesh position-y={-.155} castShadow>
+                <sphereGeometry args={[.045, 12, 8]} />
+                <meshStandardMaterial color={LOGO_MINT} roughness={.5} />
+              </mesh>
+            </group>
+          </group>
+        ))}
+
+        {/* Legs pivot on the hip, overlapping the torso bottom */}
+        {[{ ref: legL, shin: shinL, side: -1 }, { ref: legR, shin: shinR, side: 1 }].map(({ ref, shin, side }) => (
+          <group key={side} ref={ref} position={[side * .08, -.24, 0]}>
+            <mesh position-y={-.1} castShadow>
+              <capsuleGeometry args={[.05, .15, 6, 10]} />
+              <meshStandardMaterial color={LOGO_MINT} roughness={.45} />
+            </mesh>
+            <group ref={shin} position={[0, -.2, 0]}>
+              <mesh position-y={-.07} castShadow>
+                <capsuleGeometry args={[.042, .13, 6, 10]} />
+                <meshStandardMaterial color={LOGO_CYAN} roughness={.45} />
+              </mesh>
+              <mesh position-y={-.155} castShadow>
+                <boxGeometry args={[.09, .05, .18]} />
+                <meshStandardMaterial color={LOGO_NAVY} roughness={.5} />
+              </mesh>
+            </group>
+          </group>
+        ))}
       </group>
-
-      {/* Shorts */}
-      <mesh position={[0, .37, 0]} castShadow>
-        <boxGeometry args={[.2, .08, .13]} />
-        <meshStandardMaterial color={SHORTS} roughness={.6} />
-      </mesh>
-
-      {/* Arms */}
-      {[{ ref: armL, side: -1 }, { ref: armR, side: 1 }].map(({ ref, side }) => (
-        <group key={side} ref={ref} position={[side * .14, .72, 0]}>
-          <mesh position-y={-.1} castShadow>
-            <capsuleGeometry args={[.042, .15, 4, 8]} />
-            <meshStandardMaterial color={SKIN} roughness={.55} />
-          </mesh>
-          <group ref={side === -1 ? foreL : foreR} position={[0, -.2, 0]}>
-            <mesh position-y={-.08} castShadow>
-              <capsuleGeometry args={[.036, .13, 4, 8]} />
-              <meshStandardMaterial color={SKIN_DARK} roughness={.55} />
-            </mesh>
-            <mesh position-y={-.165} castShadow>
-              <sphereGeometry args={[.045, 8, 6]} />
-              <meshStandardMaterial color={SKIN} roughness={.6} />
-            </mesh>
-          </group>
-        </group>
-      ))}
-
-      {/* Legs */}
-      {[{ ref: legL, shin: shinL, side: -1 }, { ref: legR, shin: shinR, side: 1 }].map(({ ref, shin, side }) => (
-        <group key={side} ref={ref} position={[side * .075, .4, 0]}>
-          <mesh position-y={-.09} castShadow>
-            <capsuleGeometry args={[.05, .14, 4, 8]} />
-            <meshStandardMaterial color={SKIN} roughness={.55} />
-          </mesh>
-          <group ref={shin} position={[0, -.18, 0]}>
-            <mesh position-y={-.07} castShadow>
-              <capsuleGeometry args={[.042, .13, 4, 8]} />
-              <meshStandardMaterial color={SKIN_DARK} roughness={.55} />
-            </mesh>
-            <mesh position-y={-.16} castShadow>
-              <boxGeometry args={[.09, .05, .18]} />
-              <meshStandardMaterial color={SHOE} roughness={.6} />
-            </mesh>
-          </group>
-        </group>
-      ))}
     </group>
   );
 }
