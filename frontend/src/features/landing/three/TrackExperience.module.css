@@ -1,0 +1,48 @@
+.layer {
+  --track-pointer-x: 76vw;
+  --track-pointer-y: 42vh;
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  visibility: hidden;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out, visibility 180ms;
+  contain: strict;
+}
+
+.layer canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.layer[data-mode='hero'] {
+  z-index: 2;
+  visibility: visible;
+  opacity: .82;
+  -webkit-mask-image: radial-gradient(circle 210px at var(--track-pointer-x) var(--track-pointer-y), #000 58%, rgba(0, 0, 0, .75) 72%, transparent 100%);
+  mask-image: radial-gradient(circle 210px at var(--track-pointer-x) var(--track-pointer-y), #000 58%, rgba(0, 0, 0, .75) 72%, transparent 100%);
+}
+
+.layer[data-mode='lap'] {
+  visibility: visible;
+  opacity: .25;
+}
+
+.layer[data-mode='static'] {
+  visibility: visible;
+  opacity: .2;
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .layer {
+    transition: none;
+  }
+
+  .layer[data-mode='static'] {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
