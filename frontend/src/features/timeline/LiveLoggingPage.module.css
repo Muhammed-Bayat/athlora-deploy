@@ -376,11 +376,17 @@
 .selectInput {
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--console-control-border);
+  border: 1px solid rgba(138, 233, 242, 0.12);
   border-radius: var(--radius-sm);
-  background: var(--console-control-surface);
-  color: var(--console-control-text);
+  background: #061824;
+  color: #E5F1F5;
   font: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+}
+
+.selectInput option {
+  background: #061824;
+  color: #DDECF2;
 }
 
 .modalActions {
@@ -462,4 +468,16 @@ select:focus-visible,
 .incidentButtonGroup button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+:global(html.theme-light) .selectInput {
+  border-color: rgba(0, 78, 105, 0.15);
+  background: #CBE4E9;
+  color: #173E50;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:global(html.theme-light) .selectInput option {
+  background: #F7FCFD;
+  color: #173E50;
 }
