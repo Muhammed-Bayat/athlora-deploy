@@ -80,11 +80,11 @@ const START_Y = 0.08;
 
 const LOGO_NAVY = '#001D3C';
 const LOGO_CYAN = '#5CCCFE';
-const LOGO_MINT = '#79F2E3';
+const LOGO_BLUE = '#5AC9FE';
 
 /** A stylized humanoid sprinter built from overlapping primitives so every joint
- *  connects. Painted entirely in the logo palette (no clothes, no skin) and
- *  faces +Z (forward). */
+ *  connects. Painted in the logo's crisp cyan/blue palette (no clothes, no skin)
+ *  and faces +Z (forward). */
 function Runner() {
   const torso = useRef<THREE.Group>(null);
   const armL = useRef<THREE.Group>(null);
@@ -141,11 +141,11 @@ function Runner() {
             <group ref={fore} position={[0, -.2, 0]}>
               <mesh position-y={-.07} castShadow>
                 <capsuleGeometry args={[.036, .13, 6, 10]} />
-                <meshStandardMaterial color={LOGO_MINT} roughness={.45} />
+                <meshStandardMaterial color={LOGO_BLUE} roughness={.45} />
               </mesh>
               <mesh position-y={-.155} castShadow>
                 <sphereGeometry args={[.045, 12, 8]} />
-                <meshStandardMaterial color={LOGO_MINT} roughness={.5} />
+                <meshStandardMaterial color={LOGO_BLUE} roughness={.5} />
               </mesh>
             </group>
           </group>
@@ -156,7 +156,7 @@ function Runner() {
           <group key={side} ref={ref} position={[side * .08, -.24, 0]}>
             <mesh position-y={-.1} castShadow>
               <capsuleGeometry args={[.05, .15, 6, 10]} />
-              <meshStandardMaterial color={LOGO_MINT} roughness={.45} />
+              <meshStandardMaterial color={LOGO_BLUE} roughness={.45} />
             </mesh>
             <group ref={shin} position={[0, -.2, 0]}>
               <mesh position-y={-.07} castShadow>
