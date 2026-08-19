@@ -108,7 +108,6 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
   const [stats, setStats] = useState(reducedMotion ? [128, 342, 26] : [0, 0, 0]);
   const [activeSection, setActiveSection] = useState('top');
   const [navScrolled, setNavScrolled] = useState(false);
-  const supportsWebGl = useRef(typeof WebGLRenderingContext !== 'undefined').current;
   const pageRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -219,7 +218,7 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
 
   return (
     <div className={styles.page} ref={pageRef}>
-      {supportsWebGl && <Suspense fallback={null}><TrackExperience/></Suspense>}
+      <Suspense fallback={null}><TrackExperience/></Suspense>
       {introVisible && <div className={styles.intro} aria-hidden="true"><div><p>Athletics coaching · performance system</p><strong>ATHLORA</strong><i/><span>Run the whole season from one place</span></div></div>}
       <div className={styles.ambientGrid} aria-hidden="true"/>
       <div className={styles.sceneLabel} aria-hidden="true">{sections.find(([id]) => id === activeSection)?.[1]}</div>

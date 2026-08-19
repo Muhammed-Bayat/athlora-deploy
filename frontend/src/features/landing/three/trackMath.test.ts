@@ -1,42 +1,99 @@
 import { describe, expect, it } from 'vitest';
-import { lapProgress, ovalPoint, ovalTangent, smoothProgress } from './trackMath';
+import {
+  cameraTransform,
+  clamp01,
+  droneRig,
+  findTrackOpacity,
+  lapWindow,
+  objectTransform,
+  runnerHeading,
+  runnerScreenPoint,
+  smoothProgress,
+} from './trackMath';
 
 describe('landing track math', () => {
-  it('maps the features-to-footer range continuously and clamps outside it', () => {
-    expect(lapProgress(800, 1_000, 3_000)).toBe(0);
-    expect(lapProgress(1_500, 1_000, 3_000)).toBe(0.25);
-    expect(lapProgress(3_200, 1_000, 3_000)).toBe(1);
+  it('clamps progress to the mockup lap window and clamps outside it', () => {
+    const featureTop = 2_000;
+    const footerTop = 6_000;
+    const vh = 800;
+    const lapStart = featureTop - vh * 0.26;
+    const lapEnd = Math.max(lapStart + vh * 1.4, footerTop - vh * 0.28);
 
-    const samples = Array.from({ length: 101 }, (_, index) => lapProgress(1_000 + index * 20, 1_000, 3_000));
+    expect(lapWindow(lapStart - 100, featureTop, footerTop, vh).progress).toBe(0);
+    expect(lapWindow(lapEnd + 100, featureTop, footerTop, vh).progress).toBe(1);
+    expect(lapWindow((lapStart + lapEnd) / 2, featureTop, footerTop, vh).progress).toBeCloseTo(0.5, 5);
+  });
+
+  it('maps the lap window continuously', () => {
+    const featureTop = 2_000;
+    const footerTop = 6_000;
+    const vh = 800;
+    const { lapStart, lapEnd } = lapWindow(0, featureTop, footerTop, vh);
+    const samples = Array.from({ length: 101 }, (_, index) =>
+      lapWindow(lapStart + (index * (lapEnd - lapStart)) / 100, featureTop, footerTop, vh).progress,
+    );
     expect(samples.every((value, index) => index === 0 || value >= samples[index - 1])).toBe(true);
   });
 
-  it('closes the stadium lap without a position discontinuity', () => {
-    const start = ovalPoint(0);
-    const finish = ovalPoint(1);
+  it('traces the mockup runner on an ellipse that closes without a discontinuity', () => {
+    const start = runnerScreenPoint(0);
+    const finish = runnerScreenPoint(1);
     expect(finish.x).toBeCloseTo(start.x, 10);
-    expect(finish.z).toBeCloseTo(start.z, 10);
+    expect(finish.y).toBeCloseTo(start.y, 10);
 
-    const beforeFinish = ovalPoint(1 - 1e-5);
-    expect(Math.hypot(beforeFinish.x - start.x, beforeFinish.z - start.z)).toBeLessThan(0.001);
+    const beforeFinish = runnerScreenPoint(1 - 1e-5);
+    expect(Math.hypot(beforeFinish.x - start.x, beforeFinish.y - start.y)).toBeLessThan(0.5);
   });
 
-  it('contains two straight sections with constant depth', () => {
-    const first = [0.02, 0.08, 0.14].map((progress) => ovalPoint(progress));
-    const opposite = [0.52, 0.58, 0.64].map((progress) => ovalPoint(progress));
-
-    expect(first.every((point) => point.z === first[0].z)).toBe(true);
-    expect(opposite.every((point) => point.z === opposite[0].z)).toBe(true);
-    expect(first[2].x).toBeGreaterThan(first[0].x);
-    expect(opposite[2].x).toBeLessThan(opposite[0].x);
+  it('returns a heading that wraps continuously across the lap seam', () => {
+    const start = runnerHeading(0);
+    const finish = runnerHeading(1);
+    const delta = Math.abs(((finish - start + 540) % 360) - 180);
+    expect(delta).toBeLessThan(0.001);
   });
 
-  it('returns a unit tangent that is continuous across the lap seam', () => {
-    const start = ovalTangent(0);
-    const finish = ovalTangent(1);
-    expect(Math.hypot(start.x, start.z)).toBeCloseTo(1, 10);
-    expect(finish.x).toBeCloseTo(start.x, 10);
-    expect(finish.z).toBeCloseTo(start.z, 10);
+  it('places the runner lower/right in frame like the mockup target', () => {
+    const rig = droneRig(0, 1440, 900);
+    expect(rig.targetX).toBeCloseTo(1440 * 0.72, 5);
+    expect(rig.targetY).toBeCloseTo(900 * 0.7, 5);
+  });
+
+  it('zooms to fit the oval and pitches like a low aerial drone', () => {
+    const rig = droneRig(0, 1600, 900);
+    expect(rig.droneZoom).toBeCloseTo(2.15, 5);
+    expect(rig.pitch).toBeCloseTo(63, 5);
+  });
+
+  it('builds a camera transform string in the mockup form', () => {
+    const rig = droneRig(0.25, 1600, 900);
+    const transform = cameraTransform(rig);
+    expect(transform).toMatch(/^translate3d\([0-9.]+px,[0-9.]+px,0\) rotateX\(/);
+    expect(transform).toContain('rotateY(');
+    expect(transform).toContain('rotateZ(');
+    expect(transform).toContain('scale3d(');
+  });
+
+  it('translates the artwork by the negative runner position', () => {
+    const point = runnerScreenPoint(0.25);
+    const transform = objectTransform(0.25);
+    expect(transform).toBe(`translate3d(${(-point.x).toFixed(2)}px,${(-point.y).toFixed(2)}px,0)`);
+  });
+
+  it('fades per section with the mockup opacity ladder', () => {
+    const tops = [1000, 2000, 3000, 4000];
+    const opacities = [0.23, 0.2, 0.15, 0.075];
+    expect(findTrackOpacity(500, tops, opacities)).toBe(0);
+    expect(findTrackOpacity(1000, tops, opacities)).toBe(0);
+    expect(findTrackOpacity(1100, tops, opacities)).toBeCloseTo(0.227, 5);
+    expect(findTrackOpacity(4000, tops, opacities)).toBe(0.075);
+    expect(findTrackOpacity(2000, tops, opacities)).toBeCloseTo(0.2, 5);
+    expect(findTrackOpacity(2500, tops, opacities)).toBeCloseTo(0.175, 5);
+  });
+
+  it('clamps a value to the unit interval', () => {
+    expect(clamp01(-1)).toBe(0);
+    expect(clamp01(0.5)).toBe(0.5);
+    expect(clamp01(2)).toBe(1);
   });
 
   it('smooths toward scroll progress without overshooting', () => {
