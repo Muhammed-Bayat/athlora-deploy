@@ -10,7 +10,7 @@ Chosen in the dev plan and fixed by the build spec. Do not substitute a tool lis
 |-------|------|-----|
 | Frontend framework | React + Vite (TypeScript, strict) | Fast dev/build, strict typing, standard React data flow |
 | Styling | Plain CSS (variables + modules) | Design tokens from approved mockups, no runtime dependency |
-| Landing 3D | Three.js + React Three Fiber | Lazy-loaded procedural track model for the public hero reveal and cinematic lap |
+| Landing visuals | SVG + CSS (shared `TrackArtwork`) + DOM chase-camera | Mockup-exact oval art for the hero reveal and cinematic lap; no WebGL dependency |
 | Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
@@ -34,14 +34,14 @@ Chosen in the dev plan and fixed by the build spec. Do not substitute a tool lis
 - **Chart.js**: batteries-included for line/bar charts without a heavier data-viz framework.
 - **Open-Meteo**: no API key, free rate limits — ideal for a university project with no billing.
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
-- **React Three Fiber**: keeps the landing page's isolated Three.js scene declarative and aligned with React while all content and controls remain semantic HTML/CSS.
+- **Lazy-loaded SVG/CSS landing track**: the mockup-exact oval is drawn once as a shared SVG component and painted differently per context; the cinematic lap is pure DOM transforms, so the landing page needs no WebGL.
 - **pdf-lib**: pure-JS PDF generation — works in Node and the browser without native deps.
 
 Anything currently listed but unused in the codebase is there deliberately for a named stage — see the dev plan.
 
 ## Currently in use
 
-- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded Three.js/React Three Fiber landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
+- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
 - **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
 - **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 
