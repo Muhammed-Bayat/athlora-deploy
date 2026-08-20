@@ -189,7 +189,8 @@ describe('EventsPage', () => {
   it('opens an event detail supplied by dashboard navigation', async () => {
     renderPage({ initialEventId: CITY_ID });
 
-    expect(await screen.findByRole('dialog', { name: 'City Sprint Meet' })).toBeInTheDocument();
+    const detail = await screen.findByRole('dialog', { name: 'City Sprint Meet' });
+    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
     expect(resultApi.listResults).toHaveBeenCalledWith(CITY_ID);
   });

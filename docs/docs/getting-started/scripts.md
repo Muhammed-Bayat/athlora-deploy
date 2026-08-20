@@ -80,7 +80,7 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (209 Vitest/RTL and track-math tests) |
+| `frontend` | lint, typecheck, test, build | passing (211 Vitest/RTL and track-math tests) |
 | `backend` | lint, typecheck, test, build | passing (301 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
@@ -102,4 +102,4 @@ Full checklist: the build spec, Section 12.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free].
