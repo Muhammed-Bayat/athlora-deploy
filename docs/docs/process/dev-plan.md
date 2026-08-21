@@ -2,219 +2,167 @@
 sidebar_position: 3
 ---
 
-# Athletics Coaching App — Development Plan & Build Spec
+# Athlora Delivery Roadmap
 
-This plan turns the general Sport Coaching brief into a concrete build for **athletics (track & field)**, using the Stage 1/2/3 tech stack from the AI-Policy-Compliant requirements doc, and is structured so each stage maps directly onto the Sprint 1–4 rubrics.
+This is the living delivery roadmap for Athlora, an athletics coaching application. It records completed work from Gitea issues and pull requests, then defines the next planned stages. Status is changed only when the implementation, tests, and relevant documentation have landed.
 
----
+## Product Direction
 
-## 0. Sport-Specific Decisions (Athletics)
+Athlora is intended to support a complete athletics meet and season:
 
-Athletics is chosen as the sport, so before writing code the team should lock in the following domain decisions — they drive the schema, the live-logging UI, and the stats engine.
+- **Timed track events:** sprints, middle and long distance, hurdles, relays, and race walks.
+- **Measured field events:** horizontal jumps, throws, high jump, and pole vault.
+- **Meet and season workflows:** athletes, training, competitions, assignments, live results, PB/SB progression, weather, shared fixtures, reporting, and scheduling.
 
-**Event types to support**
-- **Track (timed):** sprints (100m/200m/400m), middle/long distance (800m–10000m), hurdles, relays, race walks
-- **Field (measured):** long jump, triple jump, high jump, pole vault, shot put, discus, javelin, hammer
-- **Multi-events (advanced/optional):** heptathlon/decathlon as a composite event referencing sub-events
+The delivered vertical slice is currently **100m timing in seconds**. It proves the shared foundations, not the permanent product boundary. Every additional discipline must add its own contract, validation, logger controls, result derivation, placing rules, PB/SB comparison, and tests.
 
-**Result unit per event type**
-- Time (`hh:mm:ss.ms`) for track
-- Distance (metres, to 2 decimal places) for horizontal jumps/throws
-- Height (metres/cm) for vertical jumps (high jump, pole vault)
-- Attempts (each jump/throw is a discrete attempt: valid, foul, pass) — best attempt becomes the recorded result
+## Core Model
 
-**Penalties/notable actions specific to athletics**
-- False start (track)
-- Lane infringement / obstruction
-- Foul (field event attempt)
-- Disqualification (DQ), Did Not Finish (DNF), Did Not Start (DNS)
-- Personal Best (PB) / Season Best (SB) flags (derived, not manually logged)
-
-This means the "timeline" concept from the brief becomes, per event: a sequence of **attempts/splits/incidents** tied to an athlete, timestamped, editable/undoable, from which results and stats are derived.
-
----
-
-## 1. Core Data Model (built in Stage 1, extended later)
-
-```
-users            (id, auth0_id, name, email, role[coach|assistant|viewer], created_at, updated_at)
-athletes         (id, coach_id, name, dob, gender, squad, notes, archived_at, created_at, updated_at)
-events           (id, created_by, type[competition|training], discipline, title, date, time,
-                   location_name, latitude, longitude,
-                   status[scheduled|in_progress|completed|cancelled], created_at, updated_at)
-event_participants (event_id, athlete_id, rsvp_status[pending|yes|no])  -- live RSVP
-timeline_entries (id, event_id, athlete_id, discipline, entry_type[attempt|split|penalty|note],
-                   value, unit[seconds|metres|cm], is_foul, incident_type, note_text, recorded_by,
-                   version, device_id, created_at, updated_at, deleted_at)
-results          (event_id, athlete_id, discipline, outcome[no_result|valid|dq|dnf|dns], final_result,
-                   unit, placing, is_pb, is_sb, manual_override, override_reason, overridden_by,
-                   override_at, updated_at)
+```text
+users              coach identity and role
+athletes           coach-owned roster, profile, squad, notes, archival state
+events             competition or training event, discipline, venue, lifecycle
+event_participants athlete assignment and RSVP state
+timeline_entries   append-only, versioned live observations and tombstones
+results            derived per athlete/event/discipline result and audited override
+account_deletions  durable account-deletion and retry state
 ```
 
-- `timeline_entries` is the append-only log the brief calls for ("recording what happens ... as it happens"). Soft-delete (`deleted_at`) supports "easy to edit or undo."
-- `results` is a derived/materialized table recalculated from `timeline_entries`, with a `manual_override` field for correction — satisfies "statistics should be derived from this log, with a manual override."
-- Stage 2/3 add `roles_permissions`, `season_totals` (view), `sync_queue`/`action_log` for offline merge, `standings`.
+The timeline is the system of record for live activity. Results, placing, PBs, and SBs are derived from it and recomputed by the API. Manual corrections remain auditable rather than replacing the source observation.
 
----
+## Completed Roadmap
 
-## 2. Stage 1 — Basic (maps to Sprint 1 & early Sprint 2 rubric items)
+### Phase 1: Platform and Contract Foundation
 
-**Stack used:** React + Vite + TypeScript, CSS, Node.js + Express, PostgreSQL (Neon/university), Auth0, Open-Meteo, Vitest, RTL, Supertest, Gitea Actions, Vercel, Render, Docusaurus + Cloudflare Pages.
+**Status: Complete**
 
-**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html` and `SDP-Coach-Console.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder: Bebas Neue headings, Inter body, Space Mono for results, deep-ink navy + teal/cyan/blue palette). All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
+Established the non-monolithic React/Vite frontend, Express API, PostgreSQL migrations, Auth0 authentication, deployed service foundations, Gitea CI, and documentation site. The first API contract deliberately fixed the implemented discipline to 100m/seconds while keeping the schema ready for additional athletics contracts.
 
-### 2.1 Setup (Week 1)
-1. Create Gitea repo, mono-repo layout: `/frontend`, `/backend`, `/docs`.
-2. Set up Trello board with columns matching sprint milestones; add cards for every Stage 1 feature below.
-3. Scaffold frontend with Vite + React + TypeScript; scaffold backend with Express + TypeScript.
-4. Provision PostgreSQL (Neon/university instance); write initial migration for the core tables above.
-5. Configure Auth0 tenant: sign up, login, password reset flows wired into the React app and Express middleware (JWT verification).
-6. Set up Gitea Actions: on push/PR, run lint, `tsc --noEmit`, Vitest, Supertest.
-7. Deploy skeleton frontend to Vercel, skeleton backend to Render, confirm they talk to each other and to Auth0.
-8. Init Docusaurus in `/docs`, deploy to Cloudflare Pages; add "Getting Started" pages for frontend and backend.
-9. Add the `README.md` AI Usage section (template from the requirements document), require Conventional Commits for every commit, and use an `Assisted-by:` footer whenever AI generated code for a commit. Agree that the agent creates all commits during agent-driven sessions; developers only branch, push, review and merge — they never hand-write commits on an agent-driven branch.
+| Work tracked | Delivered through |
+|---|---|
+| Project scaffold, approved branding, UI conversion, Neon, Auth0, deployments, and docs deployment: issues `#9`, `#11`, `#12`, `#16`-`#20` | PRs `#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#8`, `#19` |
+| Shared 100m contract, authentication/ownership, validation, transaction utilities, and typed frontend API behavior: issues `#23`-`#27` | PRs `#49`, `#50`, `#51`, `#52` |
 
-### 2.2 Athlete & Roster Management
-1. DB: `athletes` table + Express CRUD endpoints (`GET/POST/PUT/DELETE /api/athletes`).
-2. React: roster list view, add/edit athlete form (name, DOB, gender category, discipline group, notes).
-3. Tests: Supertest for CRUD endpoints; RTL for the roster form and list.
+Key outcomes:
 
-### 2.3 Event Management
-1. DB: `events` table + CRUD endpoints, with `type` (competition/training), discipline(s), date/time, location.
-2. React: event list/calendar-lite view, create/edit/cancel event form.
-3. Integrate **Open-Meteo**: on event detail view, fetch and display forecast for the event's location/date.
-4. Tests: Supertest for event CRUD + weather-fetch error handling (API down/no data).
+- Separate Vercel SPA, Render API, Neon PostgreSQL, and Cloudflare Pages documentation deployments.
+- Auth0 Universal Login, verified JWTs, local-user synchronization, and non-enumerating coach ownership checks.
+- Checksum-tracked SQL migrations and structured API validation/error responses.
+- Shared 100m result DTOs and pure result-derivation foundations.
 
-### 2.4 Live Event Timeline Logging
-1. DB: `timeline_entries` table, discipline-aware `entry_type`/`value`/`unit`.
-2. Backend endpoints: `POST /api/events/:id/entries` (log attempt/split/penalty), `PATCH /:entryId` (edit), `DELETE /:entryId` (soft-delete/undo).
-3. React: "Live Event" screen — pick athlete + discipline, quick-entry buttons appropriate to the discipline (time entry for track, distance/attempt entry for field, penalty/incident buttons), with an undo affordance on the last few entries.
-4. Design the entry form to branch by discipline type (time vs distance vs height vs attempt-pass/fail) — this is the sport-specific core of the whole app.
-5. Tests: Vitest unit tests for result-derivation logic (e.g., "best of N attempts", "fastest split"); RTL tests for the live logging screen; Supertest for entry endpoints including edit/undo.
+### Phase 2: Roster and Event Management
 
-### 2.5 Results & Stats Derivation
-1. Backend: pure functions that compute `results` from `timeline_entries` per discipline (best valid attempt for field, finishing time for track, applying DQ/DNF/DNS overrides).
-2. `manual_override` field exposed in UI for corrections, with an audit trail (who/when overrode).
-3. React: athlete summary page (recent results, PBs) and roster summary page.
+**Status: Complete**
 
-### 2.6 Dashboard
-1. React: dashboard component that switches between "Live Event" view (event in progress) and "Roster/Athlete Summary" view (no active event).
-2. Basic responsive CSS pass (mobile-first, since logging happens track-side).
+Delivered the coach's day-to-day roster and event workflow, including preservation of historical data when an athlete is archived, an assignment is removed, or an event is cancelled.
 
-### 2.7 Stage 1 Definition of Done (tie back to Sprint 1 rubric)
-- Repo organised, all members committing, README + getting-started docs present → *Version Control, Getting Started*.
-- Trello board in active use → *Work Tracker*.
-- Git methodology (e.g., trunk-based + PRs, or GitFlow) documented in `/docs` → *Git Methodology*.
-- Tech stack table copied into `/docs` with one-line motivation per tool → *Tech Stack*.
-- Docusaurus site live with non-trivial content (architecture overview, setup guide) → *Documentation Site*.
-- Sign up/login/roster/events/live logging/dashboard/weather all working end-to-end → *Implementation*.
+| Work tracked | Delivered through |
+|---|---|
+| Athlete API, roster UI, and athlete performance detail: issues `#28`-`#31` | PRs `#54`, `#57`, `#67`, `#68` |
+| Event lifecycle, participant API/UI, and event-management UI: issues `#32`-`#36` | PRs `#55`, `#56`, `#58`, `#59` |
+| Event-day venue forecast | PR `#70` |
 
----
+Key outcomes:
 
-## 3. Stage 2 — Intermediate (maps to Sprint 2 rubric)
+- Coach-owned athlete create, edit, archive, restore, filters, profiles, and 100m performance history.
+- Competition/training event lifecycle, cancellation-as-history-preservation, event list/calendar views, and participant RSVP management.
+- Open-Meteo venue forecasts and authenticated current-weather data for the coach console.
 
-**New stack:** IndexedDB + Dexie, vite-plugin-pwa, Socket.IO, Chart.js, Playwright.
+### Phase 3: Live 100m Results and Coaching Insight
 
-### 3.1 Roles & Permissions
-1. DB: `role` on `users` (coach, assistant, viewer) or a join table if athletes can also belong to multiple squads/coaches.
-2. Express middleware: permission checks per route (e.g., assistants can POST timeline entries but not DELETE athletes).
-3. React: role-aware UI (hide/disable controls the current user can't use).
-4. Tests: Supertest permission-denied cases per role; Playwright E2E for "assistant logs an event but cannot edit roster."
+**Status: Complete**
 
-### 3.2 Fixtures, RSVPs, Shared Calendar
-1. DB: `event_participants` (athlete/user, RSVP status), extend `events` to support cross-coach fixtures (event visible to multiple coach accounts).
-2. Backend: endpoints to invite another coach's squad to a fixture, endpoints for RSVP.
-3. React: shared calendar view, RSVP widget on event detail.
-4. Notifications/reminders: simple scheduled job (or Socket.IO push when connected) reminding users of upcoming events.
+Delivered the 100m track-side workflow from event start through derived outcomes, correction, completion, athlete statistics, and dashboard summary.
 
-### 3.3 Season Stats, Comparisons, Charts
-1. Backend: aggregate queries/views for season totals, per-event breakdowns, athlete-vs-athlete and squad-vs-opponent comparisons (PB/SB progression over the season).
-2. React + Chart.js: line charts for PB/SB progression, bar charts for comparisons.
-3. Tests: Vitest for aggregation logic; RTL/Playwright for chart rendering with seeded data.
+| Work tracked | Delivered through |
+|---|---|
+| Result engine, live-entry API, version-aware corrections, recomputation, and overrides: issues `#37`-`#42` | PRs `#53`, `#60`, `#61`, `#62`, `#63` |
+| Athlete statistics, aggregates, logger, results UI, dashboard, and verification: issues `#43`-`#48` | PRs `#64`, `#65`, `#66`, `#71`, `#73`, `#74` |
+| Account lifecycle management | PR `#69` |
 
-### 3.4 Offline-First Logging
-1. Frontend: Dexie/IndexedDB store mirroring `timeline_entries` shape; all live-logging writes go to IndexedDB first.
-2. vite-plugin-pwa: service worker + manifest so the app installs and the shell loads with no connection.
-3. Background sync: on reconnect, queue drains and POSTs to the backend in order; conflicts at this stage are simply "last write wins" (true merge logic is Stage 3).
-4. Socket.IO: when online, broadcast new/edited entries to other connected clients viewing the same event (live updates).
-5. Tests: Playwright test that simulates offline (toggle network), logs entries, restores network, and asserts entries synced.
+Key outcomes:
 
-### 3.5 Stage 2 Definition of Done (tie back to Sprint 2 rubric)
-- Core features (roles, fixtures/RSVP, stats/charts, offline logging) implemented with automated UI+API tests → *Core Features, Automated Testing*.
-- API documented (e.g., OpenAPI or Docusaurus API reference) and externally reachable from Render → *API*.
-- Database schema documented (ERD + migrations) in `/docs` → *Database Documentation*.
-- Third-party packages (Dexie, Socket.IO, Chart.js, Open-Meteo, Auth0) documented with why each was chosen → *Third-Party Code Documentation*.
-- Bug tracker (Trello labels or Gitea issues) actively used → *Bug Tracker*.
-- Testing docs: describe unit/integration/E2E strategy and any user-feedback process → *Testing Documentation*.
+- Mobile-first 100m finish, incident, note, correction, and undo logging with optimistic versions.
+- Transactional derived outcomes for valid results, DQ, DNF, DNS, placing, PBs, SBs, and audited manual overrides.
+- Athlete statistics, live/summary dashboard states, current event progress, recent results, and PB feeds.
+- Permanent account deletion with durable tombstones and retry reconciliation.
+- Desktop/mobile Playwright vertical-slice coverage, accessibility audits, and cross-coach authorization integration tests.
 
----
+`#71` was closed without a formal merge, but its dashboard work was incorporated during the `#73` conflict-resolution sequence and is present on `main`.
 
-## 4. Stage 3 — Advanced (maps to Sprint 3/4 rubric)
+### Phase 4: Experience and Release Hardening
 
-**New stack:** unique action IDs, PostgreSQL transactions, record version numbers, merge rules, pdf-lib, scheduling logic, rule-based summaries.
+**Status: Complete**
 
-### 4.1 Multi-Device Collaborative Offline Logging (core hard problem)
-1. Every locally-created `timeline_entries` row gets a client-generated **unique action ID** (UUID) at creation time, before any server contact — prevents duplicate saves on retry/resync.
-2. Add a `version` integer to `timeline_entries`/`results`; every edit increments it.
-3. Sync endpoint accepts a batch of actions tagged with device ID + action ID + timestamp; server applies them inside a **PostgreSQL transaction** so a batch either fully commits or rolls back.
-4. **Merge rules** (documented explicitly, since this is graded on correctness):
-   - Two *new* entries from different devices for the same event → both kept (append-only log, no conflict by nature).
-   - Two *edits* to the *same* entry → resolved by version number + a deterministic tiebreaker (e.g., server timestamp, or "most specific/latest valid attempt wins" for a field-event PB), with the losing edit retained in an audit trail rather than discarded silently.
-   - Deletes (undos) are tombstones, not hard deletes, so a late-arriving edit to an undone entry doesn't resurrect bad data unexpectedly.
-5. Recompute `results` server-side after each merged batch so all clients converge on the same derived result regardless of reconnection order.
-6. Tests: Playwright/integration tests simulating two "devices" logging and reconnecting in different orders, asserting final state is identical either way — this is the most important test suite in the project.
+Polished the public landing experience and authenticated console after the core workflow was in place.
 
-### 4.2 League/Standings + Public Pages
-1. DB: `standings` view aggregating results across events/fixtures for participating squads.
-2. React: public, unauthenticated read-only pages per squad/athlete (shareable link) showing results and season stats.
-3. **pdf-lib**: "Export report" button generating a PDF (and/or CSV) of an athlete's or event's results.
+| Work tracked | Delivered through |
+|---|---|
+| Landing-page redesign and mockup-matched cinematic track | PRs `#75`, `#76` |
+| Premium coach-console redesign, theme controls, weather readout, and filter refinements | PR `#77` |
 
-### 4.3 Automated Summaries & Selection Suggestions
-1. **Rule-based** (explicitly non-AI-service, per the requirements doc) logic: e.g., flag "3 consecutive PBs," "biggest improvement this season," or suggest a relay/selection lineup by best recent times per leg — implemented as plain backend functions, unit-tested.
+The console uses real dashboard data rather than mockup figures. The landing page and console retain responsive and reduced-motion behavior.
 
-### 4.4 Season Scheduling
-1. Scheduling logic: given a list of fixtures/venues/athlete availability, generate a proposed season calendar and flag clashes (same athlete double-booked, venue double-booked).
-2. React: schedule view with clash warnings surfaced inline.
+## Planned Roadmap
 
-### 4.5 Stage 3 Definition of Done (tie back to Sprint 3/4 rubric)
-- Multi-device merge tested and demonstrably consistent → *Feature Implementation, Performance*.
-- API has documentation and is deployed/available externally with auth → *API Implementation, Availability, Design*.
-- Public pages accessible, responsive, accessible (WCAG basics: alt text, contrast, keyboard nav) → *Accessibility, Responsiveness, App Design*.
-- Full DB schema + deployment docs finalized → *Database: Data, Deployment, Structure*.
+### Stage 2: Full Athletics Events and Connected Coaching
 
----
+**Status: Planned**
 
-## 5. AI Compliance — Ongoing Checklist (every stage)
+#### 2.1 Discipline Expansion
 
-- [ ] Every commit, including documentation, test and squash-merge commits, follows Conventional Commits (`type(scope): description`); descriptions are short, lowercase and imperative.
-- [ ] `README.md` **AI Usage** section kept current (generation / in-line editing / code review tools + models, or explicit non-usage statements).
-- [ ] `Assisted-by:` footer on every commit where AI generated code, listing every tool and model that contributed. In-line editing and code review do not require a footer on every commit but must be declared in the README.
-- [ ] The agent, not the developer, creates all commits in agent-driven sessions; the developer only creates and pushes the branch, then reviews and merges the PR.
-- [ ] AI usage/non-usage declaration on every submitted document (including this plan, if AI-assisted).
-- [ ] All AI-generated code and tests reviewed and tested before merge — passing AI-written tests never assumed to prove correctness.
-- [ ] The `/docs` site is kept current in every session: status/state sections and the check-status table are updated with the code (build spec Section 14), doc changes committed with the feature, and the docs build passes before a task is declared done.
-- [ ] Reports/discussions rewritten in the team's own voice, especially motivation/design-rationale sections.
-- [ ] For each assessment: start a new AI session, keep an unedited transcript/tool export as evidence.
-- [ ] Re-check the COMS3011A and University AI policies before each submission; University policy wins on conflict.
+1. Add timed contracts for 200m/400m, middle and long distance, hurdles, relays, and race walks.
+2. Add measured contracts for long jump, triple jump, throws, high jump, and pole vault.
+3. Give every discipline explicit unit, validation, timeline-entry, derivation, placing, PB/SB, and presentation rules.
+4. Add migration, unit, API, component, and browser coverage with each discipline; do not loosen the 100m contract as a shortcut.
 
----
+#### 2.2 Roles, Fixtures, and Shared Calendar
 
-## 6. Suggested Sprint-to-Stage Mapping
+1. Enforce coach, assistant, and viewer permissions. For example, assistants may log an event but cannot archive athletes.
+2. Extend fixtures so another coach's squad can participate without exposing unrelated workspace data.
+3. Add shared calendar views, RSVP workflows, and event reminders.
+4. Add API and Playwright permission coverage for each role.
 
-| Sprint (rubric) | Build stage | Primary focus |
-|---|---|---|
-| Sprint 1 | Stage 1 setup + start of Basic build | Infra, auth, roster, events, project docs/methodology |
-| Sprint 2 | Finish Stage 1 + all of Stage 2 | Live logging, results/dashboard, roles, offline PWA, stats/charts |
-| Sprint 3 | Start Stage 3 | Multi-device merge, standings, scheduling, PDF export |
-| Sprint 4 (Submission) | Finish + polish Stage 3 | Accessibility, performance, full docs, public pages, final API polish |
+#### 2.3 Season Analysis
 
-## 7. Immediate Next Actions
-1. Finalise which athletics disciplines are in scope for MVP (recommend: sprints, one distance event, long jump, shot put — enough to exercise both "timed" and "measured" result types without overbuilding).
-2. Draft the ERD from Section 1 and review it as a team before writing migrations.
-3. Set up repo, Trello, and Docusaurus skeleton in the first working session so Version Control/Work Tracker/Docs Site rubric items are "exists" from day one.
+1. Add season totals and discipline-aware athlete/squad comparisons.
+2. Use Chart.js for PB/SB progression and comparison charts once the aggregate data is stable.
+3. Add chart tests using seeded, multi-discipline data.
 
----
+#### 2.4 Offline-First Logging
+
+1. Add Dexie/IndexedDB so live entries are written locally before network sync.
+2. Add `vite-plugin-pwa` for an installable shell and service-worker caching.
+3. Drain queued actions in order on reconnect; Stage 2 uses last-write-wins while Stage 3 adds deterministic merge rules.
+4. Add Socket.IO event rooms for live updates when online.
+5. Add Playwright coverage for offline logging, reconnection, and synchronization.
+
+### Stage 3: Collaborative Meets and Season Tools
+
+**Status: Planned**
+
+#### 3.1 Multi-Device Offline Merge
+
+1. Give every locally created action a unique ID before it reaches the server.
+2. Add batch sync in PostgreSQL transactions with version checks and a durable audit trail.
+3. Keep concurrent new entries, resolve concurrent edits deterministically, and preserve undo tombstones.
+4. Recompute results after each accepted batch so every device converges on the same outcome.
+5. Test different reconnection orders across two simulated devices.
+
+#### 3.2 Public Results and Exports
+
+1. Add standings and explicitly allow-listed, read-only public athlete/squad result pages.
+2. Generate athlete and event PDF/CSV reports with `pdf-lib`.
+
+#### 3.3 Coaching Summaries and Scheduling
+
+1. Add rule-based summaries such as consecutive PBs and selection suggestions; this remains deterministic application logic, not an external AI service.
+2. Generate season schedules from fixtures, venues, and availability, with athlete and venue clash warnings.
+
+## Quality Gates
+
+Every roadmap item is complete only when its implementation and documentation are aligned, relevant tests pass, and the applicable CI checks are green. The current CI runs frontend, backend, documentation, and credential-gated E2E jobs. New work must preserve the coach-ownership boundary, responsive track-side interaction, accessible controls, and server-authoritative result derivation.
 
 ## AI Declaration
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free].
+This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra].

@@ -9,6 +9,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/frontend',
         'getting-started/backend',
+        'getting-started/e2e',
+        'getting-started/docs',
         'getting-started/scripts',
       ],
     },
