@@ -208,18 +208,22 @@ The response is `{ data: forecast }`. Temperatures are Celsius, precipitation pr
 
 **Logging guard:** timeline creation, edits, and the first undo reject writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`). An exact retry of an undo that already succeeded remains a `204` no-op even if the event has since closed; it does not write again.
 
-#### 4.3.1 Current weather
+### 4.4 Current weather (console readout)
 
-`GET /weather/current?latitude=<decimal>&longitude=<decimal>` returns the current Open-Meteo conditions for the authenticated coach console. Both query parameters are required decimal values: latitude must be in `-90..90` and longitude in `-180..180`; unknown query parameters are rejected.
+| Method & path | Purpose |
+|---|---|
+| `GET /weather/current?latitude=&longitude=` | Fetch live current conditions from Open-Meteo for the console readout |
+
+Current weather is proxied server-side from Open-Meteo without an API key. The provider receives the requested coordinates (never stored) and returns a single local current-condition snapshot; Athlora exposes only this stable DTO.
 
 ```
 timezone, temperatureC, apparentTemperatureC, humidityPercent, isDay,
 precipitationMm, weatherCode, windSpeedKmh
 ```
 
-The response is `{ data: currentWeather }`. Temperatures are Celsius, precipitation is millimetres, humidity is percent, and wind is km/h. Missing, malformed, out-of-range, or unknown query values return `400 VALIDATION_ERROR`; provider timeout, outage, or malformed data return the same safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, and `502 WEATHER_SERVICE_INVALID_RESPONSE` errors as the event forecast endpoint.
+The response is `{ data: weather }`. Temperatures are Celsius, humidity is percent, precipitation is mm, wind is km/h, and `weatherCode` is a validated WMO code. Both query parameters are required, must be decimal numbers, and must fall within latitude `-90..90` and longitude `-180..180`; unknown parameters are rejected with `400 VALIDATION_ERROR`. Provider timeout, outage, or malformed data return the same safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, or `502 WEATHER_SERVICE_INVALID_RESPONSE` errors as event weather. Authentication runs before any provider request.
 
-### 4.4 Event participant
+### 4.5 Event participant
 
 ```
 eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'),
@@ -237,7 +241,7 @@ Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Partic
 
 Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; an archived athlete cannot be newly assigned and returns `409 ATHLETE_ARCHIVED`. Archiving an already assigned athlete does not remove the assignment, so historical participation remains visible. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
-### 4.5 Timeline entry (the live log)
+### 4.6 Timeline entry (the live log)
 
 ```
 id, eventId, athleteId, discipline ('100m'), entryType, value (number|null, seconds),
@@ -266,7 +270,7 @@ Edit uses a sparse `PATCH` body containing required positive-integer `expectedVe
 
 A stale active edit or undo returns `409 TIMELINE_ENTRY_VERSION_CONFLICT` with `details: { expectedVersion, actualVersion }`. Version comparison, ownership, event/entry parent matching, lifecycle enforcement, persistence, and result recomputation occur under the same transaction lock, so a stale request cannot overwrite newer state. Missing, deleted-for-PATCH, wrong-parent, and cross-coach resources retain the generic `404 NOT_FOUND` response.
 
-### 4.6 Result
+### 4.7 Result
 
 ```
 eventId, athleteId, discipline ('100m'), outcome, finalResult (number|null, seconds),
@@ -289,7 +293,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 **Placings:** `placing` is derived per event from effective results — derived valid results and `no_result` entries promoted by an override rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or uncorrected `no_result` entries carry `placing = null`.
 
-### 4.7 Statistics
+### 4.8 Statistics
 
 `GET /api/v1/athletes/:athleteId/statistics` returns one owner-scoped 100m summary and its purpose-built history in `{ data }`:
 
@@ -326,7 +330,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 }
 ```
 
-### 4.8 Dashboard data
+### 4.9 Dashboard data
 
 `GET /api/v1/dashboard/summary` returns one `{ data }` object with the same keys in summary and live modes:
 
@@ -370,13 +374,13 @@ Every override mutation locks the event/result set and recomputes the whole even
 - `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/archived athletes, filter by name/squad/archive state, create, fully replace mutable fields, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
 - `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
-- `backend/src/services/participants.ts` implements the §4.4 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
-- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.4 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
-- `backend/src/services/timeline.ts` implements the §4.5 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.6 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
+- `backend/src/services/participants.ts` implements the §4.5 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
+- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.5 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
+- `backend/src/services/timeline.ts` implements the §4.6 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.7 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
 - `frontend/src/api/timeline.ts` and `LiveLoggingPage` expose the active list, normalized create, version-aware entry-type-valid correction, accessible confirmed undo, finish/incident logging and live standings. Finish/correction inputs use hundredth precision and decimal mobile semantics so displayed 100m times do not hide ranking-significant digits. The logger verifies fresh event status before exposing controls, distinguishes exact stale-version and event-closed conflicts, serializes writes through authoritative standings refresh, and isolates secondary standings/history failures from core logging.
 - Result read/override is live; override writes retain raw derivation and invoke canonical whole-event recomputation. The typed frontend wrapper and shared event-result view present effective competition/training outcomes in event detail and Live Logging, preserve backend tied placings/PB/SB, join active non-void penalties from the timeline, and show partial/historical rows. The correction workflow keeps raw derivation visible, requires a corrected time plus reason, exposes actor/time/reason, confirms paired-null clearing, and re-lists the whole event after mutation.
-- `backend/src/services/statistics.ts` and `dashboard.ts` implement §§4.7-4.8 with owner-scoped effective-result SQL and repeatable-read snapshots. Route/service/mapper tests plus a `TEST_DATABASE_URL`-gated PostgreSQL suite cover empty/populated data, calendar boundaries, overrides, incidents, archives, cancellations, live selection and ownership. The athlete detail UI and the API-backed dashboard consume the mirrored contracts directly.
-- `GET /weather/current` validates and proxies current coach-weather data for the authenticated console without exposing the Open-Meteo response shape to the browser.
+- `backend/src/services/statistics.ts` and `dashboard.ts` implement §§4.8-4.9 with owner-scoped effective-result SQL and repeatable-read snapshots. Route/service/mapper tests plus a `TEST_DATABASE_URL`-gated PostgreSQL suite cover empty/populated data, calendar boundaries, overrides, incidents, archives, cancellations, live selection and ownership. The athlete detail UI consumes the mirrored statistics/history contract with independent profile/statistics states and shared profile editing. The coach dashboard consumes the mirrored aggregate directly for deterministic summary/live modes, onboarding, active-event progress/latest entries, historical results/PBs and targeted console navigation.
+- `backend/src/services/weather.ts` implements both §4.3 event-day forecasts and §4.4 current conditions against Open-Meteo, with service and route tests covering the stable DTOs, strict coordinates, provider outages, timeouts and malformed payloads. `frontend/src/api/weather.ts` and the console topbar consume the §4.4 readout contract with a geolocation → timezone-city fallback.
 
 ## AI declaration
 

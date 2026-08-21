@@ -32,10 +32,14 @@ function mutationFeedback(message: string, reload: EventReloadResult): string {
   return message;
 }
 
-export function LiveLoggingPage() {
+export interface LiveLoggingPageProps {
+  initialEventId?: string | null;
+}
+
+export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps = {}) {
   const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);

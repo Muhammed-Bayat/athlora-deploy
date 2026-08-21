@@ -86,6 +86,11 @@ export interface EventListQuery {
   dateTo?: string;
 }
 
+export interface WeatherCurrentQuery {
+  latitude: number;
+  longitude: number;
+}
+
 export interface EventParticipantCreatePayload {
   athleteId: string;
 }
@@ -134,6 +139,7 @@ export interface ResultOverridePayload {
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
+const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -539,6 +545,32 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
     ...(dateFrom === undefined ? {} : { dateFrom }),
     ...(dateTo === undefined ? {} : { dateTo }),
   };
+}
+
+export function parseWeatherCurrentQuery(input: Record<string, unknown>): WeatherCurrentQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, WEATHER_CURRENT_QUERY_FIELDS, issues);
+
+  const coordinates = new Map<string, number>([
+    ['latitude', 0],
+    ['longitude', 0],
+  ]);
+  for (const [field, range] of [['latitude', 90], ['longitude', 180]] as const) {
+    const value = input[field];
+    if (typeof value !== 'string' || !/^-?\d+(\.\d+)?$/.test(value.trim())) {
+      issues.push(issue(field, 'invalid_format', 'Expected a decimal number'));
+      continue;
+    }
+    const parsed = Number(value);
+    if (!isFiniteNumber(parsed) || Math.abs(parsed) > range) {
+      issues.push(issue(field, 'out_of_range', `Expected a number from ${-range} to ${range}`));
+      continue;
+    }
+    coordinates.set(field, parsed);
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { latitude: coordinates.get('latitude')!, longitude: coordinates.get('longitude')! };
 }
 
 function timelineStateIssues(state: TimelineEntryState): ValidationIssue[] {

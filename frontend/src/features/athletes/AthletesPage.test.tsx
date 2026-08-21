@@ -65,6 +65,14 @@ beforeEach(() => {
 });
 
 describe('AthletesPage', () => {
+  it('opens an athlete detail supplied by dashboard navigation', async () => {
+    render(<AthletesPage initialAthleteId={ARI_ID} />);
+
+    expect(await screen.findByText('Personal details')).toBeInTheDocument();
+    expect(athleteApi.getAthlete).toHaveBeenCalledWith(ARI_ID);
+    expect(statisticsApi.getAthleteStatistics).toHaveBeenCalledWith(ARI_ID);
+  });
+
   it('opens API roster athlete performance and restores focus to the exact roster trigger', async () => {
     const user = userEvent.setup();
     render(<AthletesPage />);
@@ -99,7 +107,7 @@ describe('AthletesPage', () => {
     expect(screen.getByRole('button', { name: 'Add athlete' })).toBeDisabled();
     resolveList({ data: [ari], meta: { count: 1 } });
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(screen.getAllByText('Sprint A')).toHaveLength(2);
+    expect(within(screen.getByLabelText('Athlete roster')).getAllByText('Sprint A')).toHaveLength(1);
     expect(screen.queryByText(/personal best/i)).not.toBeInTheDocument();
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
@@ -270,7 +278,7 @@ describe('AthletesPage', () => {
     await waitFor(() => expect(addButton).toHaveFocus());
     await user.selectOptions(screen.getByLabelText('Filter by roster status'), 'archived');
     expect(screen.getByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(screen.getAllByText('Archived')).toHaveLength(2);
+    expect(within(screen.getByLabelText('Athlete roster')).getAllByText('Archived')).toHaveLength(1);
   });
 
   it('keeps the confirmation and roster available when archival fails', async () => {

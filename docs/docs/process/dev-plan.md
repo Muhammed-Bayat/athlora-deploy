@@ -37,6 +37,7 @@ The timeline is the system of record for live activity. Results, placing, PBs, a
 **Status: Complete**
 
 Established the non-monolithic React/Vite frontend, Express API, PostgreSQL migrations, Auth0 authentication, deployed service foundations, Gitea CI, and documentation site. The first API contract deliberately fixed the implemented discipline to 100m/seconds while keeping the schema ready for additional athletics contracts.
+**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html` and `SDP-Coach-Console.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder) plus the premium coach-console redesign `Athlora_Premium_Dashboard.html` (dark aurora default with a light "Aurora Mist/Ice" variant). The console uses Space Grotesk display/heading, Satoshi body, Space Grotesk mono for figures, and a deep-ink navy + teal/cyan/blue palette. All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
 
 | Work tracked | Delivered through |
 |---|---|

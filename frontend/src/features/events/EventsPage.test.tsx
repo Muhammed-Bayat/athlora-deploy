@@ -186,6 +186,15 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
 }
 
 describe('EventsPage', () => {
+  it('opens an event detail supplied by dashboard navigation', async () => {
+    renderPage({ initialEventId: CITY_ID });
+
+    const detail = await screen.findByRole('dialog', { name: 'City Sprint Meet' });
+    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
+    expect(resultApi.listResults).toHaveBeenCalledWith(CITY_ID);
+  });
+
   it('shows loading and then renders upcoming API events in stable order', async () => {
     let resolveList!: (value: { data: AthleticsEvent[]; meta: { count: number } }) => void;
     eventApi.listEvents.mockReturnValue(new Promise((resolve) => { resolveList = resolve; }));
@@ -636,11 +645,11 @@ describe('EventsPage', () => {
     expect(screen.getByRole('button', { name: `${augustTenth}, 1 event` })).toBeInTheDocument();
   });
 
-  it('reports only non-cancelled upcoming events to the console', async () => {
+  it('reports only scheduled upcoming events to the console', async () => {
     const onUpcomingCountChange = vi.fn();
     renderPage({ onUpcomingCountChange });
     await screen.findByRole('button', { name: /City Sprint Meet/ });
 
-    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(2));
+    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(1));
   });
 });

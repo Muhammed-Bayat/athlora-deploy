@@ -18,6 +18,7 @@ type Editor = 'new' | Athlete | null;
 
 export interface AthletesPageProps {
   onActiveCountChange?: (count: number) => void;
+  initialAthleteId?: string | null;
 }
 
 function sorted(athletes: Athlete[]): Athlete[] {
@@ -44,7 +45,7 @@ function formatDate(value: string | null): string {
   });
 }
 
-export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
+export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: AthletesPageProps = {}) {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(initialAthleteId);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const returnFocusAthleteId = useRef<string | null>(null);
@@ -194,6 +195,7 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
           <Select
             id="squad-filter"
+            icon="squad"
             value={squad}
             onChange={(event) => setSquad(event.target.value)}
             options={[{ value: '', label: 'All squads' }, ...squads.map((value) => ({ value, label: value }))]}
@@ -201,6 +203,8 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
           <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
           <Select
             id="archive-filter"
+            icon="status"
+            dotColors={{ active: '#0092BC', archived: '#6B8792' }}
             value={archiveFilter}
             onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
             options={[

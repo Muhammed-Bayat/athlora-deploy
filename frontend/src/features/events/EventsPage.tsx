@@ -45,6 +45,7 @@ type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
+  initialEventId?: string | null;
   today?: string;
 }
 
@@ -261,6 +262,7 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
           <label htmlFor="event-type">Event type</label>
           <Select
             id="event-type"
+            variant="field"
             value={draft.type}
             onChange={(input) => setField('type', input.target.value as EventType)}
             options={[
@@ -491,7 +493,7 @@ function ParticipantManager({
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squad ?? 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
               <label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
-              <Select id={`participant-rsvp-${participant.athleteId}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+              <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
@@ -508,7 +510,7 @@ function ParticipantManager({
         <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
-        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
+        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" variant="field" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
           ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squad ? ` · ${athlete.squad}` : ''}` })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
@@ -520,7 +522,7 @@ function ParticipantManager({
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
+export function EventsPage({ onUpcomingCountChange, initialEventId = null, today = localToday() }: EventsPageProps = {}) {
   const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -533,7 +535,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialEventId);
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [participantBusy, setParticipantBusy] = useState(false);
@@ -570,7 +572,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   useEffect(() => {
     if (!loading && !loadError) {
       onUpcomingCountChange?.(
-        events.filter((event) => event.status !== 'cancelled' && event.date >= today).length,
+        events.filter((event) => event.status === 'scheduled' && event.date >= today).length,
       );
     }
   }, [events, loadError, loading, onUpcomingCountChange, today]);
@@ -697,7 +699,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
             { value: 'training', label: 'Training' },
           ]} />
           <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
-          <Select id="event-status-filter" value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
+          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
             { value: '', label: 'All statuses' },
             { value: 'scheduled', label: 'Scheduled' },
             { value: 'in_progress', label: 'In progress' },

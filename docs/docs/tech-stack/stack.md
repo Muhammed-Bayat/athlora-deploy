@@ -7,6 +7,26 @@ sidebar_position: 1
 Athlora is a non-monolithic athletics coaching application: a browser SPA, a REST API, and PostgreSQL are separate services. The current implementation is deliberately limited to 100m timing so the team can make live logging, corrections, result derivation, and coach ownership reliable before expanding to the full athletics meet: races, hurdles, relays, race walks, jumps, throws, and vertical events.
 
 ## Implemented Stack
+| Layer | Tool | Why |
+|-------|------|-----|
+| Frontend framework | React + Vite (TypeScript, strict) | Fast dev/build, strict typing, standard React data flow |
+| Styling | Plain CSS (variables + modules) | Design tokens from approved mockups, no runtime dependency |
+| Landing visuals | SVG + CSS (shared `TrackArtwork`) + DOM chase-camera | Mockup-exact oval art for the hero reveal and cinematic lap; no WebGL dependency |
+| Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
+| Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
+| Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
+| Weather | Open-Meteo | Keyless REST forecast for event venues |
+| Offline storage (Stage 2+) | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
+| PWA (Stage 2+) | vite-plugin-pwa | Service worker + manifest for offline shell |
+| Realtime (Stage 2+) | Socket.IO | Live broadcast of new/edited entries to event viewers |
+| Charts (Stage 2+) | Chart.js | PB/SB progression and comparison charts |
+| PDF export (Stage 3) | pdf-lib | Athlete/event results reports |
+| Unit/component tests | Vitest, React Testing Library | Fast component + pure-logic tests |
+| API tests | Supertest | Endpoint happy paths + validation/error paths |
+| E2E tests | Playwright | Cross-cutting flows, offline sync, multi-device merge |
+| CI/CD | Gitea Actions | Lint + typecheck + test on every push/PR |
+| Hosting | Vercel (frontend), Render (backend) | Static SPA hosting + API hosting |
+| Docs site | Docusaurus on Cloudflare Pages | Versioned docs: setup, API, schema |
 
 | Area | Technology | How Athlora uses it | Why it fits Athlora |
 |---|---|---|---|
@@ -26,6 +46,13 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Hosting | Vercel, Render, Cloudflare Pages | SPA, API, and documentation deployments respectively. | Independent hosting matches the architecture and lets the public documentation remain available without exposing the API or database. |
 
 ## Implemented Supporting Libraries
+- **Dexie**: wraps IndexedDB with a typed, promise API and explicit transactions — the cleanest fit for an offline-first write queue.
+- **Socket.IO**: reliable fallbacks (polling) and rooms make per-event broadcast trivial and resilient.
+- **Chart.js**: batteries-included for line/bar charts without a heavier data-viz framework.
+- **Open-Meteo**: no API key, free rate limits — ideal for a university project with no billing.
+- **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
+- **Lazy-loaded SVG/CSS landing track**: the mockup-exact oval is drawn once as a shared SVG component and painted differently per context; the cinematic lap is pure DOM transforms, so the landing page needs no WebGL.
+- **pdf-lib**: pure-JS PDF generation — works in Node and the browser without native deps.
 
 - `dotenv` loads server-only local configuration; browser configuration is restricted to public `VITE_*` values.
 - `tsx` provides the API's watch-mode development server without a separate build step.
@@ -35,6 +62,9 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 ## Planned Stack
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
+- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
+- **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
+- **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 
 | Stage | Technology | Intended Athlora use | Why it is deferred |
 |---|---|---|---|
