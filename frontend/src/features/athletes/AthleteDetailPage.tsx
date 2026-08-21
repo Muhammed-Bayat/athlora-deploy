@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { getAthlete, updateAthlete } from '../../api/athletes';
 import { getAthleteStatistics } from '../../api/statistics';
 import { Badge, Button, Card, Modal, Toast } from '../../components';
@@ -12,6 +12,7 @@ import type {
 import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
+import type { Injury } from '../fitness/injuryRegions';
 import styles from './AthleteDetailPage.module.css';
 
 interface AthleteDetailPageProps {
@@ -23,6 +24,7 @@ interface AthleteDetailPageProps {
 type HistoryTab = 'competitions' | 'training';
 
 const historyTabs: HistoryTab[] = ['competitions', 'training'];
+const FitnessView = lazy(async () => ({ default: (await import('../fitness/FitnessView')).FitnessView }));
 
 function initials(name: string): string {
   return name
@@ -99,14 +101,21 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const [activeTab, setActiveTab] = useState<HistoryTab | null>(null);
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
+  const [fitnessOpen, setFitnessOpen] = useState(false);
+  const [injuries, setInjuries] = useState<Injury[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
+  const fitnessButtonRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<Record<HistoryTab, HTMLButtonElement | null>>({ competitions: null, training: null });
 
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!fitnessOpen) fitnessButtonRef.current?.focus();
+  }, [fitnessOpen]);
 
   useEffect(() => {
     let current = true;
@@ -172,6 +181,17 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const activeEntries = statistics?.recentResults[selectedTab] ?? [];
   const activeResultType = selectedTab === 'competitions' ? 'competition' : 'training';
 
+  if (fitnessOpen) {
+    return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
+      athleteName={displayName}
+      athleteSquad={athlete?.squad ?? statistics?.athlete.squad ?? null}
+      injuries={injuries}
+      onAddInjury={(injury) => setInjuries((current) => [...current, injury])}
+      onResolveInjury={(injuryId) => setInjuries((current) => current.filter((injury) => injury.id !== injuryId))}
+      onBack={() => setFitnessOpen(false)}
+    /></Suspense>;
+  }
+
   return (
     <section
       className={styles.detail}
@@ -198,6 +218,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
               {athlete.archivedAt ? 'Archived athlete' : 'Active athlete'}
             </span>
           )}
+          {athlete && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
           {athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
         </div>
       </header>

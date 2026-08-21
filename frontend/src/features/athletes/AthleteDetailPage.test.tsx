@@ -9,6 +9,9 @@ const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
+vi.mock('../fitness/FitnessView', () => ({
+  FitnessView: ({ athleteName, onBack }: { athleteName: string; onBack: () => void }) => <section><h1>Fitness & injury map</h1><p>{athleteName}</p><button type="button" onClick={onBack}>Back to performance</button></section>,
+}));
 
 const ATHLETE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -121,9 +124,15 @@ describe('AthleteDetailPage', () => {
     expect(screen.getByRole('tab', { name: 'Training 0' })).toHaveAttribute('tabindex', '-1');
     expect(screen.getByText('No competition results yet.')).toBeInTheDocument();
     expect(screen.queryByText('No training results yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fitness' })).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Training 0' }));
     expect(screen.getByText('No training results yet.')).toBeInTheDocument();
     expect(screen.queryByText('No competition results yet.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Fitness' }));
+    expect(await screen.findByRole('heading', { name: 'Fitness & injury map' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back to performance' }));
+    expect(screen.getByRole('button', { name: 'Fitness' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Back to roster' }));
     expect(onBack).toHaveBeenCalledOnce();
   });
