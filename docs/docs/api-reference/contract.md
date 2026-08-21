@@ -4,7 +4,11 @@ sidebar_position: 1
 
 # 100m data/API contract
 
-The authoritative contract every Stage 1 feature workstream implements against. It fixes the MVP discipline to **100m** (track, timed) and the result unit to **seconds** at the API/service boundary, and defines the request/response DTOs for athletes, events, participants, timeline entries, results, statistics, and dashboard data.
+The authoritative contract for the currently implemented 100m vertical slice. It fixes the current discipline to **100m** (track, timed) and the result unit to **seconds** at the API/service boundary, and defines the request/response DTOs for athletes, events, participants, timeline entries, results, statistics, and dashboard data.
+
+All paths in this document are relative to `/api/v1`.
+
+Athlora's product scope is a full athletics meet, not only 100m. Additional track, relay, race-walk, jump, throw, and vertical-event contracts will extend this document with their own units, validation, entry shapes, derivation, placing, and PB/SB rules. Until those contracts are implemented, this page remains exact for the shipped 100m API.
 
 The database schema stays permissive (`discipline` is free-form `TEXT`; the `unit` column allows `seconds`/`metres`/`cm`) so later disciplines are added by new migrations without changing this contract. The discipline/unit fixation happens in the TypeScript domain types and the pure result-derivation service — never by a database CHECK on the discipline value.
 
@@ -62,7 +66,7 @@ Mutation payload validation failures return HTTP `400` with code `VALIDATION_ERR
 
 Mutation payloads use strict field allow-lists. Unknown fields and server-controlled identifiers, ownership/audit fields, derived fields, and timestamps are rejected rather than ignored. Malformed JSON uses the same envelope. Malformed resource identifiers in URL paths retain the ownership contract's non-enumerating `404 NOT_FOUND` response.
 
-All application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row.
+Unless explicitly noted, application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row.
 
 ### 3.1 Authentication context and ownership
 
@@ -81,6 +85,15 @@ A valid Auth0 identity that has not completed synchronization receives:
 ```
 
 The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHORIZED` responses.
+
+**Authentication and account endpoints:**
+
+| Method & path | Authentication | Purpose |
+|---|---|---|
+| `PUT /auth/me` | Verified Auth0 JWT | Fetches the Auth0 profile and creates or updates the local application user; returns `{ data: User }`. It is the only application-user endpoint that does not require a pre-existing local user. |
+| `POST /auth/me/password-ticket` | Verified JWT + synchronized user | Creates an Auth0-hosted password-change ticket; returns `201` with `{ data: { url } }`. |
+| `DELETE /auth/me` | Verified JWT | Starts permanent deletion of the verified Auth0 identity and local workspace; returns `202` with `{ data: { status: 'pending' } }`. A durable deletion tombstone blocks later synchronization and resource access. |
+| `GET /auth/login`, `/auth/callback`, `/auth/logout` | Public | Legacy scaffolding only; each returns `501 NOT_IMPLEMENTED`. The SPA uses Auth0 Universal Login instead. |
 
 Resource ownership is server-derived: athlete access uses `athletes.coach_id`; event access uses `events.created_by`; timeline entry, participant and result access requires both the parent event and athlete to belong to the current user. `recordedBy` and `overriddenBy` are audit actors, not owners. Client mutation payloads never control `coachId`, `createdBy`, `recordedBy` or `overriddenBy`.
 
@@ -132,11 +145,11 @@ Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`,
 
 ```
 id, createdBy, type ('competition'|'training'), discipline ('100m'), title, date (ISO date),
-time (ISO|null), locationName (string|null), latitude (number|null), longitude (number|null),
+time (HH:mm:ss|null), locationName (string|null), latitude (number|null), longitude (number|null),
 status, createdAt, updatedAt
 ```
 
-The MVP discipline is fixed to **100m** at the API/service boundary: create/full-replacement accepts only `'100m'` or `null` and normalizes both to `'100m'` server-side; any other value is rejected with `400`. The database stays permissive (TEXT) so future disciplines are added by migration, not by loosening this contract.
+The currently deployed discipline is fixed to **100m** at the API/service boundary: create/full-replacement accepts only `'100m'` or `null` and normalizes both to `'100m'` server-side; any other value is rejected with `400`. The database stays permissive (TEXT) so future disciplines are added through explicit migrations and contracts rather than by loosening this one.
 
 **Event states** (`status`, CHECK-constrained):
 
@@ -201,7 +214,7 @@ The response is `{ data: forecast }`. Temperatures are Celsius, precipitation pr
 |---|---|
 | `GET /weather/current?latitude=&longitude=` | Fetch live current conditions from Open-Meteo for the console readout |
 
-Current weather is proxied server-side from Open-Meteo without an API key. The provider receives the requested coordinates (never stored) and returns a single local current-condition snapshot; Athlora exposes only this stable DTO:
+Current weather is proxied server-side from Open-Meteo without an API key. The provider receives the requested coordinates (never stored) and returns a single local current-condition snapshot; Athlora exposes only this stable DTO.
 
 ```
 timezone, temperatureC, apparentTemperatureC, humidityPercent, isDay,
@@ -268,6 +281,13 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 - `outcome` is derived, never typed in by hand (see §2).
 - `isPb`/`isSb` are derived flags, not manually logged.
 - Override fields record a coach correction: `manualOverride` (positive finite seconds), `overrideReason`, `overriddenBy` (user id), `overrideAt` (timestamp). An override request supplies a non-blank reason with the value, or paired nulls to clear it. An override is stored alongside the derived `finalResult`, never replacing it.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /events/:eventId/results` | List the owned event's current 100m result rows in `{ data, meta: { count } }`. |
+| `PUT /events/:eventId/results/:athleteId` | Set or clear that athlete's manual override. The body is `{ manualOverride, overrideReason }`; both fields are required, a positive override requires a non-blank reason, and clearing requires both values to be `null`. Returns `{ data: Result }`. |
+
+Every override mutation locks the event/result set and recomputes the whole event so placements and PB/SB flags for other athletes remain authoritative.
 
 **PB/SB rules:** `isPb` is true when the athlete's effective result is better (lower time) than every previously recorded effective result for the same discipline; `isSb` is true when it beats the best effective result recorded in the current season. A derived `valid` result or a `no_result` promoted by a manual override can count; voided outcomes do not. A manual override is what the statistic is computed from when present, while the response's `outcome` and `finalResult` remain the raw derived values for auditability.
 
@@ -364,4 +384,4 @@ overrideReason (string|null), overriddenBy (string|null), overrideAt (ISO|null),
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

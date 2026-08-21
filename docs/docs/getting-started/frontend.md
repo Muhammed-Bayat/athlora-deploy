@@ -2,61 +2,84 @@
 sidebar_position: 1
 ---
 
-# Frontend (React + Vite + TypeScript)
+# Frontend
 
-The SPA lives in `/frontend`. It talks to the backend API over HTTP/JSON and is the design source of truth for the visual identity.
+The `/frontend` package is the Athlora React single-page application. It is a separate deployment from the Express API and communicates only through authenticated HTTP/JSON requests. The shipped live-logging UI covers 100m; the product roadmap expands it into the full athletics-meet interface.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22 LTS recommended (Node.js 20 or later supported)
 - npm
+- A running backend and Auth0 SPA application for authenticated features
 
-## Install & run
+## Run locally
 
 ```bash
 cd frontend
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-`npm run dev` starts the Vite dev server (default `http://localhost:5173`).
+Vite serves the app at `http://localhost:5173`. Start the backend separately on `http://localhost:4000` before signing in.
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and set the values when they are available:
+`.env.local` is ignored by Git. Set these Vite variables:
 
-```
+```dotenv
 VITE_API_BASE_URL=http://localhost:4000
-VITE_AUTH0_DOMAIN=
-VITE_AUTH0_CLIENT_ID=
-VITE_AUTH0_AUDIENCE=
+VITE_AUTH0_DOMAIN=your-tenant.eu.auth0.com
+VITE_AUTH0_CLIENT_ID=your-spa-client-id
+VITE_AUTH0_AUDIENCE=https://api.example.com
 ```
 
-`VITE_API_BASE_URL` points at the backend (see the backend guide).
+`VITE_*` values are embedded in the browser build. They must contain only public configuration, never Management API credentials or database URLs. In Auth0, register `http://localhost:5173` as an allowed callback URL, logout URL, and web origin.
 
 The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5174` (strict port) with `VITE_API_BASE_URL=http://localhost:4100` and the same `VITE_AUTH0_*` variables — see `getting-started/scripts.md`.
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Dev server with HMR |
-| `npm run build` | Type-check and production build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run typecheck` | `tsc -b` (strict) |
-| `npm run test` | Vitest + React Testing Library, single run |
-| `npm run lint` | ESLint (flat config) |
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the Vite development server with HMR. |
+| `npm run build` | Type-check and create `dist/`. |
+| `npm run preview` | Serve the production build locally. |
+| `npm run typecheck` | Run strict TypeScript project checks. |
+| `npm run test` | Run Vitest and React Testing Library once. |
+| `npm run lint` | Run ESLint. |
 
-## Structure conventions
+## Application structure
 
-- Shared UI primitives live in `src/components` (Button, Input, Select, Card, Badge, Modal, Toast, EmptyState).
-- Feature code lives in `src/features/<feature>` folders, not global pages/forms dirs.
-- All colours, fonts, radii and shadows come from `src/styles/tokens.css` — never hard-code hex values.
-- `src/types` mirrors the backend DTOs (camelCase on the wire). The MVP 100m contract is encoded there: `DISCIPLINE_100M`/`Discipline`, `RESULT_UNIT_SECONDS`/`ResultUnit`, `ResultOutcome`, and the aligned `Athlete`, `TimelineEntry`, `Result`, `EventParticipant`, `AthleteStatistics` and `DashboardSummary` types.
-- `src/api/client.ts` is the shared typed fetch wrapper with per-resource files (`athletes`, `events`, `participants`, `timeline`, `results`, `statistics`, `dashboard`), and `src/components/AsyncBoundary.tsx` renders shared loading/error/empty states for them.
+- `src/features` contains feature-owned UI for landing, authentication, dashboard, athletes, events, live logging, and results.
+- `src/components` contains reusable accessible controls and async states.
+- `src/api` contains the typed fetch client and one module per API resource. It preserves the API error code, message, status, and validation details.
+- `src/types` mirrors the API's camel-case DTOs. The current contract is 100m results in seconds; later contracts will add the units and entry shapes required by track, relays, jumps, throws, and vertical events.
+- `src/styles/tokens.css` contains shared visual tokens. Component and feature styling uses CSS modules.
 
-## Current state
+## Implemented features
 
+- Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
+- API-backed dashboard with summary, live-event, loading, onboarding, and recovery states.
+- Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Athlete profiles are intended to become multi-discipline records.
+- Event creation, lifecycle changes, participant RSVP management, results, manual corrections, and event-day Open-Meteo forecasts.
+- Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
+- A responsive coach console with an optional weather-effects display, theme preference, live clock, and current local weather readout.
+
+The dashboard and other authenticated views wait for `PUT /api/v1/auth/me` to finish successfully. If synchronization fails, the UI provides a retry state instead of showing protected data.
+
+## Testing
+
+Frontend tests cover UI behavior, accessibility interactions, API wrappers, authenticated state, dashboard states, athlete and event workflows, live logging, result corrections, and weather handling. Run them with:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+For browser-level coverage of the full stack, use the [E2E guide](./e2e).
 - The app shell renders with **Athlora** branding and an ink sidebar. The roster, event-management and dashboard views are live against the typed API.
 - Weather presets use paired semantic surface, text, control, status and focus colors across the authenticated console. `night` and `night-rain` keep dashboards, forms, dialogs, badges, result boards, empty states and live-logging controls consistently dark and readable without changing the approved Athlora palette; disabling Weather FX removes the weather theme.
 - The console shell is a premium dark aurora redesign of `Athlora_Premium_Dashboard.html` with a light "Aurora Mist/Ice" toggle (`localStorage` `athlora-theme`, `theme-light` class on `<html>`). The topbar shows a live weather readout for the coach's device location (geolocation with timezone-city fallback, refreshed every 10 minutes while visible) proxied through `GET /api/v1/weather/current`, a weather-effects toggle with an animated scene, and a live clock. Dashboard, Athletes, Events, Live Logger and Account views all consume the same `--console-*` tokens; the mockup dashboard's fabricated numbers are replaced with real aggregate data.
@@ -77,16 +100,14 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 
 ## Deployment
 
-The frontend is deployed to **Vercel** at:
+The production SPA is deployed to Vercel:
 
 ```text
 https://athlora-deploy.vercel.app
 ```
 
-Vercel builds the `frontend` root from the private GitHub deployment mirror with `npm ci` and `npm run build`, then publishes `dist`. Production and preview environments require the four `VITE_*` variables above; `VITE_API_BASE_URL` is `https://athlora-deploy.onrender.com`.
-
-The production URL must be listed in the Auth0 application's allowed callback URLs, logout URLs, and web origins. Auth0 production sign-in and redirect have been verified.
+Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/`. Configure the same four `VITE_*` values in Vercel and register the production URL in Auth0's callback, logout, and web-origin settings.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

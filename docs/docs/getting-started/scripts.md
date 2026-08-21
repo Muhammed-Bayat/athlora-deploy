@@ -1,20 +1,29 @@
 ---
-sidebar_position: 3
+sidebar_position: 5
 ---
 
-# Scripts, CI & services
+# Scripts, CI, and Services
 
-A reference for the npm scripts and CI that keeps the repo green.
+This page records the repository-level quality gates, CI behavior, and deployed services.
 
-## Root
+## Package commands
 
+Each package has its own `package.json`; run commands with `npm --prefix <package> run <script>` from the repository root, or run them inside the package directory.
 - `.gitignore`, `.editorconfig`, `README.md` (with the **AI Usage** section) at the repo root.
 - Mockups `SDP-Landing.html`, `SDP-Coach-Console.html` and `Athlora_Premium_Dashboard.html` (premium console redesign) are tracked at the root as the design source of truth.
 
-## CI (Gitea Actions)
+| Package | Primary checks |
+|---|---|
+| `frontend` | `lint`, `typecheck`, `test`, `build` |
+| `backend` | `lint`, `typecheck`, `test`, `build` |
+| `docs` | `typecheck`, `build` |
+| `e2e` | `test:install`, `test` |
 
-Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in parallel jobs:
+The backend also provides `db:migrate` for source migrations and `db:migrate:prod` for compiled migrations. See the dedicated [frontend](./frontend), [backend](./backend), [E2E](./e2e), and [documentation-site](./docs) guides for command details.
 
+## Continuous integration
+
+`.gitea/workflows/ci.yml` runs on every push and pull request using Node.js 22.
 | Job | Steps |
 |-----|-------|
 | `frontend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
@@ -24,22 +33,61 @@ Workflow: `.gitea/workflows/ci.yml`. On every push and pull request it runs, in 
 
 The `e2e` job provisions a `postgres:16` service container (`postgresql://postgres:postgres@localhost:5432/athlora_e2e`) that `global-setup` migrates and truncates before every run. It requires five repository secrets — `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`, `E2E_AUTH0_EMAIL`, `E2E_AUTH0_PASSWORD` — and when any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
 
-Each job runs on the default `ubuntu-latest` runner label with Node 22 pinned via `actions/setup-node@v4` — so CI does not depend on a runner being registered with a custom `docker://` image label.
+| Job | Work performed |
+|---|---|
+| `frontend` | Install, lint, type-check, test, and build the SPA. |
+| `backend` | Install, lint, type-check, test, and build the API. |
+| `docs` | Install and build the Docusaurus site. |
+| `e2e` | Install all test dependencies, provision PostgreSQL 16, install Chromium, and run Playwright when Auth0 secrets are available. |
 
-The runner is registered against the university Gitea instance (`https://sdp.ms.wits.ac.za`) and executes in the `ubuntu-latest:docker://node:22-bookworm` container. It runs from Docker Desktop on a team machine with the DinD flavour (bundled daemon, no host socket required):
+The E2E job uses `postgres:16` and a disposable `athlora_e2e` database. It skips with an explicit message until these repository secrets are configured:
 
-```bash
-docker run -d --name athlora_runner --privileged \
-  -e GITEA_INSTANCE_URL=https://sdp.ms.wits.ac.za/ \
-  -e GITEA_RUNNER_REGISTRATION_TOKEN=<token> \
-  -e GITEA_RUNNER_NAME=athlora-runner \
-  -e GITEA_RUNNER_LABELS="ubuntu-latest:docker://node:22-bookworm" \
-  -v <path>:/data \
-  docker.io/gitea/runner:3-dind
+```text
+VITE_AUTH0_DOMAIN
+VITE_AUTH0_CLIENT_ID
+VITE_AUTH0_AUDIENCE
+E2E_AUTH0_EMAIL
+E2E_AUTH0_PASSWORD
 ```
 
-The registration token is obtained in the Gitea UI under the repository's **Settings → Actions → Runners**. A runner only accepts jobs while its machine and container are running.
+On an E2E failure, CI uploads `e2e/playwright-report` for seven days. A skipped E2E job is not evidence that the browser workflow has passed; run it locally or configure the secrets before release.
 
+## Local verification
+
+Run the non-browser gates from the repository root:
+
+```bash
+npm ci --prefix frontend
+npm run lint --prefix frontend
+npm run typecheck --prefix frontend
+npm run test --prefix frontend
+npm run build --prefix frontend
+
+npm ci --prefix backend
+npm run lint --prefix backend
+npm run typecheck --prefix backend
+npm run test --prefix backend
+npm run build --prefix backend
+
+npm ci --prefix docs
+npm run typecheck --prefix docs
+npm run build --prefix docs
+```
+
+Run the authenticated Playwright suite separately using the [E2E guide](./e2e). Set `TEST_DATABASE_URL` to run the backend's PostgreSQL integration tests.
+
+## Deployed services
+
+| Service | Provider | URL |
+|---|---|---|
+| Frontend SPA | Vercel | `https://athlora-deploy.vercel.app` |
+| REST API and health check | Render | `https://athlora-deploy.onrender.com/health` |
+| PostgreSQL | Neon, Frankfurt | Private connection configured through `DATABASE_URL` |
+| Identity | Auth0 | Tenant configuration is private |
+| Documentation | Cloudflare Pages | `https://athlora-deploy.pages.dev` |
+| Source control and CI | University Gitea | `https://sdp.ms.wits.ac.za/cache-us-outside/athlora` |
+
+Open-Meteo is used server-side for event-day forecasts and current coach-weather data. It requires no API key; provider data is validated and reduced to Athlora's own API response before it reaches the browser.
 ## End-to-end tests (Playwright)
 
 The `/e2e` package drives the full 100m vertical slice against real servers and a real database, on desktop and mobile Chromium, plus an automated accessibility audit.
@@ -89,17 +137,8 @@ The backend suite includes 38 database integration tests that exercise real SQL 
 
 ## Definition of done
 
-A task is "done" when its tests pass in CI and:
-
-- table/column names match the build spec exactly (or a new migration follows its conventions);
-- API routes and response shapes match the spec;
-- the UI uses design tokens only;
-- tests are added and passing;
-- the `Assisted-by:` footer is present on commits with AI-generated code;
-- the README AI Usage section is current.
-
-Full checklist: the build spec, Section 12.
+A change is ready for review when its affected checks pass, its documentation and API/schema references are current, and it does not introduce credentials or generated artifacts into Git. AI-assisted commits follow the project's documented Conventional Commit and attribution requirements.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol]. This revision was edited with the assistance of opencode[deepseek-v4-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

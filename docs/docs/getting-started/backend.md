@@ -2,36 +2,35 @@
 sidebar_position: 2
 ---
 
-# Backend (Express + TypeScript)
+# Backend
 
-The REST API lives in `/backend`. All routes are prefixed `/api/v1`. It is deployed separately from the frontend.
+The `/backend` package is the Athlora Express REST API. It owns authentication verification, coach-scoped data access, PostgreSQL persistence, result derivation, and third-party weather boundaries. API routes are mounted below `/api/v1`; `GET /health` is public. The deployed contract currently supports 100m timing, while the API/data model is the foundation for the full athletics-meet roadmap.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22 LTS recommended (Node.js 20 or later supported)
 - npm
-- PostgreSQL (local, Neon, or university instance) for DB features
-- Auth0 tenant (optional during scaffolding — protected routes return `AUTH_NOT_CONFIGURED` until configured)
+- PostgreSQL 13 or later
+- An Auth0 API and SPA application for protected routes
 
-## Install & run
+## Run locally
 
 ```bash
 cd backend
-npm install
 cp .env.example .env
+npm install
+npm run db:migrate
 npm run dev
 ```
 
-`npm run dev` runs the API with hot reload via `tsx` (default `http://localhost:4000`).
+The API listens on `http://localhost:4000` by default. Migrations require a reachable `DATABASE_URL`; protected routes additionally require `AUTH0_DOMAIN` and `AUTH0_AUDIENCE`.
 
 ## Environment
 
-`.env.example`:
-
-```
-DATABASE_URL=
-AUTH0_DOMAIN=
-AUTH0_AUDIENCE=
+```dotenv
+DATABASE_URL=postgresql://user:password@localhost:5432/athlora
+AUTH0_DOMAIN=your-tenant.eu.auth0.com
+AUTH0_AUDIENCE=https://api.example.com
 AUTH0_MANAGEMENT_CLIENT_ID=
 AUTH0_MANAGEMENT_CLIENT_SECRET=
 AUTH0_PASSWORD_RETURN_URL=http://localhost:5173
@@ -39,42 +38,65 @@ CORS_ORIGINS=http://localhost:5173
 PORT=4000
 ```
 
-Real values are never committed — only `.env.example` templates are versioned.
+The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list.
 
 The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http://localhost:5174` (see the E2E section in `getting-started/scripts.md`).
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Dev server with reload (`tsx watch`) |
-| `npm run build` | Compile TS to `dist/` |
-| `npm run db:migrate` | Apply pending SQL migrations to `DATABASE_URL` |
-| `npm start` | Apply compiled migrations, then run the compiled server |
-| `npm run typecheck` | `tsc --noEmit` (strict) |
-| `npm run test` | Vitest + Supertest, single run |
-| `npm run lint` | ESLint (flat config) |
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the API with `tsx watch`. |
+| `npm run build` | Compile TypeScript to `dist/`. |
+| `npm run db:migrate` | Apply pending source migrations. |
+| `npm run db:migrate:prod` | Apply compiled migrations. |
+| `npm start` | Migrate, then start the compiled server. |
+| `npm run typecheck` | Run strict TypeScript checks. |
+| `npm run test` | Run Vitest and Supertest once. |
+| `npm run lint` | Run ESLint. |
 
 ## Layout
 
-```
-src/routes         one router per resource (athletes, events, timeline, results, auth)
-src/controllers    thin HTTP handlers
-src/services       pure business logic (result derivation engine, ownership, merge rules) — unit-tested
-src/validation     strict shared payload parsers + primitives (UUIDs, dates, local times, enums)
-src/db             pg client, checksum-tracked migrations, snake-case row mappers, transactions
-src/middleware     auth, ownership, validation, error handling, not-implemented
-src/types          domain DTOs (camelCase JSON) + request auth context
+```text
+src/routes        API route declarations
+src/controllers   HTTP request and response handling
+src/services      coach-scoped persistence and business logic
+src/middleware    authentication, ownership, validation, and errors
+src/validation    strict DTO and primitive parsers
+src/db            pg client, migrations, row mappers, and transactions
+src/types         domain DTOs and authenticated request context
 ```
 
-## Database
+## Database and migrations
 
-The schema is defined by sequential SQL files in `src/db/migrations`. Apply all pending migrations with:
+Migrations in `src/db/migrations` are sequential, checksum-tracked SQL files. The runner records them in `schema_migrations`, takes a PostgreSQL advisory lock to prevent concurrent runs, and applies each pending migration transactionally. Do not edit an applied migration; create the next numbered migration instead.
+
+`npm start` runs migrations before starting the production server. The schema uses `gen_random_uuid()`, so PostgreSQL 13 or later is required.
+
+Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separate test database because those suites create and remove application data.
+
+## Implemented API capabilities
+
+- Auth0 JWT verification, synchronized local users, durable account-deletion tombstones, password-ticket generation, and non-enumerating ownership checks.
+- Coach-owned athlete CRUD with archive/restore, current 100m athlete statistics, results history, PBs, and SBs. Statistics will gain discipline-aware views as new events are implemented.
+- Event CRUD for the current 100m slice, forward-only lifecycle transitions, cancellation that preserves history, participants, RSVPs, and event-day forecasts. The lifecycle model will be reused for the remaining athletics disciplines.
+- Timeline entries for current 100m finishes, incidents, and notes with optimistic versions, soft-delete undo, transaction locks, and automatic result recomputation. Future contracts will add measured attempts, fouls, heights, relay legs, and discipline-specific result rules.
+- Derived results, placement, PB/SB flags, and audited manual overrides.
+- Owner-scoped dashboard aggregates and current-weather proxying for the coach console.
+
+All failures use `{ error: { code, message, details } }`. Missing, malformed, wrong-parent, and cross-coach resources intentionally share a generic `404 NOT_FOUND` response.
+
+## Test and verify
 
 ```bash
-npm run db:migrate
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+curl http://localhost:4000/health
 ```
 
+The unit and API suites cover validation, ownership, authorization, migrations, result derivation/recomputation, account lifecycle, weather boundaries, and resource services. The database integration suites skip cleanly when `TEST_DATABASE_URL` is absent.
 The runner records names and SHA-256 checksums in `schema_migrations`, serializes concurrent runs with a PostgreSQL advisory lock, and applies each migration transactionally. It can baseline the original six-table schema if `0001_init.sql` was applied manually before the runner existed, but rejects partial schemas and modified applied migrations. Checksums are computed over line-ending-normalized content, so they are stable across platforms (LF vs CRLF checkouts). Production `npm start` runs pending migrations before starting the API. `gen_random_uuid()` requires PostgreSQL 13+.
 
 ## Current state
@@ -100,28 +122,16 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 
 ## Deployment
 
-The backend is deployed to **Render** at:
+The production API is deployed to Render:
 
 ```text
 https://athlora-deploy.onrender.com
 ```
 
-`GET /health` is publicly available at `https://athlora-deploy.onrender.com/health`. Render builds from the private GitHub deployment mirror because the university Gitea repository cannot be connected directly. Gitea remains the source of truth and pushes are mirrored to GitHub.
+Render builds from `/backend` with `npm ci && npm run build`, starts with `npm start`, and checks `/health`. Configure `DATABASE_URL`, all Auth0 variables required by the deployed features, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22` as Render environment variables.
 
-Render configuration:
-
-```text
-Region: Frankfurt
-Root directory: backend
-Build command: npm ci && npm run build
-Start command: npm start
-Health check path: /health
-```
-
-The service requires `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`, `AUTH0_PASSWORD_RETURN_URL=https://athlora-deploy.vercel.app`, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22`. Multiple allowed frontend origins can be provided as a comma-separated list. Secrets are configured in Render and are never committed.
-
-Create a dedicated Auth0 Machine-to-Machine application for the Auth0 Management API and grant only `delete:users` and `create:user_tickets`; the backend also requests exactly those scopes. Rotate its client secret in Auth0 and Render together, never expose it through `VITE_*`, and list the frontend origin in the Auth0 SPA application's allowed callback, logout and web-origin URLs.
+Create a dedicated Auth0 Machine-to-Machine application for the Management API with only `delete:users` and `create:user_tickets`. Never expose its client secret through `VITE_*` variables.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
