@@ -12,6 +12,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Frontend framework | React + Vite (TypeScript, strict) | Fast dev/build, strict typing, standard React data flow |
 | Styling | Plain CSS (variables + modules) | Design tokens from approved mockups, no runtime dependency |
 | Landing visuals | SVG + CSS (shared `TrackArtwork`) + DOM chase-camera | Mockup-exact oval art for the hero reveal and cinematic lap; no WebGL dependency |
+| Fitness body viewer | Three.js + React Three Fiber + Drei | On-demand static anatomical viewer for temporary injury mapping with topology-bound surface heat maps |
 | Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
@@ -63,6 +64,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
 - **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
+- **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Its current injury state is intentionally temporary until a dedicated backend contract is introduced.
 - **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
 - **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 
