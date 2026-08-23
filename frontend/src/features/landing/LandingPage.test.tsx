@@ -12,17 +12,28 @@ function renderLanding() {
   return callbacks;
 }
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe('LandingPage', () => {
-  it('wires every account action to the supplied callbacks', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('runs the opening identity beat before typing the hero headline', () => {
+    vi.useFakeTimers();
+    renderLanding();
+
+    expect(screen.getByText('ATHLORA')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByText('ATHLORA')).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1400));
+    expect(screen.getByRole('heading', { name: 'Track the squad. Run the season.' })).toHaveTextContent('Track the squad.');
+  });
+
+  it('wires the persistent account actions to the supplied callbacks', () => {
     const callbacks = renderLanding();
 
-    screen.getAllByRole('button', { name: /^log in$/i }).forEach(fireEvent.click);
+    fireEvent.click(screen.getByRole('button', { name: /^log in$/i }));
     fireEvent.click(screen.getByRole('button', { name: /already have an account/i }));
-    screen.getAllByRole('button', { name: /^get started$/i }).forEach(fireEvent.click);
+    fireEvent.click(screen.getByRole('button', { name: /^get started$/i }));
     screen.getAllByRole('button', { name: /^get started free$/i }).forEach(fireEvent.click);
     fireEvent.click(screen.getByRole('button', { name: /^forgot password$/i }));
 
@@ -31,8 +42,8 @@ describe('LandingPage', () => {
     const dialog = screen.getByRole('dialog', { name: /navigation menu/i });
     fireEvent.click(within(dialog).getByRole('button', { name: /forgot password/i }));
 
-    expect(callbacks.onLogin).toHaveBeenCalledTimes(3);
-    expect(callbacks.onSignup).toHaveBeenCalledTimes(4);
+    expect(callbacks.onLogin).toHaveBeenCalledTimes(2);
+    expect(callbacks.onSignup).toHaveBeenCalledTimes(3);
     expect(callbacks.onPasswordHelp).toHaveBeenCalledTimes(2);
   });
 
@@ -55,22 +66,15 @@ describe('LandingPage', () => {
     expect(menuButton).toHaveFocus();
   });
 
-  it('runs the intro and stable counters from zero on each mount', () => {
-    vi.useFakeTimers();
-    const first = render(<LandingPage onLogin={vi.fn()} onSignup={vi.fn()} onPasswordHelp={vi.fn()}/>);
+  it('keeps the continuous story and real product information available in native DOM chapters', () => {
+    renderLanding();
 
-    expect(screen.getByText('ATHLORA')).toBeInTheDocument();
-    expect(screen.getByText('Athletes tracked').previousElementSibling).toHaveTextContent('0');
     expect(screen.getByRole('heading', { name: 'Track the squad. Run the season.' })).toBeInTheDocument();
-
-    act(() => vi.advanceTimersByTime(5000));
-    expect(screen.queryByText('ATHLORA')).not.toBeInTheDocument();
-    expect(screen.getByText('Athletes tracked').previousElementSibling).toHaveTextContent('128');
-    expect(screen.getByText('PBs logged this season').previousElementSibling).toHaveTextContent('342');
-
-    first.unmount();
-    render(<LandingPage onLogin={vi.fn()} onSignup={vi.fn()} onPasswordHelp={vi.fn()}/>);
-    expect(screen.getByText('ATHLORA')).toBeInTheDocument();
-    expect(screen.getByText('Athletes tracked').previousElementSibling).toHaveTextContent('0');
+    expect(screen.getByRole('heading', { name: 'One squad. Every athlete visible.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The season comes into focus.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Every lane tells a performance story.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'See more than performance.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The entire season, in one place.' })).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { name: 'Athletes' })).toHaveTextContent('Jordan Lee');
   });
 });
