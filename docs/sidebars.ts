@@ -33,9 +33,11 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Project Process',
       items: [
+        'process/project-methodology',
         'process/git-methodology',
         'process/agent-build-spec',
         'process/dev-plan',
+        'process/roadmap',
       ],
     },
     {
