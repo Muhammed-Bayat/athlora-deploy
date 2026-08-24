@@ -44,6 +44,10 @@ vi.mock('./api/athletes', async (importOriginal) => ({
 
 vi.mock('./api/dashboard', () => dashboardApi);
 
+vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
+  PersistentWebGLStage: () => null,
+}));
+
 describe('App', () => {
   beforeAll(() => {
     Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
