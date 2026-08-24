@@ -132,7 +132,7 @@ npm run test:coverage --prefix backend
 node scripts/generate-coverage-report.mjs
 ```
 
-The commands create ignored `coverage/` directories containing interactive HTML reports, `lcov.info`, machine-readable summaries, and a combined `coverage/coverage-report.md`. The Gitea `coverage` job prints the Markdown report in its log, appends it to the runner job summary when supported, and uploads all reports as a 14-day `coverage-reports` artifact. Coverage is informational until the team agrees on a baseline and threshold.
+The commands create ignored JSON coverage summaries. The Gitea `coverage` job prints a short Markdown table with frontend, backend, and combined line, branch, and function coverage; it appends the same table to the runner job summary when supported. Coverage is informational until the team agrees on a baseline and threshold.
 
 ## Current check status
 

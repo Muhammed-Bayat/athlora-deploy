@@ -10,7 +10,7 @@ export default defineConfig({
     css: false,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json-summary', 'lcov', 'html'],
+      reporter: ['json-summary'],
       exclude: ['dist/**', 'src/test/**', '**/*.test.*', '**/*.config.*'],
     },
   },

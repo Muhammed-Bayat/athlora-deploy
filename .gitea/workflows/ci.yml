@@ -58,15 +58,6 @@ jobs:
         run: npm run test:coverage --prefix backend
       - name: Generate quality report
         run: node scripts/generate-coverage-report.mjs
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: |
-            coverage/coverage-report.md
-            frontend/coverage
-            backend/coverage
-          retention-days: 14
 
   docs:
     runs-on: ubuntu-latest

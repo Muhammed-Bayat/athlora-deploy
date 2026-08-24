@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --reporter=default --reporter=json --outputFile=coverage/test-results.json",
+    "test:coverage": "vitest run --coverage --reporter=dot",
     "lint": "eslint ."
   },
   "dependencies": {
