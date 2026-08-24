@@ -26,6 +26,11 @@ This document is a concise record of the material planning, delivery, and review
 - Development and documentation would be maintained together so that implementation changes could be recorded as they landed.
 - The repository history records the scaffold commit on 12 August: `feat: scaffold Athlora monorepo (frontend/backend/docs/e2e)`.
 
+### Evidence from the Raw Transcript
+
+- **12 August, 15:40, Aaliah Reddy:** "athlora it is" records the agreed product name after the team considered options. This supports the decision to create and present the project under the Athlora identity.
+- **12 August, 17:47, Vikram Mahalingam:** "I set up the repo the scaffold is there for the front end, back end, and docs" records the project scaffold being made available to the team. It supports the repository-history evidence that the monorepo foundation was established that day.
+
 ## 14 August 2026: Kanban Setup and Delivery Plan
 
 ### Discussed
@@ -44,6 +49,12 @@ This document is a concise record of the material planning, delivery, and review
 
 ![Gitea Projects board discussed in the team chat](../../sprint-1/screenshots/00002503-PHOTO-2026-08-13-20-51-15.jpg)
 
+### Evidence from the Raw Transcript
+
+- **14 August, 11:04, Aaliah Reddy:** "guys please put your tasks on the kanban board" records the decision to use the board for all work. The surrounding messages clarify that setup, design, and normal development tasks all needed visible cards.
+- **14 August, 13:11, Muhammed Bayat:** "order to do the issues" introduces the dependency sequence, including issues `#27` and `#38` as early parallel work. This provided the team with a practical order for beginning and unblocking the main Sprint work.
+- **14 August, 13:31, Aaliah Reddy:** "create branch / do task / pull request / merge" records the agreed delivery workflow. It supports the use of branches and pull requests alongside the Kanban board rather than direct changes to `main`.
+
 ## 16 August 2026: Sprint Work Allocation
 
 ### Discussed
@@ -59,6 +70,12 @@ This document is a concise record of the material planning, delivery, and review
 - Tyra took issues 8 and 11.
 - The team agreed to resolve failing checks before merging affected work.
 
+### Evidence from the Raw Transcript
+
+- **16 August, 14:30, Vikram Mahalingam:** "29 and 33 done" records completed foundation work before the next allocation. This gave the team confidence to proceed to the dependent issues in the delivery sequence.
+- **16 August, 20:24-20:45, Vareshan Rajah, Aaliah Reddy, and Tyra Mohamed:** "I will do 6 and 10", "i'll do 7 and 9", and "I'll do 8 and 11" record the team allocation. The messages show that remaining work was divided across team members rather than remaining as an unassigned backlog.
+- **16 August, 21:46, Vikram Mahalingam:** "you’re failing test cases so ask your agents to check and fix the errors" records the decision to address failing checks before merging. It directly supports the quality expectation recorded for the Sprint.
+
 ## 17-18 August 2026: Integration and Completion Work
 
 ### Discussed
@@ -73,6 +90,12 @@ This document is a concise record of the material planning, delivery, and review
 - The repository history records merged pull requests for the results, timeline, dashboard, E2E, account-lifecycle, and weather work during this period, including PRs `#62` through `#74`.
 - The team scheduled a client meeting to demonstrate the work and gather further requirements.
 
+### Evidence from the Raw Transcript
+
+- **17 August, 20:14, Aaliah Reddy:** "#43 is done" records progress on the remaining work and the intention to continue with issue `#46`. This shows active tracking of completion as the Sprint approached its review point.
+- **17 August, 23:53, Vareshan Rajah:** "I completed issue 31, I still need to do issue 47" records the state of that work sequence. The statement distinguishes delivered work from the remaining item instead of treating the whole sequence as complete prematurely.
+- **18 August, 13:30-13:54, Vareshan Rajah and Vikram Mahalingam:** "You gonna have a merge conflict" followed by "Fixed and merged" records the resolution of the issue `#44` integration problem. It evidences that the team identified the blocker, coordinated a fix, and cleared the path for follow-on work.
+
 ## 20-23 August 2026: Review, Documentation, and Release
 
 ### Discussed
@@ -86,6 +109,12 @@ This document is a concise record of the material planning, delivery, and review
 - Documentation and release work were reported complete on 23 August.
 - The repository history records the documentation refresh and the Sprint 1 meeting-record pull request, PR `#81`.
 - Feedback from the client meeting was recorded as future backlog input in [Sprint 1 Client Meetings](./client-meetings).
+
+### Evidence from the Raw Transcript
+
+- **20 August, 10:24, Muhammed Bayat:** "Double check erd in docs" and "Dev plan together with gitea projects" record the documentation-review work. The checklist ties the technical evidence, planning material, and board records together before release.
+- **20 August, 10:24, Muhammed Bayat:** "We lowkey forgot to add reviews to the pull requests" records the review-traceability gap addressed as a next-Sprint improvement. This is why the process record now explicitly requires a recorded review before a card reaches `Done`.
+- **23 August, 19:02, Vikram Mahalingam:** "Docs updated and I did the release" records completion of the release and documentation work. It provides a direct closing record for the final Sprint preparation activities.
 
 ## User Stories and UAT Traceability
 

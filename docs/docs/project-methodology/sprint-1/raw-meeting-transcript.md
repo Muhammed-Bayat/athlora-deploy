@@ -1317,9 +1317,7 @@ Touch up on initial design n dev plan  in docs
 
 **[14:41:58] Vareshan Rajah:** Okay calm
 
-**[18:24:12] Vareshan Rajah:** Injury.mp4 ‎<video controls src="./screenshots/00002892-Injury.mp4">Your browser does not support the video tag.</video><br />
-<br />
-[Download 00002892-Injury.mp4](./screenshots/00002892-Injury.mp4)
+**[18:24:12] Vareshan Rajah:** A video attachment was shared in the original chat. The attachment has been removed from the published documentation archive.
 
 **[18:25:01] Aaliah Reddy:** jesus pooks 😭😭
 
