@@ -1,0 +1,103 @@
+.cursorGlow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: 390px;
+  height: 390px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(138, 233, 242, .16) 0%, rgba(69, 190, 215, .095) 27%, rgba(0, 146, 188, .035) 54%, transparent 76%);
+  opacity: 0;
+  transform: translate3d(-520px, -520px, 0);
+  transition: opacity .11s linear;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.reveal {
+  --track-size: 380px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  width: var(--track-size);
+  height: var(--track-size);
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate3d(-520px, -520px, 0);
+  transition: opacity .085s linear;
+  /* Static alpha texture from the SDP-Landing mockup = smooth wide feather without
+     repainting a moving CSS gradient. border-radius is a hard circular fallback, so a
+     rectangular edge can never appear and there is no lens ring. */
+  -webkit-mask-image: url('./cursor-mask.png');
+  mask-image: url('./cursor-mask.png');
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  contain: layout paint style;
+}
+
+.scene {
+  position: absolute;
+  left: 0;
+  top: -132px;
+  width: 100vw;
+  height: 100svh;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.scene svg {
+  position: absolute;
+  inset: -11% -10%;
+  width: 120%;
+  height: 122%;
+  overflow: visible;
+  transform-origin: 50% 68%;
+  transform: perspective(900px) rotateX(60deg) rotateZ(-7deg) translateY(-24%) scale(1.5);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+.shadowBed { fill: none; stroke: #00040A; stroke-width: 210; opacity: .62; }
+.bed { fill: none; stroke: #00445C; stroke-width: 184; opacity: .34; }
+.bedHi { fill: none; stroke: #1482A0; stroke-width: 172; opacity: .10; }
+.laneDepth { fill: none; stroke: #00111D; stroke-width: 5.2; vector-effect: non-scaling-stroke; opacity: .78; }
+.lane { fill: none; stroke: #82EAF3; stroke-width: 1.55; vector-effect: non-scaling-stroke; opacity: .62; }
+.laneHot { fill: none; stroke: #D9FCFF; stroke-width: 2.05; opacity: .94; }
+.startLine { stroke: #E9FEFF; stroke-width: 2.2; vector-effect: non-scaling-stroke; opacity: .95; }
+.startDepth { stroke: #00111D; stroke-width: 5.4; vector-effect: non-scaling-stroke; opacity: .78; }
+.mark { stroke: #78DDE9; stroke-width: 1.25; stroke-dasharray: 8 14; vector-effect: non-scaling-stroke; opacity: .56; }
+.laneNum { font-family: 'Space Mono', 'Courier New', monospace; font-size: 16px; font-weight: 700; fill: #D8FBFF; letter-spacing: .08em; opacity: .82; }
+.infieldShadow { fill: #00080D; opacity: .34; }
+.infield { fill: #06333D; opacity: .24; }
+.infieldHi { fill: none; stroke: #1A6979; stroke-width: 2; opacity: .20; }
+.throwDepth { fill: none; stroke: #001019; stroke-width: 5.4; vector-effect: non-scaling-stroke; opacity: .76; }
+.throwLine { fill: none; stroke: #A7F6FA; stroke-width: 1.45; vector-effect: non-scaling-stroke; opacity: .68; }
+.throwLineMajor { fill: none; stroke: #E2FDFF; stroke-width: 1.9; opacity: .88; }
+.throwGuide { fill: none; stroke: #62CAD8; stroke-width: 1.05; stroke-dasharray: 7 10; vector-effect: non-scaling-stroke; opacity: .34; }
+.throwGuideMajor { fill: none; stroke: #E2FDFF; stroke-width: 1.9; opacity: .88; }
+.runwayShadow { fill: #000B12; opacity: .62; }
+.runway { fill: #0B5363; opacity: .42; stroke: #8CECF2; stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.throwArcDepth { fill: none; stroke: #001019; stroke-width: 6; vector-effect: non-scaling-stroke; opacity: .78; }
+.throwArc { fill: none; stroke: #E5FDFF; stroke-width: 2.1; vector-effect: non-scaling-stroke; opacity: .92; }
+.throwNum { font-family: 'Space Mono', 'Courier New', monospace; font-size: 20px; font-weight: 700; fill: #C9FAFF; letter-spacing: .04em; opacity: .70; paint-order: stroke fill; stroke: #001019; stroke-width: 3px; stroke-linejoin: round; }
+.throwUnit { font-family: 'Space Mono', 'Courier New', monospace; font-size: 9px; font-weight: 700; fill: #5BBED0; letter-spacing: .08em; opacity: .56; paint-order: stroke fill; stroke: #001019; stroke-width: 1.5px; }
+
+@media (hover: none), (pointer: coarse), (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .reveal,
+  .cursorGlow {
+    display: none;
+  }
+}

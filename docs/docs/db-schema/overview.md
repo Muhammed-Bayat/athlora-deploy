@@ -6,6 +6,8 @@ sidebar_position: 1
 
 PostgreSQL 13+. Every table uses UUID primary keys, `created_at`/`updated_at` timestamps, and soft deletes (`deleted_at`) where the app needs "undo" (`timeline_entries`, `results` uses update-in-place with an override trail).
 
+The schema is the shared foundation for Athlora's full athletics-meet scope. The deployed API currently enforces the 100m/seconds contract, but `discipline`, `unit`, attempts, fouls, incidents, and result rows were modelled so subsequent track, relay, jump, throw, and vertical-event contracts can be introduced through coordinated migrations and application changes.
+
 ## Core tables
 
 ```
@@ -18,16 +20,18 @@ event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, ath
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
-                      is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
-                      — PK (event_id, athlete_id, discipline)
+                       is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
+                       — PK (event_id, athlete_id, discipline)
+account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
+                       requested_at, updated_at, completed_at)
 ```
 
 ### timeline_entries
 The append-only live log — the heart of the app.
 
 - `entry_type`: `attempt`, `split`, `penalty`, `note`.
-- `value` + `unit`: seconds for time, metres/cm for distance/height. For the 100m contract the unit is `seconds`.
-- `is_foul`: field-event foul attempts.
+- `value` + `unit`: seconds for time, metres/cm for distance/height. The deployed 100m contract accepts `seconds`; the wider unit model is reserved for later event contracts.
+- `is_foul`: represents a field-event foul attempt. It is stored in the schema but the current 100m API always normalizes it to `false`.
 - `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
 - `note_text`: free-text body for `note` entries.
 - `version`: starts at 1, is required as `expectedVersion` for PATCH/DELETE, and bumps once on each successful mutation. A mismatch is rejected before persistence.
@@ -47,7 +51,7 @@ The assignment set for an event. The composite primary key prevents duplicate ev
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
 
 - `outcome`: `no_result` | `valid` | `dq` | `dnf` | `dns` — distinguishes no result, a valid finish, and voided outcomes.
-- `final_result`: computed value (best valid field attempt, finishing time). Must be `NULL` for voided outcomes.
+- `final_result`: computed result value. The deployed contract writes a 100m finishing time; the schema and future derivation contracts also support best valid field attempts. It must be `NULL` for voided outcomes.
 - `is_pb` / `is_sb`: derived flags, not manually logged.
 - `manual_override`, `override_reason`, `overridden_by`, `override_at`: coach corrections with an audit trail (who corrected, when, and why).
 
@@ -66,7 +70,11 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 - `timeline_entries`: `entry_type`, `incident_type` and `unit` domain checks; `value >= 0` when present; index on `(event_id, athlete_id, discipline)`.
 - `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
 
-The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
+Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
+
+Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state survives removal of `users`, blocks stale-token synchronization and resource access, and schedules idempotent cleanup retries through `next_attempt_at`.
+
+The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
 
@@ -76,9 +84,9 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` — the full authoritative base schema, followed by `0002_contract_100m.sql` which adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes). Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; and `0004_account_lifecycle.sql` adds durable deletion state. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
-Status: applied to the Neon development database and tracked in `schema_migrations`. New databases and pending migrations are handled with:
+Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
 ```bash
 cd backend
@@ -91,4 +99,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

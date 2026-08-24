@@ -1,0 +1,483 @@
+.container {
+  padding: var(--space-6);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header h1 {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  color: var(--console-ink);
+  margin: 0 0 var(--space-1);
+  text-transform: uppercase;
+}
+
+.header p {
+  color: var(--console-muted);
+  margin: 0 0 var(--space-6);
+}
+
+.eventGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.eventCard {
+  background: var(--console-surface);
+  border: 1px solid var(--console-edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.eventCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge {
+  font: var(--font-weight-bold) 0.625rem/1.2 var(--font-family-mono);
+  text-transform: uppercase;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--console-badge-neutral-surface);
+  color: var(--console-badge-neutral-text);
+}
+
+.badge[data-status="in_progress"] {
+  background: var(--console-badge-pb-surface);
+  color: var(--console-badge-pb-text);
+}
+
+.date {
+  font-size: var(--font-size-sm);
+  color: var(--console-muted);
+}
+
+.eventActions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.activeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  background: var(--console-surface);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--console-edge);
+}
+
+.activeHeader h2 {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  margin: var(--space-1) 0;
+  color: var(--console-ink);
+  overflow-wrap: anywhere;
+}
+
+.activeHeader > div:first-child,
+.athleteInfo,
+.timelineMeta > *,
+.timelineBody {
+  min-width: 0;
+}
+
+.eyebrow {
+  font: var(--font-weight-bold) 0.625rem/1.2 var(--font-family-mono);
+  text-transform: uppercase;
+  color: var(--console-cyan);
+  letter-spacing: 0.14em;
+}
+
+.headerButtons {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.errorAlert {
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  font-weight: var(--font-weight-medium);
+}
+
+.conflictAlert {
+  border: 1px solid color-mix(in srgb, var(--console-cyan) 45%, var(--console-line));
+  background: color-mix(in srgb, var(--console-cyan) 16%, var(--console-soft));
+  color: var(--console-ink);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  font-weight: var(--font-weight-medium);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.consoleSection,
+.feedCard {
+  background: var(--console-surface);
+  border: 1px solid var(--console-edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+.consoleSection h3,
+.feedCard h3 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin: 0 0 var(--space-4);
+  color: var(--console-ink);
+}
+
+.feedHeading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.feedHeading h3 {
+  margin-bottom: 0;
+}
+
+.feedHeading button {
+  min-height: 44px;
+}
+
+.athleteList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.athleteRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--console-row-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--console-line);
+}
+
+.athleteInfo b {
+  display: block;
+  font-size: 1rem;
+  color: var(--console-ink);
+  overflow-wrap: anywhere;
+}
+
+.athleteInfo small {
+  color: var(--console-muted);
+}
+
+.controlsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.finishInputGroup {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.finishInputGroup input {
+  min-width: 0;
+}
+
+.incidentButtonGroup {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.incidentButtonGroup button {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.timelineList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.timelineItem {
+  padding: var(--space-3);
+  background: var(--console-row-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--console-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.timelineMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timelineMeta small {
+  color: var(--console-muted);
+  overflow-wrap: anywhere;
+}
+
+.timelineBody {
+  overflow-wrap: anywhere;
+}
+
+.successBadge {
+  display: inline-block;
+  background: var(--console-badge-pb-surface);
+  color: var(--console-badge-pb-text);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.dangerBadge {
+  display: inline-block;
+  background: var(--console-badge-danger-surface);
+  color: var(--console-badge-danger-text);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.timelineActions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.linkButton,
+.dangerLinkButton {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: var(--space-1);
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.linkButton {
+  color: var(--console-cyan);
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.dangerLinkButton {
+  color: var(--console-danger-surface);
+}
+
+.dangerLinkButton:hover {
+  text-decoration: underline;
+}
+
+.linkButton:disabled,
+.dangerLinkButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.mutedText {
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.resultsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--console-line);
+  background: var(--console-row-surface);
+  border-radius: var(--radius-sm);
+}
+
+.resultRow span b {
+  display: block;
+}
+
+.resultRow span small {
+  color: var(--console-muted);
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.formGroup label {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+  color: var(--console-ink);
+}
+
+.selectInput {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(138, 233, 242, 0.12);
+  border-radius: var(--radius-sm);
+  background: #061824;
+  color: #E5F1F5;
+  font: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+}
+
+.selectInput option {
+  background: #061824;
+  color: #DDECF2;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.undoConfirmation {
+  max-width: 520px;
+  color: var(--console-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 620px) {
+  .container {
+    padding: var(--space-2);
+  }
+
+  .eventGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .eventCard,
+  .activeHeader,
+  .consoleSection,
+  .feedCard {
+    padding: var(--space-4);
+  }
+
+  .headerButtons,
+  .finishInputGroup,
+  .modalActions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .eventActions button,
+  .headerButtons button,
+  .finishInputGroup button,
+  .modalActions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .incidentButtonGroup button {
+    flex: 1 1 calc(50% - var(--space-2));
+  }
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.header h1:focus-visible,
+.activeHeader h2:focus-visible,
+.feedCard h3:focus-visible {
+  outline: 3px solid var(--console-focus);
+  outline-offset: 2px;
+}
+
+.finishInputGroup input,
+.editForm input {
+  border-color: var(--console-control-border);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+}
+
+.finishInputGroup input::placeholder,
+.editForm input::placeholder,
+.selectInput::placeholder {
+  color: var(--console-placeholder);
+}
+
+.finishInputGroup input:disabled,
+.editForm input:disabled,
+.selectInput:disabled,
+.incidentButtonGroup button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+:global(html.theme-light) .selectInput {
+  border-color: rgba(0, 78, 105, 0.15);
+  background: #CBE4E9;
+  color: #173E50;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:global(html.theme-light) .selectInput option {
+  background: #F7FCFD;
+  color: #173E50;
+}

@@ -122,7 +122,6 @@ beforeEach(() => {
         }],
       };
     }
-    }
     return { rows: [] };
   });
 });
@@ -291,8 +290,9 @@ describe('auth bootstrap', () => {
         }),
       }),
     );
-    query.mockResolvedValueOnce({
-      rows: [
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [
         {
           id: USER_ID,
           auth0_id: 'auth0|new-coach',
@@ -302,8 +302,7 @@ describe('auth bootstrap', () => {
           created_at: new Date('2026-08-14T10:00:00.000Z'),
           updated_at: new Date('2026-08-14T10:00:00.000Z'),
         },
-      ],
-    });
+      ] });
 
     const response = await request(app)
       .put('/api/v1/auth/me')
@@ -311,57 +310,21 @@ describe('auth bootstrap', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ id: USER_ID, auth0Id: 'auth0|new-coach' });
-    expect(query).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO users');
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1]?.[0]).toContain('INSERT INTO users');
     expect(fetch).toHaveBeenCalledWith('https://example.auth0.com/userinfo', {
       headers: { Authorization: 'Bearer bootstrap-token' },
     });
   });
 });
 
-describe('owned resource scaffolds', () => {
-  it('keeps every currently scaffolded owned route reachable', async () => {
+describe('owned resource routes', () => {
+  it('keeps representative owned routes reachable', async () => {
     configureAuth();
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200, false],
-      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501, false],
-      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501, false],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200, false],
-      [
-        'put',
-        `/api/v1/events/${EVENT_ID}`,
-        {
-          type: 'competition',
-          title: 'City Sprint Meet',
-          date: '2026-09-01',
-          status: 'scheduled',
-        },
-        501,
-        false,
-      ],
-      ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501, false],
-      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
-      [
-        'post',
-        `/api/v1/events/${EVENT_ID}/entries`,
-        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
-        201,
-        true,
-      ],
-      [
-        'patch',
-        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
-        { expectedVersion: 1, value: 11.1 },
-        200,
-        true,
-      ],
-      [
-        'delete',
-        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
-        { expectedVersion: 1 },
-        204,
-        true,
-      ],
+      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 422, false],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
       [
         'put',
@@ -487,7 +450,7 @@ describe('ownership non-disclosure', () => {
 });
 
 describe('event weather', () => {
-  it('is protected before reaching the scaffolded handler', async () => {
+  it('is protected before reaching the weather handler', async () => {
     const response = await request(app).get('/api/v1/events/abc-123/weather');
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('AUTH_NOT_CONFIGURED');

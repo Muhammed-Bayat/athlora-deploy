@@ -10,13 +10,20 @@
   font-family: var(--font-family-base);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-base);
-  color: var(--color-text-light);
+  color: var(--mist-50);
   cursor: pointer;
-  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), opacity 0.15s var(--ease);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), opacity 0.15s var(--ease), background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--console-focus, var(--blue-500));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--console-focus-ring, color-mix(in srgb, var(--blue-500) 24%, transparent));
 }
 
 .primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background: linear-gradient(135deg, var(--console-primary-start, var(--color-primary)), var(--console-primary-end, var(--color-primary-dark)));
+  color: var(--console-primary-text, var(--mist-50));
   box-shadow: var(--shadow-card);
 }
 
@@ -26,35 +33,43 @@
 }
 
 .secondary {
-  background-color: var(--color-surface);
-  color: var(--color-primary-dark);
-  box-shadow: inset 0 0 0 1.5px var(--color-border);
+  background-color: var(--console-control-surface, var(--white));
+  color: var(--console-selected-text, var(--teal-700));
+  box-shadow: inset 0 0 0 1.5px var(--console-control-border, color-mix(in srgb, var(--teal-700) 22%, transparent));
 }
 
 .secondary:hover {
-  background-color: var(--mist-100);
+  background-color: var(--console-selected-surface, var(--mist-100));
+  color: var(--console-selected-text, var(--teal-700));
 }
 
 .danger {
-  background-color: var(--color-danger);
+  background-color: var(--console-danger-surface, var(--alert));
+  color: var(--console-danger-text, var(--ink-900));
 }
 
 .danger:hover {
-  opacity: 0.9;
+  background-color: color-mix(in srgb, var(--console-danger-surface, var(--alert)) 86%, var(--console-control-surface, var(--white)));
 }
 
 .ghost {
   background-color: transparent;
-  color: var(--color-text-muted);
+  color: var(--console-text-muted, color-mix(in srgb, var(--ink-900) 62%, transparent));
 }
 
 .ghost:hover {
-  color: var(--color-text);
-  background-color: var(--mist-100);
+  color: var(--console-selected-text, var(--teal-700));
+  background-color: var(--console-selected-surface, var(--mist-100));
 }
 
 .button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.button:disabled:hover {
   transform: none;
 }

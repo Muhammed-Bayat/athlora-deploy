@@ -1,0 +1,132 @@
+.page {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.page > header p,
+.setting > p,
+.danger > p {
+  margin: 0 0 var(--space-1);
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.page > header h1,
+.setting h2,
+.danger h2,
+.profile h2 {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.page > header span,
+.setting > span,
+.danger > span,
+.profile p,
+.profile small {
+  color: var(--color-text-muted);
+}
+
+.profile {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.profile p {
+  margin: var(--space-1) 0;
+}
+
+.avatar {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--white);
+  font-size: 1.6rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.setting,
+.danger {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.danger {
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+}
+
+.danger > p {
+  color: var(--color-danger);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+.ticket,
+.error {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.ticket {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+}
+
+.ticket a {
+  color: inherit;
+  font-weight: var(--font-weight-bold);
+}
+
+.error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  background: var(--alert-soft);
+  color: var(--color-danger);
+}
+
+.confirmation {
+  display: grid;
+  gap: var(--space-3);
+  width: min(520px, 72vw);
+}
+
+.confirmation p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.confirmation label {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+  .confirmation { width: auto; }
+  .actions { flex-direction: column; }
+  .actions button { width: 100%; min-height: 44px; }
+}

@@ -6,6 +6,8 @@ sidebar_position: 1
 
 Athlora is a non-monolithic web app: a React SPA and an Express API are separate deployables communicating over HTTP/JSON. This is a hard project requirement — no framework that fuses frontend and backend is allowed.
 
+Athlora's product scope is the full athletics meet: track races, hurdles, relays, race walks, jumps, throws, and vertical events. The current deployed implementation is a 100m timing vertical slice; its timeline, result, and ownership architecture is the base for adding the remaining disciplines without changing the service boundaries.
+
 ## High-level diagram
 
 ```
@@ -27,21 +29,24 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 - **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; the roster consumes `src/api/athletes.ts` for list/create/full-replacement/archive/restore operations. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user, and unauthenticated console entry invokes Auth0 rather than exposing protected views.
 - **Offline (Stage 2+)**: Dexie/IndexedDB mirror for live-logging writes, PWA service worker, background sync, Socket.IO live updates.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
+- **Public landing experience**: semantic React/HTML content remains separate from one lazy-loaded cinematic layer. The desktop hero reveals the approved SDP-Landing track exactly — a 2D SVG oval (8 gradient lanes, start line, distance marks, lane numbers and javelin throw sector) shown in a soft-feather circular window that follows the pointer using the mockup's static alpha mask (so there is no hard lens ring) alongside a matching cursor glow; the SVG is tilted with a strong perspective for a more 3D read. From the features section downward, the lazy-loaded cinematic layer is a direct DOM/CSS port of the mockup's chase-camera rig: the same shared SVG oval is mounted in a two-layer wrapper where the track object translates by the negative runner position while an oblique drone camera (60° pitch, bend-dependent bank, fit-scaled zoom, yaw steered along the lane) completes one full lap exactly when the page is scrolled to the bottom. The shared `TrackArtwork` SVG and the per-frame camera/object transforms match the mockup exactly, and the whole scene fades per section (features `.23` → preview `.20` → how `.15` → faq `.075`). Camera easing is frame-rate independent (an 82ms exponential damping constant) so fast scrolling stays smooth and crisp, while the dark aurora background is preserved. Mobile and reduced-motion modes hide the scene entirely (matching the mockup) and hide the hero reveal. Actual scroll position enforces the hero/cinematic visibility boundary, and the scene does not change Auth0 or API behavior.
 
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: resource services own coach-scoped PostgreSQL behavior for athletes, events and event participants; pure, unit-testable functions own result derivation (`src/services/resultDerivation.ts`, tested) and (Stage 3) merge rules — business logic is never buried in route handlers.
-- **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. `0001_init.sql` and `0002_contract_100m.sql` are applied to Neon.
-- **Auth**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
+- **Services**: resource services own coach-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary for both owned event forecasts and authenticated current-weather requests; pure, unit-testable functions own result derivation (`src/services/resultDerivation.ts`, tested) and Stage 3 merge rules. Business logic is never buried in route handlers.
+- **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. Migrations `0001_init.sql` through `0004_account_lifecycle.sql` are applied to Neon.
+- **Auth and account lifecycle**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize, but any durable deletion tombstone prevents re-synchronization and resource access. A backend-only, least-privilege Auth0 Management API client creates password tickets and deletes only the verified subject. Local deletion is transactional and a startup/interval reconciler retries partial external/database failures idempotently. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
 
 ## Data flow for a live result
 
-1. A coach logs an attempt on the **Live Event** screen.
-2. The frontend POSTs a `timeline_entries` row (offline: writes to IndexedDB first, syncs later).
-3. The API stores the append-only entry (soft-deletable, versioned).
-4. The API recomputes the derived `results` row for that athlete/discipline.
-5. Other connected clients receive the update (Socket.IO, Stage 2).
+1. A coach logs a 100m finish or incident on the **Live Event** screen.
+2. The frontend sends a `timeline_entries` request to the API over authenticated HTTP.
+3. The API stores the append-only, soft-deletable, versioned entry.
+4. The API recomputes the derived `results` row for that athlete and discipline, including placing and PB/SB effects.
+5. The frontend refreshes the authoritative timeline and result state.
+
+Stage 2 will extend this path by writing to IndexedDB before sync and broadcasting accepted changes to other event viewers through Socket.IO. Those offline and realtime paths are not yet implemented.
 
 ## Deployment
 
@@ -52,16 +57,16 @@ Athlora is a non-monolithic web app: a React SPA and an Express API are separate
 
 ## Design decisions
 
-- **UUIDs everywhere** — client-generated IDs can be valid PKs, enabling offline creation without ID collisions.
+- **UUIDs everywhere** — current rows receive UUID primary keys from PostgreSQL. The same key type supports future client-generated IDs for offline creation without collisions.
 - **Soft deletes** — undo is a tombstone (`deleted_at`), not a destructive delete.
 - **Derived results with manual override** — stats come from the timeline log, but a coach can correct with `manual_override` + audit trail.
-- **Timed vs measured disciplines** — the UI and result rules branch on whether a discipline is track (time) or field (distance/height).
+- **Timed vs measured disciplines** — the schema and result-service foundation accommodate track times and field measurements. The deployed API/UI currently enforces 100m timing; each later discipline will add its own validation, entry controls, derivation, and placing rules.
 - **Non-enumerating ownership** — owner IDs and audit actors come from authenticated server context, never request payloads. A resource that is missing, malformed, nested under the wrong parent or owned by another coach produces the same generic not-found response.
 
 ## Implementation status
 
-Implemented in Stage 1: synchronized-auth gating; an API-backed responsive roster (`AthletesPage` → typed client → Express/PostgreSQL) with filtering, reusable create/edit forms and reversible archival; an API-backed event list/calendar with strict create/full-replacement edit payloads and confirmed lifecycle transitions; and end-to-end event assignment management with athlete summaries, active-athlete/duplicate guards, RSVP replacement, archived-history visibility and history-preserving removal. Backend event CRUD enforces filters, forward-only status transitions, cancellation-as-delete and the in-progress logging guard. Timeline list/create/edit/undo now excludes tombstones from normal reads, requires lock-protected optimistic versions for corrections, makes exact undo retries no-ops, and atomically rematerializes 100m outcomes, placings and PB/SB flags; event changes that affect those calculations trigger the same recomputation. The dashboard still uses isolated preview data. Still to build: Open-Meteo weather, the live logging UI, and results/dashboard wiring (see the dev plan).
+Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, Open-Meteo forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. The public landing page and premium coach console implement the approved SVG/CSS visual direction without changing service boundaries. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines. Quality gates include unit/API integration suites, cross-coach isolation tests, and a desktop/mobile Playwright vertical slice with axe checks against a scratch PostgreSQL database.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

@@ -9,6 +9,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/frontend',
         'getting-started/backend',
+        'getting-started/e2e',
+        'getting-started/docs',
         'getting-started/scripts',
       ],
     },
@@ -31,15 +33,17 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Project Process',
       items: [
+        'process/project-methodology',
         'process/git-methodology',
         'process/agent-build-spec',
         'process/dev-plan',
+        'process/roadmap',
       ],
     },
     {
       type: 'category',
       label: 'Sprint 1',
-      items: ['sprint 1/Meetings', 'sprint 1/user-stories'],
+      items: ['sprint-1/Meetings', 'sprint-1/client-meetings', 'sprint-1/user-stories'],
     },
   ],
 };

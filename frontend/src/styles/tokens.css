@@ -1,6 +1,10 @@
 :root {
   /* Brand — "Athlora": deep-ink navy with teal/cyan/blue track-lane accents */
+  --ink-950: #00070D;
+  --ink-925: #000D16;
   --ink-900: #001D3C;
+  --ink-875: #00223A;
+  --ink-850: #002846;
   --ink-800: #012C4E;
   --ink-700: #023A62;
   --teal-800: #004A68;
@@ -16,20 +20,35 @@
   --alert: #E2664F;
   --alert-soft: #FBE4DF;
 
-  /* Semantic aliases (what components actually consume) */
+  /* Premium aurora console palette (dark default — matches Athlora_Premium_Dashboard V10+) */
+  --ui-white: #F7FDFF;
+  --ui-text: #EAF6FA;
+  --ui-muted: #91A8B5;
+  --ui-muted-2: #617A88;
+  --ui-line: rgba(138, 233, 242, 0.12);
+  --ui-line-strong: rgba(138, 233, 242, 0.24);
+  --ui-panel: rgba(3, 20, 32, 0.76);
+  --ui-panel-strong: rgba(4, 27, 42, 0.90);
+  --ui-panel-soft: rgba(7, 31, 46, 0.72);
+  --ui-shadow: 0 28px 82px rgba(0, 0, 0, 0.32);
+  --ui-glow: 0 0 0 1px rgba(138, 233, 242, 0.14), 0 0 28px rgba(69, 190, 215, 0.08), 0 22px 62px rgba(0, 0, 0, 0.28);
+  --shadow-premium: 0 22px 70px rgba(0, 0, 0, 0.26);
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  /* Semantic aliases (what components actually consume) — dark aurora by default */
   --color-primary: var(--blue-500);
   --color-primary-dark: var(--teal-700);
   --color-secondary: var(--cyan-400);
   --color-secondary-dark: var(--blue-400);
   --color-accent: var(--cyan-200);
-  --color-bg: var(--mist-50);
-  --color-surface: var(--white);
-  --color-border: rgba(0, 94, 131, 0.16);
-  --color-text: var(--ink-900);
-  --color-text-muted: rgba(0, 29, 60, 0.62);
-  --color-text-faint: rgba(0, 29, 60, 0.42);
-  --color-text-light: #EAFBFD;
-  --color-text-light-muted: rgba(234, 251, 252, 0.68);
+  --color-bg: var(--ink-950);
+  --color-surface: var(--ui-panel-strong);
+  --color-border: var(--ui-line);
+  --color-text: var(--ui-text);
+  --color-text-muted: var(--ui-muted);
+  --color-text-faint: var(--ui-muted-2);
+  --color-text-light: var(--ui-white);
+  --color-text-light-muted: rgba(220, 237, 243, 0.66);
 
   /* Semantic status */
   --color-success: var(--teal-700);
@@ -37,10 +56,10 @@
   --color-danger: var(--alert);
   --color-info: var(--blue-500);
 
-  /* Typography (Google Fonts: Bebas Neue, Inter, Space Mono) */
-  --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-family-mono: 'Space Mono', 'Courier New', monospace;
+  /* Typography (Google Fonts: Space Grotesk, Satoshi, Inter; Space Grotesk mono) */
+  --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-base: 'Satoshi', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-mono: 'Space Grotesk', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-lg: 1.25rem;
@@ -62,8 +81,40 @@
   --radius-md: 16px;
   --radius-lg: 24px;
   --radius-pill: 999px;
-  --shadow-soft: 0 20px 50px -22px rgba(0, 29, 60, 0.35);
-  --shadow-card: 0 10px 30px -16px rgba(0, 29, 60, 0.22);
-  --shadow-glow: 0 0 0 1px rgba(69, 190, 215, 0.35), 0 12px 30px -10px rgba(0, 146, 188, 0.45);
+  --shadow-soft: 0 30px 90px rgba(0, 0, 0, 0.42);
+  --shadow-card: 0 18px 60px rgba(0, 0, 0, 0.24);
+  --shadow-glow: 0 0 0 1px rgba(138, 233, 242, 0.14), 0 0 28px rgba(69, 190, 215, 0.08), 0 22px 62px rgba(0, 0, 0, 0.28);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Light theme — Deeper Ice (matches the mockup's final V16 html.theme-light override block) */
+html.theme-light {
+  --mist-50: #CBE3E8;
+  --mist-100: #BCD9E0;
+  --color-bg: var(--mist-50);
+  --color-surface: var(--ui-panel-strong);
+  --color-border: rgba(0, 78, 105, 0.16);
+  --color-text: var(--ink-900);
+  --color-text-muted: rgba(0, 48, 72, 0.62);
+  --color-text-faint: rgba(0, 48, 72, 0.43);
+  --color-text-light: var(--ink-900);
+  --color-text-light-muted: rgba(0, 48, 72, 0.62);
+
+  --ui-white: var(--ink-900);
+  --ui-text: #102D3E;
+  --ui-muted: #557280;
+  --ui-muted-2: #718C97;
+  --ui-line: rgba(0, 94, 131, 0.11);
+  --ui-line-strong: rgba(0, 146, 188, 0.24);
+  --ui-panel: rgba(199, 225, 232, 0.84);
+  --ui-panel-strong: rgba(216, 236, 241, 0.92);
+  --ui-panel-soft: rgba(187, 216, 224, 0.80);
+  --ui-shadow: 0 25px 66px rgba(12, 65, 84, 0.13);
+  --ui-glow: 0 0 0 1px rgba(0, 146, 188, 0.08), 0 16px 46px rgba(0, 91, 120, 0.09);
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
+  --shadow-soft: 0 28px 70px rgba(0, 48, 72, 0.13);
+  --shadow-card: 0 18px 48px rgba(9, 61, 81, 0.11);
+  --shadow-glow: 0 0 0 1px rgba(69, 190, 215, 0.35), 0 12px 30px -10px rgba(0, 146, 188, 0.45);
+  --shadow-premium: 0 23px 58px rgba(9, 61, 81, 0.13);
 }

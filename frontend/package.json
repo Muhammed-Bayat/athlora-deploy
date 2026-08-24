@@ -1,7 +1,7 @@
 {
   "name": "athlora-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,8 +14,11 @@
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.24.0",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

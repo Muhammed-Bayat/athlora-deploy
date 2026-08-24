@@ -19,6 +19,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'account_deletions',
   'results',
   'timeline_entries',
   'event_participants',
@@ -69,24 +70,33 @@ describeDB('migrations against a real database', () => {
     return result.rowCount === 1;
   };
 
-  it('applies 0001 and 0002 to a fresh database and records checksums', async () => {
+  it('applies all migrations to a fresh database and records checksums', async () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
     expect(rows.map((row) => row.name)).toEqual([
       '0001_init.sql',
       '0002_contract_100m.sql',
+      '0003_aggregate_indexes.sql',
+      '0004_account_lifecycle.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
     expect(await hasColumn('timeline_entries', 'note_text')).toBe(true);
     expect(await hasColumn('results', 'outcome')).toBe(true);
     expect(await hasColumn('results', 'override_at')).toBe(true);
+    expect(await hasColumn('account_deletions', 'completed_at')).toBe(true);
+    expect(await hasColumn('account_deletions', 'next_attempt_at')).toBe(true);
 
     expect(await hasIndex('idx_events_created_by')).toBe(true);
     expect(await hasIndex('idx_events_status_date')).toBe(true);
     expect(await hasIndex('idx_event_participants_athlete_id')).toBe(true);
     expect(await hasIndex('idx_timeline_entries_event_athlete_discipline')).toBe(true);
+    expect(await hasIndex('idx_results_athlete_discipline_event')).toBe(true);
+    expect(await hasIndex('idx_events_owner_status_date_order')).toBe(true);
+    expect(await hasIndex('idx_timeline_entries_event_active_recent')).toBe(true);
+    expect(await hasIndex('idx_account_deletions_status')).toBe(true);
+    expect(await hasIndex('idx_account_deletions_retry')).toBe(true);
   });
 
   it('baselines an existing 0001 schema and applies the pending 0002', async () => {
@@ -105,6 +115,8 @@ describeDB('migrations against a real database', () => {
     expect(rows.map((row) => row.name)).toEqual([
       '0001_init.sql',
       '0002_contract_100m.sql',
+      '0003_aggregate_indexes.sql',
+      '0004_account_lifecycle.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -114,7 +126,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(4);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

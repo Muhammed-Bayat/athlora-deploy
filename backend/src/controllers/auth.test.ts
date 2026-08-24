@@ -44,8 +44,9 @@ describe('syncCurrentUser', () => {
         }),
       }),
     );
-    query.mockResolvedValue({
-      rows: [
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [
         {
           id: '11111111-1111-4111-8111-111111111111',
           auth0_id: 'auth0|user-1',
@@ -55,8 +56,7 @@ describe('syncCurrentUser', () => {
           created_at: new Date('2026-08-13T10:00:00.000Z'),
           updated_at: new Date('2026-08-13T10:00:00.000Z'),
         },
-      ],
-    });
+      ] });
 
     await syncCurrentUser(request(), response(), next);
 
@@ -77,6 +77,40 @@ describe('syncCurrentUser', () => {
       }),
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('refuses to recreate an account with a deletion tombstone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        sub: 'auth0|user-1',
+        name: 'Deleted Coach',
+        email: 'deleted@example.com',
+      }),
+    }));
+    query.mockResolvedValueOnce({ rows: [{ status: 'completed' }] });
+
+    await syncCurrentUser(request(), response(), next);
+
+    expect(query).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 410, code: 'ACCOUNT_DELETED' }));
+  });
+
+  it('keeps an account blocked after an ambiguous deletion failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        sub: 'auth0|user-1',
+        name: 'Deleted Coach',
+        email: 'deleted@example.com',
+      }),
+    }));
+    query.mockResolvedValueOnce({ rows: [{ status: 'failed' }] });
+
+    await syncCurrentUser(request(), response(), next);
+
+    expect(query).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 410, code: 'ACCOUNT_DELETED' }));
   });
 
   it('rejects a profile whose subject does not match the token', async () => {
