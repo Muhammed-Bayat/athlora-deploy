@@ -43,7 +43,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Sprint 1',
-      items: ['sprint 1/Meetings'],
+      items: ['sprint 1/Meetings', 'sprint 1/client meetings'],
     },
   ],
 };
