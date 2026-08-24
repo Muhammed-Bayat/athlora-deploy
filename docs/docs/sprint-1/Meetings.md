@@ -1,8 +1,8 @@
----
+﻿---
 sidebar_position: 1
 ---
 
-# Meeting 1 - 05/08/2026
+# Meetings
 
 ## What we spoke about
 
@@ -36,10 +36,6 @@ sidebar_position: 1
 **[10:33:48] Aaliah Reddy:** also don’t forget to sign into gitea
 
 **[10:35:21] Muhammed Bayat:** Whoop whoop
-
-**[10:35:36] Aaliah Reddy:** ‎![00002259-STICKER-2026-08-03-10-35-36.webp](./screenshots/00002259-STICKER-2026-08-03-10-35-36.webp)
-
-**[10:35:45] Muhammed Bayat:** ‎![00002260-STICKER-2026-08-03-10-35-45.webp](./screenshots/00002260-STICKER-2026-08-03-10-35-45.webp)
 
 **[10:35:53] Aaliah Reddy:** shame i don’t hate it
 
@@ -175,8 +171,6 @@ im gonna eat now
 
 **[19:03:14] Muhammed Bayat:** Anyone
 
-**[19:03:16] Aaliah Reddy:** ‎![00002325-STICKER-2026-08-05-19-03-16.webp](./screenshots/00002325-STICKER-2026-08-05-19-03-16.webp)
-
 **[19:03:31] Aaliah Reddy:** it’ll be quick tho
 
 **[19:03:35] Tyra:** 😭😭😭
@@ -189,8 +183,6 @@ im gonna eat now
 so i might be useless if anyone asks me questions
 
 **[19:03:49] Muhammed Bayat:** I will present my findings
-
-**[19:04:02] Aaliah Reddy:** ‎![00002334-STICKER-2026-08-05-19-04-02.webp](./screenshots/00002334-STICKER-2026-08-05-19-04-02.webp)
 
 **[19:04:13] Muhammed Bayat:** Lock in dawg 🙅‍♂️
 
@@ -266,8 +258,6 @@ Coding prompt - doc - files
 
 **[13:10:10] Aaliah Reddy:** we can do some research and decide
 
-**[13:10:16] Aaliah Reddy:** ‎![00002373-STICKER-2026-08-10-13-10-16.webp](./screenshots/00002373-STICKER-2026-08-10-13-10-16.webp)
-
 **[13:10:20] Vikram Mahalingam:** So when are gonna meet harshil?
 
 **[13:10:27] Aaliah Reddy:** well ask harshil on discord what’s going on
@@ -279,8 +269,6 @@ Coding prompt - doc - files
 **[13:11:20] Aaliah Reddy:** we do 😭
 
 **[13:11:24] Aaliah Reddy:** atleast once a week i think
-
-**[13:11:29] Muhammed Bayat:** ‎![00002380-STICKER-2026-08-10-13-11-29.webp](./screenshots/00002380-STICKER-2026-08-10-13-11-29.webp)
 
 **[13:11:43] Aaliah Reddy:** but we can ask him if we can do an online call or something if we don’t see him tomorrow
 
@@ -566,8 +554,6 @@ PORT=4000
 
 **[20:54:48] Muhammed Bayat:** no thanks
 
-**[20:54:59] Aaliah Reddy:** ‎![00002521-STICKER-2026-08-13-20-54-59.webp](./screenshots/00002521-STICKER-2026-08-13-20-54-59.webp)
-
 **[20:55:07] Muhammed Bayat:** cool cool thanks
 
 **[20:56:42] Aaliah Reddy:** do we just add these files to our local cloned repo?
@@ -668,8 +654,6 @@ One to use for coding
 **[10:58:06] Aaliah Reddy:** but the page is still blank
 
 **[10:58:14] Aaliah Reddy:** but the deployed site is working
-
-**[10:58:39] Muhammed Bayat:** ‎![00002563-STICKER-2026-08-14-10-58-39.webp](./screenshots/00002563-STICKER-2026-08-14-10-58-39.webp)
 
 **[10:59:13] Vareshan Rajah:** It's currently coding rn😭
 
@@ -952,11 +936,7 @@ does anyone know what the issue is ‎![00002698-PHOTO-2026-08-17-17-06-39.jpg](
 
 **[17:41:11] Vareshan Rajah:** We saw how she was running after Suli on Friday🤣
 
-**[19:00:27] Tyra:** ‎![00002705-STICKER-2026-08-17-19-00-27.webp](./screenshots/00002705-STICKER-2026-08-17-19-00-27.webp)
-
 **[19:00:58] Tyra:** If we’re not meeting up with the tutor tmr should I still come to campus ?
-
-**[19:01:01] Tyra:** ‎![00002707-STICKER-2026-08-17-19-01-01.webp](./screenshots/00002707-STICKER-2026-08-17-19-01-01.webp)
 
 **[19:01:03] Aaliah Reddy:** nah😭
 
@@ -1004,8 +984,6 @@ does anyone know what the issue is ‎![00002698-PHOTO-2026-08-17-17-06-39.jpg](
 
 **[22:46:35] Vareshan Rajah:** Ya shoutout whoever this was🤣🤣 ‎![00002730-PHOTO-2026-08-17-22-46-35.jpg](./screenshots/00002730-PHOTO-2026-08-17-22-46-35.jpg)
 
-**[22:47:03] Aaliah Reddy:** ‎![00002731-STICKER-2026-08-17-22-47-03.webp](./screenshots/00002731-STICKER-2026-08-17-22-47-03.webp)
-
 **[22:56:23] Vareshan Rajah:** 🤣🤣
 
 **[23:53:21] Vareshan Rajah:** I completed issue 31, I still need to do issue 47 which I'll do tomorrow and then ill be done with wave 10
@@ -1029,8 +1007,6 @@ does anyone know what the issue is ‎![00002698-PHOTO-2026-08-17-17-06-39.jpg](
 **[13:17:26] Muhammed Bayat:** 😭😭
 
 **[13:18:07] Vikram Mahalingam:** Yea I can💀
-
-**[13:18:19] Muhammed Bayat:** ‎![00002743-STICKER-2026-08-18-13-18-19.webp](./screenshots/00002743-STICKER-2026-08-18-13-18-19.webp)
 
 **[13:18:45] Vareshan Rajah:** I just did when I pushed now
 
@@ -1253,15 +1229,11 @@ im waiting till monday to export our chat and convert it to md and then edit jt
 
 **[19:01:03] Vikram Mahalingam:** That’s how it is now all I do is tell it to read the docs
 
-**[19:01:13] Muhammed Bayat:** ‎![00002852-STICKER-2026-08-19-19-01-13.webp](./screenshots/00002852-STICKER-2026-08-19-19-01-13.webp)
-
 **[19:01:15] Muhammed Bayat:** Lol
 
 **[19:01:16] Muhammed Bayat:** Oh ya
 
 **[19:01:17] Vikram Mahalingam:** Wait you guys have been asking it to scan the whole repo😭😭😭
-
-**[19:01:25] Muhammed Bayat:** ‎![00002856-STICKER-2026-08-19-19-01-25.webp](./screenshots/00002856-STICKER-2026-08-19-19-01-25.webp)
 
 **[19:01:28] Aaliah Reddy:** i just tell it to read the docs 😭
 
@@ -1391,13 +1363,9 @@ So I low-key got bored again, a redesigned the landing page to make it more smoo
 
 **[12:44:49] Muhammed Bayat:** Anyone want to volunteer
 
-**[12:44:52] Muhammed Bayat:** ‎![00002912-STICKER-2026-08-23-12-44-52.webp](./screenshots/00002912-STICKER-2026-08-23-12-44-52.webp)
-
 **[12:45:29] Vikram Mahalingam:** Nah it’s cool I have the dev plan I’ll just add that and fix up the rest you oaks can relax💀
 
 **[12:45:43] Vikram Mahalingam:** Especially you Pooks
-
-**[12:47:30] Muhammed Bayat:** ‎![00002915-STICKER-2026-08-23-12-47-30.webp](./screenshots/00002915-STICKER-2026-08-23-12-47-30.webp)
 
 **[12:47:38] Muhammed Bayat:** Bro this guy
 
