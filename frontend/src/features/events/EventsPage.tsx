@@ -9,6 +9,11 @@ import {
 } from '../../api/participants';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import { useCurrentUser } from '../auth/CurrentUserContext';
+import { EventResultsSection } from '../results/EventResultsSection';
+import { type ResultCorrectionTarget } from '../results/EventResultsView';
+import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
+import { EventWeatherPanel } from './EventWeatherPanel';
 import {
   DISCIPLINE_100M,
   type Athlete,
@@ -40,6 +45,7 @@ type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
+  initialEventId?: string | null;
   today?: string;
 }
 
@@ -256,6 +262,7 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
           <label htmlFor="event-type">Event type</label>
           <Select
             id="event-type"
+            variant="field"
             value={draft.type}
             onChange={(input) => setField('type', input.target.value as EventType)}
             options={[
@@ -318,7 +325,15 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
   );
 }
 
-function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusyChange: (busy: boolean) => void }) {
+function ParticipantManager({
+  eventId,
+  onBusyChange,
+  onChanged,
+}: {
+  eventId: string;
+  onBusyChange: (busy: boolean) => void;
+  onChanged: () => void;
+}) {
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
   const [participantsError, setParticipantsError] = useState<string | null>(null);
@@ -414,6 +429,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
       setParticipants((current) => sortedParticipants([...current, participant]));
       setCandidateId('');
       setFeedback(`${participant.athlete.name} assigned with a pending RSVP.`);
+      onChanged();
     } catch (error) {
       setMutationError(errorMessage(error));
     } finally {
@@ -448,6 +464,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
       setParticipants((current) => current.filter((item) => item.athleteId !== removeTarget.athleteId));
       setFeedback(`${removeTarget.athlete.name} removed from this event. Existing timeline entries and results were preserved.`);
       setRemoveTarget(null);
+      onChanged();
     } catch (error) {
       setMutationError(errorMessage(error));
     } finally {
@@ -476,7 +493,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squad ?? 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
               <label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
-              <Select id={`participant-rsvp-${participant.athleteId}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+              <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
@@ -493,7 +510,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
         <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
-        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
+        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" variant="field" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
           ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squad ? ` · ${athlete.squad}` : ''}` })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
@@ -505,7 +522,8 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
+export function EventsPage({ onUpcomingCountChange, initialEventId = null, today = localToday() }: EventsPageProps = {}) {
+  const currentUser = useCurrentUser();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -517,15 +535,20 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialEventId);
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [participantBusy, setParticipantBusy] = useState(false);
+  const [resultReloadKey, setResultReloadKey] = useState(0);
+  const [correctionTarget, setCorrectionTarget] = useState<ResultCorrectionTarget | null>(null);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<{ eventId: string; action: LifecycleAction } | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let current = true;
@@ -549,7 +572,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   useEffect(() => {
     if (!loading && !loadError) {
       onUpcomingCountChange?.(
-        events.filter((event) => event.status !== 'cancelled' && event.date >= today).length,
+        events.filter((event) => event.status === 'scheduled' && event.date >= today).length,
       );
     }
   }, [events, loadError, loading, onUpcomingCountChange, today]);
@@ -568,7 +591,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
   );
   const calendarEvents = filtered.filter((event) => event.date === selectedDay);
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
-  const pending = editorBusy || lifecycleBusy || participantBusy;
+  const pending = editorBusy || lifecycleBusy || participantBusy || correctionBusy;
 
   const saveEditor = async (payload: EventMutationPayload) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
@@ -615,6 +638,23 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     setStatusFilter('');
   };
 
+  const finishCorrection = (message: string) => {
+    setCorrectionTarget(null);
+    setResultReloadKey((key) => key + 1);
+    setNotice(message);
+    window.requestAnimationFrame(() => detailRef.current?.focus());
+  };
+
+  const openCorrection = (target: ResultCorrectionTarget, trigger: HTMLButtonElement) => {
+    correctionTriggerRef.current = trigger;
+    setCorrectionTarget(target);
+  };
+
+  const backToEvent = () => {
+    setCorrectionTarget(null);
+    window.requestAnimationFrame(() => correctionTriggerRef.current?.focus());
+  };
+
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const leading = first.getDay();
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -659,7 +699,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
             { value: 'training', label: 'Training' },
           ]} />
           <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
-          <Select id="event-status-filter" value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
+          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
             { value: '', label: 'All statuses' },
             { value: 'scheduled', label: 'Scheduled' },
             { value: 'in_progress', label: 'In progress' },
@@ -674,7 +714,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
         </div>
       </header>
 
-      {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
+      {notice && !selected && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
@@ -723,9 +763,20 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
         </div>
       )}
 
-      <Modal open={selected !== null && confirmation === null && editor === null} title={selected?.title ?? 'Event detail'} onClose={() => setSelectedId(null)} closeDisabled={participantBusy}>
+      <Modal
+        open={selected !== null && confirmation === null && editor === null}
+        title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : selected?.title ?? 'Event detail'}
+        onClose={() => {
+          setCorrectionTarget(null);
+          setSelectedId(null);
+          setNotice(null);
+        }}
+        closeDisabled={participantBusy || correctionBusy}
+      >
         {selected && (
-          <div className={styles.detail}>
+          <>
+          <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
+            {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
             <div className={styles.detailTags}><span data-type={selected.type}>{formattedType(selected.type)}</span><span data-status={selected.status}>{formattedStatus(selected.status)}</span><span>100m</span></div>
             <dl className={styles.detailGrid}>
               <div><dt>Date</dt><dd><time dateTime={selected.date}>{formattedDate(selected.date, true)}</time></dd></div>
@@ -734,7 +785,17 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
               <div><dt>Discipline</dt><dd>100m</dd></div>
             </dl>
             {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
-            <ParticipantManager eventId={selected.id} onBusyChange={setParticipantBusy} />
+            <EventWeatherPanel key={`${selected.id}-${selected.updatedAt}`} event={selected} />
+            <EventResultsSection
+              event={selected}
+              reloadKey={resultReloadKey}
+              onCorrect={openCorrection}
+            />
+            <ParticipantManager
+              eventId={selected.id}
+              onBusyChange={setParticipantBusy}
+              onChanged={() => setResultReloadKey((key) => key + 1)}
+            />
             <div className={styles.detailActions}>
               <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }} disabled={participantBusy}>Edit event</Button>
               {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')} disabled={participantBusy}>Start event</Button>}
@@ -742,6 +803,16 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
               {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')} disabled={participantBusy}>Cancel event</Button>}
             </div>
           </div>
+          {correctionTarget && (
+            <ResultCorrectionForm
+              target={correctionTarget}
+              currentUser={currentUser}
+              onBack={backToEvent}
+              onSaved={finishCorrection}
+              onBusyChange={setCorrectionBusy}
+            />
+          )}
+          </>
         )}
       </Modal>
 

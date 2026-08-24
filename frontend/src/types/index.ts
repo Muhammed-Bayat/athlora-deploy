@@ -65,6 +65,27 @@ export interface AthleticsEvent {
   updatedAt: string;
 }
 
+export interface EventWeatherForecast {
+  date: string;
+  timezone: string;
+  weatherCode: number;
+  temperatureMinC: number;
+  temperatureMaxC: number;
+  precipitationProbabilityMaxPercent: number | null;
+  windSpeedMaxKmh: number | null;
+}
+
+export interface CurrentWeather {
+  timezone: string;
+  temperatureC: number;
+  apparentTemperatureC: number;
+  humidityPercent: number;
+  isDay: boolean;
+  precipitationMm: number;
+  weatherCode: number;
+  windSpeedKmh: number;
+}
+
 export interface EventMutationPayload {
   type: EventType;
   discipline: Discipline;
@@ -163,7 +184,12 @@ export interface Result {
   overrideReason: string | null;
   overriddenBy: string | null;
   overrideAt: string | null;
+  updatedAt: string;
 }
+
+export type ResultOverridePayload =
+  | { manualOverride: number; overrideReason: string }
+  | { manualOverride: null; overrideReason: null };
 
 export interface AthleteStatistics {
   athleteId: string;
@@ -175,6 +201,50 @@ export interface AthleteStatistics {
   latestResult: number | null;
   latestOutcome: ResultOutcome;
   updatedAt: string;
+}
+
+export interface AggregateAthleteIdentity {
+  id: string;
+  name: string;
+  squad: string | null;
+  archivedAt: string | null;
+}
+
+export interface AggregateEventIdentity {
+  id: string;
+  title: string;
+  type: EventType;
+  discipline: Discipline;
+  date: string;
+  time: string | null;
+  locationName: string | null;
+  status: EventStatus;
+}
+
+export interface AthleteResultHistoryEntry {
+  athlete: AggregateAthleteIdentity;
+  event: AggregateEventIdentity;
+  result: Result;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+}
+
+export interface AthleteResultCounts {
+  allTime: number;
+  currentYear: number;
+  competitionAllTime: number;
+  trainingAllTime: number;
+}
+
+export interface AthleteStatisticsDetail extends AthleteStatistics {
+  athlete: AggregateAthleteIdentity;
+  resultCounts: AthleteResultCounts;
+  latest: AthleteResultHistoryEntry | null;
+  recentResults: {
+    competitions: AthleteResultHistoryEntry[];
+    training: AthleteResultHistoryEntry[];
+  };
 }
 
 export interface RosterSnapshotEntry {
@@ -189,18 +259,44 @@ export interface DashboardUpcomingEvent {
   eventId: string;
   title: string;
   type: EventType;
+  discipline: Discipline;
   date: string;
+  time: string | null;
+  locationName: string | null;
   status: EventStatus;
   athleteCount: number;
 }
 
+export interface DashboardTimelineEntry {
+  entry: TimelineEntry;
+  athlete: AggregateAthleteIdentity;
+}
+
+export interface DashboardActiveEvent {
+  event: AggregateEventIdentity;
+  progress: {
+    participantCount: number;
+    athletesWithEntriesCount: number;
+    resolvedResultsCount: number;
+    entryCount: number;
+    completionPercent: number;
+  };
+  latestEntries: DashboardTimelineEntry[];
+}
+
 export interface DashboardSummary {
+  state: 'live' | 'summary';
+  asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  archivedAthletesCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
+  activeEvent: DashboardActiveEvent | null;
   rosterSnapshot: RosterSnapshotEntry[];
   upcomingEvents: DashboardUpcomingEvent[];
+  recentResults: AthleteResultHistoryEntry[];
+  recentPbs: AthleteResultHistoryEntry[];
 }
 
 export interface ApiError {

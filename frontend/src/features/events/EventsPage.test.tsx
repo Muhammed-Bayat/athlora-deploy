@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { Athlete, AthleticsEvent, EventParticipantSummary } from '../../types';
+import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } from '../../types';
+import { CurrentUserProvider } from '../auth/CurrentUserProvider';
 import { EventsPage } from './EventsPage';
 
 const eventApi = vi.hoisted(() => ({
@@ -10,6 +11,7 @@ const eventApi = vi.hoisted(() => ({
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   cancelEvent: vi.fn(),
+  getEventWeather: vi.fn(),
 }));
 const participantApi = vi.hoisted(() => ({
   listEventParticipants: vi.fn(),
@@ -20,10 +22,19 @@ const participantApi = vi.hoisted(() => ({
 const athleteApi = vi.hoisted(() => ({
   listAthletes: vi.fn(),
 }));
+const resultApi = vi.hoisted(() => ({
+  listResults: vi.fn(),
+  overrideResult: vi.fn(),
+}));
+const timelineApi = vi.hoisted(() => ({
+  listTimelineEntries: vi.fn(),
+}));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
 vi.mock('../../api/athletes', () => athleteApi);
+vi.mock('../../api/results', () => resultApi);
+vi.mock('../../api/timeline', () => timelineApi);
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
@@ -110,6 +121,35 @@ const beaParticipant = participant({
   athleteId: BEA_ID,
   athlete: { id: BEA_ID, name: 'Bea Sprinter', squad: null, archivedAt: null },
 });
+const currentUser: User = {
+  id: '55555555-5555-4555-8555-555555555555',
+  auth0Id: 'auth0|coach-1',
+  name: 'Coach Avery',
+  email: 'coach@example.com',
+  role: 'coach',
+  createdAt: '2026-08-16T10:00:00.000Z',
+  updatedAt: '2026-08-16T10:00:00.000Z',
+};
+
+function result(overrides: Partial<Result> = {}): Result {
+  return {
+    eventId: CITY_ID,
+    athleteId: ARI_ID,
+    discipline: '100m',
+    outcome: 'valid',
+    finalResult: 10.45,
+    unit: 'seconds',
+    placing: 1,
+    isPb: false,
+    isSb: false,
+    manualOverride: null,
+    overrideReason: null,
+    overriddenBy: null,
+    overrideAt: null,
+    updatedAt: '2026-08-17T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -117,12 +157,27 @@ beforeEach(() => {
     data: [past, cancelled, city, training],
     meta: { count: 4 },
   });
+  eventApi.getEventWeather.mockResolvedValue({
+    date: city.date,
+    timezone: 'Africa/Johannesburg',
+    weatherCode: 2,
+    temperatureMinC: 13.4,
+    temperatureMaxC: 24.8,
+    precipitationProbabilityMaxPercent: 20,
+    windSpeedMaxKmh: 18.1,
+  });
   participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
+  resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
+  timelineApi.listTimelineEntries.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
-  return render(<EventsPage today={TODAY} {...props} />);
+  return render(
+    <CurrentUserProvider user={currentUser}>
+      <EventsPage today={TODAY} {...props} />
+    </CurrentUserProvider>,
+  );
 }
 
 async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'City Sprint Meet') {
@@ -131,6 +186,15 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
 }
 
 describe('EventsPage', () => {
+  it('opens an event detail supplied by dashboard navigation', async () => {
+    renderPage({ initialEventId: CITY_ID });
+
+    const detail = await screen.findByRole('dialog', { name: 'City Sprint Meet' });
+    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
+    expect(resultApi.listResults).toHaveBeenCalledWith(CITY_ID);
+  });
+
   it('shows loading and then renders upcoming API events in stable order', async () => {
     let resolveList!: (value: { data: AthleticsEvent[]; meta: { count: number } }) => void;
     eventApi.listEvents.mockReturnValue(new Promise((resolve) => { resolveList = resolve; }));
@@ -282,11 +346,65 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Scheduled');
     expect(detail).toHaveTextContent('100m');
     expect(detail).toHaveTextContent('Central Stadium');
-    expect(await within(detail).findByText('Ari Runner')).toBeInTheDocument();
+    expect(await within(detail).findByText('Partly cloudy')).toBeInTheDocument();
+    expect(eventApi.getEventWeather).toHaveBeenCalledWith(CITY_ID, expect.any(AbortSignal));
+    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
     expect(detail).toHaveTextContent('Assigned athletes 1');
     expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: false });
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
+  });
+
+  it('loads event results and opens the correction modal body', async () => {
+    resultApi.listResults.mockImplementation(async (eventId: string) => ({
+      data: eventId === TRAINING_ID ? [result({ eventId: TRAINING_ID })] : [],
+      meta: { count: eventId === TRAINING_ID ? 1 : 0 },
+    }));
+    participantApi.listEventParticipants.mockImplementation(async (eventId: string) => ({
+      data: [{ ...ariParticipant, eventId }],
+      meta: { count: 1 },
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user, training.title);
+
+    const board = await within(detail).findByRole('list', { name: 'Event results' });
+    expect(within(board).getAllByText('10.45s')).toHaveLength(2);
+    expect(resultApi.listResults).toHaveBeenCalledWith(TRAINING_ID);
+    expect(timelineApi.listTimelineEntries).toHaveBeenCalledWith(TRAINING_ID);
+
+    const correctionTrigger = within(board).getByRole('button', { name: 'Correct time' });
+    await user.click(correctionTrigger);
+    const correction = screen.getByRole('dialog', { name: 'Correct Ari Runner' });
+    expect(within(correction).getByText('Derived value · read only')).toBeInTheDocument();
+    expect(within(correction).getByText('Current effective value')).toBeInTheDocument();
+    expect(within(correction).getByRole('spinbutton', { name: 'Corrected time (seconds)' })).toHaveFocus();
+    expect(within(correction).getByRole('textbox', { name: 'Reason for correction' })).toBeInTheDocument();
+
+    await user.click(within(correction).getByRole('button', { name: 'Back to event' }));
+    await waitFor(() => expect(correctionTrigger).toHaveFocus());
+    expect(screen.getByRole('dialog', { name: training.title })).toBeInTheDocument();
+
+    await user.click(correctionTrigger);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps the result retry control focused while recovering from an API failure', async () => {
+    resultApi.listResults
+      .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
+      .mockResolvedValueOnce({ data: [result()], meta: { count: 1 } });
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    expect(await within(detail).findByText(/Could not reach Athlora/)).toBeInTheDocument();
+    const retry = within(detail).getByRole('button', { name: 'Retry results' });
+    await user.click(retry);
+
+    expect(await within(detail).findByRole('list', { name: 'Event results' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Refresh results' })).toHaveFocus();
   });
 
   it('assigns an active athlete with a pending RSVP', async () => {
@@ -396,9 +514,11 @@ describe('EventsPage', () => {
 
   it('retries assignment and active-roster loading independently', async () => {
     participantApi.listEventParticipants
+      .mockResolvedValueOnce({ data: [ariParticipant], meta: { count: 1 } })
       .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
       .mockResolvedValueOnce({ data: [ariParticipant], meta: { count: 1 } });
     athleteApi.listAthletes
+      .mockResolvedValueOnce({ data: [ari, bea], meta: { count: 2 } })
       .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
       .mockResolvedValueOnce({ data: [ari, bea], meta: { count: 2 } });
     const user = userEvent.setup();
@@ -410,21 +530,22 @@ describe('EventsPage', () => {
     await user.click(within(detail).getByRole('button', { name: 'Retry roster' }));
     expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
     expect(await within(detail).findByLabelText('Assign an active athlete')).toBeInTheDocument();
-    expect(participantApi.listEventParticipants).toHaveBeenCalledTimes(2);
-    expect(athleteApi.listAthletes).toHaveBeenCalledTimes(2);
+    expect(participantApi.listEventParticipants.mock.calls.filter(([eventId]) => eventId === CITY_ID)).toHaveLength(3);
+    expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => filters.includeArchived)).toHaveLength(1);
+    expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => !filters.includeArchived)).toHaveLength(2);
   });
 
   it('keeps archived historical participants visible but out of assignment candidates', async () => {
-    participantApi.listEventParticipants.mockResolvedValueOnce({
+    participantApi.listEventParticipants.mockResolvedValue({
       data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z' } })],
       meta: { count: 1 },
     });
-    athleteApi.listAthletes.mockResolvedValueOnce({ data: [bea], meta: { count: 1 } });
+    athleteApi.listAthletes.mockResolvedValue({ data: [bea], meta: { count: 1 } });
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
 
-    expect(await within(detail).findByText('Archived')).toBeInTheDocument();
+    expect(await within(detail).findAllByText('Archived')).toHaveLength(2);
     const candidate = within(detail).getByLabelText('Assign an active athlete');
     expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
     expect(within(candidate).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
@@ -524,11 +645,11 @@ describe('EventsPage', () => {
     expect(screen.getByRole('button', { name: `${augustTenth}, 1 event` })).toBeInTheDocument();
   });
 
-  it('reports only non-cancelled upcoming events to the console', async () => {
+  it('reports only scheduled upcoming events to the console', async () => {
     const onUpcomingCountChange = vi.fn();
     renderPage({ onUpcomingCountChange });
     await screen.findByRole('button', { name: /City Sprint Meet/ });
 
-    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(2));
+    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(1));
   });
 });

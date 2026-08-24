@@ -12,14 +12,36 @@ body,
   min-height: 100%;
 }
 
+html {
+  background: var(--ink-950);
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+html.theme-light {
+  background: #BDD8E0;
+  color-scheme: light;
+}
+
 body {
   margin: 0;
   font-family: var(--font-family-base);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-normal);
   color: var(--color-text);
-  background: var(--color-bg);
+  background:
+    radial-gradient(820px 620px at 82% 1%, rgba(0, 146, 188, 0.12), transparent 62%),
+    radial-gradient(760px 520px at 8% 66%, rgba(0, 94, 131, 0.09), transparent 63%),
+    linear-gradient(180deg, #00070D 0%, #000A12 50%, #00070D 100%);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+html.theme-light body {
+  background:
+    radial-gradient(980px 660px at 86% -5%, rgba(73, 195, 216, 0.27), transparent 58%),
+    radial-gradient(760px 560px at 3% 72%, rgba(0, 125, 164, 0.16), transparent 67%),
+    linear-gradient(180deg, #C3DEE5 0%, #D0E6EB 48%, #BBD6DE 100%);
 }
 
 h1,
@@ -27,8 +49,8 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  font-weight: var(--font-weight-normal);
-  letter-spacing: 0.02em;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.035em;
   margin: 0 0 var(--space-2);
 }
 
@@ -43,9 +65,51 @@ textarea {
   font: inherit;
 }
 
+::selection {
+  background: var(--cyan-200);
+  color: #001018;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: #00070D;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #143849;
+  border: 2px solid #00070D;
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1E566C;
+}
+
+html.theme-light ::-webkit-scrollbar-track {
+  background: #B9D5DD;
+}
+
+html.theme-light ::-webkit-scrollbar-thumb {
+  background: #86B9C6;
+  border-color: #B9D5DD;
+}
+
+html.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #6AA8B8;
+}
+
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2.5px solid var(--cyan-400);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+html.theme-light :focus-visible {
+  outline-color: var(--color-primary);
 }
 
 .ink {

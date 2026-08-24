@@ -1,0 +1,21 @@
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  background: #00070d;
+  contain: paint;
+}
+
+.stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .stage {
+    display: none;
+  }
+}

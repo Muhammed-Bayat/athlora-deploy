@@ -1,0 +1,83 @@
+.fitness {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+  padding-bottom: var(--space-8);
+}
+
+.header,
+.headerIdentity,
+.headerActions,
+.viewerHeader,
+.viewerFooter,
+.activeInjuries header,
+.injuryItem {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--console-edge);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--cyan-200) 26%, transparent), transparent 36%), linear-gradient(135deg, var(--console-surface), var(--console-soft));
+  box-shadow: var(--console-shadow);
+}
+
+.headerIdentity { gap: var(--space-4); min-width: 0; }
+.headerIdentity > span {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan-400), var(--blue-500), var(--teal-700));
+  color: var(--white);
+  font: var(--font-weight-bold) .9rem var(--font-family-mono);
+  box-shadow: var(--shadow-glow);
+}
+.header h1 { margin: 0; color: var(--console-ink); font: 2.6rem/.95 var(--font-display); letter-spacing: .02em; text-transform: uppercase; }
+.header small { color: var(--console-muted); }
+.eyebrow { margin: 0 0 4px; color: var(--console-teal); font: var(--font-weight-bold) .65rem var(--font-family-mono); letter-spacing: .13em; text-transform: uppercase; }
+.headerActions { flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); }.headerActions > span { padding: 7px 10px; border-radius: var(--radius-pill); background: var(--console-soft); color: var(--console-teal); font: var(--font-weight-bold) .75rem var(--font-family-mono); }
+
+.layout { display: grid; grid-template-columns: minmax(280px, 38fr) minmax(0, 62fr); grid-template-areas: 'editor viewer' 'active active'; gap: var(--space-5); min-width: 0; align-items: start; }
+.editorCard,
+.viewerCard,
+.activeInjuries { min-width: 0; border: 1px solid var(--console-edge); border-radius: var(--radius-md); background: var(--console-surface); box-shadow: var(--console-shadow); }
+
+.editorCard { grid-area: editor; display: grid; gap: var(--space-3); padding: var(--space-6); }.editorCard h2,
+.activeInjuries h2 { margin: 0; color: var(--console-ink); font-size: 1.2rem; }.editorLead { margin: 0 0 var(--space-2); color: var(--console-muted); font-size: .84rem; line-height: 1.5; }
+.field { display: grid; gap: 6px; color: var(--console-ink); font-size: .8rem; font-weight: var(--font-weight-bold); }.field em { color: var(--console-muted); font-size: .7rem; font-style: normal; font-weight: var(--font-weight-normal); }
+.field textarea { width: 100%; border: 1px solid var(--console-control-border, var(--console-line)); border-radius: var(--radius-sm); background: var(--console-component-surface, var(--console-soft)); color: var(--console-component-text, var(--console-ink)); font: inherit; }.field textarea { min-height: 118px; padding: var(--space-3); resize: vertical; }
+.dropdown { position: relative; display: grid; gap: 6px; z-index: 1; }.dropdownOpen { z-index: 5; }.fieldLabel { color: var(--console-ink); font-size: .8rem; font-weight: var(--font-weight-bold); }.dropdownTrigger { display: flex; min-height: 46px; width: 100%; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-3); border: 1px solid var(--console-control-border, var(--console-line)); border-radius: var(--radius-sm); background: var(--console-component-surface, var(--console-soft)); color: var(--console-component-text, var(--console-ink)); font: var(--font-weight-bold) .82rem var(--font-family-base); text-align: left; cursor: pointer; }.dropdownTrigger > i { width: 8px; height: 8px; flex: 0 0 auto; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform var(--transition-fast); }.dropdownTrigger[aria-expanded='true'] { border-color: var(--console-teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--console-teal) 20%, transparent); }.dropdownTrigger[aria-expanded='true'] > i { transform: translateY(2px) rotate(225deg); }.dropdownMenu { position: absolute; z-index: 2; top: calc(100% + 6px); right: 0; left: 0; display: grid; max-height: 230px; margin: 0; padding: 6px; overflow-y: auto; border: 1px solid var(--console-teal); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--console-surface) 96%, transparent); box-shadow: 0 18px 34px color-mix(in srgb, var(--black) 36%, transparent); backdrop-filter: blur(16px); list-style: none; }.dropdownMenu button { display: flex; width: 100%; align-items: center; gap: 9px; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: var(--console-ink); font: .8rem var(--font-family-base); text-align: left; cursor: pointer; }.dropdownMenu button:hover,
+.dropdownMenu button[aria-selected='true'] { background: color-mix(in srgb, var(--console-teal) 18%, transparent); color: var(--console-component-text, var(--console-ink)); }.severityDot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #e0a000; box-shadow: 0 0 8px #e0a000; }.severityDot[data-severity='moderate'] { background: #e85b00; box-shadow: 0 0 8px #e85b00; }.severityDot[data-severity='severe'] { background: #d41432; box-shadow: 0 0 8px #d41432; }
+.dropdownTrigger:focus-visible,
+.field textarea:focus-visible,
+.resetButton:focus-visible,
+.injuryItem button:focus-visible,
+.dropdownMenu button:focus-visible { outline: 3px solid var(--console-focus); outline-offset: 2px; }
+.saveButton { width: 100%; margin-top: var(--space-2); }.sessionNote { margin: 0; color: var(--console-muted); font-size: .72rem; line-height: 1.4; }
+
+.viewerCard { grid-area: viewer; overflow: hidden; background: #01090f; color: #eafbfd; }.viewerHeader { justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid rgba(138, 233, 242, .14); }.viewerHeader div { display: grid; gap: 3px; }.viewerHeader strong { color: #eafbfd; font-size: .9rem; }.viewerHeader span { color: rgba(234, 251, 253, .65); font-size: .75rem; }
+.resetButton { min-height: 36px; padding: 0 12px; border: 1px solid rgba(138, 233, 242, .35); border-radius: var(--radius-pill); background: rgba(69, 190, 215, .09); color: #dffaff; font: var(--font-weight-bold) .72rem var(--font-family-base); cursor: pointer; }
+.canvasWrap { position: relative; height: clamp(380px, 56vh, 620px); min-height: 0; background: radial-gradient(ellipse at 50% 38%, #082b36, #01090f 68%); }.canvas { position: absolute !important; inset: 0; }.canvasLoader,
+.viewerError { padding: 9px 12px; border: 1px solid rgba(138, 233, 242, .25); border-radius: var(--radius-pill); background: rgba(1, 9, 15, .86); color: #dffaff; font: var(--font-weight-bold) .72rem var(--font-family-mono); }.viewerError { display: grid; height: 100%; place-items: center; border: 0; border-radius: 0; text-align: center; }
+.viewerFooter { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid rgba(138, 233, 242, .14); color: rgba(234, 251, 253, .68); font-size: .72rem; }
+.anatomyDebug { padding: var(--space-3) var(--space-4); border-top: 1px solid rgba(138, 233, 242, .14); background: rgba(6, 34, 43, .7); color: #dffaff; font-size: .75rem; }.anatomyDebug summary { color: #73e9f2; font-weight: var(--font-weight-bold); cursor: pointer; }.anatomyDebug p { margin: var(--space-2) 0; color: rgba(234, 251, 253, .72); }.anatomyDebug label { display: grid; gap: 5px; max-width: 280px; font-weight: var(--font-weight-bold); }.anatomyDebug select { min-height: 36px; border: 1px solid rgba(138, 233, 242, .35); border-radius: 6px; background: #03151d; color: #eafbfd; font: inherit; }
+
+.activeInjuries { grid-area: active; padding: var(--space-5); }.activeInjuries header { justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--console-line); }.activeInjuries header > span { color: var(--console-muted); font: var(--font-weight-bold) .76rem var(--font-family-mono); }.activeInjuries ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-3); margin: var(--space-4) 0 0; padding: 0; list-style: none; }.emptyInjuries { margin: var(--space-4) 0 0; padding: var(--space-5); border: 1px dashed var(--console-line); border-radius: var(--radius-sm); color: var(--console-muted); text-align: center; }
+.injuryItem { align-items: flex-start; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--console-line); border-radius: var(--radius-sm); background: var(--console-row-surface); }.injuryItem > i { width: 9px; height: 9px; flex: 0 0 auto; margin-top: 5px; border-radius: 50%; background: #e0a000; box-shadow: 0 0 9px currentColor; color: #e0a000; }.injuryItem[data-severity='moderate'] > i { background: #e85b00; color: #e85b00; }.injuryItem[data-severity='severe'] > i { background: #d41432; color: #d41432; }.injuryItem div { display: grid; flex: 1; min-width: 0; gap: 3px; }.injuryItem strong { color: var(--console-ink); }.injuryItem span,
+.injuryItem p { margin: 0; color: var(--console-muted); font-size: .76rem; line-height: 1.45; }.injuryItem button { border: 0; background: transparent; color: var(--console-teal); font: var(--font-weight-bold) .75rem var(--font-family-base); cursor: pointer; }
+
+@media (max-width: 940px) {
+  .layout { grid-template-columns: 1fr; grid-template-areas: 'viewer' 'editor' 'active'; }.canvasWrap { height: clamp(340px, 55vh, 520px); }
+}
+
+@media (max-width: 640px) {
+  .fitness { gap: var(--space-4); }.header { align-items: flex-start; flex-direction: column; padding: var(--space-5); }.header h1 { font-size: 2.15rem; }.headerActions { justify-content: flex-start; }.headerActions button { width: 100%; }.editorCard,
+  .activeInjuries { padding: var(--space-4); }.canvasWrap { height: 360px; }.viewerFooter { align-items: flex-start; flex-direction: column; }.activeInjuries ol { grid-template-columns: 1fr; }
+}

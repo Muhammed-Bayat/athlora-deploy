@@ -1,93 +1,138 @@
 # Athlora
 
-Run the whole season from one place.
+Run the whole athletics season from one place.
 
-Athlora is a web app for an athletics (track & field) coach to manage a roster of athletes, plan competitions and training, log results live during an event (times for track, distances/heights for field), derive statistics and PBs/SBs from that log, and — in later stages — collaborate with assistants offline, publish public results pages, and generate season schedules.
+## Core Requirements
 
-## Live services
+### Project Title
 
-- **Application:** [athlora-deploy.vercel.app](https://athlora-deploy.vercel.app)
-- **Documentation:** [athlora-deploy.pages.dev](https://athlora-deploy.pages.dev)
-- **API health:** [athlora-deploy.onrender.com/health](https://athlora-deploy.onrender.com/health)
+**Athlora**
 
-## Architecture
+### Short Description
 
-Non-monolithic: a **React + Vite + TypeScript** frontend talks to a separate **Express + TypeScript** API over HTTP/JSON, backed by **PostgreSQL**. Auth is handled by **Auth0**. No framework that merges front and back (no Next.js/SvelteKit-style fused routing) — this is a hard project requirement.
+Athlora is a web application for athletics coaches who need one place to manage athletes, plan training and competitions, and record results at the track. The shipped vertical slice supports 100m timing, live corrections, derived results, PBs/SBs, athlete statistics, weather, and a coach dashboard; the roadmap expands this into a full athletics-meet system.
 
-```
+### System Requirements
+
+- Node.js 22 LTS recommended; Node.js 20 or later supported.
+- npm 10 or later.
+- PostgreSQL 13 or later for local API features. Docker Desktop is recommended for local PostgreSQL and required for the documented E2E setup.
+- An Auth0 SPA/API configuration for authenticated application features.
+- Chromium, installed by Playwright, for E2E tests.
+
+Tested development environment: Linux, macOS, or Windows with a current Node.js LTS release. The frontend requires a modern Chromium-, Firefox-, or Safari-based browser.
+
+### Architecture
+
+```text
 /frontend   React + Vite + TypeScript SPA
-/backend    Express + TypeScript REST API (PostgreSQL)
+/backend    Express + TypeScript REST API and PostgreSQL migrations
 /docs       Docusaurus documentation site
-/e2e        Playwright end-to-end tests
+/e2e        Playwright browser tests
 ```
 
-## Tech stack
+The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; Open-Meteo provides weather through server-side proxies.
 
-| Layer            | Tool                                   | Why |
-|------------------|----------------------------------------|-----|
-| Frontend         | React + Vite + TypeScript (strict)     | Fast dev/build, strict typing, team-standard React |
-| Styling          | Plain CSS (CSS variables + modules)    | Design tokens from approved mockups, no runtime dependency |
-| Backend          | Node.js + Express + TypeScript         | Small hand-written REST API, shared TS types with frontend |
-| Database         | PostgreSQL (Neon)                      | Relational results/log data, UUIDs for offline-safe keys |
-| Auth             | Auth0                                  | Never hand-roll auth; hosted identity + JWT verification |
-| Weather          | Open-Meteo                             | Keyless REST forecast for event locations |
-| Testing          | Vitest, React Testing Library, Supertest, Playwright | Unit / component / API / E2E |
-| CI/CD            | Gitea Actions                          | Lint + typecheck + test on every push/PR |
-| Hosting          | Vercel (frontend), Render (backend)    | S3/FaaS + API hosting |
-| Docs site        | Docusaurus (Cloudflare Pages)          | Versioned docs for setup, API, schema |
+## Installation Guide
 
-Full design conventions and database schema live in the build spec (`docs/process/agent-build-spec`), the development plan in `docs/process/dev-plan`, and this repo's Git workflow in `docs/process/git-methodology`.
-
-## Getting started
-
-See `/docs` (Docusaurus) for the full setup guides: [frontend](docs/docs/getting-started/frontend), [backend](docs/docs/getting-started/backend).
-
-### Frontend
+### 1. Clone and install packages
 
 ```bash
-cd frontend
-npm install
-npm run dev
+git clone https://sdp.ms.wits.ac.za/cache-us-outside/athlora.git
+cd athlora
+npm ci --prefix frontend
+npm ci --prefix backend
+npm ci --prefix docs
+npm ci --prefix e2e
 ```
 
-### Backend
+### 2. Configure the API
+
+Create `backend/.env` from the example and supply your PostgreSQL and Auth0 values:
 
 ```bash
-cd backend
-npm install
-cp .env.example .env   # fill in DATABASE_URL and Auth0 values
-npm run dev
+cp backend/.env.example backend/.env
 ```
 
-A Postgres instance (Neon or similar) and an Auth0 tenant are required for the live features; the initial migration lives in `backend/src/db/migrations`.
+At minimum, set `DATABASE_URL`, `AUTH0_DOMAIN`, and `AUTH0_AUDIENCE`. Password-ticket creation and permanent account deletion also require the Auth0 Management API client variables. Never commit `.env` files.
 
-### Docs
+Run the migrations and API:
 
 ```bash
-cd docs
-npm install
-npm run start
+npm run db:migrate --prefix backend
+npm run dev --prefix backend
 ```
 
-## Contributing (Git workflow)
+The API starts at `http://localhost:4000`.
 
-We use **GitHub Flow** with Conventional Commits. Branch off `main` (`feature/<short-desc>`), open a PR early, get a review, squash-merge. Every commit follows `type(scope): description` and carries an `Assisted-by:` footer when AI generated code. Full details: `docs/process/git-methodology`.
+### 3. Configure and run the frontend
 
-## AI Usage
+Create a local frontend environment file:
 
-This project follows the course AI policy. The tools below have contributed to the repository; categories that are unused are explicitly declared as unused.
+```bash
+cp frontend/.env.example frontend/.env.local
+```
 
-- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
-- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
-- **Code review:** none used — not used for code review
-- Every commit where AI generated code includes an `Assisted-by:` footer naming every contributing tool and model.
-- Every submitted document ends with an AI usage/non-usage declaration.
-- This section is kept current as tools and models change.
+For local API development, set `VITE_API_BASE_URL=http://localhost:4000` in `frontend/.env.local`, then start Vite:
 
-## Documentation
+```bash
+npm run dev --prefix frontend
+```
 
-- [Dev plan](docs/docs/process/dev-plan)
-- [Agent build spec](docs/docs/process/agent-build-spec)
-- [Git methodology](docs/docs/process/git-methodology)
-- [Architecture overview](docs/docs/architecture/overview)
-- [Database schema](docs/docs/db-schema/overview)
+Open `http://localhost:5173`. Register this URL as an Auth0 callback URL, logout URL, and web origin before signing in.
+
+## Usage Examples
+
+### Verify the API
+
+```bash
+curl http://localhost:4000/health
+```
+
+Expected response:
+
+```json
+{ "status": "ok" }
+```
+
+### Run the current coaching workflow
+
+1. Sign in through Auth0 and let Athlora synchronize the local coach profile.
+2. Create athletes from **Athletes**.
+3. Create a 100m competition or training event from **Events**, assign athletes, and start it.
+4. Use **Live Logger** to record finishes or incidents; correct or undo entries if needed.
+5. Review derived results, manual corrections, PB/SB information, athlete history, and the dashboard summary.
+
+### Run quality checks
+
+```bash
+npm run lint --prefix frontend
+npm run typecheck --prefix frontend
+npm run test --prefix frontend
+npm run build --prefix frontend
+
+npm run lint --prefix backend
+npm run typecheck --prefix backend
+npm run test --prefix backend
+npm run build --prefix backend
+
+npm run build --prefix docs
+```
+
+See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup.
+
+## Services and Documentation
+
+- Application: https://athlora-deploy.vercel.app
+- API health: https://athlora-deploy.onrender.com/health
+- Documentation: https://athlora-deploy.pages.dev
+- [Frontend guide](docs/docs/getting-started/frontend.md)
+- [Backend guide](docs/docs/getting-started/backend.md)
+- [E2E guide](docs/docs/getting-started/e2e.md)
+- [Architecture](docs/docs/architecture/overview.md)
+- [API reference](docs/docs/api-reference/contract.md)
+- [Delivery roadmap](docs/docs/process/dev-plan.md)
+
+## AI Declaration
+
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].

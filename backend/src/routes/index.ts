@@ -5,6 +5,9 @@ import timelineRouter from './timeline.js';
 import resultsRouter from './results.js';
 import participantsRouter from './participants.js';
 import authRouter from './auth.js';
+import dashboardRouter from './dashboard.js';
+import statisticsRouter from './statistics.js';
+import weatherRouter from './weather.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
@@ -44,7 +47,15 @@ eventsRouter.delete('/:id', requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 router.use('/auth', authRouter);
-router.use('/athletes', verifyAuth0Token, resolveApplicationUser, athletesRouter);
+router.use(
+  '/athletes',
+  verifyAuth0Token,
+  resolveApplicationUser,
+  statisticsRouter,
+  athletesRouter,
+);
+router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
+router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use(
   '/events',
   verifyAuth0Token,

@@ -3,6 +3,7 @@ import type {
   ApiList,
   EventListFilters,
   EventMutationPayload,
+  EventWeatherForecast,
 } from '../types';
 import { get, create, update, request } from './client';
 
@@ -38,6 +39,7 @@ export async function cancelEvent(id: string): Promise<AthleticsEvent> {
   return response.data;
 }
 
-export async function getEventWeather(id: string): Promise<unknown> {
-  return request<unknown>(`/api/v1/events/${id}/weather`);
+export async function getEventWeather(id: string, signal?: AbortSignal): Promise<EventWeatherForecast> {
+  const response = await request<{ data: EventWeatherForecast }>(`/api/v1/events/${id}/weather`, { signal });
+  return response.data;
 }

@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from './client.js';
-import { withTransaction } from './transaction.js';
+import { withReadTransaction, withTransaction } from './transaction.js';
 
 vi.mock('./client.js', () => ({
   getPool: vi.fn(),
@@ -85,5 +85,21 @@ describe('withTransaction', () => {
       errors: [operationFailure, rollbackFailure],
     });
     expect(release).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('withReadTransaction', () => {
+  it('uses one repeatable read-only snapshot', async () => {
+    query.mockResolvedValue({ rows: [] });
+    const operation = vi.fn().mockResolvedValue('summary');
+
+    await expect(withReadTransaction(operation)).resolves.toBe('summary');
+
+    expect(query.mock.calls.map(([statement]) => statement)).toEqual([
+      'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
+      'COMMIT',
+    ]);
+    expect(operation).toHaveBeenCalledWith(client);
+    expect(release).toHaveBeenCalledWith(false);
   });
 });

@@ -74,10 +74,11 @@ export const requireAuth = verifyAuth0Token;
 export const resolveApplicationUser: RequestHandler = async (req, _res, next) => {
   try {
     const auth0 = getVerifiedAuth0Context(req);
-    const result = await getPool().query<ApplicationUserContextRow>(
-      `SELECT id AS user_id, auth0_id, role
-       FROM users
-       WHERE auth0_id = $1`,
+    const result = await getPool().query<ApplicationUserContextRow & { deletion_status: string | null }>(
+      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status
+       FROM users u
+       LEFT JOIN account_deletions d ON d.auth0_id = u.auth0_id
+       WHERE u.auth0_id = $1`,
       [auth0.auth0Id],
     );
     const user = result.rows[0];
@@ -91,6 +92,10 @@ export const resolveApplicationUser: RequestHandler = async (req, _res, next) =>
           { syncEndpoint: '/api/v1/auth/me' },
         ),
       );
+      return;
+    }
+    if (user.deletion_status) {
+      next(new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress'));
       return;
     }
 

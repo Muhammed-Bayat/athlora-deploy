@@ -121,7 +121,7 @@ describe('timeline service', () => {
       EVENT_ID, ATHLETE_ID, '100m', 'attempt', 11.2, 'seconds', false, null, null, USER_ID, null,
     ]);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('ON CONFLICT'))).toBe(true);
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET placing'))).toBe(true);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET "placing"'))).toBe(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('SET is_pb'))).toBe(true);
   });
 
@@ -251,7 +251,7 @@ describe('timeline service', () => {
     });
 
     await removeTimelineEntry(USER_ID, EVENT_ID, ENTRY_ID, { expectedVersion: 1 }, transaction(query));
-    const placingUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET placing'));
+    const placingUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET "placing"'));
     expect(placingUpdate?.[1]?.[0]).toBe(1);
     const flagsUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET is_pb'));
     expect(flagsUpdate?.[1]?.slice(0, 2)).toEqual([true, true]);

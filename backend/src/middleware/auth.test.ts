@@ -102,7 +102,7 @@ describe('resolveApplicationUser', () => {
 
     await resolveApplicationUser(req, response(), next);
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE auth0_id = $1'), [
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE u.auth0_id = $1'), [
       'auth0|coach-1',
     ]);
     expect(req.auth).toEqual({
@@ -112,6 +112,50 @@ describe('resolveApplicationUser', () => {
     });
     expect(req.auth0).toEqual({ auth0Id: 'auth0|coach-1', accessToken: 'access-token' });
     expect(next).toHaveBeenCalledWith();
+  });
+
+  it('blocks resource access while account deletion is pending', async () => {
+    const req = request();
+    req.auth0 = { auth0Id: 'auth0|coach-1', accessToken: 'access-token' };
+    query.mockResolvedValue({
+      rows: [{
+        user_id: '11111111-1111-4111-8111-111111111111',
+        auth0_id: 'auth0|coach-1',
+        role: 'coach',
+        deletion_status: 'pending',
+      }],
+    });
+    const next = vi.fn() as unknown as NextFunction;
+
+    await resolveApplicationUser(req, response(), next);
+
+    expect(req.auth).toBeUndefined();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      status: 403,
+      code: 'ACCOUNT_DELETION_PENDING',
+    }));
+  });
+
+  it('keeps resource access blocked after an ambiguous deletion failure', async () => {
+    const req = request();
+    req.auth0 = { auth0Id: 'auth0|coach-1', accessToken: 'access-token' };
+    query.mockResolvedValue({
+      rows: [{
+        user_id: '11111111-1111-4111-8111-111111111111',
+        auth0_id: 'auth0|coach-1',
+        role: 'coach',
+        deletion_status: 'failed',
+      }],
+    });
+    const next = vi.fn() as unknown as NextFunction;
+
+    await resolveApplicationUser(req, response(), next);
+
+    expect(req.auth).toBeUndefined();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      status: 403,
+      code: 'ACCOUNT_DELETION_PENDING',
+    }));
   });
 
   it('reports an unsynchronized verified identity with the sync endpoint', async () => {

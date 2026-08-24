@@ -16,6 +16,7 @@ import {
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
+  'account_deletions',
   'results',
   'timeline_entries',
   'event_participants',
@@ -126,7 +127,7 @@ describeDB('timeline entries against a real database', () => {
     expect(second.recordedBy).toBe(coachId);
 
     const { rows } = await pool.query(
-      `SELECT outcome, final_result, unit, placing, is_pb, is_sb
+      `SELECT outcome, final_result, unit, "placing" AS placing, is_pb, is_sb
        FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
     );
@@ -254,14 +255,14 @@ describeDB('timeline entries against a real database', () => {
     }, runTransaction);
 
     let result = await pool.query(
-      `SELECT outcome, final_result, placing FROM results WHERE event_id = $1 AND athlete_id = $2`,
+      `SELECT outcome, final_result, "placing" AS placing FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
     );
     expect(result.rows[0]).toEqual({ outcome: 'dq', final_result: null, placing: null });
 
     await removeTimelineEntry(coachId, eventId, dq.id, { expectedVersion: dq.version }, runTransaction);
     result = await pool.query(
-      `SELECT outcome, final_result, placing FROM results WHERE event_id = $1 AND athlete_id = $2`,
+      `SELECT outcome, final_result, "placing" AS placing FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
     );
     expect(result.rows[0]).toEqual({ outcome: 'valid', final_result: '10.9', placing: 1 });
@@ -338,7 +339,7 @@ describeDB('timeline entries against a real database', () => {
       runTransaction,
     );
     const { rows } = await pool.query<ResultRow>(
-      `SELECT event_id, athlete_id, discipline, outcome, final_result, unit, placing,
+      `SELECT event_id, athlete_id, discipline, outcome, final_result, unit, "placing" AS placing,
               is_pb, is_sb, manual_override, override_reason, overridden_by, override_at, updated_at
        FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
@@ -364,7 +365,7 @@ describeDB('timeline entries against a real database', () => {
     await createTimelineEntry(coachId, eventId, attempt(beaId, 10.9), runTransaction);
 
     const placing = await pool.query(
-      `SELECT athlete_id, placing FROM results WHERE event_id = $1 ORDER BY athlete_id`,
+      `SELECT athlete_id, "placing" AS placing FROM results WHERE event_id = $1 ORDER BY athlete_id`,
       [eventId],
     );
     expect(Object.fromEntries(placing.rows.map((row) => [row.athlete_id, row.placing]))).toEqual({
@@ -411,7 +412,7 @@ describeDB('timeline entries against a real database', () => {
 
     await cancelEvent(coachId, eventId, runTransaction);
     rows = await pool.query(
-      `SELECT event_id, placing, is_pb, is_sb FROM results
+      `SELECT event_id, "placing" AS placing, is_pb, is_sb FROM results
        WHERE athlete_id = $1 ORDER BY event_id`,
       [athleteId],
     );

@@ -10,9 +10,9 @@
 .viewHeader h1 {
   margin: 0;
   font-family: var(--font-display);
-  text-transform: uppercase;
-  font-size: 2.4rem;
-  letter-spacing: 0.03em;
+  font-size: 1.875rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   color: var(--console-ink);
 }
 
@@ -37,18 +37,12 @@
   flex-wrap: wrap;
 }
 
-.controls select,
 .segmented,
 .viewToggle {
   min-height: 44px;
-  border: 1px solid var(--console-line);
+  border: 1px solid var(--console-control-border);
   border-radius: var(--radius-sm);
-  background: var(--console-surface);
-}
-
-.controls select {
-  color: var(--console-teal);
-  padding-inline: var(--space-3);
+  background: var(--console-control-surface);
 }
 
 .segmented,
@@ -71,16 +65,15 @@
 
 .segmented button[aria-pressed='true'],
 .viewToggle button[aria-pressed='true'] {
-  background: linear-gradient(135deg, var(--blue-500), var(--teal-700));
-  color: var(--white);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
-.controls select:focus-visible,
 .segmented button:focus-visible,
 .viewToggle button:focus-visible,
 .eventOpen:focus-visible,
 .calendar button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline: 3px solid var(--console-focus);
   outline-offset: 2px;
 }
 
@@ -110,7 +103,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--console-cyan);
   animation: pulse 0.9s var(--ease) infinite alternate;
 }
 
@@ -184,6 +177,12 @@
   background: var(--console-soft);
   color: var(--console-ink);
   cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.calendarGrid > button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--console-cyan) 40%, transparent);
+  transform: translateY(-1px);
 }
 
 .calendarGrid > button:disabled {
@@ -192,8 +191,9 @@
 }
 
 .calendarGrid > button[aria-pressed='true'] {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
+  border-color: var(--console-focus);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .calendarGrid > button.today > span {
@@ -202,8 +202,8 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: var(--white);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
 }
 
 .calendarGrid button > i {
@@ -215,11 +215,11 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--console-cyan);
 }
 
 .calendarGrid button > i > i[data-type='training'] {
-  background: var(--color-secondary-dark);
+  background: var(--console-teal);
 }
 
 .dayHeading {
@@ -237,6 +237,17 @@
   border-color: var(--console-edge);
   background: var(--console-surface);
   box-shadow: var(--console-shadow);
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.eventCard:hover {
+  border-color: color-mix(in srgb, var(--console-cyan) 45%, var(--console-edge));
+  transform: translateY(-1px);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--console-shadow) 82%, transparent);
+}
+
+.eventCard:focus-within {
+  border-color: color-mix(in srgb, var(--console-cyan) 55%, var(--console-edge));
 }
 
 .eventOpen {
@@ -258,8 +269,9 @@
   place-items: center;
   min-height: 64px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(160deg, var(--ink-900), var(--teal-800));
-  color: var(--color-text-light);
+  background: linear-gradient(135deg, var(--console-selected-surface), color-mix(in srgb, var(--console-cyan) 14%, var(--console-soft)));
+  border: 1px solid color-mix(in srgb, var(--console-cyan) 26%, transparent);
+  color: var(--console-selected-text);
 }
 
 .dateBlock b {
@@ -297,33 +309,33 @@
 }
 
 [data-type='competition'] {
-  color: var(--color-primary-dark);
-  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--console-badge-pb-text);
+  background: var(--console-badge-pb-surface);
 }
 
 [data-type='training'] {
-  color: var(--teal-700);
-  background: color-mix(in srgb, var(--cyan-400) 18%, transparent);
+  color: var(--console-badge-sb-text);
+  background: var(--console-badge-sb-surface);
 }
 
 [data-status='scheduled'] {
-  color: var(--color-info);
-  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--console-badge-neutral-text);
+  background: var(--console-badge-neutral-surface);
 }
 
 [data-status='in_progress'] {
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--console-selected-text);
+  background: var(--console-selected-surface);
 }
 
 [data-status='completed'] {
-  color: var(--color-text-muted);
-  background: var(--mist-100);
+  color: var(--console-badge-neutral-text);
+  background: var(--console-badge-neutral-surface);
 }
 
 [data-status='cancelled'] {
-  color: var(--color-danger);
-  background: var(--alert-soft);
+  color: var(--console-badge-danger-text);
+  background: var(--console-badge-danger-surface);
 }
 
 .eventBody small {
@@ -346,11 +358,11 @@
   min-height: 76px;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
+  background: var(--console-row-surface);
 }
 
 .detailGrid dt {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -358,28 +370,95 @@
 
 .detailGrid dd {
   margin: var(--space-1) 0 0;
-  color: var(--color-text);
+  color: var(--console-ink);
   font-weight: var(--font-weight-bold);
 }
 
 .coordinates {
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   font: 0.75rem var(--font-family-mono);
+}
+
+.weatherPanel {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-md);
+  background: var(--console-surface);
+}
+
+.weatherPanel > header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weatherPanel > header p {
+  margin: 0 0 var(--space-1);
+  color: var(--console-cyan);
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.weatherPanel h3 {
+  margin: 0;
+  color: var(--console-ink);
+  font-size: 1rem;
+}
+
+.weatherPanel > header > span {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.weatherMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.weatherMetrics div {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--console-row-surface);
+}
+
+.weatherMetrics dt {
+  color: var(--console-faint);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.weatherMetrics dd {
+  margin: var(--space-1) 0 0;
+  color: var(--console-ink);
+  font: var(--font-weight-bold) 0.82rem var(--font-family-mono);
 }
 
 .participants {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
   padding: var(--space-4);
-  border: 1px solid var(--console-border);
+  border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--console-surface);
 }
 
 .participants > header p {
   margin: 0 0 var(--space-1);
-  color: var(--color-primary);
+  color: var(--console-cyan);
   font-size: 0.68rem;
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
@@ -388,7 +467,7 @@
 
 .participants h3 {
   margin: 0;
-  color: var(--color-text);
+  color: var(--console-ink);
   font-size: 1rem;
 }
 
@@ -399,8 +478,8 @@
   margin-left: var(--space-2);
   place-items: center;
   border-radius: var(--radius-pill);
-  background: var(--mist-100);
-  color: var(--color-primary-dark);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
   font: 0.75rem var(--font-family-mono);
 }
 
@@ -419,7 +498,8 @@
   align-items: center;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
+  border: 1px solid var(--console-line);
+  background: var(--console-row-surface);
 }
 
 .participantIdentity {
@@ -430,7 +510,7 @@
 
 .participantIdentity b {
   overflow: hidden;
-  color: var(--color-text);
+  color: var(--console-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -439,14 +519,14 @@
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  color: var(--color-text-muted);
+  color: var(--console-muted);
 }
 
 .participantIdentity i {
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius-pill);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-badge-danger-surface);
+  color: var(--console-badge-danger-text);
   font-style: normal;
   font-weight: var(--font-weight-bold);
 }
@@ -459,11 +539,11 @@
   display: grid;
   gap: var(--space-2);
   padding-top: var(--space-3);
-  border-top: 1px solid var(--console-border);
+  border-top: 1px solid var(--console-line);
 }
 
 .assignment > label {
-  color: var(--teal-700);
+  color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
 }
@@ -480,14 +560,15 @@
   margin: 0;
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  background: var(--console-row-surface);
+  color: var(--console-muted);
   font-size: var(--font-size-sm);
 }
 
 .participantFeedback {
-  background: color-mix(in srgb, var(--color-success) 12%, transparent);
-  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--console-teal) 45%, var(--console-line));
+  background: color-mix(in srgb, var(--console-teal) 14%, var(--console-soft));
+  color: var(--console-ink);
 }
 
 .inlineError,
@@ -497,10 +578,10 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   font-size: var(--font-size-sm);
 }
 
@@ -532,13 +613,13 @@
 
 .form label {
   margin-top: var(--space-2);
-  color: var(--teal-700);
+  color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
 }
 
 .form label span {
-  color: var(--color-text-faint);
+  color: var(--console-faint);
   font-weight: var(--font-weight-normal);
 }
 
@@ -548,12 +629,12 @@
   margin: 0 0 var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--mist-100);
-  color: var(--color-text-muted);
+  background: var(--console-row-surface);
+  color: var(--console-muted);
 }
 
 .fixedDiscipline strong {
-  color: var(--color-primary-dark);
+  color: var(--console-teal);
   font-family: var(--font-family-mono);
 }
 
@@ -569,27 +650,63 @@
 }
 
 .fieldError {
-  color: var(--color-danger);
+  color: var(--console-danger-surface);
   font-size: 0.75rem;
 }
 
 .formError {
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
   border-radius: var(--radius-sm);
-  background: var(--alert-soft);
-  color: var(--color-danger);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
   font-size: var(--font-size-sm);
 }
 
 .confirmation {
   max-width: 560px;
-  color: var(--color-text-muted);
+  color: var(--console-muted);
   line-height: 1.6;
 }
 
 .confirmation strong {
-  color: var(--color-text);
+  color: var(--console-ink);
+}
+
+.form input,
+.form select,
+.assignment select,
+.participantList select {
+  border-color: rgba(138, 233, 242, 0.12);
+  background: #061824;
+  color: #E5F1F5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+}
+
+.form select option,
+.assignment select option,
+.participantList select option {
+  background: #061824;
+  color: #DDECF2;
+}
+
+.form input::placeholder {
+  color: var(--console-placeholder);
+}
+
+.form input:focus-visible,
+.form select:focus-visible,
+.assignment select:focus-visible,
+.participantList select:focus-visible {
+  outline-color: var(--console-focus);
+}
+
+.form input:disabled,
+.form select:disabled,
+.assignment select:disabled,
+.participantList select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .srOnly {
@@ -607,6 +724,55 @@
 @keyframes pulse {
   from { opacity: 0.35; transform: translateY(2px); }
   to { opacity: 1; transform: translateY(-2px); }
+}
+
+:global(html.theme-light) .controls select {
+  border-color: rgba(0, 94, 131, 0.10);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.22), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%230086AC' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
+    linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(237, 248, 250, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 10px 30px rgba(0, 48, 72, 0.055);
+  color: #315D6E;
+}
+
+:global(html.theme-light) .controls select:hover {
+  border-color: rgba(0, 146, 188, 0.21);
+  background:
+    linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.22), transparent) left 13px top 0 / calc(100% - 26px) 1px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5' fill='none' stroke='%230086AC' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 14px center / 12px 8px no-repeat,
+    linear-gradient(145deg, #FFFFFF, #EAF8FA);
+  box-shadow: inset 0 1px 0 #fff, 0 14px 34px rgba(0, 48, 72, 0.08), 0 0 20px rgba(69, 190, 215, 0.04);
+  color: #123F50;
+}
+
+:global(html.theme-light) .controls select:focus,
+:global(html.theme-light) .controls select:focus-visible {
+  border-color: rgba(0, 146, 188, 0.36);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 3px rgba(0, 146, 188, 0.07), 0 14px 34px rgba(0, 48, 72, 0.08);
+  outline: none;
+}
+
+:global(html.theme-light) .controls select option {
+  background: #F7FCFD;
+  color: #173E50;
+}
+
+:global(html.theme-light) .form input,
+:global(html.theme-light) .form select,
+:global(html.theme-light) .assignment select,
+:global(html.theme-light) .participantList select {
+  border-color: rgba(0, 78, 105, 0.15);
+  background: #CBE4E9;
+  color: #173E50;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:global(html.theme-light) .form select option,
+:global(html.theme-light) .assignment select option,
+:global(html.theme-light) .participantList select option {
+  background: #F7FCFD;
+  color: #173E50;
 }
 
 @media (max-width: 980px) {
@@ -627,7 +793,6 @@
     flex: 1;
   }
 
-  .controls select,
   .controls > button {
     flex: 1;
   }
@@ -665,6 +830,10 @@
 }
 
 @media (max-width: 620px) {
+  .weatherMetrics {
+    grid-template-columns: 1fr;
+  }
+
   .eventOpen {
     grid-template-columns: 52px 1fr;
   }
