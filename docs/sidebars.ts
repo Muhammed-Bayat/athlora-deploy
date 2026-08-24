@@ -31,19 +31,24 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Project Process',
+      label: 'Project Methodology',
       items: [
-        'process/project-methodology',
-        'process/git-methodology',
-        'process/agent-build-spec',
-        'process/dev-plan',
-        'process/roadmap',
+        'project-methodology/methodology',
+        'project-methodology/git-methodology',
+        'project-methodology/agent-build-spec',
+        'project-methodology/dev-plan',
+        'project-methodology/delivery-roadmap',
+        {
+          type: 'category',
+          label: 'Sprint 1',
+          items: [
+            'project-methodology/sprint-1/meeting-records',
+            'project-methodology/sprint-1/client-meetings',
+            'project-methodology/sprint-1/user-stories',
+            'project-methodology/sprint-1/raw-meeting-transcript',
+          ],
+        },
       ],
-    },
-    {
-      type: 'category',
-      label: 'Sprint 1',
-      items: ['sprint-1/Meetings', 'sprint-1/client-meetings', 'sprint-1/user-stories'],
     },
   ],
 };

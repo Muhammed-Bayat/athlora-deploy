@@ -72,7 +72,7 @@ These pages are a living record that agents maintain as part of every task. If y
 - [Getting Started](/docs/getting-started/frontend) — run the stack locally
 - [Architecture overview](/docs/architecture/overview) — how the pieces fit
 - [Database](/docs/db-schema/overview) — schema and result derivation rules
-- [Project Process](/docs/process/git-methodology) — Git methodology, build spec, dev plan
+- [Project Methodology](/docs/project-methodology/methodology) — workflow, Git methodology, build plan, roadmap, and Sprint records
 
 ## AI Usage
 

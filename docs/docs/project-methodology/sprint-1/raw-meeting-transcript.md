@@ -2,9 +2,11 @@
 sidebar_position: 1
 ---
 
-# Meetings
+# Raw Meeting Transcript
 
-## What we spoke about
+This is the retained raw WhatsApp project-chat export for Sprint 1. It is chronological source evidence for the concise [Sprint 1 meeting records](./meeting-records). Sensitive values and access-bearing invitation links have been redacted.
+
+## Initial Meeting Notes
 
 - file management 
 - spoke about git methodologies
@@ -98,7 +100,7 @@ trello <br />
 ideas and creativity <br />
 will send a vn later and we can maybe do a call tomorrow
 
-**[15:06:23] Aaliah Reddy:** https://discord.gg/R2YhkKexD
+**[15:06:23] Aaliah Reddy:** [REDACTED — Discord invite link]
 
 **[16:13:27] Vikram Mahalingam:** https://youtu.be/8toBNmRDO90?si=UeMpW8Lkdr1pFptK
 
@@ -212,7 +214,7 @@ Coding prompt - doc - files
 
 **[20:37:51] Muhammed Bayat:** Full Stack Project Requirements - AI Policy Compliant.md ‎[00002349-Full Stack Project Requirements - AI Policy Compliant.md](./screenshots/00002349-Full%20Stack%20Project%20Requirements%20-%20AI%20Policy%20Compliant.md)
 
-**[20:47:00] Tyra:** https://trello.com/invite/b/6a7383c1d9c3340eb1f19570/ATTI3b7d9e1dcd9c7e7bd571f8dc2007c20fE71A6DB9/cache-us-outside
+**[20:47:00] Tyra:** [REDACTED — Trello board invite link]
 
 **[20:47:14] Tyra:** here's a trello board link
 
@@ -871,9 +873,7 @@ then git push origin &lt;branch name&gt;
 
 **[21:58:19] Vikram Mahalingam:** Yea you should be good
 
-**[22:08:51] Vareshan Rajah:** Okay these are account details yall can use for Athlora:<br />
-vareshan123@gmail.com <br />
-Athlora123456789
+**[22:08:51] Vareshan Rajah:** Shared Athlora test-account details were discussed. [REDACTED — test account email and password]
 
 **[22:21:32] Vareshan Rajah:** Okay 6 is done @⁨Aaliah Reddy⁩ so you can start with 7 tomorrow morning ‎&lt;This message was edited&gt;
 
