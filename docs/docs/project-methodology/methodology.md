@@ -61,7 +61,7 @@ The team uses a **Gitea Projects** board as the single source of truth for all w
 | **To Do** | Work that has been selected for the current cycle. The team has reviewed it, confirmed it is well-defined, and intends to start it soon. |
 | **In Progress** | Someone is actively working on this. There should be a branch and ideally a draft PR linked. |
 | **In Review** | The PR is open and awaiting review. No further code changes should be pushed until review feedback is addressed. |
-| **Done** | The work is merged, tests pass, documentation is updated, and the card is complete. |
+| **Done** | The work is merged, applicable tests and CI checks pass, documentation is updated, and the card is complete. |
 
 ### 3.2 How Cards Move
 
@@ -114,7 +114,7 @@ A typical work cycle looks like this:
 5. **Open a PR (early).** Even as a draft. This signals to the team that work is underway and invites early feedback.
 6. **Move to In Review.** When the PR is ready for review, the card moves to `In Review`. At least one team member reviews the diff.
 7. **Address feedback.** If changes are requested, the developer (or agent) pushes fixes to the same branch. The card stays in `In Review`.
-8. **Merge.** Once approved and all CI checks pass, the PR is merged into `main`. The card moves to `Done`.
+8. **Merge.** Once approved and all CI checks pass, the PR is merged into `main`. Where source code changes, review the Gitea coverage report and its lowest-covered-file list as part of the quality discussion. The card then moves to `Done`.
 9. **Review and improve.** At the Sprint checkpoint, the team reviews delivered work and feedback, then records any follow-up work or process improvement.
 
 ---

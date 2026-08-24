@@ -25,7 +25,8 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Unit/component tests | Vitest, React Testing Library | Fast component + pure-logic tests |
 | API tests | Supertest | Endpoint happy paths + validation/error paths |
 | E2E tests | Playwright | Cross-cutting flows, offline sync, multi-device merge |
-| CI/CD | Gitea Actions | Lint + typecheck + test on every push/PR |
+| Coverage reports | Vitest V8 coverage | HTML, LCOV, JSON, and combined Markdown coverage reports |
+| CI/CD | Gitea Actions | Lint, typecheck, test, build, coverage, and credential-gated E2E jobs on every push/PR |
 | Hosting | Vercel (frontend), Render (backend) | Static SPA hosting + API hosting |
 | Docs site | Docusaurus on Cloudflare Pages | Versioned docs: setup, API, schema |
 
@@ -43,7 +44,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | API tests | Supertest | HTTP contracts, validation, ownership, lifecycle guards, and error behavior. | The frontend relies on predictable status codes and error envelopes when handling stale corrections and closed events. |
 | End-to-end tests | Playwright, axe-core/playwright | Anonymous checks plus authenticated desktop/mobile 100m vertical-slice and accessibility tests. | The real workflow crosses Auth0, the SPA, the API, and PostgreSQL; browser tests verify that a coach can complete it at a desk or track-side. |
 | Documentation | Docusaurus | Versioned setup, architecture, API, schema, and process documentation. | The stack has several services and environment boundaries, so executable team documentation prevents setup knowledge staying with one contributor. |
-| CI | Gitea Actions | Separate frontend, backend, docs, and credential-gated E2E jobs on push and pull request. | A feature is not complete if it breaks a different service in the monorepo; CI verifies each deployable before merging. |
+| CI | Gitea Actions | Separate frontend, backend, docs, coverage, and credential-gated E2E jobs on push and pull request. The coverage job uploads interactive HTML/LCOV artifacts and a Markdown summary. | A feature is not complete if it breaks a different service in the monorepo; CI verifies each deployable before merging and makes source-coverage gaps visible without an initial threshold. |
 | Hosting | Vercel, Render, Cloudflare Pages | SPA, API, and documentation deployments respectively. | Independent hosting matches the architecture and lets the public documentation remain available without exposing the API or database. |
 
 ## Implemented Supporting Libraries

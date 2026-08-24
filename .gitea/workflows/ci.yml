@@ -41,6 +41,33 @@ jobs:
       - name: Build
         run: npm run build --prefix backend
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Generate frontend coverage
+        run: npm run test:coverage --prefix frontend
+      - name: Generate backend coverage
+        run: npm run test:coverage --prefix backend
+      - name: Generate quality report
+        run: node scripts/generate-coverage-report.mjs
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage/coverage-report.md
+            frontend/coverage
+            backend/coverage
+          retention-days: 14
+
   docs:
     runs-on: ubuntu-latest
     steps:
