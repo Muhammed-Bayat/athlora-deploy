@@ -109,12 +109,16 @@ Expected response:
 npm run lint --prefix frontend
 npm run typecheck --prefix frontend
 npm run test --prefix frontend
+npm run test:coverage --prefix frontend
 npm run build --prefix frontend
 
 npm run lint --prefix backend
 npm run typecheck --prefix backend
 npm run test --prefix backend
+npm run test:coverage --prefix backend
 npm run build --prefix backend
+
+node scripts/generate-coverage-report.mjs
 
 npm run build --prefix docs
 ```
@@ -131,7 +135,8 @@ See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup.
 - [E2E guide](docs/docs/getting-started/e2e.md)
 - [Architecture](docs/docs/architecture/overview.md)
 - [API reference](docs/docs/api-reference/contract.md)
-- [Delivery roadmap](docs/docs/process/dev-plan.md)
+- [Project methodology](docs/docs/project-methodology/methodology.md)
+- [Delivery roadmap](docs/docs/project-methodology/delivery-roadmap.md)
 
 ## AI Declaration
 

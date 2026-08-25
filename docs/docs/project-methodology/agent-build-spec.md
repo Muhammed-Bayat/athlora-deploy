@@ -36,7 +36,7 @@ The product is branded **Athlora** ("run the whole season from one place"). The 
 | Charts (Stage 2+) | Chart.js | |
 | PDF export (Stage 3) | pdf-lib | |
 | Testing | Vitest, React Testing Library, Supertest, Playwright | Unit/API/E2E respectively |
-| CI/CD | Gitea Actions | Lint + typecheck + test on every push/PR |
+| CI/CD | Gitea Actions | Lint, typecheck, test, build, and an informational frontend/backend coverage report on every push/PR |
 | Hosting | Vercel (frontend), Render (backend) | |
 | Docs site | Docusaurus on Cloudflare Pages | |
 

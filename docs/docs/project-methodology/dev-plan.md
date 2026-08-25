@@ -73,7 +73,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 - Express + TypeScript backend scaffold
 - PostgreSQL on Neon with checksum-tracked migrations
 - Auth0 tenant configured: sign up, login, password reset wired into SPA and Express middleware
-- Gitea Actions CI: lint, typecheck, test on every push/PR
+- Gitea Actions CI: lint, typecheck, test, build, and an informational frontend/backend coverage report on every push/PR
 - Frontend deployed to Vercel, backend to Render
 - Docusaurus site deployed to Cloudflare Pages
 - README.md with AI Usage section, Conventional Commits enforced
@@ -123,7 +123,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 - Tech stack table in `/docs` with one-line motivation per tool
 - Docusaurus site live with architecture overview, setup guide
 - Sign up/login/roster/events/live logging/dashboard/weather all working end-to-end
-- 215 frontend tests, 301 backend tests, Playwright E2E vertical slice with axe accessibility
+- 217 frontend tests, 308 backend tests (38 database tests conditionally skipped without `TEST_DATABASE_URL`), interactive Vitest V8 coverage artifacts, and a Playwright E2E vertical slice with axe accessibility
 
 ---
 

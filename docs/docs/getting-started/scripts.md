@@ -122,14 +122,26 @@ Projects:
 
 Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates application tables (users, athletes, events, event_participants, timeline_entries, results, account_deletions) before each run. The final serial test audits key coach views (dashboard, roster, events, live logger console, athlete detail, results) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations.
 
+## Coverage Reports
+
+Generate the same coverage reports used by Gitea Actions:
+
+```bash
+npm run test:coverage --prefix frontend
+npm run test:coverage --prefix backend
+node scripts/generate-coverage-report.mjs
+```
+
+The commands create ignored JSON coverage summaries. The Gitea `coverage` job prints a short Markdown table with frontend, backend, and combined line, branch, and function coverage; it appends the same table to the runner job summary when supported. Coverage is informational until the team agrees on a baseline and threshold.
+
 ## Current check status
 
 The implemented Stage 1 checks pass locally, and the same frontend/backend/docs gates run in Gitea Actions CI on every push/PR. The `e2e` job runs in CI once the Auth0/E2E secrets are configured and skips (with a message) until then:
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, build | passing (215 Vitest/RTL and track-math tests) |
-| `backend` | lint, typecheck, test, build | passing (301 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, coverage, build | passing (217 Vitest/RTL and track-math tests) |
+| `backend` | lint, typecheck, test, coverage, build | passing (308 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 

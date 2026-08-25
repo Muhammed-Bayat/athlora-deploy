@@ -161,7 +161,7 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 
 ## Quality Gates
 
-Every roadmap item is complete only when its implementation and documentation are aligned, relevant tests pass, and the applicable CI checks are green. The current CI runs frontend, backend, documentation, and credential-gated E2E jobs. New work must preserve the coach-ownership boundary, responsive track-side interaction, accessible controls, and server-authoritative result derivation.
+Every roadmap item is complete only when its implementation and documentation are aligned, relevant tests pass, and the applicable CI checks are green. The current CI runs frontend, backend, documentation, an informational frontend/backend coverage job, and credential-gated E2E jobs. The coverage job prints a short Markdown summary and does not yet impose a threshold. New work must preserve the coach-ownership boundary, responsive track-side interaction, accessible controls, and server-authoritative result derivation.
 
 ## AI Declaration
 

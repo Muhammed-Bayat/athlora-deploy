@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Sprint 1 User Stories & Acceptance Criteria
 
-This document defines the comprehensive set of user stories, acceptance criteria, and User Acceptance Tests (UATs) for **Athlora** Sprint 1. It is synthesized from project architecture documentation (`README.md`, developer plans, API contracts, database schemas), GitHub issues (`#27`, `#38`, `#41`, `#42`, `#54`, `#55`, `#56`, `#57`, `#58`, `#59`, `#60`, `#61`, `#62`), backend services, database migrations, and frontend UI components.
+This document defines the comprehensive set of user stories, acceptance criteria, and User Acceptance Tests (UATs) for **Athlora** Sprint 1. It is synthesized from project architecture documentation (`README.md`, developer plans, API contracts, database schemas), Gitea issues (`#27`, `#38`, `#41`, `#42`, `#54`, `#55`, `#56`, `#57`, `#58`, `#59`, `#60`, `#61`, `#62`), backend services, database migrations, and frontend UI components.
 
 ---
 
@@ -216,3 +216,4 @@ This document defines the comprehensive set of user stories, acceptance criteria
 This document was generated and refined with the assistance of AI tools:
 - **Code Generation & Documentation Synthesis:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
 - **In-line Review & Structuring:** `opencode[deepseek-v4-flash-free]`
+- **Documentation Relocation:** `OpenCode[gpt-5.6-terra]`

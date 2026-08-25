@@ -112,7 +112,7 @@ Standard merge process
 
 2. **Resolve conflicts locally**, test, and push before merging the PR.
 
-3. **Merge via Pull Request on GitHub**, not directly from the command line.
+3. **Merge via Pull Request on Gitea**, not directly from the command line.
 
 4. **Merge strategy:**
    - Use **"Squash and merge"** for feature/fix branches with messy or WIP commit history — this keeps `main`'s history clean. Before merging, ensure the squash commit title follows the Conventional Commits format above and retains every required `Assisted-by:` footer.
@@ -161,10 +161,10 @@ git checkout -b feature/short-description
 git fetch origin
 git merge origin/main
 
-# Push and open a PR on GitHub
+# Push and open a PR on Gitea
 git push -u origin feature/short-description
 
-# After PR approval → squash & merge on GitHub → delete branch
+# After PR approval → squash & merge on Gitea → delete branch
 
 # Tag a release (on main, after merging)
 git tag -a v1.2.0 -m "Release 1.2.0"
@@ -174,4 +174,4 @@ git push origin v1.2.0
 
 ## AI Declaration
 
-The preceding document was generated with the assistance of Claude-Web[Sonnet 5] and edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free].
+The preceding document was generated with the assistance of Claude-Web[Sonnet 5] and edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and OpenCode[gpt-5.6-terra].
