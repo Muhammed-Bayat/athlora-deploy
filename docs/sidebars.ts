@@ -38,14 +38,20 @@ const sidebars: SidebarsConfig = {
         'project-methodology/agent-build-spec',
         'project-methodology/dev-plan',
         'project-methodology/delivery-roadmap',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Sprints',
+      items: [
         {
           type: 'category',
           label: 'Sprint 1',
           items: [
-            'project-methodology/sprint-1/meeting-records',
-            'project-methodology/sprint-1/client-meetings',
-            'project-methodology/sprint-1/user-stories',
-            'project-methodology/sprint-1/raw-meeting-transcript',
+            'sprints/sprint-1/meeting-records',
+            'sprints/sprint-1/client-meetings',
+            'sprints/sprint-1/user-stories',
+            'sprints/sprint-1/raw-meeting-transcript',
           ],
         },
       ],

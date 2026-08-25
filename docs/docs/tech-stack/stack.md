@@ -66,7 +66,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 All authenticated dialogs (add, edit, correction, confirmation) use the shared `<Modal>` component. Layout rules:
 
 - **Desktop (≥768px):** Centered card with `max-width: 560px`, `max-height: 90vh`, and vertical scroll only when content exceeds the viewport.
-- **Mobile (<768px):** Full-screen sheet with safe-area insets. No border radius, no shadow, no backdrop padding.
+- **Mobile (`<768px`):** Full-screen sheet with safe-area insets. No border radius, no shadow, no backdrop padding.
 - **Body scroll lock:** `document.body.style.overflow` is set to `'hidden'` while any modal is open and restored on close.
 - **Forms inside Modal:** Always `width: 100%`. Never use hardcoded widths that exceed ~512px (560px minus 24px padding each side).
 - **Action buttons:** Stack vertically (`flex-direction: column`) below 620px with `width: 100%; min-height: 44px` for touch targets.

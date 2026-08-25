@@ -47,7 +47,7 @@ This document is a concise record of the material planning, delivery, and review
 
 ### Evidence
 
-![Gitea Projects board discussed in the team chat](../../sprint-1/screenshots/00002503-PHOTO-2026-08-13-20-51-15.jpg)
+![Gitea Projects board discussed in the team chat](./screenshots/00002503-PHOTO-2026-08-13-20-51-15.jpg)
 
 ### Evidence from the Raw Transcript
 
