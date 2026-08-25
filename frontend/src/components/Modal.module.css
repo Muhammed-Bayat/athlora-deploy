@@ -34,3 +34,22 @@
   font-size: var(--font-size-xl);
   margin: 0;
 }
+
+@media (max-width: 768px) {
+  .overlay {
+    padding: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .dialog {
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+}

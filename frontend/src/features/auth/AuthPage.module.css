@@ -110,7 +110,7 @@
 .confirmation {
   display: grid;
   gap: var(--space-3);
-  width: min(520px, 72vw);
+  width: 100%;
 }
 
 .confirmation p {
@@ -126,7 +126,6 @@
 
 @media (max-width: 720px) {
   .grid { grid-template-columns: 1fr; }
-  .confirmation { width: auto; }
   .actions { flex-direction: column; }
   .actions button { width: 100%; min-height: 44px; }
 }

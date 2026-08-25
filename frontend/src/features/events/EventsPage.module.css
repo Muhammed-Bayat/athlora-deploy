@@ -344,7 +344,7 @@
 }
 
 .detail {
-  width: min(620px, 75vw);
+  width: 100%;
 }
 
 .detailGrid {
@@ -608,7 +608,7 @@
 .form {
   display: grid;
   gap: var(--space-2);
-  width: min(620px, 75vw);
+  width: 100%;
 }
 
 .form label {
@@ -800,11 +800,6 @@
   .eventOpen {
     grid-template-columns: 58px 1fr auto;
     padding: var(--space-3);
-  }
-
-  .detail,
-  .form {
-    width: auto;
   }
 
   .formRow,
