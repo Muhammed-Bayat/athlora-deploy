@@ -22,6 +22,10 @@ export function Modal({ open, title, onClose, children, closeDisabled = false }:
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     (
       dialog?.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)') ??
       dialog?.querySelector<HTMLElement>('button:not(:disabled)')
@@ -56,6 +60,7 @@ export function Modal({ open, title, onClose, children, closeDisabled = false }:
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
       previous?.focus();
     };
   }, [open]);

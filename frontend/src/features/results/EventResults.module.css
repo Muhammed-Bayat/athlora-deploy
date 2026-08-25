@@ -464,10 +464,6 @@
     width: 100%;
   }
 
-  .correctionForm {
-    width: auto;
-  }
-
   .correctionSummary {
     grid-template-columns: 1fr;
   }

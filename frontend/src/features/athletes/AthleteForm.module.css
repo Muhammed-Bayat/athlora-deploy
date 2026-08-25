@@ -1,4 +1,4 @@
-.formFields { display: grid; gap: var(--space-2); min-width: min(540px, 70vw); }
+.formFields { display: grid; gap: var(--space-2); width: 100%; }
 .formFields label { margin-top: var(--space-2); color: var(--console-teal); font-size: 0.78rem; font-weight: var(--font-weight-bold); }
 .formFields label span { color: var(--console-faint); font-weight: var(--font-weight-normal); }
 .formFields textarea { min-height: 100px; padding: var(--space-3); border: 1px solid var(--console-control-border); border-radius: var(--radius-sm); background: var(--console-control-surface); color: var(--console-control-text); resize: vertical; }
@@ -13,4 +13,14 @@
 @media (max-width: 980px) {
   .formFields { min-width: 0; }
   .formRow { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .formActions {
+    flex-direction: column;
+  }
+  .formActions button {
+    width: 100%;
+    min-height: 44px;
+  }
 }

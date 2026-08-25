@@ -61,6 +61,18 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - `@testing-library/user-event` exercises real keyboard and pointer interactions for controls used during event logging.
 - `@axe-core/playwright` checks serious and critical accessibility violations in the browser suite.
 
+## Responsive Overlay Convention
+
+All authenticated dialogs (add, edit, correction, confirmation) use the shared `<Modal>` component. Layout rules:
+
+- **Desktop (≥768px):** Centered card with `max-width: 560px`, `max-height: 90vh`, and vertical scroll only when content exceeds the viewport.
+- **Mobile (<768px):** Full-screen sheet with safe-area insets. No border radius, no shadow, no backdrop padding.
+- **Body scroll lock:** `document.body.style.overflow` is set to `'hidden'` while any modal is open and restored on close.
+- **Forms inside Modal:** Always `width: 100%`. Never use hardcoded widths that exceed ~512px (560px minus 24px padding each side).
+- **Action buttons:** Stack vertically (`flex-direction: column`) below 620px with `width: 100%; min-height: 44px` for touch targets.
+- **Focus management:** Auto-focuses first input on open, restores focus to trigger on close, traps Tab within the dialog, Escape dismisses unless `closeDisabled`.
+- **Accessibility:** `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `aria-busy` during saves.
+
 ## Planned Stack
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.

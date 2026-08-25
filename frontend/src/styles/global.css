@@ -34,7 +34,7 @@ body {
     radial-gradient(760px 520px at 8% 66%, rgba(0, 94, 131, 0.09), transparent 63%),
     linear-gradient(180deg, #00070D 0%, #000A12 50%, #00070D 100%);
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 html.theme-light body {

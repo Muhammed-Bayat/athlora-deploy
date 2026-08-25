@@ -8,6 +8,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    exclude: ['e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
       reporter: ['json-summary'],
