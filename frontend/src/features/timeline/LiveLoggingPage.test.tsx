@@ -10,6 +10,7 @@ import * as resultsApi from '../../api/results';
 import { ApiError } from '../../api/client';
 import type { User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
+import { WorkspaceContext } from '../auth/WorkspaceContext';
 
 vi.mock('../../api/events');
 vi.mock('../../api/athletes');
@@ -111,6 +112,19 @@ describe('LiveLoggingPage', () => {
     );
   }
 
+  function renderAssistantPage(initialEventId?: string) {
+    return render(
+      <WorkspaceContext.Provider value={{
+        activeWorkspace: { id: 'workspace-1', name: 'Sprint squad', timezone: 'UTC', role: 'assistant' },
+        workspaces: [], selectWorkspace: () => undefined, refreshWorkspaces: async () => undefined,
+      }}>
+        <CurrentUserProvider user={{ ...currentUser, role: 'assistant' }}>
+          <LiveLoggingPage initialEventId={initialEventId} />
+        </CurrentUserProvider>
+      </WorkspaceContext.Provider>,
+    );
+  }
+
   it('renders no-live state and allows starting an event', async () => {
     vi.mocked(eventsApi.listEvents).mockResolvedValueOnce({
       data: [mockEvent],
@@ -140,6 +154,22 @@ describe('LiveLoggingPage', () => {
     await waitFor(() => {
       expect(eventsApi.updateEvent).toHaveBeenCalledWith('ev-1', expect.objectContaining({ status: 'in_progress' }));
     });
+  });
+
+  it('lets assistants open live logging but not start or complete events', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [{ ...mockEvent, id: 'ev-scheduled' }, mockActiveEvent], meta: { count: 2 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+
+    const user = userEvent.setup();
+    renderAssistantPage();
+
+    expect(await screen.findByRole('button', { name: 'Open Live Logger ›' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start Event' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open Live Logger ›' }));
+    expect(await screen.findByRole('button', { name: 'Record' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Complete Event' })).not.toBeInTheDocument();
   });
 
   it('resumes the active event supplied by dashboard navigation', async () => {

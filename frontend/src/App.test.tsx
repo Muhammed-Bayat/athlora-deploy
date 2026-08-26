@@ -18,6 +18,8 @@ const dashboardApi = vi.hoisted(() => ({
   getDashboardSummary: vi.fn(),
 }));
 
+const workspaceApi = vi.hoisted(() => ({ acceptWorkspaceInvitation: vi.fn() }));
+
 const emptyDashboard: DashboardSummary = {
   state: 'summary',
   asOfDate: '2026-08-18',
@@ -43,6 +45,10 @@ vi.mock('./api/athletes', async (importOriginal) => ({
 }));
 
 vi.mock('./api/dashboard', () => dashboardApi);
+vi.mock('./api/workspaces', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./api/workspaces')>()),
+  acceptWorkspaceInvitation: workspaceApi.acceptWorkspaceInvitation,
+}));
 
 vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
   PersistentWebGLStage: () => null,
@@ -62,6 +68,7 @@ describe('App', () => {
     athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
     dashboardApi.getDashboardSummary.mockReset();
     dashboardApi.getDashboardSummary.mockResolvedValue(emptyDashboard);
+    workspaceApi.acceptWorkspaceInvitation.mockReset();
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -158,5 +165,16 @@ describe('App', () => {
       'aria-busy',
       'true',
     );
+  });
+
+  it('accepts an authenticated invitation and enters its workspace', async () => {
+    authState.isAuthenticated = true;
+    workspaceApi.acceptWorkspaceInvitation.mockResolvedValue({ id: 'workspace-2', name: 'Relay squad', timezone: 'UTC', role: 'assistant' });
+    window.history.replaceState({}, '', '/invitations/token-123');
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Performance. In motion.' })).toBeInTheDocument();
+    expect(workspaceApi.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
   });
 });

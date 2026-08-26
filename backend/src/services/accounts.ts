@@ -25,6 +25,42 @@ async function markPending(auth0Id: string, runTransaction: TransactionRunner): 
     );
     if (deletion.rows[0]?.status === 'completed') return false;
     if (!user.rows[0] && !deletion.rows[0]) throw accountNotFound();
+    if (user.rows[0]) {
+      const coachedWorkspaces = await client.query<{ workspace_id: string }>(
+        `SELECT workspace_id FROM workspace_members
+         WHERE user_id = $1 AND role = 'coach' ORDER BY workspace_id`,
+        [user.rows[0].id],
+      );
+      const workspaceIds = coachedWorkspaces.rows.map((row) => row.workspace_id);
+      if (workspaceIds.length > 0) {
+        // Serialise deletions of coaches in the same workspace before deciding whether one remains.
+        await client.query(
+          `SELECT workspace_id FROM workspace_members
+           WHERE workspace_id = ANY($1::uuid[]) ORDER BY workspace_id, user_id FOR UPDATE`,
+          [workspaceIds],
+        );
+      }
+      const lastCoach = await client.query<{ workspace_id: string }>(
+        `SELECT wm.workspace_id
+         FROM workspace_members wm
+         WHERE wm.user_id = $1 AND wm.role = 'coach'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM workspace_members other
+             JOIN users other_user ON other_user.id = other.user_id
+             LEFT JOIN account_deletions deletion ON deletion.auth0_id = other_user.auth0_id
+             WHERE other.workspace_id = wm.workspace_id
+               AND other.role = 'coach'
+               AND other.user_id <> wm.user_id
+               AND deletion.status IS NULL
+           )
+         LIMIT 1`,
+        [user.rows[0].id],
+      );
+      if (lastCoach.rows[0]) {
+        throw new ApiError(409, 'LAST_COACH_REQUIRED', 'Transfer or add a coach before deleting this account');
+      }
+    }
     await client.query(
       `INSERT INTO account_deletions
          (auth0_id, status, attempts, next_attempt_at, last_error, requested_at, updated_at, completed_at)

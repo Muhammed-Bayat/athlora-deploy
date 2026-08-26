@@ -13,6 +13,7 @@ import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
 import type { Injury } from '../fitness/injuryRegions';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './AthleteDetailPage.module.css';
 
 interface AthleteDetailPageProps {
@@ -90,6 +91,8 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
 }
 
 export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: AthleteDetailPageProps) {
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -219,7 +222,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
             </span>
           )}
           {athlete && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
-          {athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {isCoach && athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
         </div>
       </header>
 

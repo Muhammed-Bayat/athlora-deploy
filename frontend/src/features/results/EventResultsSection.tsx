@@ -19,7 +19,7 @@ import styles from './EventResults.module.css';
 interface EventResultsSectionProps {
   event: AthleticsEvent;
   reloadKey: number;
-  onCorrect: (target: ResultCorrectionTarget, trigger: HTMLButtonElement) => void;
+  onCorrect?: (target: ResultCorrectionTarget, trigger: HTMLButtonElement) => void;
 }
 
 function resultErrorMessage(error: unknown): string {

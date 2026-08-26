@@ -94,9 +94,19 @@ The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHO
 | `POST /auth/me/password-ticket` | Verified JWT + synchronized user | Creates an Auth0-hosted password-change ticket; returns `201` with `{ data: { url } }`. |
 | `DELETE /auth/me` | Verified JWT | Starts permanent deletion of the verified Auth0 identity and removes its memberships; shared workspace data and attribution remain. Returns `202` with `{ data: { status: 'pending' } }`. A durable deletion tombstone blocks later synchronization and resource access. |
 | `GET /workspaces` | Verified JWT + synchronized user | Lists accessible workspaces and returns `meta.activeWorkspaceId`. |
+| `GET /workspaces/:workspaceId/members` | Coach membership | Lists workspace members. |
+| `PATCH /workspaces/:workspaceId/members/:userId` | Coach membership | Changes a member between `coach` and `assistant`; cannot demote the final coach. |
+| `DELETE /workspaces/:workspaceId/members/:userId` | Coach membership | Removes a member; cannot remove the final coach. |
+| `GET /workspaces/:workspaceId/invitations` | Coach membership | Lists active, unexpired invitations. |
+| `POST /workspaces/:workspaceId/invitations` | Coach membership | Creates an expiring email-bound coach or assistant invitation. |
+| `POST /workspaces/:workspaceId/invitations/:invitationId/resend` | Coach membership | Revokes the active token and issues a replacement invitation. |
+| `DELETE /workspaces/:workspaceId/invitations/:invitationId` | Coach membership | Revokes an unused invitation. |
+| `POST /workspaces/invitations/:token/accept` | Verified JWT | Accepts one active invitation only when the synchronized account email matches. |
 | `GET /auth/login`, `/auth/callback`, `/auth/logout` | Public | Legacy scaffolding only; each returns `501 NOT_IMPLEMENTED`. The SPA uses Auth0 Universal Login instead. |
 
 Workspace membership is server-derived and is the authorization boundary: athletes and events carry `workspace_id`, and dependent rows require event and athlete workspace equality. `coachId`, `createdBy`, `recordedBy` and `overriddenBy` remain attribution actors, not ownership controls. A workspace has a default IANA timezone; events can store an optional timezone override. Client mutation payloads never control workspace or attribution fields.
+
+Workspace roles are only `coach` and `assistant`. Coaches manage memberships and invitations and can mutate athletes, events, participants, lifecycle state, and result overrides. Assistants may read private workspace data and create timeline entries, but may edit or undo only entries they recorded. Every assistant-restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -107,7 +117,7 @@ Field names are camelCase on the wire. Calendar dates are real Gregorian `YYYY-M
 ### 4.1 User
 
 ```
-id, auth0Id, name, email, role ('coach'|'assistant'|'viewer'), createdAt, updatedAt
+id, auth0Id, name, email, role ('coach'|'assistant'), createdAt, updatedAt
 ```
 
 ### 4.2 Athlete

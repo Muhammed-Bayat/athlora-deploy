@@ -11,6 +11,7 @@ import type { Athlete, AthleteMutationPayload } from '../../types';
 import { AthleteDetailPage } from './AthleteDetailPage';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage as errorMessage } from './athleteError';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './AthletesPage.module.css';
 
 type ArchiveFilter = 'active' | 'archived' | 'all';
@@ -46,6 +47,8 @@ function formatDate(value: string | null): string {
 }
 
 export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: AthletesPageProps = {}) {
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -213,13 +216,13 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
               { value: 'all', label: 'All athletes' },
             ]}
           />
-          <Button
+          {isCoach && <Button
             ref={addButtonRef}
             onClick={() => setEditor('new')}
             disabled={loading || Boolean(loadError) || pendingId !== null}
           >
             Add athlete
-          </Button>
+          </Button>}
         </div>
       </header>
 
@@ -244,7 +247,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
       {!loading && !loadError && athletes.length === 0 && (
         <div className={styles.emptyPanel}>
           <EmptyState title="No athletes yet" description="Add your first athlete to start building the roster." />
-          <Button onClick={() => setEditor('new')}>Add your first athlete</Button>
+           {isCoach && <Button onClick={() => setEditor('new')}>Add your first athlete</Button>}
         </div>
       )}
 
@@ -293,14 +296,14 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                 >
                   View performance
                 </Button>
-                <Button
+                {isCoach && <Button
                   variant="secondary"
                   onClick={() => setEditor(athlete)}
                   disabled={pendingId !== null}
                 >
                   Edit
-                </Button>
-                {athlete.archivedAt ? (
+                </Button>}
+                {isCoach && (athlete.archivedAt ? (
                   <Button onClick={() => void restore(athlete)} disabled={pendingId !== null}>
                     {pendingId === athlete.id ? 'Restoring...' : 'Restore'}
                   </Button>
@@ -312,7 +315,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                   >
                     Archive
                   </Button>
-                )}
+                ))}
               </div>
             </Card>
           ))}

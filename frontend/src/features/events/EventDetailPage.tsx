@@ -3,6 +3,7 @@ import { cancelEvent, getEvent, updateEvent } from '../../api/events';
 import { ApiError } from '../../api/client';
 import { Button, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import { EventResultsSection } from '../results/EventResultsSection';
 import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
@@ -15,6 +16,8 @@ type LifecycleAction = 'start' | 'complete' | 'cancel';
 
 export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated, onBusyChange }: { eventId: string; onBack: () => void; initialEvent?: AthleticsEvent; onEventUpdated?: (event: AthleticsEvent) => void; onBusyChange?: (busy: boolean) => void }) {
   const currentUser = useCurrentUser();
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [event, setEvent] = useState<AthleticsEvent | null>(initialEvent ?? null);
   const [loading, setLoading] = useState(!initialEvent);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,9 +101,9 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Discipline</dt><dd>100m</dd></div></dl>
       {(event.latitude !== null || event.longitude !== null) && <p className={styles.coordinates}>Coordinates: {event.latitude ?? 'Not set'}, {event.longitude ?? 'Not set'}</p>}
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
-      <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={(target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); }} />
+      <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
       <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
-      <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>
+       {isCoach && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>
     <Modal open={editor} title="Edit event" onClose={() => { if (!editorBusy) setEditor(false); }} closeDisabled={editorBusy}><EventForm event={event} onSave={saveEditor} onCancel={() => setEditor(false)} onSubmittingChange={setEditorBusy} /></Modal>

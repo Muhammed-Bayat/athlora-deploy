@@ -22,6 +22,7 @@ import {
   type RsvpStatus,
 } from '../../types';
 import styles from './EventsPage.module.css';
+import { useWorkspace } from '../auth/WorkspaceContext';
 
 type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
@@ -330,6 +331,8 @@ export function ParticipantManager({
   onBusyChange: (busy: boolean) => void;
   onChanged: () => void;
 }) {
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
   const [participantsError, setParticipantsError] = useState<string | null>(null);
@@ -488,13 +491,13 @@ export function ParticipantManager({
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squad ?? 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
-              <label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
-              <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+               {isCoach && <><label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
+               <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
-              ]} disabled={Boolean(busy)} />
-              <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button>
+               ]} disabled={Boolean(busy)} />
+               <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button></>}
             </li>;
           })}
         </ul>
@@ -502,7 +505,7 @@ export function ParticipantManager({
 
       {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 
-      <div className={styles.assignment}>
+       {isCoach && <div className={styles.assignment}>
         <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
@@ -510,7 +513,7 @@ export function ParticipantManager({
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
           ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squad ? ` · ${athlete.squad}` : ''}` })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
-      </div>
+       </div>}
 
       {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
       {feedback && <p className={styles.participantFeedback} role="status">{feedback}</p>}
@@ -519,6 +522,8 @@ export function ParticipantManager({
 }
 
 export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday() }: EventsPageProps = {}) {
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -651,7 +656,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
             <button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button>
             <button type="button" aria-label="Calendar view" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>□</button>
           </div>
-          <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>
+           {isCoach && <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>}
         </div>
       </header>
 
@@ -659,7 +664,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
-      {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
+       {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." />{isCoach && <Button onClick={() => setEditor('new')}>Add your first event</Button>}</div>}
 
       {!loading && !loadError && events.length > 0 && view === 'calendar' && (
         <div className={styles.calendar}>
