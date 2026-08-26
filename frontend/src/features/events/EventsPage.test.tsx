@@ -1,16 +1,19 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
 import { EventsPage } from './EventsPage';
+import { EventDetailPage } from './EventDetailPage';
 
 const eventApi = vi.hoisted(() => ({
   listEvents: vi.fn(),
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   cancelEvent: vi.fn(),
+  getEvent: vi.fn(),
   getEventWeather: vi.fn(),
 }));
 const participantApi = vi.hoisted(() => ({
@@ -166,6 +169,7 @@ beforeEach(() => {
     precipitationProbabilityMaxPercent: 20,
     windSpeedMaxKmh: 18.1,
   });
+  eventApi.getEvent.mockResolvedValue(city);
   participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
@@ -175,7 +179,7 @@ beforeEach(() => {
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
   return render(
     <CurrentUserProvider user={currentUser}>
-      <EventsPage today={TODAY} {...props} />
+      <MemoryRouter><EventsPage today={TODAY} {...props} /></MemoryRouter>
     </CurrentUserProvider>,
   );
 }
@@ -186,13 +190,27 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
 }
 
 describe('EventsPage', () => {
-  it('opens an event detail supplied by dashboard navigation', async () => {
-    renderPage({ initialEventId: CITY_ID });
+  it('hands an event id to routed detail navigation', async () => {
+    const onOpenEvent = vi.fn();
+    const user = userEvent.setup();
+    renderPage({ onOpenEvent });
 
-    const detail = await screen.findByRole('dialog', { name: 'City Sprint Meet' });
-    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
-    expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
-    expect(resultApi.listResults).toHaveBeenCalledWith(CITY_ID);
+    await user.click(await screen.findByRole('button', { name: /City Sprint Meet/i }));
+    expect(onOpenEvent).toHaveBeenCalledWith(CITY_ID);
+  });
+
+  it('loads a direct event route and distinguishes a missing event', async () => {
+    const onBack = vi.fn();
+    const { rerender } = render(<CurrentUserProvider user={currentUser}><MemoryRouter><EventDetailPage eventId={CITY_ID} onBack={onBack} /></MemoryRouter></CurrentUserProvider>);
+
+    expect(await screen.findByRole('heading', { name: 'City Sprint Meet' })).toBeInTheDocument();
+    expect(eventApi.getEvent).toHaveBeenCalledWith(CITY_ID);
+
+    eventApi.getEvent.mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'missing'));
+    rerender(<CurrentUserProvider user={currentUser}><MemoryRouter><EventDetailPage eventId="missing" onBack={onBack} /></MemoryRouter></CurrentUserProvider>);
+    expect(await screen.findByRole('heading', { name: 'Event not found' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Back to events' }));
+    expect(onBack).toHaveBeenCalledOnce();
   });
 
   it('shows loading and then renders upcoming API events in stable order', async () => {
