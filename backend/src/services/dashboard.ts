@@ -46,7 +46,7 @@ function calendarYearBounds(asOfDate: string): [string, string] {
 
 async function listRecentResults(
   client: DbExecutor,
-  userId: string,
+   workspaceId: string,
   onlyPbs: boolean,
   limit: number,
 ): Promise<AthleteResultHistoryEntry[]> {
@@ -78,8 +78,8 @@ async function listRecentResults(
        FROM results r
        JOIN events e ON e.id = r.event_id
        JOIN athletes a ON a.id = r.athlete_id
-       WHERE e.created_by = $1
-         AND a.coach_id = $1
+        WHERE e.workspace_id = $1
+          AND a.workspace_id = $1
          AND r.discipline = $2
          AND e.status <> 'cancelled'
          ${onlyPbs ? 'AND r.is_pb = true' : ''}
@@ -93,29 +93,29 @@ async function listRecentResults(
               event_id DESC,
               athlete_id ASC
      LIMIT $3`,
-    [userId, DISCIPLINE_100M, limit],
+    [workspaceId, DISCIPLINE_100M, limit],
   );
   return result.rows.map(mapAthleteResultHistoryRow);
 }
 
 export async function getDashboardSummary(
-  userId: string,
+  workspaceId: string,
   asOfDate = utcDateToday(),
   runTransaction: ReadTransactionRunner = withReadTransaction,
 ): Promise<DashboardSummary> {
-  if (!isCanonicalUuid(userId)) throw notFound();
+  if (!isCanonicalUuid(workspaceId)) throw notFound();
   const [yearStart, nextYearStart] = calendarYearBounds(asOfDate);
 
   return runTransaction(async (client) => {
     const metricsResult = await client.query<DashboardMetricsRow>(
       `SELECT
-         (SELECT COUNT(*) FROM athletes WHERE coach_id = $1) AS athletes_count,
+          (SELECT COUNT(*) FROM athletes WHERE workspace_id = $1) AS athletes_count,
          (SELECT COUNT(*) FROM athletes
-          WHERE coach_id = $1 AND archived_at IS NULL) AS active_athletes_count,
+           WHERE workspace_id = $1 AND archived_at IS NULL) AS active_athletes_count,
          (SELECT COUNT(*) FROM athletes
-          WHERE coach_id = $1 AND archived_at IS NOT NULL) AS archived_athletes_count,
+           WHERE workspace_id = $1 AND archived_at IS NOT NULL) AS archived_athletes_count,
          (SELECT COUNT(*) FROM events
-          WHERE created_by = $1
+           WHERE workspace_id = $1
             AND status = 'scheduled'
             AND discipline = $5
             AND date >= $2::date)
@@ -124,14 +124,14 @@ export async function getDashboardSummary(
           FROM results r
           JOIN events e ON e.id = r.event_id
           JOIN athletes a ON a.id = r.athlete_id
-          WHERE e.created_by = $1
-            AND a.coach_id = $1
+           WHERE e.workspace_id = $1
+             AND a.workspace_id = $1
             AND e.status <> 'cancelled'
             AND r.discipline = $5
             AND r.is_pb = true
             AND e.date >= $3::date
             AND e.date < $4::date) AS season_pbs`,
-      [userId, asOfDate, yearStart, nextYearStart, DISCIPLINE_100M],
+       [workspaceId, asOfDate, yearStart, nextYearStart, DISCIPLINE_100M],
     );
     const metricsRow = metricsResult.rows[0];
     if (!metricsRow) throw new Error('Dashboard metrics query returned no row');
@@ -149,7 +149,7 @@ export async function getDashboardSummary(
               (SELECT COUNT(*)
                FROM event_participants ep
                JOIN athletes a ON a.id = ep.athlete_id
-               WHERE ep.event_id = e.id AND a.coach_id = $1) AS participant_count,
+                WHERE ep.event_id = e.id AND a.workspace_id = $1) AS participant_count,
               (SELECT COUNT(DISTINCT te.athlete_id)
                FROM event_participants ep
                JOIN athletes a ON a.id = ep.athlete_id
@@ -158,7 +158,7 @@ export async function getDashboardSummary(
                WHERE ep.event_id = e.id
                  AND te.deleted_at IS NULL
                  AND te.discipline = $2
-                 AND a.coach_id = $1) AS athletes_with_entries_count,
+                  AND a.workspace_id = $1) AS athletes_with_entries_count,
               (SELECT COUNT(*)
                FROM event_participants ep
                JOIN athletes a ON a.id = ep.athlete_id
@@ -166,7 +166,7 @@ export async function getDashboardSummary(
                  ON r.event_id = ep.event_id AND r.athlete_id = ep.athlete_id
                WHERE ep.event_id = e.id
                  AND r.discipline = $2
-                 AND a.coach_id = $1
+                  AND a.workspace_id = $1
                  AND CASE
                        WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                        WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
@@ -180,9 +180,9 @@ export async function getDashboardSummary(
                WHERE ep.event_id = e.id
                  AND te.deleted_at IS NULL
                  AND te.discipline = $2
-                 AND a.coach_id = $1) AS entry_count
+                  AND a.workspace_id = $1) AS entry_count
        FROM events e
-       WHERE e.created_by = $1
+        WHERE e.workspace_id = $1
          AND e.status = 'in_progress'
          AND e.discipline = $2
        ORDER BY e.date ASC,
@@ -190,7 +190,7 @@ export async function getDashboardSummary(
                 e.created_at ASC,
                 e.id ASC
        LIMIT 1`,
-      [userId, DISCIPLINE_100M],
+       [workspaceId, DISCIPLINE_100M],
     );
     const activeRow = activeResult.rows[0];
     const activeBase = activeRow ? mapDashboardActiveEventRow(activeRow) : null;
@@ -204,13 +204,13 @@ export async function getDashboardSummary(
          JOIN events e ON e.id = te.event_id
          JOIN athletes a ON a.id = te.athlete_id
          WHERE te.event_id = $1
-           AND e.created_by = $2
-           AND a.coach_id = $2
+            AND e.workspace_id = $2
+            AND a.workspace_id = $2
            AND te.deleted_at IS NULL
            AND te.discipline = $3
          ORDER BY te.created_at DESC, te.id DESC
          LIMIT $4`,
-        [activeBase.event.id, userId, DISCIPLINE_100M, LATEST_ENTRIES_LIMIT],
+         [activeBase.event.id, workspaceId, DISCIPLINE_100M, LATEST_ENTRIES_LIMIT],
       )
       : { rows: [] as DashboardTimelineEntryRow[] };
 
@@ -240,12 +240,12 @@ export async function getDashboardSummary(
          JOIN events e ON e.id = r.event_id
          WHERE r.athlete_id = a.id
            AND r.discipline = $2
-           AND e.created_by = $1
+            AND e.workspace_id = $1
            AND e.status <> 'cancelled'
        ) best ON true
-       WHERE a.coach_id = $1 AND a.archived_at IS NULL
+        WHERE a.workspace_id = $1 AND a.archived_at IS NULL
        ORDER BY LOWER(a.name) ASC, a.created_at ASC, a.id ASC`,
-      [userId, DISCIPLINE_100M],
+       [workspaceId, DISCIPLINE_100M],
     );
 
     const upcomingResult = await client.query<DashboardUpcomingEventRow>(
@@ -260,8 +260,8 @@ export async function getDashboardSummary(
               COUNT(a.id) AS athlete_count
        FROM events e
        LEFT JOIN event_participants ep ON ep.event_id = e.id
-       LEFT JOIN athletes a ON a.id = ep.athlete_id AND a.coach_id = $1
-       WHERE e.created_by = $1
+        LEFT JOIN athletes a ON a.id = ep.athlete_id AND a.workspace_id = $1
+        WHERE e.workspace_id = $1
          AND e.status = 'scheduled'
          AND e.discipline = $3
          AND e.date >= $2::date
@@ -270,16 +270,16 @@ export async function getDashboardSummary(
                 e.time ASC NULLS LAST,
                 e.created_at ASC,
                 e.id ASC`,
-      [userId, asOfDate, DISCIPLINE_100M],
+       [workspaceId, asOfDate, DISCIPLINE_100M],
     );
 
     const recentResults = await listRecentResults(
       client,
-      userId,
+       workspaceId,
       false,
       RECENT_RESULTS_LIMIT,
     );
-    const recentPbs = await listRecentResults(client, userId, true, RECENT_PBS_LIMIT);
+    const recentPbs = await listRecentResults(client, workspaceId, true, RECENT_PBS_LIMIT);
 
     return {
       state: activeBase ? 'live' : 'summary',

@@ -4,8 +4,8 @@ import { getDashboardSummary as loadDashboardSummary } from '../services/dashboa
 
 export const getDashboardSummary: RequestHandler = async (_req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(_req);
-    const dashboard = await loadDashboardSummary(userId);
+    const { workspaceId } = getApplicationUserContext(_req);
+    const dashboard = await loadDashboardSummary(workspaceId);
     res.json({ data: dashboard });
   } catch (error) {
     next(error);

@@ -7,3 +7,4 @@ export * as timelineApi from './timeline';
 export * as resultsApi from './results';
 export * as statisticsApi from './statistics';
 export * as dashboardApi from './dashboard';
+export * as workspacesApi from './workspaces';

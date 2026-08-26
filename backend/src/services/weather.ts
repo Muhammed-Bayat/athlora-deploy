@@ -45,11 +45,11 @@ function numericArray(value: unknown, length: number): Array<number | null> {
 }
 
 export async function getEventWeatherForecast(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   fetcher: typeof fetch = fetch,
 ): Promise<EventWeatherForecast> {
-  const event = await getEvent(userId, eventId);
+  const event = await getEvent(workspaceId, eventId);
   if (event.latitude === null || event.longitude === null) {
     throw new ApiError(
       422,

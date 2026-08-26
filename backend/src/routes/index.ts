@@ -8,6 +8,7 @@ import authRouter from './auth.js';
 import dashboardRouter from './dashboard.js';
 import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
+import workspacesRouter from './workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
@@ -47,6 +48,7 @@ eventsRouter.delete('/:id', requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 router.use('/auth', authRouter);
+router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRouter);
 router.use(
   '/athletes',
   verifyAuth0Token,

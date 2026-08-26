@@ -9,4 +9,6 @@ export interface ApplicationUserContext {
   userId: string;
   auth0Id: string;
   role: UserRole;
+  workspaceId: string;
+  workspaceRole: UserRole;
 }

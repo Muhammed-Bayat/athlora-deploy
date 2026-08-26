@@ -76,6 +76,19 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
     if (!result.rows[0]) {
       throw new ApiError(410, 'ACCOUNT_DELETED', 'This account is pending deletion or has been deleted');
     }
+    // New accounts begin with one private workspace. Existing accounts were
+    // backfilled by migration 0005, so this is intentionally idempotent.
+    await getPool().query(
+      `WITH created_workspace AS (
+         INSERT INTO workspaces (name)
+         SELECT CONCAT($2, '''s workspace')
+         WHERE NOT EXISTS (SELECT 1 FROM workspace_members WHERE user_id = $1)
+         RETURNING id
+       )
+       INSERT INTO workspace_members (workspace_id, user_id, role)
+       SELECT id, $1, $3 FROM created_workspace`,
+      [result.rows[0].id, name, result.rows[0].role],
+    );
     res.json({ data: mapUserRow(result.rows[0]) });
   } catch (error) {
     next(error);

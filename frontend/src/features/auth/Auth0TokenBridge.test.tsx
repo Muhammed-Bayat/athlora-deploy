@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => ({
     getAccessTokenSilently: vi.fn().mockResolvedValue('access-token'),
   },
   setAccessTokenGetter: vi.fn(() => vi.fn()),
+  setActiveWorkspaceId: vi.fn(),
   syncCurrentUser: vi.fn(),
+  listWorkspaces: vi.fn(),
 }));
 
 vi.mock('@auth0/auth0-react', () => ({
@@ -22,8 +24,11 @@ vi.mock('@auth0/auth0-react', () => ({
 
 vi.mock('../../api/client', () => ({
   setAccessTokenGetter: mocks.setAccessTokenGetter,
+  setActiveWorkspaceId: mocks.setActiveWorkspaceId,
   syncCurrentUser: mocks.syncCurrentUser,
 }));
+
+vi.mock('../../api/workspaces', () => ({ listWorkspaces: mocks.listWorkspaces }));
 
 const synchronizedUser: User = {
   id: 'user-1',
@@ -61,7 +66,13 @@ beforeEach(() => {
   mocks.auth.getAccessTokenSilently = vi.fn().mockResolvedValue('access-token');
   mocks.setAccessTokenGetter.mockReset();
   mocks.setAccessTokenGetter.mockImplementation(() => vi.fn());
+  mocks.setActiveWorkspaceId.mockReset();
   mocks.syncCurrentUser.mockReset();
+  mocks.listWorkspaces.mockReset();
+  mocks.listWorkspaces.mockResolvedValue({
+    data: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Private application', timezone: 'UTC', role: 'coach' }],
+    meta: { count: 1, activeWorkspaceId: '11111111-1111-4111-8111-111111111111' },
+  });
 });
 
 describe('Auth0TokenBridge', () => {

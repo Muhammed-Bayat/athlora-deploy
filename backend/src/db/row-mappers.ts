@@ -52,6 +52,8 @@ export interface ApplicationUserContextRow {
   user_id: string;
   auth0_id: string;
   role: string;
+  workspace_id?: string;
+  workspace_role?: string;
 }
 
 export interface AthleteRow {
@@ -480,6 +482,12 @@ export function mapApplicationUserContextRow(
     userId: uuid(row.user_id, 'user context.user_id'),
     auth0Id: nonemptyString(row.auth0_id, 'user context.auth0_id'),
     role: enumValue(row.role, USER_ROLES, 'user context.role'),
+    workspaceId: row.workspace_id === undefined
+      ? uuid(row.user_id, 'user context.user_id')
+      : uuid(row.workspace_id, 'user context.workspace_id'),
+    workspaceRole: row.workspace_role === undefined
+      ? enumValue(row.role, USER_ROLES, 'user context.role')
+      : enumValue(row.workspace_role, USER_ROLES, 'user context.workspace_role'),
   };
 }
 

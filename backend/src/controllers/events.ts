@@ -13,8 +13,8 @@ import { getEventWeatherForecast } from '../services/weather.js';
 export const listEvents: RequestHandler = async (req, res, next) => {
   try {
     const query = parseEventListQuery(req.query as Record<string, unknown>);
-    const { userId } = getApplicationUserContext(req);
-    const events = await listEventsRecords(userId, query);
+    const { workspaceId } = getApplicationUserContext(req);
+    const events = await listEventsRecords(workspaceId, query);
     res.json({ data: events, meta: { count: events.length } });
   } catch (error) {
     next(error);
@@ -23,8 +23,8 @@ export const listEvents: RequestHandler = async (req, res, next) => {
 
 export const getEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await getEventRecord(userId, req.params.id);
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await getEventRecord(workspaceId, req.params.id);
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -33,8 +33,8 @@ export const getEvent: RequestHandler = async (req, res, next) => {
 
 export const createEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await createEventRecord(userId, req.body);
+    const { userId, workspaceId } = getApplicationUserContext(req);
+    const event = await createEventRecord(userId, req.body, undefined, workspaceId);
     res.status(201).json({ data: event });
   } catch (error) {
     next(error);
@@ -43,8 +43,8 @@ export const createEvent: RequestHandler = async (req, res, next) => {
 
 export const updateEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await replaceEvent(userId, req.params.id, req.body);
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await replaceEvent(workspaceId, req.params.id, req.body);
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -53,8 +53,8 @@ export const updateEvent: RequestHandler = async (req, res, next) => {
 
 export const deleteEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await cancelEventRecord(userId, req.params.id);
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await cancelEventRecord(workspaceId, req.params.id);
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -63,8 +63,8 @@ export const deleteEvent: RequestHandler = async (req, res, next) => {
 
 export const getWeather: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const forecast = await getEventWeatherForecast(userId, req.params.id);
+    const { workspaceId } = getApplicationUserContext(req);
+    const forecast = await getEventWeatherForecast(workspaceId, req.params.id);
     res.json({ data: forecast });
   } catch (error) {
     next(error);

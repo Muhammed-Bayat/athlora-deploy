@@ -12,10 +12,12 @@ The schema is the shared foundation for Athlora's full athletics-meet scope. The
 
 ```
 users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
-athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, notes,
-                      archived_at, created_at, updated_at)
-events               (id UUID PK, created_by -> users, type, discipline, title, date, time,
-                      location_name, latitude, longitude, status)
+workspaces           (id UUID PK, name, timezone)
+workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK (workspace_id, user_id)
+athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, squad, notes,
+                       archived_at, created_at, updated_at)
+events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
+                       location_name, latitude, longitude, timezone, status)
 event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
@@ -57,7 +59,7 @@ Derived/materialized from `timeline_entries`. Recalculated after every entry cha
 
 ## Ownership boundaries
 
-Protected requests resolve the verified Auth0 subject to `users.id` before resource access. Direct ownership is `athletes.coach_id` for athletes and `events.created_by` for events. Timeline entries, participants and results are authorized through both parent relationships: the event must have been created by the current user and the athlete must belong to that user. `recorded_by` and `overridden_by` are audit actors, not ownership fields.
+Protected requests resolve the verified Auth0 subject to an active `workspace_members` row before resource access. `athletes.workspace_id` and `events.workspace_id` are the authorization boundary; dependent resources require their event and athlete to share that workspace. `coach_id`, `created_by`, `recorded_by` and `overridden_by` are audit actors, not ownership fields.
 
 Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. The policy is centralized in `backend/src/services/ownership.ts` so the Stage 2 sharing model can replace it consistently when assistants and cross-coach fixtures are introduced.
 
@@ -72,7 +74,9 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 
 Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
 
-Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state survives removal of `users`, blocks stale-token synchronization and resource access, and schedules idempotent cleanup retries through `next_attempt_at`.
+Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state blocks stale-token synchronization and resource access and schedules idempotent cleanup retries through `next_attempt_at`.
+
+Migration `0005_workspace_tenancy.sql` creates workspaces and membership roles, backfills one UTC workspace per legacy user without changing domain IDs, adds `workspace_id` to athletes/events, and adds optional event timezone overrides. Account departure deletes memberships but retains the local audit user and shared workspace history.
 
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
@@ -84,7 +88,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; and `0004_account_lifecycle.sql` adds durable deletion state. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; and `0005_workspace_tenancy.sql` adds shared workspace tenancy. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 

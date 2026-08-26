@@ -9,13 +9,15 @@ import { getApplicationUserContext } from '../middleware/auth.js';
 
 export const getEventResults: RequestHandler = async (req, res, next) => {
   try {
+    const { workspaceId } = getApplicationUserContext(req);
     const eventId = req.params.eventId as string;
     const pool = getPool();
     const resultRes = await pool.query(
       `SELECT r.*
        FROM results r
-       WHERE r.event_id = $1 AND r.discipline = $2`,
-       [eventId, DISCIPLINE_100M],
+       JOIN events e ON e.id = r.event_id
+       WHERE r.event_id = $1 AND r.discipline = $2 AND e.workspace_id = $3`,
+       [eventId, DISCIPLINE_100M, workspaceId],
     );
 
     const results = resultRes.rows.map(mapResultRow);
@@ -27,7 +29,7 @@ export const getEventResults: RequestHandler = async (req, res, next) => {
 
 export const overrideResult: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
+    const { userId, workspaceId } = getApplicationUserContext(req);
     const eventId = req.params.eventId as string;
     const athleteId = req.params.athleteId as string;
     const { manualOverride, overrideReason } = req.body;
@@ -37,9 +39,9 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
       await client.query(
         `SELECT id
          FROM events
-         WHERE id = $1
+          WHERE id = $1 AND workspace_id = $2
          FOR UPDATE`,
-        [eventId],
+         [eventId, workspaceId],
       );
       await lockEventResultAthletes(client, eventId);
       const discipline = DISCIPLINE_100M;

@@ -3,6 +3,7 @@ import type { ApiList, User } from '../types';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 let getAccessToken: (() => Promise<string>) | undefined;
 let accessTokenGetterRegistration: symbol | undefined;
+let activeWorkspaceId: string | undefined;
 
 // Try to read a stored token from localStorage on startup
 {
@@ -39,6 +40,10 @@ export function setAccessTokenGetter(getter: (() => Promise<string>) | undefined
       accessTokenGetterRegistration = undefined;
     }
   };
+}
+
+export function setActiveWorkspaceId(workspaceId: string | undefined): void {
+  activeWorkspaceId = workspaceId;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,6 +104,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (accessToken && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  if (activeWorkspaceId && !headers.has('X-Workspace-Id')) {
+    headers.set('X-Workspace-Id', activeWorkspaceId);
   }
 
   let response: Response;

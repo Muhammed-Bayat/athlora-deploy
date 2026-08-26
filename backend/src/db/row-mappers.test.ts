@@ -240,6 +240,8 @@ describe('PostgreSQL row mapping', () => {
       userId: USER_ID,
       auth0Id: 'auth0|coach-1',
       role: 'assistant',
+      workspaceId: USER_ID,
+      workspaceRole: 'assistant',
     });
   });
 

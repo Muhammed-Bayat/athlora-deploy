@@ -1,9 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import type { EventType } from '../types/domain.js';
 import { deleteAuth0User } from './auth0-management.js';
-import { recomputeEventResults } from './timeline.js';
 
 type TransactionRunner = <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T>;
 
@@ -64,59 +62,8 @@ async function purgeLocalAccount(auth0Id: string, runTransaction: TransactionRun
     );
     const userId = user.rows[0]?.id;
     if (userId) {
-      const affectedEvents = await client.query<{ id: string; type: EventType }>(
-        `SELECT id, type FROM events
-         WHERE created_by <> $1
-           AND id IN (
-             SELECT event_id FROM timeline_entries WHERE recorded_by = $1
-             UNION
-             SELECT event_id FROM results WHERE overridden_by = $1
-             UNION
-             SELECT event_id FROM event_participants
-             WHERE athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)
-             UNION
-             SELECT event_id FROM timeline_entries
-             WHERE athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)
-             UNION
-             SELECT event_id FROM results
-             WHERE athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)
-           )
-         ORDER BY id
-         FOR UPDATE`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM event_participants
-         WHERE event_id IN (SELECT id FROM events WHERE created_by = $1)
-            OR athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM results
-         WHERE event_id IN (SELECT id FROM events WHERE created_by = $1)
-            OR athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM timeline_entries
-         WHERE event_id IN (SELECT id FROM events WHERE created_by = $1)
-            OR athlete_id IN (SELECT id FROM athletes WHERE coach_id = $1)`,
-        [userId],
-      );
-      await client.query(`DELETE FROM timeline_entries WHERE recorded_by = $1`, [userId]);
-      await client.query(
-        `UPDATE results
-         SET manual_override = NULL, override_reason = NULL,
-             overridden_by = NULL, override_at = NULL
-         WHERE overridden_by = $1`,
-        [userId],
-      );
-      for (const event of affectedEvents.rows) {
-        await recomputeEventResults(client, event.id, event.type);
-      }
-      await client.query(`DELETE FROM events WHERE created_by = $1`, [userId]);
-      await client.query(`DELETE FROM athletes WHERE coach_id = $1`, [userId]);
-      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      // Keep the local user row and all domain records so attribution remains auditable.
+      await client.query(`DELETE FROM workspace_members WHERE user_id = $1`, [userId]);
     }
     await client.query(
       `UPDATE account_deletions

@@ -16,8 +16,8 @@ function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function requireOwnedId(userId: string, athleteId: unknown): asserts athleteId is string {
-  if (!isCanonicalUuid(userId) || !isCanonicalUuid(athleteId)) {
+function requireScopedId(workspaceId: string, athleteId: unknown): asserts athleteId is string {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(athleteId)) {
     throw notFound();
   }
 }
@@ -27,16 +27,16 @@ function escapeLike(value: string): string {
 }
 
 export async function listAthletes(
-  userId: string,
+  workspaceId: string,
   query: AthleteListQuery,
   executor: DbExecutor = getPool(),
 ): Promise<Athlete[]> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId)) {
     throw notFound();
   }
 
-  const conditions = ['coach_id = $1'];
-  const parameters: string[] = [userId];
+  const conditions = ['workspace_id = $1'];
+  const parameters: string[] = [workspaceId];
   if (!query.includeArchived) {
     conditions.push('archived_at IS NULL');
   }
@@ -60,17 +60,17 @@ export async function listAthletes(
 }
 
 export async function getAthlete(
-  userId: string,
+  workspaceId: string,
   athleteId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<Athlete> {
-  requireOwnedId(userId, athleteId);
+  requireScopedId(workspaceId, athleteId);
 
   const result = await executor.query<AthleteRow>(
     `SELECT ${ATHLETE_COLUMNS}
      FROM athletes
-     WHERE id = $1 AND coach_id = $2`,
-    [athleteId, userId],
+      WHERE id = $1 AND workspace_id = $2`,
+    [athleteId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -81,27 +81,28 @@ export async function createAthlete(
   userId: string,
   payload: AthleteCreatePayload,
   executor: DbExecutor = getPool(),
+  workspaceId = userId,
 ): Promise<Athlete> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(userId)) {
     throw notFound();
   }
 
   const result = await executor.query<AthleteRow>(
-    `INSERT INTO athletes (coach_id, name, dob, gender, squad, notes)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO athletes (workspace_id, coach_id, name, dob, gender, squad, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${ATHLETE_COLUMNS}`,
-    [userId, payload.name, payload.dob, payload.gender, payload.squad, payload.notes],
+    [workspaceId, userId, payload.name, payload.dob, payload.gender, payload.squad, payload.notes],
   );
   return mapAthleteRow(result.rows[0]);
 }
 
 export async function replaceAthlete(
-  userId: string,
+  workspaceId: string,
   athleteId: unknown,
   payload: AthleteReplacementPayload,
   executor: DbExecutor = getPool(),
 ): Promise<Athlete> {
-  requireOwnedId(userId, athleteId);
+  requireScopedId(workspaceId, athleteId);
 
   const result = await executor.query<AthleteRow>(
     `UPDATE athletes
@@ -111,9 +112,9 @@ export async function replaceAthlete(
          squad = $4,
          notes = $5,
          updated_at = now()
-     WHERE id = $6 AND coach_id = $7
+      WHERE id = $6 AND workspace_id = $7
      RETURNING ${ATHLETE_COLUMNS}`,
-    [payload.name, payload.dob, payload.gender, payload.squad, payload.notes, athleteId, userId],
+    [payload.name, payload.dob, payload.gender, payload.squad, payload.notes, athleteId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -121,20 +122,20 @@ export async function replaceAthlete(
 }
 
 export async function setAthleteArchived(
-  userId: string,
+  workspaceId: string,
   athleteId: unknown,
   archived: boolean,
   executor: DbExecutor = getPool(),
 ): Promise<Athlete> {
-  requireOwnedId(userId, athleteId);
+  requireScopedId(workspaceId, athleteId);
 
   const result = await executor.query<AthleteRow>(
     `UPDATE athletes
      SET ${archived ? 'archived_at = now()' : 'archived_at = NULL'},
          updated_at = now()
-     WHERE id = $1 AND coach_id = $2
+      WHERE id = $1 AND workspace_id = $2
      RETURNING ${ATHLETE_COLUMNS}`,
-    [athleteId, userId],
+    [athleteId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();

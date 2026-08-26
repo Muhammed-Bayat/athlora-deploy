@@ -32,7 +32,7 @@ function calendarYearBounds(asOfDate: string): [string, string] {
 }
 
 export async function getAthleteStatisticsDetail(
-  userId: string,
+  workspaceId: string,
   athleteId: unknown,
   asOfDate = utcDateToday(),
   runTransaction: ReadTransactionRunner = withReadTransaction,
@@ -40,7 +40,7 @@ export async function getAthleteStatisticsDetail(
   const [yearStart, nextYearStart] = calendarYearBounds(asOfDate);
 
   return runTransaction(async (client) => {
-    const athlete = await getAthlete(userId, athleteId, client);
+    const athlete = await getAthlete(workspaceId, athleteId, client);
     const statisticsResult = await client.query<AthleteStatisticsAggregateRow>(
       `WITH effective AS (
          SELECT r.outcome,
@@ -68,8 +68,8 @@ export async function getAthleteStatisticsDetail(
          JOIN athletes a ON a.id = r.athlete_id
          WHERE r.athlete_id = $1
            AND r.discipline = $3
-           AND a.coach_id = $2
-           AND e.created_by = $2
+            AND a.workspace_id = $2
+            AND e.workspace_id = $2
            AND e.status <> 'cancelled'
        ), latest AS (
          SELECT effective_result, effective_outcome
@@ -113,11 +113,11 @@ export async function getAthleteStatisticsDetail(
               ) AS training_all_time_count
        FROM athletes a
        LEFT JOIN effective e ON true
-       WHERE a.id = $1 AND a.coach_id = $2
+        WHERE a.id = $1 AND a.workspace_id = $2
        GROUP BY a.id, a.updated_at`,
       [
         athlete.id,
-        userId,
+         workspaceId,
         DISCIPLINE_100M,
         RESULT_UNIT_SECONDS,
         yearStart,
@@ -157,8 +157,8 @@ export async function getAthleteStatisticsDetail(
          JOIN athletes a ON a.id = r.athlete_id
          WHERE r.athlete_id = $1
            AND r.discipline = $3
-           AND a.coach_id = $2
-           AND e.created_by = $2
+            AND a.workspace_id = $2
+            AND e.workspace_id = $2
        ), selected AS (
          (SELECT * FROM history
           WHERE event_type = 'competition'
@@ -183,7 +183,7 @@ export async function getAthleteStatisticsDetail(
                 event_time DESC NULLS LAST,
                 event_created_at DESC,
                 event_id DESC`,
-      [athlete.id, userId, DISCIPLINE_100M, RECENT_RESULTS_PER_TYPE],
+       [athlete.id, workspaceId, DISCIPLINE_100M, RECENT_RESULTS_PER_TYPE],
     );
     const history = historyResult.rows.map(mapAthleteResultHistoryRow);
     const statistics = mapAthleteStatisticsRow(statisticsRow);

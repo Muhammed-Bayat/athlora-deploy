@@ -18,8 +18,8 @@ function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function requireOwnedId(userId: string, eventId: unknown): asserts eventId is string {
-  if (!isCanonicalUuid(userId) || !isCanonicalUuid(eventId)) {
+function requireScopedId(workspaceId: string, eventId: unknown): asserts eventId is string {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(eventId)) {
     throw notFound();
   }
 }
@@ -45,16 +45,16 @@ export function assertValidTransition(from: EventStatus, to: EventStatus): void 
 }
 
 export async function listEvents(
-  userId: string,
+  workspaceId: string,
   query: EventListQuery,
   executor: DbExecutor = getPool(),
 ): Promise<AthleticsEvent[]> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId)) {
     throw notFound();
   }
 
-  const conditions = ['created_by = $1'];
-  const parameters: string[] = [userId];
+  const conditions = ['workspace_id = $1'];
+  const parameters: string[] = [workspaceId];
   if (query.type !== undefined) {
     parameters.push(query.type);
     conditions.push(`type = $${parameters.length}`);
@@ -83,17 +83,17 @@ export async function listEvents(
 }
 
 export async function getEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
      FROM events
-     WHERE id = $1 AND created_by = $2`,
-    [eventId, userId],
+      WHERE id = $1 AND workspace_id = $2`,
+    [eventId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -104,16 +104,18 @@ export async function createEvent(
   userId: string,
   payload: EventCreatePayload,
   executor: DbExecutor = getPool(),
+  workspaceId = userId,
 ): Promise<AthleticsEvent> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(userId)) {
     throw notFound();
   }
 
   const result = await executor.query<EventRow>(
-    `INSERT INTO events (created_by, type, discipline, title, date, time, location_name, latitude, longitude, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO events (workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${EVENT_COLUMNS}`,
     [
+      workspaceId,
       userId,
       payload.type,
       payload.discipline,
@@ -132,20 +134,20 @@ export async function createEvent(
 type TransactionRunner = <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T>;
 
 export async function replaceEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   payload: EventReplacementPayload,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   return runTransaction(async (client) => {
     const current = await client.query<EventRow>(
       `SELECT ${EVENT_COLUMNS}
        FROM events
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        FOR UPDATE`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
@@ -165,7 +167,7 @@ export async function replaceEvent(
            longitude = $8,
            status = $9,
            updated_at = now()
-       WHERE id = $10 AND created_by = $11
+        WHERE id = $10 AND workspace_id = $11
        RETURNING ${EVENT_COLUMNS}`,
       [
         payload.type,
@@ -178,7 +180,7 @@ export async function replaceEvent(
         payload.longitude,
         payload.status,
         eventId,
-        userId,
+         workspaceId,
       ],
     );
     const updated = mapEventRow(result.rows[0]);
@@ -195,18 +197,18 @@ export async function replaceEvent(
 }
 
 export async function cancelEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
   return runTransaction(async (client) => {
     const current = await client.query<EventRow>(
       `SELECT ${EVENT_COLUMNS}
        FROM events
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        FOR UPDATE`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
@@ -215,9 +217,9 @@ export async function cancelEvent(
       `UPDATE events
        SET status = 'cancelled',
            updated_at = now()
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        RETURNING ${EVENT_COLUMNS}`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const cancelled = mapEventRow(result.rows[0]);
     if (currentEvent.status !== 'cancelled') {
@@ -228,17 +230,17 @@ export async function cancelEvent(
 }
 
 export async function assertEventLoggingOpen(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<void> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
      FROM events
-     WHERE id = $1 AND created_by = $2`,
-    [eventId, userId],
+      WHERE id = $1 AND workspace_id = $2`,
+    [eventId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();

@@ -61,8 +61,8 @@ function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function ownedIds(userId: string, ...ids: unknown[]): string[] {
-  if (!isCanonicalUuid(userId) || !ids.every(isCanonicalUuid)) throw notFound();
+function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
+  if (!isCanonicalUuid(workspaceId) || !ids.every(isCanonicalUuid)) throw notFound();
   return ids as string[];
 }
 
@@ -268,7 +268,7 @@ export async function recomputeEventResults(
 
 async function lockOwnedEntry(
   client: DbExecutor,
-  userId: string,
+  workspaceId: string,
   eventId: string,
   entryId: string,
 ): Promise<{ entry: TimelineEntry; eventType: EventType; eventStatus: EventStatus }> {
@@ -281,10 +281,10 @@ async function lockOwnedEntry(
      JOIN athletes a ON a.id = te.athlete_id
      WHERE te.id = $1
        AND te.event_id = $2
-       AND e.created_by = $3
-       AND a.coach_id = $3
+        AND e.workspace_id = $3
+        AND a.workspace_id = $3
      FOR UPDATE OF e, a, te`,
-    [entryId, eventId, userId],
+    [entryId, eventId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -296,11 +296,11 @@ async function lockOwnedEntry(
 }
 
 export async function listTimelineEntries(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<TimelineEntry[]> {
-  const [ownedEventId] = ownedIds(userId, eventId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
   const result = await executor.query<TimelineEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS}
      FROM timeline_entries te
@@ -308,10 +308,10 @@ export async function listTimelineEntries(
      JOIN athletes a ON a.id = te.athlete_id
      WHERE te.event_id = $1
        AND te.deleted_at IS NULL
-       AND e.created_by = $2
-       AND a.coach_id = $2
+        AND e.workspace_id = $2
+        AND a.workspace_id = $2
      ORDER BY te.created_at ASC, te.id ASC`,
-    [ownedEventId, userId],
+    [ownedEventId, workspaceId],
   );
   return result.rows.map(mapTimelineEntryRow);
 }
@@ -321,16 +321,17 @@ export async function createTimelineEntry(
   eventId: unknown,
   payload: TimelineEntryCreatePayload,
   runTransaction: TransactionRunner = withTransaction,
+  workspaceId = userId,
 ): Promise<TimelineEntry> {
-  const [ownedEventId] = ownedIds(userId, eventId, payload.athleteId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId, payload.athleteId);
   return runTransaction(async (client) => {
     const locked = await client.query<LockedEventRow>(
       `SELECT e.type, e.status
        FROM events e
        JOIN athletes a ON a.id = $2
-       WHERE e.id = $1 AND e.created_by = $3 AND a.coach_id = $3
+        WHERE e.id = $1 AND e.workspace_id = $3 AND a.workspace_id = $3
        FOR UPDATE OF e, a`,
-      [ownedEventId, payload.athleteId, userId],
+       [ownedEventId, payload.athleteId, workspaceId],
     );
     const event = locked.rows[0];
     if (!event) throw notFound();
@@ -362,17 +363,17 @@ export async function createTimelineEntry(
 }
 
 export async function updateTimelineEntry(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   entryId: unknown,
   patch: TimelineEntryPatchPayload,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<TimelineEntry> {
-  const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
+  const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   return runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
-      userId,
+       workspaceId,
       ownedEventId,
       ownedEntryId,
     );
@@ -417,17 +418,17 @@ export async function updateTimelineEntry(
 }
 
 export async function removeTimelineEntry(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   entryId: unknown,
   payload: TimelineEntryDeletePayload,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<void> {
-  const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
+  const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   await runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
-      userId,
+       workspaceId,
       ownedEventId,
       ownedEntryId,
     );
