@@ -29,6 +29,13 @@ createRoot(rootElement).render(
         redirect_uri: window.location.origin,
         scope: 'openid profile email',
       }}
+      onRedirectCallback={(appState) => {
+        const returnTo = appState?.returnTo;
+        const target = typeof returnTo === 'string' && returnTo.startsWith('/console')
+          ? returnTo
+          : '/console';
+        window.history.replaceState({}, '', target);
+      }}
     >
       <Auth0TokenBridge>
         <App />

@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { CoachConsole } from './CoachConsole';
 
@@ -24,8 +25,9 @@ vi.mock('../athletes/AthletesPage', () => ({
 }));
 
 vi.mock('../events/EventsPage', () => ({
-  EventsPage: ({ initialEventId }: { initialEventId?: string }) => <p>Event target: {initialEventId ?? 'none'}</p>,
+  EventsPage: () => <p>Events list</p>,
 }));
+vi.mock('../events/EventDetailPage', () => ({ EventDetailPage: ({ eventId }: { eventId: string }) => <p>Event target: {eventId}</p> }));
 
 vi.mock('../timeline/LiveLoggingPage', () => ({
   LiveLoggingPage: ({ initialEventId }: { initialEventId?: string }) => <p>Live target: {initialEventId ?? 'none'}</p>,
@@ -40,7 +42,7 @@ describe('CoachConsole dashboard navigation', () => {
 
   it('opens exact athlete, event, and live logging destinations', async () => {
     const user = userEvent.setup();
-    render(<CoachConsole />);
+    render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Open athlete record' }));
     expect(screen.getByText('Athlete target: athlete-42')).toBeInTheDocument();
@@ -59,7 +61,7 @@ describe('CoachConsole dashboard navigation', () => {
 
   it('clears a targeted record when standard navigation is used', async () => {
     const user = userEvent.setup();
-    render(<CoachConsole />);
+    render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: 'Open athlete record' }));
     expect(screen.getByText('Athlete target: athlete-42')).toBeInTheDocument();

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { cancelEvent, createEvent, listEvents, updateEvent } from '../../api/events';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { EventDetailPage } from './EventDetailPage';
+import { createEvent, listEvents, updateEvent } from '../../api/events';
 import { listAthletes } from '../../api/athletes';
 import {
   addEventParticipant,
@@ -9,11 +11,6 @@ import {
 } from '../../api/participants';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
-import { useCurrentUser } from '../auth/CurrentUserContext';
-import { EventResultsSection } from '../results/EventResultsSection';
-import { type ResultCorrectionTarget } from '../results/EventResultsView';
-import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
-import { EventWeatherPanel } from './EventWeatherPanel';
 import {
   DISCIPLINE_100M,
   type Athlete,
@@ -29,7 +26,6 @@ import styles from './EventsPage.module.css';
 type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
 type Editor = 'new' | AthleticsEvent | null;
-type LifecycleAction = 'start' | 'complete' | 'cancel';
 
 interface EventDraft {
   title: string;
@@ -45,7 +41,7 @@ type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
-  initialEventId?: string | null;
+  onOpenEvent?: (eventId: string) => void;
   today?: string;
 }
 
@@ -106,7 +102,7 @@ function toPayload(
   };
 }
 
-function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
+export function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
   return {
     type: event.type,
     discipline: DISCIPLINE_100M,
@@ -120,7 +116,7 @@ function replacement(event: AthleticsEvent, status: EventStatus): EventMutationP
   };
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
     if (error.status === 401) return 'Your session could not be authorized. Please sign in again.';
@@ -149,11 +145,11 @@ function validationErrors(error: unknown): FieldErrors {
   return fields;
 }
 
-function formattedStatus(status: EventStatus): string {
+export function formattedStatus(status: EventStatus): string {
   return status.replace('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
 
-function formattedType(type: EventType): string {
+export function formattedType(type: EventType): string {
   return type === 'competition' ? 'Competition' : 'Training';
 }
 
@@ -161,7 +157,7 @@ function formattedRsvp(status: RsvpStatus): string {
   return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : 'pending';
 }
 
-function formattedDate(date: string, long = false): string {
+export function formattedDate(date: string, long = false): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
     day: 'numeric',
     month: long ? 'long' : 'short',
@@ -197,7 +193,7 @@ interface EventFormProps {
   onSubmittingChange: (submitting: boolean) => void;
 }
 
-function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormProps) {
+export function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormProps) {
   const [draft, setDraft] = useState(() => draftFor(event));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -325,7 +321,7 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
   );
 }
 
-function ParticipantManager({
+export function ParticipantManager({
   eventId,
   onBusyChange,
   onChanged,
@@ -522,33 +518,27 @@ function ParticipantManager({
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, initialEventId = null, today = localToday() }: EventsPageProps = {}) {
-  const currentUser = useCurrentUser();
+export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday() }: EventsPageProps = {}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [dateTab, setDateTab] = useState<DateTab>('upcoming');
-  const [typeFilter, setTypeFilter] = useState<EventType | ''>('');
-  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
+  const [dateTab, setDateTab] = useState<DateTab>(() => searchParams.get('date') === 'past' || searchParams.get('date') === 'all' ? searchParams.get('date') as DateTab : 'upcoming');
+  const [typeFilter, setTypeFilter] = useState<EventType | ''>(() => searchParams.get('type') === 'competition' || searchParams.get('type') === 'training' ? searchParams.get('type') as EventType : '');
+  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>(() => ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventStatus : '');
   const [view, setView] = useState<EventView>('list');
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
-  const [selectedId, setSelectedId] = useState<string | null>(initialEventId);
   const [editor, setEditor] = useState<Editor>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
-  const [participantBusy, setParticipantBusy] = useState(false);
-  const [resultReloadKey, setResultReloadKey] = useState(0);
-  const [correctionTarget, setCorrectionTarget] = useState<ResultCorrectionTarget | null>(null);
-  const [correctionBusy, setCorrectionBusy] = useState(false);
-  const [confirmation, setConfirmation] = useState<{ eventId: string; action: LifecycleAction } | null>(null);
-  const [lifecycleBusy, setLifecycleBusy] = useState(false);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let current = true;
@@ -581,7 +571,6 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
     setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
   };
 
-  const selected = events.find((event) => event.id === selectedId) ?? null;
   const filtered = sortedEvents(
     events.filter((event) => {
       const dateMatches = dateTab === 'all' || (dateTab === 'upcoming' ? event.date >= today : event.date < today);
@@ -591,7 +580,7 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
   );
   const calendarEvents = filtered.filter((event) => event.date === selectedDay);
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
-  const pending = editorBusy || lifecycleBusy || participantBusy || correctionBusy;
+  const pending = editorBusy;
 
   const saveEditor = async (payload: EventMutationPayload) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
@@ -600,59 +589,20 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
     setNotice(editor === 'new' ? `${event.title} added to the calendar.` : `${event.title} updated.`);
   };
 
-  const runLifecycle = async () => {
-    if (!confirmation) return;
-    const event = events.find((item) => item.id === confirmation.eventId);
-    if (!event) return;
-    setLifecycleBusy(true);
-    setMutationError(null);
-    try {
-      const nextStatus: EventStatus = confirmation.action === 'start' ? 'in_progress' : 'completed';
-      const updated = confirmation.action === 'cancel'
-        ? await cancelEvent(event.id)
-        : await updateEvent(event.id, replacement(event, nextStatus));
-      storeEvent(updated);
-      setConfirmation(null);
-      setNotice(
-        confirmation.action === 'cancel'
-          ? `${updated.title} cancelled. Its history is preserved.`
-          : confirmation.action === 'start'
-            ? `${updated.title} is now live.`
-            : `${updated.title} marked completed.`,
-      );
-    } catch (error) {
-      setMutationError(errorMessage(error));
-    } finally {
-      setLifecycleBusy(false);
-    }
-  };
-
-  const openConfirmation = (eventId: string, action: LifecycleAction) => {
-    setMutationError(null);
-    setConfirmation({ eventId, action });
-  };
-
   const clearFilters = () => {
     setDateTab('upcoming');
     setTypeFilter('');
     setStatusFilter('');
+    setSearchParams({});
   };
 
-  const finishCorrection = (message: string) => {
-    setCorrectionTarget(null);
-    setResultReloadKey((key) => key + 1);
-    setNotice(message);
-    window.requestAnimationFrame(() => detailRef.current?.focus());
-  };
-
-  const openCorrection = (target: ResultCorrectionTarget, trigger: HTMLButtonElement) => {
-    correctionTriggerRef.current = trigger;
-    setCorrectionTarget(target);
-  };
-
-  const backToEvent = () => {
-    setCorrectionTarget(null);
-    window.requestAnimationFrame(() => correctionTriggerRef.current?.focus());
+  const updateFilters = (next: { date?: DateTab; type?: EventType | ''; status?: EventStatus | '' }) => {
+    const params = new URLSearchParams(searchParams);
+    const values = { date: dateTab, type: typeFilter, status: statusFilter, ...next };
+    if (values.date === 'upcoming') params.delete('date'); else params.set('date', values.date);
+    if (values.type) params.set('type', values.type); else params.delete('type');
+    if (values.status) params.set('status', values.status); else params.delete('status');
+    setSearchParams(params);
   };
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -667,15 +617,6 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
     return { day: rawDay, current: true, iso };
   });
 
-  const confirmationEvent = confirmation
-    ? events.find((event) => event.id === confirmation.eventId) ?? null
-    : null;
-  const confirmationTitle = confirmation?.action === 'cancel'
-    ? 'Cancel event'
-    : confirmation?.action === 'start'
-      ? 'Start event'
-      : 'Complete event';
-
   return (
     <section aria-labelledby="events-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
@@ -687,19 +628,19 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
         <div className={styles.controls}>
           <div className={styles.segmented} role="group" aria-label="Filter events by date">
             {(['upcoming', 'past', 'all'] as const).map((tab) => (
-              <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => setDateTab(tab)}>
+              <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => { setDateTab(tab); updateFilters({ date: tab }); }}>
                 {tab[0].toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
           <label className={styles.srOnly} htmlFor="event-type-filter">Filter by event type</label>
-          <Select id="event-type-filter" value={typeFilter} onChange={(input) => setTypeFilter(input.target.value as EventType | '')} options={[
+          <Select id="event-type-filter" value={typeFilter} onChange={(input) => { const value = input.target.value as EventType | ''; setTypeFilter(value); updateFilters({ type: value }); }} options={[
             { value: '', label: 'All types' },
             { value: 'competition', label: 'Competition' },
             { value: 'training', label: 'Training' },
           ]} />
           <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
-          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
+          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => { const value = input.target.value as EventStatus | ''; setStatusFilter(value); updateFilters({ status: value }); }} options={[
             { value: '', label: 'All statuses' },
             { value: 'scheduled', label: 'Scheduled' },
             { value: 'in_progress', label: 'In progress' },
@@ -714,7 +655,7 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
         </div>
       </header>
 
-      {notice && !selected && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
+       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
@@ -752,7 +693,10 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
             const date = new Date(`${event.date}T00:00:00`);
             return (
               <Card className={styles.eventCard} key={event.id}>
-                <button type="button" className={styles.eventOpen} onClick={() => setSelectedId(event.id)}>
+                  <button type="button" className={styles.eventOpen} onClick={() => {
+                    const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+                    if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
+                  }}>
                   <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
                   <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
                   <span aria-hidden="true">›</span>
@@ -763,82 +707,11 @@ export function EventsPage({ onUpcomingCountChange, initialEventId = null, today
         </div>
       )}
 
-      <Modal
-        open={selected !== null && confirmation === null && editor === null}
-        title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : selected?.title ?? 'Event detail'}
-        onClose={() => {
-          setCorrectionTarget(null);
-          setSelectedId(null);
-          setNotice(null);
-        }}
-        closeDisabled={participantBusy || correctionBusy}
-      >
-        {selected && (
-          <>
-          <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
-            {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
-            <div className={styles.detailTags}><span data-type={selected.type}>{formattedType(selected.type)}</span><span data-status={selected.status}>{formattedStatus(selected.status)}</span><span>100m</span></div>
-            <dl className={styles.detailGrid}>
-              <div><dt>Date</dt><dd><time dateTime={selected.date}>{formattedDate(selected.date, true)}</time></dd></div>
-              <div><dt>Time</dt><dd>{selected.time ?? 'Time not set'}</dd></div>
-              <div><dt>Location</dt><dd>{selected.locationName ?? 'Location not set'}</dd></div>
-              <div><dt>Discipline</dt><dd>100m</dd></div>
-            </dl>
-            {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
-            <EventWeatherPanel key={`${selected.id}-${selected.updatedAt}`} event={selected} />
-            <EventResultsSection
-              event={selected}
-              reloadKey={resultReloadKey}
-              onCorrect={openCorrection}
-            />
-            <ParticipantManager
-              eventId={selected.id}
-              onBusyChange={setParticipantBusy}
-              onChanged={() => setResultReloadKey((key) => key + 1)}
-            />
-            <div className={styles.detailActions}>
-              <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }} disabled={participantBusy}>Edit event</Button>
-              {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')} disabled={participantBusy}>Start event</Button>}
-              {(selected.status === 'scheduled' || selected.status === 'in_progress') && <Button onClick={() => openConfirmation(selected.id, 'complete')} disabled={participantBusy}>Mark completed</Button>}
-              {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')} disabled={participantBusy}>Cancel event</Button>}
-            </div>
-          </div>
-          {correctionTarget && (
-            <ResultCorrectionForm
-              target={correctionTarget}
-              currentUser={currentUser}
-              onBack={backToEvent}
-              onSaved={finishCorrection}
-              onBusyChange={setCorrectionBusy}
-            />
-          )}
-          </>
-        )}
-      </Modal>
-
       <Modal open={editor !== null} title={editor === 'new' ? 'Add event' : 'Edit event'} onClose={() => { if (!editorBusy) setEditor(null); }} closeDisabled={editorBusy}>
         {editor && <EventForm key={editor === 'new' ? 'new' : editor.id} event={editor === 'new' ? undefined : editor} onSave={saveEditor} onCancel={() => setEditor(null)} onSubmittingChange={setEditorBusy} />}
       </Modal>
-
-      <Modal open={confirmationEvent !== null} title={confirmationTitle} onClose={() => { if (!lifecycleBusy) { setConfirmation(null); setMutationError(null); } }} closeDisabled={lifecycleBusy}>
-        {confirmationEvent && confirmation && (
-          <div className={styles.confirmation}>
-            <p>
-              {confirmation.action === 'cancel'
-                ? <>Cancel <strong>{confirmationEvent.title}</strong>? The event remains in history. Participant assignments, timeline entries, and results are preserved, but cancelled-event results do not contribute to statistics.</>
-                : confirmation.action === 'start'
-                  ? <>Start <strong>{confirmationEvent.title}</strong>? Live result logging will open for this event.</>
-                  : <>Mark <strong>{confirmationEvent.title}</strong> completed? Live result logging will close.</>}
-            </p>
-            {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
-            <div className={styles.formActions}>
-              <Button variant="secondary" onClick={() => setConfirmation(null)} disabled={lifecycleBusy}>Back</Button>
-              <Button variant={confirmation.action === 'cancel' ? 'danger' : 'primary'} onClick={() => void runLifecycle()} disabled={lifecycleBusy}>
-                {lifecycleBusy ? 'Saving...' : confirmation.action === 'cancel' ? 'Cancel event' : confirmation.action === 'start' ? 'Start event' : 'Mark completed'}
-              </Button>
-            </div>
-          </div>
-        )}
+      <Modal open={selectedId !== null} title={events.find((event) => event.id === selectedId)?.title ?? 'Event detail'} onClose={() => setSelectedId(null)} closeDisabled={detailBusy}>
+        {selectedId && <EventDetailPage eventId={selectedId} initialEvent={events.find((event) => event.id === selectedId)} onEventUpdated={storeEvent} onBusyChange={setDetailBusy} onBack={() => setSelectedId(null)} />}
       </Modal>
     </section>
   );

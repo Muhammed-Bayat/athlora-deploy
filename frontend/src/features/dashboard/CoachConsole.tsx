@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AthletesPage } from '../athletes/AthletesPage';
 import { EventsPage } from '../events/EventsPage';
+import { EventDetailPage } from '../events/EventDetailPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import { AuthPage } from '../auth/AuthPage';
 import type { DashboardSummary } from '../../types';
@@ -12,11 +14,6 @@ import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
 type IconName = 'home' | 'athletes' | 'calendar' | 'activity';
-
-interface ConsoleDestination {
-  view: ConsoleView;
-  targetId?: string;
-}
 
 const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; icon: IconName }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
@@ -270,7 +267,8 @@ function resolveDeviceCoordinates(): Promise<Coordinates | null> {
 
 export function CoachConsole() {
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const [destination, setDestination] = useState<ConsoleDestination>({ view: 'dashboard' });
+  const location = useLocation();
+  const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
@@ -281,7 +279,15 @@ export function CoachConsole() {
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
-  const navigate = (view: ConsoleView, targetId?: string) => { setDestination({ view, targetId }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
+    : location.pathname.includes('/events') ? 'events'
+      : location.pathname.includes('/live') ? 'live'
+        : location.pathname.includes('/account') ? 'account' : 'dashboard';
+  const navigate = (view: ConsoleView, targetId?: string) => {
+    const path = view === 'dashboard' ? '/console' : `/console/${view}${targetId ? `/${targetId}` : ''}`;
+    routerNavigate(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const updateDashboardCounts = (summary: DashboardSummary) => {
     setRosterCount(summary.activeAthletesCount);
     setEventUpcomingCount(summary.upcomingEventCount);
@@ -292,7 +298,7 @@ export function CoachConsole() {
   const changeWorkspace = (workspaceId: string) => {
     if (workspaceId === activeWorkspace.id) return;
     selectWorkspace(workspaceId);
-    setDestination({ view: 'dashboard' });
+    routerNavigate('/console');
     setRosterCount(null);
     setEventUpcomingCount(null);
   };
@@ -370,7 +376,7 @@ export function CoachConsole() {
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       </label>
-      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination.view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && <small>{eventUpcomingCount ?? '—'}</small>}</button></li>)}</ul></nav>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && <small>{eventUpcomingCount ?? '—'}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
@@ -380,7 +386,7 @@ export function CoachConsole() {
     </aside>
     <div className={styles.main}>
       <header className={styles.topbar}>
-        <div className={styles.title}><h1>{PAGE_COPY[destination.view].title}</h1><p>{PAGE_COPY[destination.view].subtitle}</p></div>
+         <div className={styles.title}><h1>{PAGE_COPY[destination].title}</h1><p>{PAGE_COPY[destination].subtitle}</p></div>
         <div className={styles.weatherOrigin} aria-hidden="true"><i className={styles.sun} /><i className={styles.moon} /><i className={styles.cloudOne} /><i className={styles.cloudTwo} /></div>
         <div className={styles.topControls}>
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
@@ -391,13 +397,16 @@ export function CoachConsole() {
         </div>
       </header>
       <main className={styles.content}>
-        {destination.view === 'dashboard' && <DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
-        {destination.view === 'athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialAthleteId={destination.targetId} onActiveCountChange={setRosterCount} />}
-        {destination.view === 'events' && <EventsPage key={`events:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} onUpcomingCountChange={setEventUpcomingCount} />}
-        {destination.view === 'live' && <LiveLoggingPage key={`live:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} />}
-        {destination.view === 'account' && <AuthPage />}
+        {location.pathname === '/console' && <DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
+        {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
+        {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
+        {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
+        {location.pathname.startsWith('/console/events/') && <EventDetailPage eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
+        {location.pathname === '/console/account' && <AuthPage />}
       </main>
     </div>
-    <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={destination.view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
+    <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
   </div>;
 }
