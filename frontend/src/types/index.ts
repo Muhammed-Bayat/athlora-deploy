@@ -1,4 +1,4 @@
-export type UserRole = 'coach' | 'assistant' | 'viewer';
+export type UserRole = 'coach' | 'assistant';
 
 export interface User {
   id: string;
@@ -15,6 +15,23 @@ export interface Workspace {
   name: string;
   timezone: string;
   role: UserRole;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'coach' | 'assistant';
+  createdAt: string;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  role: 'coach' | 'assistant';
+  expiresAt: string;
+  createdAt: string;
+  token?: string;
 }
 
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.

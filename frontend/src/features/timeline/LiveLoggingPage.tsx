@@ -7,6 +7,7 @@ import { listResults } from '../../api/results';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import { EventResultsView } from '../results/EventResultsView';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import type {
@@ -38,6 +39,8 @@ export interface LiveLoggingPageProps {
 
 export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps = {}) {
   const currentUser = useCurrentUser();
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
@@ -458,7 +461,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
                     >
                       Open Live Logger ›
                     </Button>
-                  ) : (
+                   ) : isCoach ? (
                     <Button
                       variant="secondary"
                       disabled={mutationBusy}
@@ -467,7 +470,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
                     >
                       {eventMutation === `start-${ev.id}` ? 'Starting...' : 'Start Event'}
                     </Button>
-                  )}
+                   ) : null}
                 </div>
               </Card>
             ))}
@@ -494,14 +497,14 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
           >
             Switch Event
           </Button>
-          <Button
+          {isCoach && <Button
             variant="danger"
             onClick={() => void handleCompleteEvent()}
             disabled={mutationBusy}
             style={{ minHeight: '44px', minWidth: '44px' }}
           >
             {eventMutation === 'complete' ? 'Completing...' : 'Complete Event'}
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -638,7 +641,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
                         {entry.noteText && <p>Note: {entry.noteText}</p>}
                         <small>Recorded by {entry.recordedBy} · v{entry.version}</small>
                       </div>
-                      <div className={styles.timelineActions}>
+                       {(isCoach || currentUser?.id === entry.recordedBy) && <div className={styles.timelineActions}>
                         <button
                           type="button"
                           className={styles.linkButton}
@@ -657,7 +660,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
                         >
                           Undo
                         </button>
-                      </div>
+                       </div>}
                     </div>
                   );
                 })}

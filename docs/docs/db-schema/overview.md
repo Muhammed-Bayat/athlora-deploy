@@ -14,6 +14,9 @@ The schema is the shared foundation for Athlora's full athletics-meet scope. The
 users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
 workspaces           (id UUID PK, name, timezone)
 workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK (workspace_id, user_id)
+workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invited_by, expires_at,
+                       accepted_at, accepted_by, revoked_at, revoked_by)
+workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
 athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, squad, notes,
                        archived_at, created_at, updated_at)
 events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
@@ -77,6 +80,8 @@ Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statis
 Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state blocks stale-token synchronization and resource access and schedules idempotent cleanup retries through `next_attempt_at`.
 
 Migration `0005_workspace_tenancy.sql` creates workspaces and membership roles, backfills one UTC workspace per legacy user without changing domain IDs, adds `workspace_id` to athletes/events, and adds optional event timezone overrides. Account departure deletes memberships but retains the local audit user and shared workspace history.
+
+Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer roles to assistants, limits workspace roles to coach/assistant, and adds durable invitations plus membership audit events. Invitation tokens are persisted only as SHA-256 hashes.
 
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 

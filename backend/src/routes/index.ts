@@ -9,9 +9,11 @@ import dashboardRouter from './dashboard.js';
 import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
 import workspacesRouter from './workspaces.js';
+import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
+import { requireCoach } from '../middleware/capabilities.js';
 import {
   parseAthleteCreatePayload,
   parseAthleteReplacementPayload,
@@ -23,31 +25,33 @@ const router = Router();
 
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
-athletesRouter.post('/', validateBody(parseAthleteCreatePayload), athletes.createAthlete);
+athletesRouter.post('/', requireCoach(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);
 athletesRouter.put(
   '/:id',
-  validateBody(parseAthleteReplacementPayload),
+  requireCoach(), validateBody(parseAthleteReplacementPayload),
   requireAthleteOwnership,
   athletes.updateAthlete,
 );
-athletesRouter.delete('/:id', requireAthleteOwnership, athletes.deleteAthlete);
-athletesRouter.post('/:id/unarchive', requireAthleteOwnership, athletes.unarchiveAthlete);
+athletesRouter.delete('/:id', requireCoach(), requireAthleteOwnership, athletes.deleteAthlete);
+athletesRouter.post('/:id/unarchive', requireCoach(), requireAthleteOwnership, athletes.unarchiveAthlete);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);
-eventsRouter.post('/', validateBody(parseEventCreatePayload), events.createEvent);
+eventsRouter.post('/', requireCoach(), validateBody(parseEventCreatePayload), events.createEvent);
 eventsRouter.get('/:id', requireEventOwnership(), events.getEvent);
 eventsRouter.put(
   '/:id',
-  validateBody(parseEventReplacementPayload),
+  requireCoach(), validateBody(parseEventReplacementPayload),
   requireEventOwnership(),
   events.updateEvent,
 );
-eventsRouter.delete('/:id', requireEventOwnership(), events.deleteEvent);
+eventsRouter.delete('/:id', requireCoach(), requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 router.use('/auth', authRouter);
+// Acceptance cannot require an existing workspace membership.
+router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
 router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRouter);
 router.use(
   '/athletes',

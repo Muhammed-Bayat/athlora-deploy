@@ -124,8 +124,40 @@
   font-weight: var(--font-weight-bold);
 }
 
+.members {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.members > div > p {
+  margin: 0 0 var(--space-1);
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.members h2 { margin: 0; }
+.members span, .memberList small { color: var(--color-text-muted); }
+
+.inviteForm {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.inviteForm label { font-weight: var(--font-weight-bold); font-size: var(--font-size-sm); }
+.inviteForm select { min-height: 44px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); padding: 0 var(--space-2); }
+
+.memberList { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.memberList li { display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.memberList span { display: grid; gap: 0.15rem; }
+
 @media (max-width: 720px) {
   .grid { grid-template-columns: 1fr; }
   .actions { flex-direction: column; }
   .actions button { width: 100%; min-height: 44px; }
+  .inviteForm { grid-template-columns: 1fr; }
 }

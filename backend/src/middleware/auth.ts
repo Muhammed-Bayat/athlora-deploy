@@ -111,8 +111,8 @@ export const resolveApplicationUser: RequestHandler = async (req, _res, next) =>
       next(new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress'));
       return;
     }
-    if (!['coach', 'assistant', 'viewer'].includes(user.role) ||
-        !['coach', 'assistant', 'viewer'].includes(user.workspace_role ?? user.role)) {
+    if (!['coach', 'assistant'].includes(user.role) ||
+        !['coach', 'assistant'].includes(user.workspace_role ?? user.role)) {
       next(new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid'));
       return;
     }

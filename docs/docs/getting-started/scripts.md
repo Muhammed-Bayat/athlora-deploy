@@ -140,8 +140,8 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, coverage, build | passing (230 Vitest/RTL and track-math tests) |
-| `backend` | lint, typecheck, test, coverage, build | passing (310 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, coverage, build | passing (234 Vitest/RTL and track-math tests) |
+| `backend` | lint, typecheck, test, coverage, build | passing (317 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 

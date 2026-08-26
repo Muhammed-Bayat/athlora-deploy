@@ -43,6 +43,10 @@ export async function assertTimelineEntryOwnership(workspaceId: string, eventId:
   await assertScoped(workspaceId, [eventId, entryId], `SELECT 1 FROM timeline_entries te JOIN events e ON e.id = te.event_id JOIN athletes a ON a.id = te.athlete_id WHERE te.id = $1 AND te.event_id = $2 AND e.workspace_id = $3 AND a.workspace_id = $3 LIMIT 1`, [entryId as string, eventId as string, workspaceId], executor);
 }
 
+export async function assertTimelineEntryRecordedBy(workspaceId: string, eventId: unknown, entryId: unknown, userId: string, executor: DbExecutor = getPool()): Promise<void> {
+  await assertScoped(workspaceId, [eventId, entryId, userId], `SELECT 1 FROM timeline_entries te JOIN events e ON e.id = te.event_id JOIN athletes a ON a.id = te.athlete_id WHERE te.id = $1 AND te.event_id = $2 AND te.recorded_by = $3 AND e.workspace_id = $4 AND a.workspace_id = $4 LIMIT 1`, [entryId as string, eventId as string, userId, workspaceId], executor);
+}
+
 export async function assertResultOwnership(workspaceId: string, eventId: unknown, athleteId: unknown, executor: DbExecutor = getPool()): Promise<void> {
   await assertScoped(workspaceId, [eventId, athleteId], `SELECT 1 FROM results r JOIN events e ON e.id = r.event_id JOIN athletes a ON a.id = r.athlete_id WHERE r.event_id = $1 AND r.athlete_id = $2 AND e.workspace_id = $3 AND a.workspace_id = $3 AND r.discipline = $4 LIMIT 1`, [eventId as string, athleteId as string, workspaceId, DISCIPLINE_100M], executor);
 }

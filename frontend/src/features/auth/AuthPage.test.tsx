@@ -7,6 +7,13 @@ import type { User } from '../../types';
 import { CurrentUserProvider } from './CurrentUserProvider';
 import { AuthPage } from './AuthPage';
 
+const workspaceApi = vi.hoisted(() => ({
+  listWorkspaceMembers: vi.fn(),
+  listWorkspaceInvitations: vi.fn(),
+  resendWorkspaceInvitation: vi.fn(),
+  updateWorkspaceMemberRole: vi.fn(),
+}));
+
 const auth0 = vi.hoisted(() => ({
   logout: vi.fn(),
   user: { name: 'Coach Avery', email: 'coach@example.com' },
@@ -14,6 +21,7 @@ const auth0 = vi.hoisted(() => ({
 
 vi.mock('@auth0/auth0-react', () => ({ useAuth0: () => auth0 }));
 vi.mock('../../api/auth');
+vi.mock('../../api/workspaces', () => workspaceApi);
 
 const currentUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -31,6 +39,8 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  workspaceApi.listWorkspaceMembers.mockResolvedValue({ data: [], meta: { count: 0 } });
+  workspaceApi.listWorkspaceInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 describe('AuthPage', () => {
@@ -94,5 +104,26 @@ describe('AuthPage', () => {
 
     expect(screen.queryByRole('button', { name: 'Change password' })).not.toBeInTheDocument();
     expect(screen.getByText('Your password is managed by your identity provider.')).toBeInTheDocument();
+  });
+
+  it('shows workspace management to coaches', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Members and invitations' })).toBeInTheDocument();
+    expect(workspaceApi.listWorkspaceMembers).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000');
+  });
+
+  it('replaces a pending invitation link when the coach resends it', async () => {
+    workspaceApi.listWorkspaceInvitations.mockResolvedValue({
+      data: [{ id: 'invite', email: 'assistant@example.test', role: 'assistant', expiresAt: '2026-09-01T00:00:00.000Z', createdAt: '2026-08-26T00:00:00.000Z' }],
+      meta: { count: 1 },
+    });
+    workspaceApi.resendWorkspaceInvitation.mockResolvedValue({ id: 'replacement', email: 'assistant@example.test', role: 'assistant', expiresAt: '2026-09-02T00:00:00.000Z', createdAt: '2026-08-26T00:00:00.000Z', token: 'replacement-token' });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Resend' }));
+
+    expect(workspaceApi.resendWorkspaceInvitation).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000', 'invite');
+    expect(await screen.findByRole('link', { name: 'Open invitation link' })).toHaveAttribute('href', `${window.location.origin}/invitations/replacement-token`);
   });
 });
