@@ -103,12 +103,14 @@ describe('resolveApplicationUser', () => {
     await resolveApplicationUser(req, response(), next);
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE u.auth0_id = $1'), [
-      'auth0|coach-1',
+      'auth0|coach-1', null,
     ]);
     expect(req.auth).toEqual({
       userId: '11111111-1111-4111-8111-111111111111',
       auth0Id: 'auth0|coach-1',
       role: 'coach',
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspaceRole: 'coach',
     });
     expect(req.auth0).toEqual({ auth0Id: 'auth0|coach-1', accessToken: 'access-token' });
     expect(next).toHaveBeenCalledWith();
@@ -207,6 +209,8 @@ describe('typed context accessors', () => {
       userId: '11111111-1111-4111-8111-111111111111',
       auth0Id: 'auth0|coach-1',
       role: 'coach',
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspaceRole: 'coach',
     };
 
     expect(getVerifiedAuth0Context(req)).toBe(req.auth0);

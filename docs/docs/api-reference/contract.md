@@ -66,11 +66,11 @@ Mutation payload validation failures return HTTP `400` with code `VALIDATION_ERR
 
 Mutation payloads use strict field allow-lists. Unknown fields and server-controlled identifiers, ownership/audit fields, derived fields, and timestamps are rejected rather than ignored. Malformed JSON uses the same envelope. Malformed resource identifiers in URL paths retain the ownership contract's non-enumerating `404 NOT_FOUND` response.
 
-Unless explicitly noted, application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row.
+Unless explicitly noted, application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row. Resource requests may include `X-Workspace-Id: <UUID>` to select one of the caller's memberships; omitted headers select the earliest membership. An inaccessible workspace returns `403 WORKSPACE_ACCESS_DENIED`.
 
 ### 3.1 Authentication context and ownership
 
-`PUT /api/v1/auth/me` verifies the Auth0 token and synchronizes its subject/profile to `users`; it intentionally does not require an existing `users` row. Every protected resource route performs a second step after JWT verification: it resolves the verified Auth0 `sub` by `users.auth0_id` and exposes the application user UUID, Auth0 ID and role to controllers through typed request context.
+`PUT /api/v1/auth/me` verifies the Auth0 token and synchronizes its subject/profile to `users`; it intentionally does not require an existing `users` row and creates a default UTC workspace for a new account. Every protected resource route performs a second step after JWT verification: it resolves the verified Auth0 `sub` by `users.auth0_id`, validates the selected membership, and exposes the application user UUID, audit role, active workspace UUID and workspace role to controllers through typed request context.
 
 A valid Auth0 identity that has not completed synchronization receives:
 
@@ -92,10 +92,11 @@ The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHO
 |---|---|---|
 | `PUT /auth/me` | Verified Auth0 JWT | Fetches the Auth0 profile and creates or updates the local application user; returns `{ data: User }`. It is the only application-user endpoint that does not require a pre-existing local user. |
 | `POST /auth/me/password-ticket` | Verified JWT + synchronized user | Creates an Auth0-hosted password-change ticket; returns `201` with `{ data: { url } }`. |
-| `DELETE /auth/me` | Verified JWT | Starts permanent deletion of the verified Auth0 identity and local workspace; returns `202` with `{ data: { status: 'pending' } }`. A durable deletion tombstone blocks later synchronization and resource access. |
+| `DELETE /auth/me` | Verified JWT | Starts permanent deletion of the verified Auth0 identity and removes its memberships; shared workspace data and attribution remain. Returns `202` with `{ data: { status: 'pending' } }`. A durable deletion tombstone blocks later synchronization and resource access. |
+| `GET /workspaces` | Verified JWT + synchronized user | Lists accessible workspaces and returns `meta.activeWorkspaceId`. |
 | `GET /auth/login`, `/auth/callback`, `/auth/logout` | Public | Legacy scaffolding only; each returns `501 NOT_IMPLEMENTED`. The SPA uses Auth0 Universal Login instead. |
 
-Resource ownership is server-derived: athlete access uses `athletes.coach_id`; event access uses `events.created_by`; timeline entry, participant and result access requires both the parent event and athlete to belong to the current user. `recordedBy` and `overriddenBy` are audit actors, not owners. Client mutation payloads never control `coachId`, `createdBy`, `recordedBy` or `overriddenBy`.
+Workspace membership is server-derived and is the authorization boundary: athletes and events carry `workspace_id`, and dependent rows require event and athlete workspace equality. `coachId`, `createdBy`, `recordedBy` and `overriddenBy` remain attribution actors, not ownership controls. A workspace has a default IANA timezone; events can store an optional timezone override. Client mutation payloads never control workspace or attribution fields.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 

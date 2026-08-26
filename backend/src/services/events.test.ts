@@ -119,7 +119,7 @@ describe('listEvents', () => {
 
     expect(events).toEqual([eventBody({ status: 'completed' })]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('created_by = $1');
+    expect(sql).toContain('workspace_id = $1');
     expect(sql).toContain('type = $2');
     expect(sql).toContain('status = $3');
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
@@ -149,7 +149,7 @@ describe('getEvent', () => {
 
     await expect(getEvent(USER_ID, EVENT_ID)).resolves.toEqual(eventBody());
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE id = $1 AND created_by = $2'),
+      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
       [EVENT_ID, USER_ID],
     );
   });
@@ -186,7 +186,7 @@ describe('createEvent', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO events');
     expect(parameters).toEqual([
-      USER_ID,
+      USER_ID, USER_ID,
       'competition',
       '100m',
       'City Sprint Meet',

@@ -10,6 +10,13 @@ export interface User {
   updatedAt: string;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  timezone: string;
+  role: UserRole;
+}
+
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
 export const DISCIPLINE_100M = '100m' as const;
 export type Discipline = typeof DISCIPLINE_100M;

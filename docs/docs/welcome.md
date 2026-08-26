@@ -60,6 +60,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Frontend deployment** — the Vercel SPA is live at `https://athlora-deploy.vercel.app` with production Auth0 sign-in verified.
 - **100m vertical-slice E2E suite** — a deterministic Playwright run (desktop and mobile Chromium) proves the whole slice end to end against a dedicated local PostgreSQL: authenticated roster → event creation → athlete assignment → track-side live logging of finishes and incidents → timeline correction and undo → result overrides and clearing → event completion → statistics, PBs/SBs and the returning dashboard summary. The suite signs in through real Auth0 Universal Login once (`auth-setup` project), keeps an unauthenticated smoke project, seeds unique per-project data so desktop and mobile runs never collide, and runs an axe accessibility audit across key coach views.
 - **Cross-coach authorization integration test** — a `TEST_DATABASE_URL`-gated backend suite proves every owned resource (athletes, events, participants, timeline entries, result overrides and athlete statistics) is scoped to the owning coach with the generic non-enumerating `404`, and that list endpoints never leak foreign rows.
+- **Workspace tenancy** — workspaces and memberships now form the shared authorization boundary. Existing records migrate losslessly into default UTC workspaces; the console selects an accessible workspace and scopes every request, aggregate and local view reset through `X-Workspace-Id`. Creator and result actors remain durable attribution, so an account departure removes memberships without destroying shared history.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, production builds, an informational Vitest V8 coverage report, the Playwright E2E suite (smoke + desktop/mobile vertical slice + axe audit), and the Docusaurus build are configured in CI. The Gitea `coverage` job prints a short Markdown summary; the `e2e` job boots a Postgres service container and skips with a clear message until the Auth0/E2E credentials are configured as repository secrets.
 - **Docs deployment** — the Docusaurus site is live at `https://athlora-deploy.pages.dev`.
 
@@ -78,8 +79,8 @@ These pages are a living record that agents maintain as part of every task. If y
 
 This documentation site and the repository follow the course AI policy.
 
-- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`
-- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`
+- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `OpenCode[gpt-5.6-terra]`
+- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`, `OpenCode[gpt-5.6-terra]`
 - **Code review:** `opencode[gpt-5.6-sol]`
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.

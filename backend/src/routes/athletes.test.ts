@@ -93,7 +93,7 @@ describe('GET /api/v1/athletes', () => {
     expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toMatch(/archived_at IS NULL/);
-    expect(sql).toMatch(/coach_id = \$1/);
+    expect(sql).toMatch(/workspace_id = \$1/);
     expect(parameters).toEqual([USER_ID]);
   });
 
@@ -190,7 +190,7 @@ describe('POST /api/v1/athletes', () => {
     expect(response.body).toEqual({ data: athleteBody() });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO athletes');
-    expect(parameters).toEqual([USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
+    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
   });
 
   it('rejects an invalid create payload', async () => {

@@ -32,24 +32,24 @@ beforeEach(() => {
 });
 
 describe('ownership checks', () => {
-  it('checks athlete ownership through coach_id', async () => {
+  it('checks athlete ownership through workspace_id', async () => {
     query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
 
     await expect(assertAthleteOwnership(USER_ID, ATHLETE_ID)).resolves.toBeUndefined();
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/FROM athletes[\s\S]*coach_id = \$2/),
+      expect.stringMatching(/FROM athletes[\s\S]*workspace_id = \$2/),
       [ATHLETE_ID, USER_ID],
     );
   });
 
-  it('checks event ownership through created_by', async () => {
+  it('checks event ownership through workspace_id', async () => {
     query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
 
     await expect(assertEventOwnership(USER_ID, EVENT_ID)).resolves.toBeUndefined();
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/FROM events[\s\S]*created_by = \$2/),
+      expect.stringMatching(/FROM events[\s\S]*workspace_id = \$2/),
       [EVENT_ID, USER_ID],
     );
   });
@@ -73,8 +73,8 @@ describe('ownership checks', () => {
     ).resolves.toBeUndefined();
 
     const sql = query.mock.calls[0]?.[0] as string;
-    expect(sql).toMatch(/e\.created_by = \$3/);
-    expect(sql).toMatch(/a\.coach_id = \$3/);
+    expect(sql).toMatch(/e\.workspace_id = \$3/);
+    expect(sql).toMatch(/a\.workspace_id = \$3/);
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, ATHLETE_ID, USER_ID]);
   });
 
@@ -87,8 +87,8 @@ describe('ownership checks', () => {
 
     const sql = query.mock.calls[0]?.[0] as string;
     expect(sql).toMatch(/te\.event_id = \$2/);
-    expect(sql).toMatch(/e\.created_by = \$3/);
-    expect(sql).toMatch(/a\.coach_id = \$3/);
+    expect(sql).toMatch(/e\.workspace_id = \$3/);
+    expect(sql).toMatch(/a\.workspace_id = \$3/);
     expect(sql).not.toContain('recorded_by');
     expect(query).toHaveBeenCalledWith(expect.any(String), [ENTRY_ID, EVENT_ID, USER_ID]);
   });
@@ -101,9 +101,9 @@ describe('ownership checks', () => {
     ).resolves.toBeUndefined();
 
     const sql = query.mock.calls[0]?.[0] as string;
-    expect(sql).toContain('FROM event_participants');
-    expect(sql).toMatch(/e\.created_by = \$3/);
-    expect(sql).toMatch(/a\.coach_id = \$3/);
+    expect(sql).toContain('JOIN event_participants');
+    expect(sql).toMatch(/e\.workspace_id = \$3/);
+    expect(sql).toMatch(/a\.workspace_id = \$3/);
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, ATHLETE_ID, USER_ID]);
   });
 
@@ -114,8 +114,8 @@ describe('ownership checks', () => {
 
     const sql = query.mock.calls[0]?.[0] as string;
     expect(sql).toContain('FROM results');
-    expect(sql).toMatch(/e\.created_by = \$3/);
-    expect(sql).toMatch(/a\.coach_id = \$3/);
+    expect(sql).toMatch(/e\.workspace_id = \$3/);
+    expect(sql).toMatch(/a\.workspace_id = \$3/);
     expect(sql).toMatch(/r\.discipline = \$4/);
     expect(sql).not.toContain('overridden_by');
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, ATHLETE_ID, USER_ID, '100m']);

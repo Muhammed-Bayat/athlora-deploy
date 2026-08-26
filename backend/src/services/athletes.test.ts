@@ -70,7 +70,7 @@ describe('listAthletes', () => {
 
     expect(athletes).toEqual([athleteBody()]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('coach_id = $1');
+    expect(sql).toContain('workspace_id = $1');
     expect(sql).toContain('archived_at IS NULL');
     expect(sql).toMatch(/ORDER BY LOWER\(name\) ASC, created_at ASC, id ASC/);
     expect(parameters).toEqual([USER_ID]);
@@ -112,7 +112,7 @@ describe('getAthlete', () => {
 
     await expect(getAthlete(USER_ID, ATHLETE_ID)).resolves.toEqual(athleteBody());
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE id = $1 AND coach_id = $2'),
+      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
       [ATHLETE_ID, USER_ID],
     );
   });
@@ -145,7 +145,7 @@ describe('createAthlete', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO athletes');
     expect(sql).toContain('coach_id');
-    expect(parameters).toEqual([USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
+    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
   });
 });
 

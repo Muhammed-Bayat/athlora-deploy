@@ -126,7 +126,7 @@ describe('GET /api/v1/events', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: [eventBody()], meta: { count: 1 } });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toMatch(/created_by = \$1/);
+    expect(sql).toMatch(/workspace_id = \$1/);
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
     expect(parameters).toEqual([USER_ID]);
   });
@@ -221,7 +221,7 @@ describe('POST /api/v1/events', () => {
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO events');
     expect(parameters).toEqual([
-      USER_ID,
+      USER_ID, USER_ID,
       'competition',
       '100m',
       'City Sprint Meet',

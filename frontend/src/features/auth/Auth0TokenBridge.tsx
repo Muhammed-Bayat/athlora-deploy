@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { setAccessTokenGetter, syncCurrentUser } from '../../api/client';
+import { listWorkspaces } from '../../api/workspaces';
 import { Button } from '../../components';
-import type { User } from '../../types';
+import type { User, Workspace } from '../../types';
 import styles from './Auth0TokenBridge.module.css';
 import { CurrentUserProvider } from './CurrentUserProvider';
+import { WorkspaceProvider } from './WorkspaceProvider';
 
 interface Auth0TokenBridgeProps {
   children: ReactNode;
@@ -13,13 +15,13 @@ interface Auth0TokenBridgeProps {
 type SynchronizationState =
   | { status: 'idle' }
   | { status: 'synchronizing'; subject: string }
-  | { status: 'ready'; subject: string; user: User }
+  | { status: 'ready'; subject: string; user: User; workspaces: Workspace[]; activeWorkspace: Workspace }
   | { status: 'error'; subject: string };
 
 interface SynchronizationAttempt {
   subject: string;
   retry: number;
-  promise: Promise<User>;
+  promise: Promise<{ user: User; workspaces: Workspace[]; activeWorkspace: Workspace }>;
 }
 
 export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
@@ -49,14 +51,26 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
 
     let attempt = attemptRef.current;
     if (!attempt || attempt.subject !== subject || attempt.retry !== retry) {
-      attempt = { subject, retry, promise: syncCurrentUser() };
+      attempt = {
+        subject,
+        retry,
+        promise: syncCurrentUser().then(async (synchronizedUser) => {
+          const response = await listWorkspaces();
+          const storedWorkspaceId = (() => { try { return localStorage.getItem(`athlora-active-workspace:${subject}`); } catch { return null; } })();
+          const activeWorkspace = response.data.find((workspace) => workspace.id === storedWorkspaceId)
+            ?? response.data.find((workspace) => workspace.id === response.meta.activeWorkspaceId)
+            ?? response.data[0];
+          if (!activeWorkspace) throw new Error('No workspace is available for this account');
+          return { user: synchronizedUser, workspaces: response.data, activeWorkspace };
+        }),
+      };
       attemptRef.current = attempt;
     }
 
     void attempt.promise.then(
-      (synchronizedUser) => {
+      (session) => {
         if (active) {
-          setSynchronization({ status: 'ready', subject, user: synchronizedUser });
+          setSynchronization({ status: 'ready', subject, ...session });
         }
       },
       () => {
@@ -81,7 +95,11 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
     synchronization.subject === subject
   ) {
     return (
-      <CurrentUserProvider user={synchronization.user}>{children}</CurrentUserProvider>
+      <CurrentUserProvider user={synchronization.user}>
+        <WorkspaceProvider subject={subject} initialWorkspace={synchronization.activeWorkspace} workspaces={synchronization.workspaces}>
+          {children}
+        </WorkspaceProvider>
+      </CurrentUserProvider>
     );
   }
 

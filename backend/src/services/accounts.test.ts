@@ -15,7 +15,7 @@ function runner(query: ReturnType<typeof vi.fn>) {
 }
 
 describe('account deletion service', () => {
-  it('marks pending, deletes Auth0 identity, and purges the owned graph in dependency order', async () => {
+  it('marks pending, deletes the identity, and removes workspace memberships', async () => {
     let userLookup = 0;
     const query = vi.fn(async (sqlValue: string) => {
       const sql = String(sqlValue);
@@ -34,11 +34,9 @@ describe('account deletion service', () => {
     expect(deleteIdentity).toHaveBeenCalledWith(AUTH0_ID);
     const statements = query.mock.calls.map(([sql]) => String(sql));
     expect(statements.findIndex((sql) => sql.includes("VALUES ($1, 'pending', 1"))).toBeLessThan(
-      statements.findIndex((sql) => sql.includes('DELETE FROM event_participants')),
+      statements.findIndex((sql) => sql.includes('DELETE FROM workspace_members')),
     );
-    expect(statements.findIndex((sql) => sql.includes('DELETE FROM event_participants'))).toBeLessThan(
-      statements.findIndex((sql) => sql.includes('DELETE FROM events')),
-    );
+    expect(statements).not.toContain('DELETE FROM users WHERE id = $1');
     expect(statements.some((sql) => sql.includes("status = 'completed'"))).toBe(true);
   });
 
@@ -81,7 +79,7 @@ describe('account deletion service', () => {
     ).rejects.toMatchObject({ status: 404, code: 'ACCOUNT_NOT_FOUND' });
   });
 
-  it('removes or anonymizes audit references outside the owned graph', async () => {
+  it('preserves audit references while removing workspace access', async () => {
     const query = vi.fn(async (sqlValue: string) => {
       const sql = String(sqlValue);
       if (sql.includes('SELECT id FROM users')) return { rows: [{ id: USER_ID }] };
@@ -92,8 +90,9 @@ describe('account deletion service', () => {
     await deleteCurrentAccount(AUTH0_ID, vi.fn().mockResolvedValue(undefined), runner(query));
 
     const statements = query.mock.calls.map(([sql]) => String(sql));
-    expect(statements).toContain('DELETE FROM timeline_entries WHERE recorded_by = $1');
-    expect(statements.some((sql) => sql.includes('SET manual_override = NULL'))).toBe(true);
+    expect(statements).toContain('DELETE FROM workspace_members WHERE user_id = $1');
+    expect(statements.some((sql) => sql.includes('timeline_entries'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('overridden_by'))).toBe(false);
   });
 
   it('retries durable pending and failed deletion requests', async () => {

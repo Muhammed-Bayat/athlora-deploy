@@ -1,13 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Request, RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
-import {
-  DatabaseMappingError,
-  mapApplicationUserContextRow,
-  type ApplicationUserContextRow,
-} from '../db/row-mappers.js';
 import { ApiError } from './errors.js';
 import type { ApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 
 export function getVerifiedAuth0Context(req: Request): VerifiedAuth0Context {
   if (!req.auth0) {
@@ -74,12 +70,29 @@ export const requireAuth = verifyAuth0Token;
 export const resolveApplicationUser: RequestHandler = async (req, _res, next) => {
   try {
     const auth0 = getVerifiedAuth0Context(req);
-    const result = await getPool().query<ApplicationUserContextRow & { deletion_status: string | null }>(
-      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status
+    const requestedWorkspaceId = typeof req.header === 'function' ? req.header('X-Workspace-Id') : undefined;
+    if (requestedWorkspaceId !== undefined && !isCanonicalUuid(requestedWorkspaceId)) {
+      next(new ApiError(400, 'WORKSPACE_ID_INVALID', 'Workspace ID must be a UUID'));
+      return;
+    }
+    const result = await getPool().query<{
+      user_id: string;
+      auth0_id: string;
+      role: ApplicationUserContext['role'];
+      deletion_status: string | null;
+      workspace_id: string;
+      workspace_role: ApplicationUserContext['workspaceRole'];
+    }>(
+      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status,
+              wm.workspace_id, wm.role AS workspace_role
        FROM users u
        LEFT JOIN account_deletions d ON d.auth0_id = u.auth0_id
-       WHERE u.auth0_id = $1`,
-      [auth0.auth0Id],
+       JOIN workspace_members wm ON wm.user_id = u.id
+       WHERE u.auth0_id = $1
+         AND ($2::uuid IS NULL OR wm.workspace_id = $2::uuid)
+       ORDER BY wm.created_at, wm.workspace_id
+       LIMIT 1`,
+      [auth0.auth0Id, requestedWorkspaceId ?? null],
     );
     const user = result.rows[0];
 
@@ -98,15 +111,19 @@ export const resolveApplicationUser: RequestHandler = async (req, _res, next) =>
       next(new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress'));
       return;
     }
-
-    try {
-      req.auth = mapApplicationUserContextRow(user);
-    } catch (error) {
-      if (error instanceof DatabaseMappingError) {
-        throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
-      }
-      throw error;
+    if (!['coach', 'assistant', 'viewer'].includes(user.role) ||
+        !['coach', 'assistant', 'viewer'].includes(user.workspace_role ?? user.role)) {
+      next(new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid'));
+      return;
     }
+
+    req.auth = {
+      userId: user.user_id,
+      auth0Id: user.auth0_id,
+      role: user.role,
+      workspaceId: user.workspace_id ?? user.user_id,
+      workspaceRole: user.workspace_role ?? user.role,
+    };
     next();
   } catch (error) {
     next(error);

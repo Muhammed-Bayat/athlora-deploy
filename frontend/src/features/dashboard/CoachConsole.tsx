@@ -7,6 +7,7 @@ import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
 import { DashboardPage } from './DashboardPage';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -268,6 +269,7 @@ function resolveDeviceCoordinates(): Promise<Coordinates | null> {
 }
 
 export function CoachConsole() {
+  const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const [destination, setDestination] = useState<ConsoleDestination>({ view: 'dashboard' });
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
@@ -286,6 +288,14 @@ export function CoachConsole() {
   };
   const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem(WEATHER_PREF_KEY, next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
   const toggleTheme = () => setThemeLight((light) => { const next = !light; try { localStorage.setItem(THEME_STORAGE_KEY, next ? 'light' : 'dark'); } catch { /* Preference persistence is optional. */ } return next; });
+
+  const changeWorkspace = (workspaceId: string) => {
+    if (workspaceId === activeWorkspace.id) return;
+    selectWorkspace(workspaceId);
+    setDestination({ view: 'dashboard' });
+    setRosterCount(null);
+    setEventUpcomingCount(null);
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle('theme-light', themeLight);
@@ -354,6 +364,12 @@ export function CoachConsole() {
     </div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
+      <label className={styles.workspaceSwitcher}>
+        <span>Workspace</span>
+        <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active workspace">
+          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+        </select>
+      </label>
       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination.view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && <small>{eventUpcomingCount ?? '—'}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
@@ -375,10 +391,10 @@ export function CoachConsole() {
         </div>
       </header>
       <main className={styles.content}>
-        {destination.view === 'dashboard' && <DashboardPage onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
-        {destination.view === 'athletes' && <AthletesPage key={`athletes:${destination.targetId ?? 'index'}`} initialAthleteId={destination.targetId} onActiveCountChange={setRosterCount} />}
-        {destination.view === 'events' && <EventsPage key={`events:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} onUpcomingCountChange={setEventUpcomingCount} />}
-        {destination.view === 'live' && <LiveLoggingPage key={`live:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} />}
+        {destination.view === 'dashboard' && <DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
+        {destination.view === 'athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialAthleteId={destination.targetId} onActiveCountChange={setRosterCount} />}
+        {destination.view === 'events' && <EventsPage key={`events:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} onUpcomingCountChange={setEventUpcomingCount} />}
+        {destination.view === 'live' && <LiveLoggingPage key={`live:${activeWorkspace.id}:${destination.targetId ?? 'index'}`} initialEventId={destination.targetId} />}
         {destination.view === 'account' && <AuthPage />}
       </main>
     </div>

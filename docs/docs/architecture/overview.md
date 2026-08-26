@@ -34,9 +34,9 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: resource services own coach-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary for both owned event forecasts and authenticated current-weather requests; pure, unit-testable functions own result derivation (`src/services/resultDerivation.ts`, tested) and Stage 3 merge rules. Business logic is never buried in route handlers.
-- **Database access**: `pg` pool in `src/db/client.ts`; sequential SQL files in `src/db/migrations` are checksum-tracked (line-ending-normalized) and applied before production startup. Migrations `0001_init.sql` through `0004_account_lifecycle.sql` are applied to Neon.
-- **Auth and account lifecycle**: `src/middleware/auth.ts` verifies Auth0 JWT issuer and audience via `jose`, then resolves the verified subject to a typed application-user UUID/Auth0 ID/role context on resource routes. `PUT /api/v1/auth/me` intentionally uses token verification only so new identities can synchronize, but any durable deletion tombstone prevents re-synchronization and resource access. A backend-only, least-privilege Auth0 Management API client creates password tickets and deletes only the verified subject. Local deletion is transactional and a startup/interval reconciler retries partial external/database failures idempotently. Central ownership services scope athlete, event, timeline, participant and result access without disclosing cross-coach resources; public results pages (Stage 3) will be explicitly allow-listed.
+- **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary. Business logic is never buried in route handlers.
+- **Database access**: migration `0005_workspace_tenancy.sql` adds workspaces, memberships, resource workspace IDs, a default IANA timezone, and optional event overrides. It backfills one workspace per existing user without replacing domain IDs or historical results.
+- **Auth and account lifecycle**: authenticated resource context includes a validated active workspace selected with `X-Workspace-Id`. Central ownership services enforce workspace isolation while creator/recorder/override columns remain audit attribution. Deleting an account removes memberships but retains shared records and the local audit placeholder.
 
 ## Data flow for a live result
 
@@ -61,7 +61,7 @@ Stage 2 will extend this path by writing to IndexedDB before sync and broadcasti
 - **Soft deletes** — undo is a tombstone (`deleted_at`), not a destructive delete.
 - **Derived results with manual override** — stats come from the timeline log, but a coach can correct with `manual_override` + audit trail.
 - **Timed vs measured disciplines** — the schema and result-service foundation accommodate track times and field measurements. The deployed API/UI currently enforces 100m timing; each later discipline will add its own validation, entry controls, derivation, and placing rules.
-- **Non-enumerating ownership** — owner IDs and audit actors come from authenticated server context, never request payloads. A resource that is missing, malformed, nested under the wrong parent or owned by another coach produces the same generic not-found response.
+- **Non-enumerating workspace isolation** — workspace selection and audit actors come from authenticated server context, never request payloads. A resource that is missing, malformed, nested under the wrong parent or in another workspace produces the same generic not-found response.
 
 ## Implementation status
 
