@@ -10,6 +10,7 @@ import dashboardRouter from './dashboard.js';
 import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
 import workspacesRouter from './workspaces.js';
+import fixturesRouter, { fixtureHostRouter } from './fixtures.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -83,10 +84,12 @@ router.use(
   '/events',
   verifyAuth0Token,
   resolveApplicationUser,
-  participantsRouter,
+   fixtureHostRouter,
+   participantsRouter,
   timelineRouter,
   resultsRouter,
   eventsRouter,
 );
+router.use('/fixtures', verifyAuth0Token, resolveApplicationUser, fixturesRouter);
 
 export default router;

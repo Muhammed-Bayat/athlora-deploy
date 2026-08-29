@@ -146,6 +146,16 @@ export interface ResultOverridePayload {
   overrideReason: string | null;
 }
 
+export interface FixtureInvitationCreatePayload {
+  email: string;
+  expiresInDays: number;
+}
+
+export interface FixtureInvitationResponsePayload {
+  response: 'accepted' | 'declined' | 'change_requested';
+  message: string | null;
+}
+
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
@@ -185,6 +195,8 @@ const TIMELINE_PATCH_FIELDS = [
 ] as const;
 const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
+const FIXTURE_INVITATION_CREATE_FIELDS = ['email', 'expiresInDays'] as const;
+const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
 
 type PayloadObject = Record<string, unknown>;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
@@ -895,4 +907,49 @@ export function parseResultOverridePayload(input: unknown): ResultOverridePayloa
 
   if (issues.length > 0) throwValidation(issues);
   return { manualOverride, overrideReason };
+}
+
+export function parseFixtureInvitationCreatePayload(input: unknown): FixtureInvitationCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_CREATE_FIELDS, issues);
+  const email = typeof payload.email === 'string' && /^\S+@\S+\.\S+$/.test(payload.email.trim())
+    ? payload.email.trim().toLowerCase()
+    : '';
+  if (!email) issues.push(issue('email', 'invalid_format', 'Expected an email address'));
+  let expiresInDays = 7;
+  if (payload.expiresInDays !== undefined) {
+    if (typeof payload.expiresInDays !== 'number' || !Number.isSafeInteger(payload.expiresInDays) || payload.expiresInDays < 1 || payload.expiresInDays > 30) {
+      issues.push(issue('expiresInDays', 'invalid_value', 'Expected an integer from 1 to 30'));
+    } else {
+      expiresInDays = payload.expiresInDays;
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { email, expiresInDays };
+}
+
+export function parseFixtureInvitationResponsePayload(input: unknown): FixtureInvitationResponsePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_RESPONSE_FIELDS, issues);
+  const response = requiredEnum(
+    payload,
+    'response',
+    ['accepted', 'declined', 'change_requested'] as const,
+    issues,
+  );
+  let message: string | null = null;
+  if (payload.message !== undefined && payload.message !== null) {
+    message = normalizeRequiredString(payload.message);
+    if (message === null) issues.push(issue('message', 'blank', 'Must not be blank'));
+  }
+  if (response === 'change_requested' && message === null) {
+    issues.push(issue('message', 'required', 'A change request needs a message'));
+  }
+  if (response !== 'change_requested' && message !== null) {
+    issues.push(issue('message', 'not_allowed', 'Only change requests may include a message'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { response, message };
 }

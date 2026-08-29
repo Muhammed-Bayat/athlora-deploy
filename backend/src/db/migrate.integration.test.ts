@@ -84,7 +84,7 @@ describeDB('migrations against a real database', () => {
       '0001_init.sql',
       '0002_contract_100m.sql',
       '0003_aggregate_indexes.sql',
-       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql',
+       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql', '0009_intermediate_fixtures.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -97,6 +97,8 @@ describeDB('migrations against a real database', () => {
     expect(await hasColumn('athletes', 'lifecycle_status')).toBe(true);
     expect(await hasColumn('athletes', 'status_changed_by')).toBe(true);
     expect(await hasColumn('athlete_squads', 'squad_id')).toBe(true);
+    expect(await hasColumn('events', 'fixture_revision')).toBe(true);
+    expect(await hasColumn('event_participants', 'participant_workspace_id')).toBe(true);
 
     expect(await hasIndex('idx_events_created_by')).toBe(true);
     expect(await hasIndex('idx_events_status_date')).toBe(true);
@@ -126,7 +128,7 @@ describeDB('migrations against a real database', () => {
       '0001_init.sql',
       '0002_contract_100m.sql',
       '0003_aggregate_indexes.sql',
-       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql',
+       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql', '0009_intermediate_fixtures.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -136,7 +138,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 
