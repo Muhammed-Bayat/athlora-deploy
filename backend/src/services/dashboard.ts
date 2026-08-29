@@ -54,7 +54,7 @@ async function listRecentResults(
     `WITH history AS (
        SELECT r.*,
               a.name AS athlete_name,
-              a.squad AS athlete_squad,
+               COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
               a.archived_at AS athlete_archived_at,
               e.title AS event_title,
               e.type AS event_type,
@@ -198,7 +198,7 @@ export async function getDashboardSummary(
       ? await client.query<DashboardTimelineEntryRow>(
         `SELECT te.*,
                 a.name AS athlete_name,
-                a.squad AS athlete_squad,
+                 COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
                 a.archived_at AS athlete_archived_at
          FROM timeline_entries te
          JOIN events e ON e.id = te.event_id
@@ -217,7 +217,7 @@ export async function getDashboardSummary(
     const rosterResult = await client.query<RosterSnapshotRow>(
       `SELECT a.id AS athlete_id,
               a.name,
-              a.squad,
+               COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS squad_names,
               $2::text AS discipline,
               best.pb
        FROM athletes a

@@ -31,7 +31,7 @@ const participantRow: EventParticipantSummaryRow = {
   athlete_id: ATHLETE_ID,
   rsvp_status: 'pending',
   athlete_name: 'Ari Runner',
-  athlete_squad: 'Sprint',
+  athlete_squad_names: [],
   athlete_archived_at: null,
 };
 
@@ -42,7 +42,7 @@ const participantBody = {
   athlete: {
     id: ATHLETE_ID,
     name: 'Ari Runner',
-    squad: 'Sprint',
+    squadNames: [],
     archivedAt: null,
   },
 };

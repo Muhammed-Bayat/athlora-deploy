@@ -57,7 +57,7 @@ describe('LiveLoggingPage', () => {
     athlete: {
       id: 'ath-1',
       name: 'Amara Chen',
-      squad: 'Sprint',
+      squadNames: ['Sprint'],
       archivedAt: null,
     },
   };
@@ -730,7 +730,7 @@ describe('LiveLoggingPage', () => {
         name: 'Former Runner',
         dob: null,
         gender: null,
-        squad: 'Senior',
+        squads: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Senior', archivedAt: null, createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z' }],
         notes: null,
         archivedAt: '2026-08-01T00:00:00.000Z',
         createdAt: '2026-07-01T00:00:00.000Z',

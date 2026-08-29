@@ -37,7 +37,8 @@ export interface AthleteCreatePayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
@@ -45,13 +46,15 @@ export interface AthleteReplacementPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
 export interface AthleteListQuery {
   includeArchived: boolean;
   name?: string;
+  squadId?: string;
   squad?: string;
 }
 
@@ -136,8 +139,9 @@ export interface ResultOverridePayload {
   overrideReason: string | null;
 }
 
-const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
+const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squadId'] as const;
+const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
 const EVENT_FIELDS = [
@@ -283,6 +287,20 @@ function nullableString(
   }
   const normalized = payload[field].trim();
   return normalized.length === 0 ? null : normalized;
+}
+
+function requiredUuidArray(payload: PayloadObject, field: string, issues: ValidationIssue[]): string[] {
+  if (!hasOwn(payload, field)) { issues.push(issue(field, 'required', 'Field is required')); return []; }
+  if (!Array.isArray(payload[field])) { issues.push(issue(field, 'invalid_type', 'Expected an array of canonical UUIDs')); return []; }
+  const values = payload[field];
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  values.forEach((value, index) => {
+    if (!isCanonicalUuid(value)) issues.push(issue(`${field}.${index}`, 'invalid_format', 'Expected a canonical UUID'));
+    else if (seen.has(value)) issues.push(issue(`${field}.${index}`, 'duplicate', 'Squad IDs must be unique'));
+    else { seen.add(value); ids.push(value); }
+  });
+  return ids;
 }
 
 function optionalQueryString(
@@ -440,7 +458,7 @@ function parseAthlete(input: unknown): AthleteCreatePayload {
     name: requiredString(payload, 'name', issues),
     dob: nullableDate(payload, 'dob', issues),
     gender: nullableString(payload, 'gender', issues),
-    squad: nullableString(payload, 'squad', issues),
+    squadIds: requiredUuidArray(payload, 'squadIds', issues),
     notes: nullableString(payload, 'notes', issues),
   };
 
@@ -470,15 +488,25 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   }
 
   const name = optionalQueryString(input, 'name', issues);
-  const squad = optionalQueryString(input, 'squad', issues);
+  const squadId = optionalQueryString(input, 'squadId', issues);
+  if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
 
   if (issues.length > 0) throwValidation(issues);
 
   return {
     includeArchived,
     ...(name === undefined ? {} : { name }),
-    ...(squad === undefined ? {} : { squad }),
+    ...(squadId === undefined ? {} : { squadId }),
   };
+}
+
+export function parseSquadPayload(input: unknown): { name: string } {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, SQUAD_FIELDS, issues);
+  const name = requiredString(payload, 'name', issues);
+  if (issues.length > 0) throwValidation(issues);
+  return { name };
 }
 
 function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload {

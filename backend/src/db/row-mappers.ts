@@ -23,6 +23,7 @@ import {
   type EventParticipantSummary,
   type Result,
   type RosterSnapshotEntry,
+  type Squad,
   type TimelineEntry,
   type User,
 } from '../types/domain.js';
@@ -62,8 +63,17 @@ export interface AthleteRow {
   name: string;
   dob: DateValue | null;
   gender: string | null;
-  squad: string | null;
+  squads?: unknown;
+  squad?: string | null;
   notes: string | null;
+  archived_at: TimestampValue | null;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+}
+
+export interface SquadRow {
+  id: string;
+  name: string;
   archived_at: TimestampValue | null;
   created_at: TimestampValue;
   updated_at: TimestampValue;
@@ -93,7 +103,8 @@ export interface EventParticipantRow {
 
 export interface EventParticipantSummaryRow extends EventParticipantRow {
   athlete_name: string;
-  athlete_squad: string | null;
+  athlete_squad_names?: unknown;
+  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
 }
 
@@ -154,7 +165,8 @@ export interface AthleteStatisticsAggregateRow extends AthleteStatisticsRow {
 
 export interface AthleteResultHistoryRow extends ResultRow {
   athlete_name: string;
-  athlete_squad: string | null;
+  athlete_squad_names?: unknown;
+  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
   event_title: string;
   event_type: string;
@@ -171,7 +183,8 @@ export interface AthleteResultHistoryRow extends ResultRow {
 export interface RosterSnapshotRow {
   athlete_id: string;
   name: string;
-  squad: string | null;
+  squad_names?: unknown;
+  squad?: string | null;
   discipline: string;
   pb: NumericValue | null;
 }
@@ -205,7 +218,8 @@ export interface DashboardActiveEventRow {
 
 export interface DashboardTimelineEntryRow extends TimelineEntryRow {
   athlete_name: string;
-  athlete_squad: string | null;
+  athlete_squad_names?: unknown;
+  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
 }
 
@@ -498,12 +512,30 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     name: nonemptyString(row.name, 'athletes.name'),
     dob: row.dob === null ? null : databaseDate(row.dob, 'athletes.dob'),
     gender: nullableString(row.gender, 'athletes.gender'),
-    squad: nullableString(row.squad, 'athletes.squad'),
+    squads: row.squads === undefined ? [] : squads(row.squads, 'athletes.squads'),
     notes: nullableString(row.notes, 'athletes.notes'),
     archivedAt: nullableTimestamp(row.archived_at, 'athletes.archived_at'),
     createdAt: timestamp(row.created_at, 'athletes.created_at'),
     updatedAt: timestamp(row.updated_at, 'athletes.updated_at'),
   };
+}
+
+function squads(value: unknown, field: string): Squad[] {
+  if (!Array.isArray(value)) return invalid(field, 'expected a JSON array');
+  return value.map((item, index) => {
+    if (typeof item !== 'object' || item === null) return invalid(`${field}.${index}`, 'expected a squad object');
+    const row = item as Record<string, unknown>;
+    return {
+      id: uuid(row.id, `${field}.${index}.id`), name: nonemptyString(row.name, `${field}.${index}.name`),
+      archivedAt: nullableTimestamp(row.archivedAt, `${field}.${index}.archivedAt`),
+      createdAt: timestamp(row.createdAt, `${field}.${index}.createdAt`), updatedAt: timestamp(row.updatedAt, `${field}.${index}.updatedAt`),
+    };
+  });
+}
+
+function squadNames(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) return invalid(field, 'expected a text array');
+  return value.map((name, index) => nonemptyString(name, `${field}.${index}`));
 }
 
 export function mapEventRow(row: EventRow): AthleticsEvent {
@@ -541,7 +573,7 @@ export function mapEventParticipantSummaryRow(
     athlete: {
       id: participant.athleteId,
       name: nonemptyString(row.athlete_name, 'athletes.name'),
-      squad: nullableString(row.athlete_squad, 'athletes.squad'),
+       squadNames: row.athlete_squad_names === undefined ? [] : squadNames(row.athlete_squad_names, 'athletes.squad_names'),
       archivedAt:
         row.athlete_archived_at === null
           ? null
@@ -695,14 +727,14 @@ export function mapAthleteResultCounts(
 function mapAggregateAthleteIdentity(
   athleteId: unknown,
   name: unknown,
-  squad: unknown,
+  squadNamesValue: unknown,
   archivedAt: unknown,
   context: string,
 ): AggregateAthleteIdentity {
   return {
     id: uuid(athleteId, `${context}.id`),
     name: nonemptyString(name, `${context}.name`),
-    squad: nullableString(squad, `${context}.squad`),
+    squadNames: squadNamesValue === undefined ? [] : squadNames(squadNamesValue, `${context}.squad_names`),
     archivedAt: nullableTimestamp(archivedAt, `${context}.archived_at`),
   };
 }
@@ -767,7 +799,7 @@ export function mapAthleteResultHistoryRow(
     athlete: mapAggregateAthleteIdentity(
       row.athlete_id,
       row.athlete_name,
-      row.athlete_squad,
+       row.athlete_squad_names,
       row.athlete_archived_at,
       'athlete history.athlete',
     ),
@@ -783,7 +815,7 @@ export function mapRosterSnapshotRow(row: RosterSnapshotRow): RosterSnapshotEntr
   return {
     athleteId: uuid(row.athlete_id, 'roster snapshot.athlete_id'),
     name: nonemptyString(row.name, 'roster snapshot.name'),
-    squad: nullableString(row.squad, 'roster snapshot.squad'),
+    squadNames: row.squad_names === undefined ? [] : squadNames(row.squad_names, 'roster snapshot.squad_names'),
     discipline: discipline(row.discipline, 'roster snapshot.discipline'),
     pb: nullablePositiveNumeric(row.pb, 'roster snapshot.pb'),
   };
@@ -849,7 +881,7 @@ export function mapDashboardTimelineEntryRow(
     athlete: mapAggregateAthleteIdentity(
       row.athlete_id,
       row.athlete_name,
-      row.athlete_squad,
+       row.athlete_squad_names,
       row.athlete_archived_at,
       'dashboard timeline entry.athlete',
     ),

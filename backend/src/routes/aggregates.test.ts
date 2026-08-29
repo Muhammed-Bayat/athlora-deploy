@@ -59,7 +59,7 @@ describe('aggregate API routes', () => {
       latestResult: null,
       latestOutcome: 'no_result',
       updatedAt: '2026-08-17T10:00:00.000Z',
-      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squad: null, archivedAt: null },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
       resultCounts: {
         allTime: 0,
         currentYear: 0,

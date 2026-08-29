@@ -20,6 +20,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',
@@ -67,7 +68,7 @@ describeDB('athletes against a real database', () => {
     const coachId = await seedCoach('auth|athletes-1');
     const created = await createAthlete(
       coachId,
-      { name: 'Ari Runner', dob: '2010-04-12', squad: 'Sprint', gender: null, notes: null },
+      { name: 'Ari Runner', dob: '2010-04-12', squadIds: [], gender: null, notes: null },
       pool,
     );
     expect(created.id).toBeDefined();
@@ -84,22 +85,25 @@ describeDB('athletes against a real database', () => {
     expect(all[0].archivedAt).not.toBeNull();
   });
 
-  it('filters the roster by name substring and squad', async () => {
+  it('filters the roster by name substring and squad membership', async () => {
     const coachId = await seedCoach('auth|athletes-2');
+    const { rows: squadRows } = await pool.query<{ id: string; name: string }>(`INSERT INTO squads (workspace_id, name) VALUES ($1, 'Sprint'), ($1, 'Throws') RETURNING id, name`, [coachId]);
+    const sprintId = squadRows.find((row) => row.name === 'Sprint')!.id;
+    const throwsId = squadRows.find((row) => row.name === 'Throws')!.id;
     await createAthlete(
       coachId,
-      { name: 'Ada Runner', dob: null, squad: 'Sprint', gender: null, notes: null },
+      { name: 'Ada Runner', dob: null, squadIds: [sprintId], gender: null, notes: null },
       pool,
     );
     await createAthlete(
       coachId,
-      { name: 'Zulu Thrower', dob: null, squad: 'Throws', gender: null, notes: null },
+      { name: 'Zulu Thrower', dob: null, squadIds: [throwsId], gender: null, notes: null },
       pool,
     );
 
     const matches = await listAthletes(
       coachId,
-      { includeArchived: false, name: 'ada', squad: 'Sprint' },
+      { includeArchived: false, name: 'ada', squadId: sprintId },
       pool,
     );
     expect(matches).toHaveLength(1);
@@ -110,7 +114,7 @@ describeDB('athletes against a real database', () => {
     const coachId = await seedCoach('auth|athletes-3');
     const created = await createAthlete(
       coachId,
-      { name: 'Sprint Star', dob: null, gender: null, squad: null, notes: null },
+      { name: 'Sprint Star', dob: null, gender: null, squadIds: [], notes: null },
       pool,
     );
     const { rows: eventRows } = await pool.query<{ id: string }>(
@@ -152,7 +156,7 @@ describeDB('athletes against a real database', () => {
     const coachB = await seedCoach('auth|athletes-4b');
     const created = await createAthlete(
       coachA,
-      { name: 'A Only', dob: null, gender: null, squad: null, notes: null },
+      { name: 'A Only', dob: null, gender: null, squadIds: [], notes: null },
       pool,
     );
 

@@ -50,7 +50,7 @@ function participant(
     eventId: EVENT_ID,
     athleteId,
     rsvpStatus: 'yes',
-    athlete: { id: athleteId, name, squad: 'Sprint', archivedAt: null },
+    athlete: { id: athleteId, name, squadNames: ['Sprint'], archivedAt: null },
     ...overrides,
   };
 }
@@ -62,7 +62,7 @@ function athlete(athleteId: string, name: string, overrides: Partial<Athlete> = 
     name,
     dob: null,
     gender: null,
-    squad: null,
+    squads: [],
     notes: null,
     archivedAt: null,
     createdAt: '2026-08-01T10:00:00.000Z',
@@ -224,14 +224,14 @@ describe('EventResultsView', () => {
   it('renders PB/SB for an assigned partial athlete and identifies an archived historical result', () => {
     renderView({
       participants: [participant('assigned', 'Assigned Runner', {
-        athlete: { id: 'assigned', name: 'Assigned Runner', squad: 'Development', archivedAt: null },
+        athlete: { id: 'assigned', name: 'Assigned Runner', squadNames: ['Development'], archivedAt: null },
       })],
       results: [
         result('assigned', { finalResult: 10.75, isPb: true, isSb: true }),
         result('historical', { finalResult: 11.7, placing: 2 }),
       ],
       athletes: [athlete('historical', 'Former Runner', {
-        squad: 'Senior',
+        squads: [{ id: '22222222-2222-4222-8222-222222222222', name: 'Senior', archivedAt: null, createdAt: '2026-08-01T10:00:00.000Z', updatedAt: '2026-08-01T10:00:00.000Z' }],
         archivedAt: '2026-07-01T10:00:00.000Z',
       })],
     });

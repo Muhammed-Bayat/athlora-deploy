@@ -25,7 +25,7 @@ const EMPTY_SUMMARY: DashboardSummary = {
 
 function history(overrides: Partial<AthleteResultHistoryEntry> = {}): AthleteResultHistoryEntry {
   return {
-    athlete: { id: 'athlete-1', name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+    athlete: { id: 'athlete-1', name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null },
     event: {
       id: 'past-event', title: 'Winter Classic', type: 'competition', discipline: '100m',
       date: '2026-08-10', time: '09:30:00', locationName: 'Central Stadium', status: 'completed',
@@ -45,7 +45,7 @@ function history(overrides: Partial<AthleteResultHistoryEntry> = {}): AthleteRes
 
 function populatedSummary(): DashboardSummary {
   const archived = history({
-    athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squad: null, archivedAt: '2026-08-12T00:00:00.000Z' },
+    athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squadNames: [], archivedAt: '2026-08-12T00:00:00.000Z' },
     result: { ...history().result, athleteId: 'athlete-archived', outcome: 'dq', finalResult: null, isPb: false },
     effectiveResult: null,
     effectiveOutcome: 'dq',
@@ -59,8 +59,8 @@ function populatedSummary(): DashboardSummary {
     upcomingEventCount: 2,
     seasonPbs: 4,
     rosterSnapshot: [
-      { athleteId: 'athlete-2', name: 'Zola Fast', squad: null, discipline: '100m', pb: null },
-      { athleteId: 'athlete-1', name: 'Ari Runner', squad: 'Sprint', discipline: '100m', pb: 11.21 },
+      { athleteId: 'athlete-2', name: 'Zola Fast', squadNames: [], discipline: '100m', pb: null },
+      { athleteId: 'athlete-1', name: 'Ari Runner', squadNames: ['Sprint'], discipline: '100m', pb: 11.21 },
     ],
     upcomingEvents: [
       { eventId: 'event-2', title: 'Training Two', type: 'training', discipline: '100m', date: '2026-08-20', time: null, locationName: null, status: 'scheduled', athleteCount: 0 },
@@ -80,7 +80,7 @@ function liveSummary(): DashboardSummary {
       progress: { participantCount: 3, athletesWithEntriesCount: 1, resolvedResultsCount: 2, entryCount: 4, completionPercent: 67 },
       latestEntries: [
         {
-          athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squad: null, archivedAt: '2026-08-12T00:00:00.000Z' },
+          athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squadNames: [], archivedAt: '2026-08-12T00:00:00.000Z' },
           entry: {
             id: 'entry-1', eventId: 'live-event', athleteId: 'athlete-archived', discipline: '100m',
             entryType: 'split', value: 6.12, unit: 'seconds', isFoul: false, incidentType: 'lane_infringement',

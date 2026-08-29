@@ -49,8 +49,17 @@ export interface Athlete {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squads?: Squad[];
+  squad?: string | null;
   notes: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Squad {
+  id: string;
+  name: string;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -60,13 +69,15 @@ export interface AthleteMutationPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
 export interface AthleteListFilters {
   includeArchived?: boolean;
   name?: string;
+  squadId?: string;
   squad?: string;
 }
 
@@ -140,7 +151,8 @@ export interface EventParticipant {
 export interface EventParticipantAthleteSummary {
   id: string;
   name: string;
-  squad: string | null;
+  squadNames?: string[];
+  squad?: string | null;
   archivedAt: string | null;
 }
 
@@ -230,7 +242,8 @@ export interface AthleteStatistics {
 export interface AggregateAthleteIdentity {
   id: string;
   name: string;
-  squad: string | null;
+  squadNames?: string[];
+  squad?: string | null;
   archivedAt: string | null;
 }
 
@@ -274,7 +287,8 @@ export interface AthleteStatisticsDetail extends AthleteStatistics {
 export interface RosterSnapshotEntry {
   athleteId: string;
   name: string;
-  squad: string | null;
+  squadNames?: string[];
+  squad?: string | null;
   discipline: Discipline;
   pb: number | null;
 }
