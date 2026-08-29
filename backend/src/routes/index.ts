@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as athletes from '../controllers/athletes.js';
 import * as events from '../controllers/events.js';
+import * as squads from '../controllers/squads.js';
 import timelineRouter from './timeline.js';
 import resultsRouter from './results.js';
 import participantsRouter from './participants.js';
@@ -19,6 +20,7 @@ import {
   parseAthleteReplacementPayload,
   parseEventCreatePayload,
   parseEventReplacementPayload,
+  parseSquadPayload,
 } from '../validation/payloads.js';
 
 const router = Router();
@@ -49,6 +51,13 @@ eventsRouter.put(
 eventsRouter.delete('/:id', requireCoach(), requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
+const squadsRouter = Router();
+squadsRouter.get('/', squads.list);
+squadsRouter.post('/', requireCoach(), validateBody(parseSquadPayload), squads.create);
+squadsRouter.put('/:id', requireCoach(), validateBody(parseSquadPayload), squads.update);
+squadsRouter.delete('/:id', requireCoach(), squads.archive);
+squadsRouter.post('/:id/unarchive', requireCoach(), squads.unarchive);
+
 router.use('/auth', authRouter);
 // Acceptance cannot require an existing workspace membership.
 router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
@@ -61,6 +70,7 @@ router.use(
   athletesRouter,
 );
 router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
+router.use('/squads', verifyAuth0Token, resolveApplicationUser, squadsRouter);
 router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use(
   '/events',

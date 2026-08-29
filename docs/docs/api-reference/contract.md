@@ -123,7 +123,7 @@ id, auth0Id, name, email, role ('coach'|'assistant'), createdAt, updatedAt
 ### 4.2 Athlete
 
 ```
-id, coachId, name, dob (ISO date|null), gender (string|null), squad (string|null),
+id, coachId, name, dob (ISO date|null), gender (string|null), squads (Squad[]),
 notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 ```
 
@@ -146,13 +146,29 @@ notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 |---|---|
 | `includeArchived` | `'true'` or `'false'` (default `'false'`). When `false`, archived athletes are excluded. |
 | `name` | Case-insensitive substring match on `name` |
-| `squad` | Exact match on `squad` |
+| `squadId` | Canonical UUID; returns athletes with that membership without multiplying roster rows |
 
 Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable.
 
-Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squad`, `notes` — all optional except `name`. `PUT` is a full replacement, so omitted nullable fields become `null`; it never touches `archivedAt`. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes` — all optional except `name`. `PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
-### 4.3 Event
+### 4.3 Squad
+
+```
+id, name, archivedAt (ISO|null), createdAt, updatedAt
+```
+
+Squads are scoped to the active workspace and their names are case-insensitively unique within it. They are archived and restored rather than hard-deleted; archived squads remain on existing athletes but are excluded from new selection by default.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /squads` | List active workspace squads; `includeArchived=true` includes archived squads |
+| `POST /squads` | Create a squad (coach only) |
+| `PUT /squads/:id` | Rename a squad (coach only) |
+| `DELETE /squads/:id` | Archive a squad (coach only) |
+| `POST /squads/:id/unarchive` | Restore a squad (coach only) |
+
+### 4.4 Event
 
 ```
 id, createdBy, type ('competition'|'training'), discipline ('100m'), title, date (ISO date),

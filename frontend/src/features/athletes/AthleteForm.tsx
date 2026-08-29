@@ -1,7 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { listSquads } from '../../api/squads';
 import { ApiError } from '../../api/client';
 import { Button, Input } from '../../components';
-import type { Athlete, AthleteMutationPayload } from '../../types';
+import type { Athlete, AthleteMutationPayload, Squad } from '../../types';
 import { athleteErrorMessage } from './athleteError';
 import styles from './AthleteForm.module.css';
 
@@ -9,7 +10,7 @@ interface AthleteDraft {
   name: string;
   dob: string;
   gender: string;
-  squad: string;
+  squadIds: string[];
   notes: string;
 }
 
@@ -20,7 +21,7 @@ function draftFor(athlete?: Athlete): AthleteDraft {
     name: athlete?.name ?? '',
     dob: athlete?.dob ?? '',
     gender: athlete?.gender ?? '',
-    squad: athlete?.squad ?? '',
+    squadIds: athlete?.squads?.map((squad) => squad.id) ?? [],
     notes: athlete?.notes ?? '',
   };
 }
@@ -31,7 +32,7 @@ function toPayload(draft: AthleteDraft): AthleteMutationPayload {
     name: draft.name.trim(),
     dob: draft.dob || null,
     gender: nullable(draft.gender),
-    squad: nullable(draft.squad),
+    squadIds: draft.squadIds,
     notes: nullable(draft.notes),
   };
 }
@@ -48,7 +49,7 @@ function validationErrors(error: unknown): FieldErrors {
     if (
       typeof path === 'string'
       && typeof message === 'string'
-      && ['name', 'dob', 'gender', 'squad', 'notes'].includes(path)
+       && ['name', 'dob', 'gender', 'squadIds', 'notes'].includes(path)
     ) {
       fields[path as keyof AthleteDraft] ??= message;
     }
@@ -68,7 +69,14 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [squads, setSquads] = useState<Squad[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void listSquads(true)
+      .then(({ data }) => setSquads(data.filter((squad) => squad.archivedAt === null || athlete?.squads?.some((assigned) => assigned.id === squad.id))))
+      .catch(() => setSquads([]));
+  }, [athlete]);
 
   const setField = <K extends keyof AthleteDraft>(field: K, value: AthleteDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -121,9 +129,11 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
         </div>
       </div>
 
-      <label htmlFor="athlete-squad">Discipline group / squad <span>Optional</span></label>
-      <Input id="athlete-squad" value={draft.squad} onChange={(event) => setField('squad', event.target.value)} invalid={Boolean(errors.squad)} aria-invalid={Boolean(errors.squad)} aria-describedby={errors.squad ? 'athlete-squad-error' : undefined} disabled={submitting} />
-      {errors.squad && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squad}</span>}
+       <fieldset disabled={submitting} aria-describedby={errors.squadIds ? 'athlete-squad-error' : undefined}>
+         <legend>Discipline groups / squads <span>Optional</span></legend>
+         {squads.length === 0 ? <p>No active squads available.</p> : squads.map((squad) => <label key={squad.id}><input type="checkbox" checked={draft.squadIds.includes(squad.id)} disabled={squad.archivedAt !== null} onChange={(event) => setField('squadIds', event.target.checked ? [...draft.squadIds, squad.id] : draft.squadIds.filter((id) => id !== squad.id))} /> {squad.name}{squad.archivedAt && ' (archived)'}</label>)}
+       </fieldset>
+       {errors.squadIds && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squadIds}</span>}
 
       <label htmlFor="athlete-notes">Coach notes <span>Optional</span></label>
       <textarea id="athlete-notes" value={draft.notes} onChange={(event) => setField('notes', event.target.value)} aria-invalid={Boolean(errors.notes)} aria-describedby={errors.notes ? 'athlete-notes-error' : undefined} disabled={submitting} />

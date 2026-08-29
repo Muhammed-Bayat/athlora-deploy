@@ -7,7 +7,8 @@ import {
   updateAthlete,
 } from '../../api/athletes';
 import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
-import type { Athlete, AthleteMutationPayload } from '../../types';
+import type { Athlete, AthleteMutationPayload, Squad } from '../../types';
+import { listSquads } from '../../api/squads';
 import { AthleteDetailPage } from './AthleteDetailPage';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage as errorMessage } from './athleteError';
@@ -55,7 +56,8 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const [squad, setSquad] = useState('');
+  const [squadId, setSquadId] = useState('');
+  const [squads, setSquads] = useState<Squad[]>([]);
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
@@ -88,6 +90,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
       current = false;
     };
   }, [reloadKey]);
+  useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
 
   useEffect(() => {
     if (!loading && !loadError) {
@@ -115,11 +118,10 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
       archiveFilter === 'all' ||
       (archiveFilter === 'active' ? athlete.archivedAt === null : athlete.archivedAt !== null);
     const queryMatches = !activeQuery || athlete.name.toLowerCase().includes(activeQuery);
-    const squadMatches = !squad || athlete.squad === squad;
+    const squadMatches = !squadId || athlete.squads?.some((squad) => squad.id === squadId);
     return archiveMatches && queryMatches && squadMatches;
   });
-  const squads = [...new Set(athletes.map((athlete) => athlete.squad).filter((value): value is string => Boolean(value)))].sort();
-  const hasFilters = Boolean(query || squad || archiveFilter !== 'active');
+  const hasFilters = Boolean(query || squadId || archiveFilter !== 'active');
 
   const saveEditor = async (payload: AthleteMutationPayload) => {
     const athlete = editor === 'new'
@@ -164,7 +166,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
 
   const clearFilters = () => {
     setQuery('');
-    setSquad('');
+    setSquadId('');
     setArchiveFilter('active');
   };
 
@@ -199,9 +201,9 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
           <Select
             id="squad-filter"
             icon="squad"
-            value={squad}
-            onChange={(event) => setSquad(event.target.value)}
-            options={[{ value: '', label: 'All squads' }, ...squads.map((value) => ({ value, label: value }))]}
+            value={squadId}
+            onChange={(event) => setSquadId(event.target.value)}
+            options={[{ value: '', label: 'All squads' }, ...squads.map((squad) => ({ value: squad.id, label: `${squad.name}${squad.archivedAt ? ' (archived)' : ''}` }))]}
           />
           <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
           <Select
@@ -255,9 +257,9 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
         <div className={styles.emptyPanel}>
           <EmptyState
             title={
-              !query && !squad && archiveFilter === 'active'
+               !query && !squadId && archiveFilter === 'active'
                 ? 'No active athletes'
-                : !query && !squad && archiveFilter === 'archived'
+                 : !query && !squadId && archiveFilter === 'archived'
                   ? 'No archived athletes'
                   : 'No athletes match your filters'
             }
@@ -278,7 +280,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                 </span>
               </div>
               <h2>{athlete.name}</h2>
-              <p className={styles.squad}>{athlete.squad ?? 'No squad assigned'}</p>
+               <p className={styles.squad}>{athlete.squads?.map((squad) => squad.name).join(', ') || 'No squad assigned'}</p>
               <dl className={styles.details}>
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
                 <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>

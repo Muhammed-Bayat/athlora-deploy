@@ -2,18 +2,25 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, ResultOutcome } from '../../types';
+import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, ResultOutcome, Squad } from '../../types';
 import { AthleteDetailPage } from './AthleteDetailPage';
 
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
+const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
+vi.mock('../../api/squads', () => squadsApi);
 vi.mock('../fitness/FitnessView', () => ({
   FitnessView: ({ athleteName, onBack }: { athleteName: string; onBack: () => void }) => <section><h1>Fitness & injury map</h1><p>{athleteName}</p><button type="button" onClick={onBack}>Back to performance</button></section>,
 }));
 
 const ATHLETE_ID = '11111111-1111-4111-8111-111111111111';
+const SPRINT_ID = '33333333-3333-4333-8333-333333333333';
+const ELITE_ID = '44444444-4444-4444-8444-444444444444';
+function squad(id: string, name: string): Squad {
+  return { id, name, archivedAt: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+}
 
 function athlete(overrides: Partial<Athlete> = {}): Athlete {
   return {
@@ -22,7 +29,7 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2004-02-29',
     gender: 'Open',
-    squad: 'Sprint A',
+    squads: [squad(SPRINT_ID, 'Sprint A')],
     notes: 'Starts focus',
     archivedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -38,7 +45,7 @@ function history(
 ): AthleteResultHistoryEntry {
   const valid = outcome === 'valid';
   return {
-    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squad: 'Sprint A', archivedAt: null },
+    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint A'], archivedAt: null },
     event: {
       id: `event-${title}`,
       title,
@@ -83,7 +90,7 @@ function statistics(overrides: Partial<AthleteStatisticsDetail> = {}): AthleteSt
     latestResult: null,
     latestOutcome: 'no_result',
     updatedAt: '2026-08-17T10:00:00.000Z',
-    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squad: 'Sprint A', archivedAt: null },
+    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint A'], archivedAt: null },
     resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
     latest: null,
     recentResults: { competitions: [], training: [] },
@@ -96,6 +103,7 @@ function renderDetail(onBack = vi.fn(), onAthleteUpdated = vi.fn()) {
 }
 
 beforeEach(() => {
+  squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(ELITE_ID, 'Elite')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.getAthlete.mockResolvedValue(athlete());
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
@@ -138,7 +146,7 @@ describe('AthleteDetailPage', () => {
   });
 
   it('uses explicit placeholders for a partial archived profile', async () => {
-    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squad: null, notes: null, archivedAt: '2026-08-01T00:00:00.000Z' }));
+    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squads: [], notes: null, archivedAt: '2026-08-01T00:00:00.000Z' }));
     renderDetail();
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
@@ -268,7 +276,7 @@ describe('AthleteDetailPage', () => {
   });
 
   it('edits the profile with the shared form and updates displayed data', async () => {
-    const updated = athlete({ name: 'Ari Updated', squad: 'Elite', notes: null, updatedAt: '2026-08-17T12:00:00.000Z' });
+    const updated = athlete({ name: 'Ari Updated', squads: [squad(ELITE_ID, 'Elite')], notes: null, updatedAt: '2026-08-17T12:00:00.000Z' });
     athleteApi.updateAthlete.mockResolvedValue(updated);
     const user = userEvent.setup();
     const { onAthleteUpdated } = renderDetail();
@@ -277,13 +285,13 @@ describe('AthleteDetailPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Edit athlete' });
     await user.clear(within(dialog).getByLabelText('Athlete name'));
     await user.type(within(dialog).getByLabelText('Athlete name'), 'Ari Updated');
-    await user.clear(within(dialog).getByLabelText(/discipline group/i));
-    await user.type(within(dialog).getByLabelText(/discipline group/i), 'Elite');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Elite' }));
     await user.clear(within(dialog).getByLabelText(/coach notes/i));
     await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(athleteApi.updateAthlete).toHaveBeenCalledWith(ATHLETE_ID, {
-      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squad: 'Elite', notes: null,
+      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [ELITE_ID], notes: null,
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
     expect(screen.getAllByText('Elite')).toHaveLength(2);

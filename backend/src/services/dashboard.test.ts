@@ -71,7 +71,7 @@ function timelineRow(): DashboardTimelineEntryRow {
     updated_at: TIMESTAMP,
     deleted_at: null,
     athlete_name: 'Ari Runner',
-    athlete_squad: 'Sprint',
+    athlete_squad_names: [],
     athlete_archived_at: TIMESTAMP,
   };
 }
@@ -93,7 +93,7 @@ function historyRow(): AthleteResultHistoryRow {
     override_at: null,
     updated_at: TIMESTAMP,
     athlete_name: 'Ari Runner',
-    athlete_squad: 'Sprint',
+    athlete_squad_names: [],
     athlete_archived_at: TIMESTAMP,
     event_title: 'City Sprint',
     event_type: 'competition',
@@ -141,7 +141,7 @@ describe('getDashboardSummary', () => {
     const roster: RosterSnapshotRow = {
       athlete_id: ATHLETE_ID,
       name: 'Ari Runner',
-      squad: 'Sprint',
+      squad_names: [],
       discipline: '100m',
       pb: '11.20',
     };

@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { Athlete } from '../../types';
+import type { Athlete, Squad } from '../../types';
 import { AthletesPage } from './AthletesPage';
 
 const athleteApi = vi.hoisted(() => ({
@@ -14,12 +14,19 @@ const athleteApi = vi.hoisted(() => ({
   unarchiveAthlete: vi.fn(),
 }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
+const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
+vi.mock('../../api/squads', () => squadsApi);
 
 const ARI_ID = '11111111-1111-4111-8111-111111111111';
 const BEA_ID = '22222222-2222-4222-8222-222222222222';
+const SPRINT_ID = '44444444-4444-4444-8444-444444444444';
+const DEVELOPMENT_ID = '55555555-5555-4555-8555-555555555555';
+function squad(id: string, name: string): Squad {
+  return { id, name, archivedAt: null, createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' };
+}
 
 function athlete(overrides: Partial<Athlete> = {}): Athlete {
   return {
@@ -28,7 +35,7 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2004-02-29',
     gender: 'Open',
-    squad: 'Sprint A',
+    squads: [squad(SPRINT_ID, 'Sprint A')],
     notes: 'Starts focus',
     archivedAt: null,
     createdAt: '2026-08-16T10:00:00.000Z',
@@ -43,7 +50,7 @@ const bea = athlete({
   name: 'Bea Fast',
   dob: null,
   gender: null,
-  squad: 'Development',
+  squads: [squad(DEVELOPMENT_ID, 'Development')],
   notes: null,
 });
 const archivedBea = athlete({
@@ -52,13 +59,14 @@ const archivedBea = athlete({
 });
 
 beforeEach(() => {
+  squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(DEVELOPMENT_ID, 'Development')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   athleteApi.getAthlete.mockResolvedValue(ari);
   statisticsApi.getAthleteStatistics.mockResolvedValue({
     athleteId: ARI_ID, discipline: '100m', unit: 'seconds', pb: null, sb: null,
     resultsCount: 0, latestResult: null, latestOutcome: 'no_result', updatedAt: '2026-08-17T10:00:00.000Z',
-    athlete: { id: ARI_ID, name: ari.name, squad: ari.squad, archivedAt: null },
+    athlete: { id: ARI_ID, name: ari.name, squadNames: ari.squads?.map((squad) => squad.name) ?? [], archivedAt: null },
     resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
     latest: null, recentResults: { competitions: [], training: [] },
   });
@@ -155,7 +163,7 @@ describe('AthletesPage', () => {
 
     await user.selectOptions(screen.getByLabelText('Filter by roster status'), 'all');
     expect(screen.getByRole('heading', { name: 'Bea Fast' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Filter by squad'), 'Development');
+    await user.selectOptions(screen.getByLabelText('Filter by squad'), DEVELOPMENT_ID);
     expect(screen.queryByRole('heading', { name: 'Ari Runner' })).not.toBeInTheDocument();
     await user.clear(screen.getByRole('textbox', { name: 'Search athletes by name' }));
     await user.type(screen.getByRole('textbox', { name: 'Search athletes by name' }), 'bea');
@@ -178,7 +186,7 @@ describe('AthletesPage', () => {
 
     await user.type(within(dialog).getByLabelText('Athlete name'), '  Casey Quick  ');
     await user.type(within(dialog).getByLabelText(/gender category/i), 'Open');
-    await user.type(within(dialog).getByLabelText(/discipline group/i), 'Sprint B');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
     await user.type(within(dialog).getByLabelText(/coach notes/i), '  Acceleration block  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add athlete' }));
 
@@ -186,7 +194,7 @@ describe('AthletesPage', () => {
       name: 'Casey Quick',
       dob: null,
       gender: 'Open',
-      squad: 'Sprint B',
+      squadIds: [SPRINT_ID],
       notes: 'Acceleration block',
     }));
     expect(await screen.findByRole('heading', { name: 'Casey Quick' })).toBeInTheDocument();
@@ -211,7 +219,7 @@ describe('AthletesPage', () => {
       name: 'Ari Updated',
       dob: '2004-02-29',
       gender: 'Open',
-      squad: 'Sprint A',
+      squadIds: [SPRINT_ID],
       notes: null,
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();

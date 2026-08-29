@@ -13,7 +13,7 @@ const participant: EventParticipantSummary = {
   eventId: EVENT_ID,
   athleteId: ATHLETE_ID,
   rsvpStatus: 'pending',
-  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null },
 };
 
 afterEach(() => {

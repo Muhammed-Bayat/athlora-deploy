@@ -37,7 +37,7 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archived_at: null,
     created_at: new Date('2026-08-01T09:00:00.000Z'),
@@ -53,7 +53,7 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archivedAt: null,
     createdAt: '2026-08-01T09:00:00.000Z',
@@ -72,7 +72,7 @@ describe('listAthletes', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('workspace_id = $1');
     expect(sql).toContain('archived_at IS NULL');
-    expect(sql).toMatch(/ORDER BY LOWER\(name\) ASC, created_at ASC, id ASC/);
+    expect(sql).toMatch(/ORDER BY LOWER\(a\.name\) ASC, a\.created_at ASC, a\.id ASC/);
     expect(parameters).toEqual([USER_ID]);
   });
 
@@ -86,16 +86,17 @@ describe('listAthletes', () => {
     expect(parameters).toEqual([USER_ID]);
   });
 
-  it('filters by case-insensitive name substring and exact squad', async () => {
+  it('filters by case-insensitive name substring and squad ID membership', async () => {
     query.mockResolvedValue({ rows: [] });
 
-    await listAthletes(USER_ID, { includeArchived: true, name: 'ari_%', squad: 'Sprint' });
+    await listAthletes(USER_ID, { includeArchived: true, name: 'ari_%', squadId: ATHLETE_ID });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('name ILIKE $2');
     expect(sql).toContain('ILIKE $2 ESCAPE');
-    expect(sql).toContain('squad = $3');
-    expect(parameters).toEqual([USER_ID, '%ari\\_\\%%', 'Sprint']);
+    expect(sql).toContain('EXISTS (SELECT 1 FROM athlete_squads');
+    expect(sql).toContain('axs.squad_id = $3');
+    expect(parameters).toEqual([USER_ID, '%ari\\_\\%%', ATHLETE_ID]);
   });
 
   it('rejects a malformed coach id without querying', async () => {
@@ -112,7 +113,7 @@ describe('getAthlete', () => {
 
     await expect(getAthlete(USER_ID, ATHLETE_ID)).resolves.toEqual(athleteBody());
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
+      expect.stringContaining('WHERE a.id = $1 AND a.workspace_id = $2'),
       [ATHLETE_ID, USER_ID],
     );
   });
@@ -137,15 +138,15 @@ describe('createAthlete', () => {
       name: 'Ari Runner',
       dob: '2010-04-12',
       gender: null,
-      squad: 'Sprint',
+      squadIds: [],
       notes: null,
-    });
+    }, { query } as never);
 
     expect(athlete).toEqual(athleteBody());
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO athletes');
     expect(sql).toContain('coach_id');
-    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
+    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, null]);
   });
 });
 
@@ -157,15 +158,15 @@ describe('replaceAthlete', () => {
       name: 'Ari Two',
       dob: null,
       gender: null,
-      squad: null,
+      squadIds: [],
       notes: null,
-    });
+    }, { query } as never);
 
     expect(athlete).toEqual(athleteBody({ name: 'Ari Two' }));
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('UPDATE athletes');
     expect(sql).not.toContain('archived_at =');
-    expect(parameters).toEqual(['Ari Two', null, null, null, null, ATHLETE_ID, USER_ID]);
+    expect(parameters).toEqual(['Ari Two', null, null, null, ATHLETE_ID, USER_ID]);
   });
 
   it('returns the generic not-found error when no owned row exists', async () => {
@@ -176,9 +177,9 @@ describe('replaceAthlete', () => {
         name: 'Ari Two',
         dob: null,
         gender: null,
-        squad: null,
+        squadIds: [],
         notes: null,
-      }),
+      }, { query } as never),
     ).rejects.toMatchObject(genericNotFound);
   });
 });

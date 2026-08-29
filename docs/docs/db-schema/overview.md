@@ -17,8 +17,10 @@ workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK
 workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invited_by, expires_at,
                        accepted_at, accepted_by, revoked_at, revoked_by)
 workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
-athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, squad, notes,
-                       archived_at, created_at, updated_at)
+athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, notes,
+                        archived_at, created_at, updated_at)
+squads               (id UUID PK, workspace_id -> workspaces, name, archived_at, created_at, updated_at)
+athlete_squads       (workspace_id, athlete_id -> athletes, squad_id -> squads) — PK (athlete_id, squad_id)
 events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
                        location_name, latitude, longitude, timezone, status)
 event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
@@ -43,6 +45,12 @@ The append-only live log — the heart of the app.
 - `device_id`: originating device for offline merge (Stage 3).
 - `deleted_at`: "undo" is a soft delete, never `DELETE`; normal timeline reads and result derivation exclude tombstones. Repeating the same undo leaves its version and timestamps unchanged.
 
+### squads and athlete_squads
+
+`squads` is the workspace-owned catalogue of managed squad names. Names are case-insensitively unique inside a workspace and squads are archived rather than deleted. `athlete_squads` allows each athlete to belong to zero or more squads, prevents duplicate membership, and carries the workspace key so both foreign keys must resolve within the same workspace.
+
+Migration `0007_workspace_squads.sql` backfills each distinct trimmed nonblank legacy `athletes.squad` value into a squad in that athlete's workspace and creates the matching membership. The old text column remains only for compatibility with pre-migration deployments; application reads and writes use the normalized tables.
+
 ### event_participants
 The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
 
@@ -50,7 +58,7 @@ The assignment set for an event. The composite primary key prevents duplicate ev
 - Existing assignments remain visible if the athlete is later archived, preserving historical participation.
 - RSVP status replacement is idempotent.
 - Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
-- Participant reads join the athlete name, squad and archive state for event detail and live-logger selection.
+- Participant reads aggregate squad names with the athlete name and archive state, so multi-squad membership never duplicates a participant row.
 
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
@@ -83,6 +91,8 @@ Migration `0005_workspace_tenancy.sql` creates workspaces and membership roles, 
 
 Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer roles to assistants, limits workspace roles to coach/assistant, and adds durable invitations plus membership audit events. Invitation tokens are persisted only as SHA-256 hashes.
 
+Migration `0007_workspace_squads.sql` adds normalized workspace squads and multi-squad athlete memberships, including the legacy text migration and indexes used by roster filters.
+
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -93,7 +103,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; and `0005_workspace_tenancy.sql` adds shared workspace tenancy. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; and `0007_workspace_squads.sql` normalizes athlete squads. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 

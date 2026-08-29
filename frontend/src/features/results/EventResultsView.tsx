@@ -38,7 +38,7 @@ interface EventResultRow extends ResultPresentationRow {
   athlete: {
     id: string;
     name: string;
-    squad: string | null;
+     squadNames?: string[];
     archivedAt: string | null;
   };
   hasMaterializedResult: boolean;
@@ -104,10 +104,15 @@ export function EventResultsView({
   const rows = sortResultPresentationRows([...athleteIds].map((athleteId): EventResultRow => {
     const participant = participantByAthlete.get(athleteId);
     const rosterAthlete = athleteById.get(athleteId);
-    const athlete = participant?.athlete ?? rosterAthlete ?? {
+    const athlete = participant?.athlete ?? (rosterAthlete && {
+      id: rosterAthlete.id,
+      name: rosterAthlete.name,
+      squadNames: rosterAthlete.squads?.map((squad) => squad.name) ?? [],
+      archivedAt: rosterAthlete.archivedAt,
+    }) ?? {
       id: athleteId,
       name: `Athlete ${athleteId.slice(0, 8)}`,
-      squad: null,
+       squadNames: [],
       archivedAt: null,
     };
     const materializedResult = resultByAthlete.get(athleteId);
@@ -177,7 +182,7 @@ export function EventResultsView({
 
               <div className={styles.identity}>
                 <strong>{row.athleteName}</strong>
-                <span>{row.athlete.squad ?? 'No squad assigned'}</span>
+                 <span>{row.athlete.squadNames?.join(', ') || 'No squad assigned'}</span>
                 <div className={styles.identityBadges}>
                   {row.athlete.archivedAt && <Badge variant="neutral">Archived</Badge>}
                   {!row.isAssigned && <Badge variant="neutral">Historical result</Badge>}

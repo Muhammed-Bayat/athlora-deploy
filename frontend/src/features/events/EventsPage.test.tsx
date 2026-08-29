@@ -98,7 +98,7 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: null,
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archivedAt: null,
     createdAt: '2026-08-16T10:00:00.000Z',
@@ -112,17 +112,17 @@ function participant(overrides: Partial<EventParticipantSummary> = {}): EventPar
     eventId: CITY_ID,
     athleteId: ARI_ID,
     rsvpStatus: 'pending',
-    athlete: { id: ARI_ID, name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
     ...overrides,
   };
 }
 
 const ari = athlete();
-const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squad: null });
+const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squads: [] });
 const ariParticipant = participant();
 const beaParticipant = participant({
   athleteId: BEA_ID,
-  athlete: { id: BEA_ID, name: 'Bea Sprinter', squad: null, archivedAt: null },
+  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null },
 });
 const currentUser: User = {
   id: '55555555-5555-4555-8555-555555555555',

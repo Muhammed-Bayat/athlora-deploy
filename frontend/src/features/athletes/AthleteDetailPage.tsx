@@ -187,7 +187,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   if (fitnessOpen) {
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
       athleteName={displayName}
-      athleteSquad={athlete?.squad ?? statistics?.athlete.squad ?? null}
+       athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
       injuries={injuries}
       onAddInjury={(injury) => setInjuries((current) => [...current, injury])}
       onResolveInjury={(injuryId) => setInjuries((current) => current.filter((injury) => injury.id !== injuryId))}
@@ -211,7 +211,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
           <h1 id="athlete-detail-heading" ref={headingRef} tabIndex={-1}>{displayName}</h1>
           <div className={styles.heroMeta}>
             <span>100m</span>
-            <span>{athlete?.squad ?? statistics?.athlete.squad ?? 'Squad not provided'}</span>
+             <span>{athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || 'Squad not provided'}</span>
             <span>{age === null ? 'Age not provided' : `${age} years`}</span>
           </div>
         </div>
@@ -257,7 +257,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
             <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
             <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
             <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
-            <div><dt>Squad</dt><dd>{athlete.squad ?? 'Not provided'}</dd></div>
+             <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
             <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
           </dl>
         )}

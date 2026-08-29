@@ -3,6 +3,7 @@ import { jwtVerify } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
 import { type AthleteRow } from '../db/row-mappers.js';
+import { withTransaction } from '../db/transaction.js';
 import type { Athlete } from '../types/domain.js';
 import { createApp } from '../app.js';
 
@@ -16,6 +17,10 @@ vi.mock('../db/client.js', () => ({
   pool: null,
 }));
 
+vi.mock('../db/transaction.js', () => ({
+  withTransaction: vi.fn(),
+}));
+
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ATHLETE_ID = '33333333-3333-4333-8333-333333333333';
 const ATHLETE_ID_2 = '44444444-4444-4444-8444-444444444444';
@@ -25,6 +30,7 @@ const app = createApp();
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getPool).mockReturnValue({ query } as unknown as ReturnType<typeof getPool>);
+  vi.mocked(withTransaction).mockImplementation(async (operation) => operation({ query } as never));
 });
 
 afterEach(() => {
@@ -55,7 +61,7 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archived_at: null,
     created_at: new Date('2026-08-01T09:00:00.000Z'),
@@ -71,7 +77,7 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archivedAt: null,
     createdAt: '2026-08-01T09:00:00.000Z',
@@ -122,20 +128,20 @@ describe('GET /api/v1/athletes', () => {
     expect(sql).not.toMatch(/archived_at IS NULL/);
   });
 
-  it('filters by name and squad', async () => {
+  it('filters by name and squad ID', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [athleteRow()] });
 
     const response = await request(app)
-      .get('/api/v1/athletes?name=ari&squad=Sprint')
+      .get(`/api/v1/athletes?name=ari&squadId=${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('name ILIKE $2');
-    expect(sql).toContain('squad = $3');
-    expect(parameters).toEqual([USER_ID, '%ari%', 'Sprint']);
+    expect(sql).toContain('axs.squad_id = $3');
+    expect(parameters).toEqual([USER_ID, '%ari%', ATHLETE_ID]);
   });
 
   it('rejects an invalid query value with the validation envelope', async () => {
@@ -179,18 +185,22 @@ describe('GET /api/v1/athletes', () => {
 describe('POST /api/v1/athletes', () => {
   it('creates an athlete scoped to the requesting coach', async () => {
     configureAuth();
-    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [athleteRow()] });
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] });
 
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Runner', dob: '2010-04-12', squad: 'Sprint' });
+      .send({ name: 'Ari Runner', dob: '2010-04-12', squadIds: [] });
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ data: athleteBody() });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO athletes');
-    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, 'Sprint', null]);
+    expect(parameters).toEqual([USER_ID, USER_ID, 'Ari Runner', '2010-04-12', null, null]);
   });
 
   it('rejects an invalid create payload', async () => {
@@ -200,7 +210,7 @@ describe('POST /api/v1/athletes', () => {
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: '   ' });
+      .send({ name: '   ', squadIds: [] });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -219,7 +229,7 @@ describe('POST /api/v1/athletes', () => {
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Runner', coachId: USER_ID, createdBy: USER_ID });
+      .send({ name: 'Ari Runner', squadIds: [], coachId: USER_ID, createdBy: USER_ID });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -284,12 +294,14 @@ describe('PUT /api/v1/athletes/:id', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [athleteRow({ name: 'Ari Two', gender: 'f' })] });
 
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Two', gender: 'f' });
+      .send({ name: 'Ari Two', gender: 'f', squadIds: [] });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: athleteBody({ name: 'Ari Two', gender: 'f' }) });
@@ -305,7 +317,7 @@ describe('PUT /api/v1/athletes/:id', () => {
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({});
+      .send({ squadIds: [] });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -324,7 +336,7 @@ describe('PUT /api/v1/athletes/:id', () => {
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Two' });
+      .send({ name: 'Ari Two', squadIds: [] });
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual(resourceNotFound);
@@ -337,6 +349,7 @@ describe('DELETE /api/v1/athletes/:id', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
       .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: new Date('2026-08-03T10:00:00.000Z') })] });
 
     const response = await request(app)
@@ -369,6 +382,7 @@ describe('POST /api/v1/athletes/:id/unarchive', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
       .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: null })] });
 
     const response = await request(app)

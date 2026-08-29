@@ -9,6 +9,7 @@ import { getAthleteStatisticsDetail } from './statistics.js';
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
+  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',
@@ -77,8 +78,8 @@ describeDB('aggregate APIs against a real database', () => {
     archived = false,
   ): Promise<string> {
     const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO athletes (coach_id, name, squad, archived_at)
-       VALUES ($1, $2, 'Sprint', ${archived ? 'now()' : 'NULL'})
+      `INSERT INTO athletes (workspace_id, coach_id, name, archived_at)
+       VALUES ($1, $1, $2, ${archived ? 'now()' : 'NULL'})
        RETURNING id`,
       [coachId, name],
     );

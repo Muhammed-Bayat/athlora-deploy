@@ -13,6 +13,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',
@@ -85,8 +86,8 @@ describeDB('event participants against a real database', () => {
 
   async function seedAthlete(coachId: string, name: string, archived = false): Promise<string> {
     const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO athletes (coach_id, name, squad, archived_at)
-       VALUES ($1, $2, 'Sprint', $3)
+      `INSERT INTO athletes (workspace_id, coach_id, name, archived_at)
+       VALUES ($1, $1, $2, $3)
        RETURNING id`,
       [coachId, name, archived ? new Date() : null],
     );
@@ -103,7 +104,7 @@ describeDB('event participants against a real database', () => {
       eventId,
       athleteId,
       rsvpStatus: 'pending',
-      athlete: { id: athleteId, name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+      athlete: { id: athleteId, name: 'Ari Runner', squadNames: [], archivedAt: null },
     });
     await expect(listEventParticipants(coachId, eventId, pool)).resolves.toEqual([assigned]);
 

@@ -93,21 +93,21 @@ describe('event participant payloads', () => {
 
 describe('athlete payloads', () => {
   it('normalizes create and replacement payloads with omitted nullable fields', () => {
-    expect(parseAthleteCreatePayload({ name: '  Ada Runner  ', dob: '2000-02-29' })).toEqual({
+    expect(parseAthleteCreatePayload({ name: '  Ada Runner  ', dob: '2000-02-29', squadIds: [] })).toEqual({
       name: 'Ada Runner',
       dob: '2000-02-29',
       gender: null,
-      squad: null,
+      squadIds: [],
       notes: null,
     });
-    expect(parseAthleteReplacementPayload({ name: 'Ada Runner' })).toEqual({
+    expect(parseAthleteReplacementPayload({ name: 'Ada Runner', squadIds: [] })).toEqual({
       name: 'Ada Runner',
       dob: null,
       gender: null,
-      squad: null,
+      squadIds: [],
       notes: null,
     });
-    expect(parseAthleteCreatePayload({ name: 'Ada Runner', squad: '   ' }).squad).toBeNull();
+    expect(parseAthleteCreatePayload({ name: 'Ada Runner', squadIds: [] }).squadIds).toEqual([]);
   });
 
   it('rejects malformed dates, blank names, unknown fields, and server fields in order', () => {
@@ -118,6 +118,7 @@ describe('athlete payloads', () => {
           dob: '2025-02-29',
           id: ATHLETE_ID,
           coachId: ATHLETE_ID,
+          squadIds: [],
           surprise: true,
         }),
       [
@@ -146,21 +147,21 @@ describe('athlete list queries', () => {
     expect(parseAthleteListQuery({})).toEqual({ includeArchived: false });
   });
 
-  it('parses includeArchived and trimmed name and squad filters', () => {
+  it('parses includeArchived and trimmed name and squad ID filters', () => {
     expect(
-      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ', squad: ' Sprint ' }),
-    ).toEqual({ includeArchived: true, name: 'ari', squad: 'Sprint' });
+      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ', squadId: ATHLETE_ID }),
+    ).toEqual({ includeArchived: true, name: 'ari', squadId: ATHLETE_ID });
     expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
   });
 
   it('rejects unknown, malformed, blank, and non-string query values', () => {
     expectValidationError(
-      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squad: 5 }),
+      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squadId: 5 }),
       [
         { path: 'includeArchived', code: 'invalid_value', message: 'Expected "true" or "false"' },
         { path: 'name', code: 'blank', message: 'Must not be blank' },
         { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
-        { path: 'squad', code: 'invalid_type', message: 'Expected a string' },
+        { path: 'squadId', code: 'invalid_type', message: 'Expected a string' },
       ],
     );
   });
