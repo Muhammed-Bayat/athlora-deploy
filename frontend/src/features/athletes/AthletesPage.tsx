@@ -5,9 +5,10 @@ import {
   listAthletes,
   unarchiveAthlete,
   updateAthlete,
+  updateAthleteStatus,
 } from '../../api/athletes';
 import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
-import type { Athlete, AthleteMutationPayload, Squad } from '../../types';
+import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
 import { listSquads } from '../../api/squads';
 import { AthleteDetailPage } from './AthleteDetailPage';
 import { AthleteForm } from './AthleteForm';
@@ -15,7 +16,7 @@ import { athleteErrorMessage as errorMessage } from './athleteError';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './AthletesPage.module.css';
 
-type ArchiveFilter = 'active' | 'archived' | 'all';
+type StatusFilter = AthleteStatus | 'all';
 type Editor = 'new' | Athlete | null;
 
 export interface AthletesPageProps {
@@ -47,6 +48,10 @@ function formatDate(value: string | null): string {
   });
 }
 
+function statusLabel(status: AthleteStatus): string {
+  return status[0].toUpperCase() + status.slice(1);
+}
+
 export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: AthletesPageProps = {}) {
   const { activeWorkspace } = useWorkspace();
   const isCoach = activeWorkspace.role === 'coach';
@@ -58,7 +63,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
   const deferredQuery = useDeferredValue(query);
   const [squadId, setSquadId] = useState('');
   const [squads, setSquads] = useState<Squad[]>([]);
-  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Athlete | null>(null);
@@ -94,7 +99,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
 
   useEffect(() => {
     if (!loading && !loadError) {
-      onActiveCountChange?.(athletes.filter((athlete) => athlete.archivedAt === null).length);
+       onActiveCountChange?.(athletes.filter((athlete) => athlete.status === 'active').length);
     }
   }, [athletes, loadError, loading, onActiveCountChange]);
 
@@ -114,14 +119,17 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
 
   const activeQuery = deferredQuery.trim().toLowerCase();
   const visible = athletes.filter((athlete) => {
-    const archiveMatches =
-      archiveFilter === 'all' ||
-      (archiveFilter === 'active' ? athlete.archivedAt === null : athlete.archivedAt !== null);
+    const statusMatches = statusFilter === 'all' || athlete.status === statusFilter;
     const queryMatches = !activeQuery || athlete.name.toLowerCase().includes(activeQuery);
     const squadMatches = !squadId || athlete.squads?.some((squad) => squad.id === squadId);
-    return archiveMatches && queryMatches && squadMatches;
+    return statusMatches && queryMatches && squadMatches;
   });
-  const hasFilters = Boolean(query || squadId || archiveFilter !== 'active');
+  const hasFilters = Boolean(query || squadId || statusFilter !== 'active');
+  const statusCounts = {
+    active: athletes.filter((athlete) => athlete.status === 'active').length,
+    inactive: athletes.filter((athlete) => athlete.status === 'inactive').length,
+    archived: athletes.filter((athlete) => athlete.status === 'archived').length,
+  };
 
   const saveEditor = async (payload: AthleteMutationPayload) => {
     const athlete = editor === 'new'
@@ -164,10 +172,24 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
     }
   };
 
+  const changeStatus = async (athlete: Athlete, status: Extract<AthleteStatus, 'active' | 'inactive'>) => {
+    setPendingId(athlete.id);
+    setActionError(null);
+    try {
+      const updated = await updateAthleteStatus(athlete.id, status);
+      storeAthlete(updated);
+      setNotice(`${updated.name} marked ${status}.`);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   const clearFilters = () => {
     setQuery('');
     setSquadId('');
-    setArchiveFilter('active');
+    setStatusFilter('active');
   };
 
   if (selectedAthleteId) {
@@ -205,17 +227,18 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
             onChange={(event) => setSquadId(event.target.value)}
             options={[{ value: '', label: 'All squads' }, ...squads.map((squad) => ({ value: squad.id, label: `${squad.name}${squad.archivedAt ? ' (archived)' : ''}` }))]}
           />
-          <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
+          <label className={styles.srOnly} htmlFor="status-filter">Filter by roster status</label>
           <Select
-            id="archive-filter"
+            id="status-filter"
             icon="status"
-            dotColors={{ active: '#0092BC', archived: '#6B8792' }}
-            value={archiveFilter}
-            onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
+            dotColors={{ active: '#0092BC', inactive: '#D8A642', archived: '#6B8792' }}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             options={[
-              { value: 'active', label: 'Active roster' },
-              { value: 'archived', label: 'Archived' },
-              { value: 'all', label: 'All athletes' },
+              { value: 'active', label: `Active (${statusCounts.active})` },
+              { value: 'inactive', label: `Inactive (${statusCounts.inactive})` },
+              { value: 'archived', label: `Archived (${statusCounts.archived})` },
+              { value: 'all', label: `All athletes (${athletes.length})` },
             ]}
           />
           {isCoach && <Button
@@ -257,9 +280,11 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
         <div className={styles.emptyPanel}>
           <EmptyState
             title={
-               !query && !squadId && archiveFilter === 'active'
+                !query && !squadId && statusFilter === 'active'
                 ? 'No active athletes'
-                 : !query && !squadId && archiveFilter === 'archived'
+                  : !query && !squadId && statusFilter === 'inactive'
+                   ? 'No inactive athletes'
+                  : !query && !squadId && statusFilter === 'archived'
                   ? 'No archived athletes'
                   : 'No athletes match your filters'
             }
@@ -275,8 +300,8 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
             <Card className={styles.card} key={athlete.id}>
               <div className={styles.cardTop}>
                 <span className={styles.avatar} aria-hidden="true">{initials(athlete.name)}</span>
-                <span className={athlete.archivedAt ? styles.archivedBadge : styles.activeBadge}>
-                  {athlete.archivedAt ? 'Archived' : 'Active'}
+                <span className={athlete.status === 'archived' ? styles.archivedBadge : athlete.status === 'inactive' ? styles.inactiveBadge : styles.activeBadge}>
+                  {statusLabel(athlete.status)}
                 </span>
               </div>
               <h2>{athlete.name}</h2>
@@ -298,25 +323,34 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                 >
                   View performance
                 </Button>
-                {isCoach && <Button
+                {isCoach && athlete.status !== 'archived' && <Button
                   variant="secondary"
                   onClick={() => setEditor(athlete)}
                   disabled={pendingId !== null}
                 >
                   Edit
                 </Button>}
-                {isCoach && (athlete.archivedAt ? (
+                {isCoach && (athlete.status === 'archived' ? (
                   <Button onClick={() => void restore(athlete)} disabled={pendingId !== null}>
                     {pendingId === athlete.id ? 'Restoring...' : 'Restore'}
                   </Button>
                 ) : (
-                  <Button
-                    variant="danger"
-                    onClick={() => setArchiveTarget(athlete)}
-                    disabled={pendingId !== null}
-                  >
-                    Archive
-                  </Button>
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void changeStatus(athlete, athlete.status === 'active' ? 'inactive' : 'active')}
+                      disabled={pendingId !== null}
+                    >
+                      {pendingId === athlete.id ? 'Saving...' : athlete.status === 'active' ? 'Mark inactive' : 'Reactivate'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => setArchiveTarget(athlete)}
+                      disabled={pendingId !== null}
+                    >
+                      Archive
+                    </Button>
+                  </>
                 ))}
               </div>
             </Card>

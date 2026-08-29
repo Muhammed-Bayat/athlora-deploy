@@ -1,6 +1,7 @@
 import { ApiError } from '../middleware/errors.js';
 import {
   DISCIPLINE_100M,
+  ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
   EVENT_STATUSES,
   EVENT_TYPES,
@@ -8,6 +9,7 @@ import {
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
   type Discipline,
+  type AthleteLifecycleStatus,
   type EntryType,
   type EventStatus,
   type EventType,
@@ -53,9 +55,14 @@ export interface AthleteReplacementPayload {
 
 export interface AthleteListQuery {
   includeArchived: boolean;
+  status?: AthleteLifecycleStatus;
   name?: string;
   squadId?: string;
   squad?: string;
+}
+
+export interface AthleteStatusPayload {
+  status: AthleteLifecycleStatus;
 }
 
 export interface EventCreatePayload {
@@ -140,7 +147,8 @@ export interface ResultOverridePayload {
 }
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squadId'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
+const ATHLETE_STATUS_FIELDS = ['status'] as const;
 const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
@@ -488,6 +496,7 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   }
 
   const name = optionalQueryString(input, 'name', issues);
+  const status = optionalQueryEnum(input, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
   const squadId = optionalQueryString(input, 'squadId', issues);
   if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
 
@@ -495,9 +504,19 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
 
   return {
     includeArchived,
+    ...(status === undefined ? {} : { status }),
     ...(name === undefined ? {} : { name }),
     ...(squadId === undefined ? {} : { squadId }),
   };
+}
+
+export function parseAthleteStatusPayload(input: unknown): AthleteStatusPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ATHLETE_STATUS_FIELDS, issues);
+  const status = requiredEnum(payload, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
+  if (issues.length > 0) throwValidation(issues);
+  return { status };
 }
 
 export function parseSquadPayload(input: unknown): { name: string } {

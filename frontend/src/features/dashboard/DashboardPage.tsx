@@ -123,6 +123,7 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
         <strong>{summary.activeAthletesCount} of {summary.athletesCount} athlete{summary.athletesCount === 1 ? '' : 's'}</strong> {summary.activeAthletesCount === 1 ? 'is' : 'are'} active,
         with <strong>{summary.upcomingEventCount} upcoming event{summary.upcomingEventCount === 1 ? '' : 's'}</strong> and
         <strong> {summary.seasonPbs} season PB{summary.seasonPbs === 1 ? '' : 's'}</strong> on the board.
+        {summary.inactiveAthletesCount > 0 && <> <strong>{summary.inactiveAthletesCount} inactive</strong> athlete{summary.inactiveAthletesCount === 1 ? '' : 's'} need roster attention.</>}
       </p>
       <div className={styles.summaryMeta}>
         <div><small>Local time</small><strong><time dateTime={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time></strong></div>
@@ -248,6 +249,16 @@ function StatRow({ summary }: { summary: DashboardSummary }) {
   );
 }
 
+function StatusAttention({ inactiveAthletesCount, statusReviewCount }: Pick<DashboardSummary, 'inactiveAthletesCount' | 'statusReviewCount'>) {
+  if (inactiveAthletesCount === 0 && statusReviewCount === 0) return null;
+  return (
+    <section className={styles.statusAttention} aria-label="Roster status attention">
+      {inactiveAthletesCount > 0 && <p><strong>{inactiveAthletesCount}</strong> inactive athlete{inactiveAthletesCount === 1 ? '' : 's'}</p>}
+      {statusReviewCount > 0 && <p><strong>{statusReviewCount}</strong> participant status review{statusReviewCount === 1 ? '' : 's'} pending</p>}
+    </section>
+  );
+}
+
 function TrendPanel({ summary }: { summary: DashboardSummary }) {
   const { labels, values } = trendBuckets(summary);
   const max = Math.max(...values, 1);
@@ -287,8 +298,10 @@ function TrendPanel({ summary }: { summary: DashboardSummary }) {
   );
 }
 
-function LiveDashboard({ activeEvent, onResumeLogging }: {
+function LiveDashboard({ activeEvent, inactiveAthletesCount, statusReviewCount, onResumeLogging }: {
   activeEvent: DashboardActiveEvent;
+  inactiveAthletesCount: number;
+  statusReviewCount: number;
   onResumeLogging: (eventId: string) => void;
 }) {
   const { event, progress, latestEntries } = activeEvent;
@@ -325,6 +338,8 @@ function LiveDashboard({ activeEvent, onResumeLogging }: {
           </div>
         </div>
       </section>
+
+      <StatusAttention inactiveAthletesCount={inactiveAthletesCount} statusReviewCount={statusReviewCount} />
 
       <section className={styles.metricGrid} aria-label="Live event progress">
         <article><strong>{progress.participantCount}</strong><span>Participants</span></article>
@@ -375,6 +390,8 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
       </section>
 
       <StatRow summary={summary} />
+
+      <StatusAttention inactiveAthletesCount={summary.inactiveAthletesCount} statusReviewCount={summary.statusReviewCount} />
 
       {(summary.athletesCount === 0 || summary.upcomingEventCount === 0) && (
         <section className={styles.onboarding} aria-label="Dashboard setup">
@@ -454,7 +471,7 @@ export function DashboardPage(props: DashboardPageProps) {
   return (
     <section className={styles.dashboard} aria-label="Dashboard overview">
       {isLive
-        ? <LiveDashboard activeEvent={summary!.activeEvent!} onResumeLogging={props.onResumeLogging} />
+        ? <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
         : <SummaryDashboard summary={summary!} onOpenRoster={props.onOpenRoster} onOpenAthlete={props.onOpenAthlete} onOpenEvents={props.onOpenEvents} onOpenEvent={props.onOpenEvent} />}
     </section>
   );

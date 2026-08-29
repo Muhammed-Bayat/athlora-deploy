@@ -32,6 +32,9 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     squads: [squad(SPRINT_ID, 'Sprint A')],
     notes: 'Starts focus',
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-01-01T00:00:00.000Z',
+    statusChangedBy: '22222222-2222-4222-8222-222222222222',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -146,10 +149,11 @@ describe('AthleteDetailPage', () => {
   });
 
   it('uses explicit placeholders for a partial archived profile', async () => {
-    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squads: [], notes: null, archivedAt: '2026-08-01T00:00:00.000Z' }));
+    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squads: [], notes: null, archivedAt: '2026-08-01T00:00:00.000Z', status: 'archived' }));
     renderDetail();
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Not provided')).toHaveLength(5);
     expect(screen.getByText('No valid result')).toBeInTheDocument();
     expect(screen.getByText('No valid result this year')).toBeInTheDocument();

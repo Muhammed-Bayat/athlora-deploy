@@ -5,7 +5,7 @@ import {
   getAthlete as getAthleteRecord,
   listAthletes as listAthletesRecords,
   replaceAthlete,
-  setAthleteArchived,
+  setAthleteStatus,
 } from '../services/athletes.js';
 import { parseAthleteListQuery } from '../validation/payloads.js';
 
@@ -52,8 +52,8 @@ export const updateAthlete: RequestHandler = async (req, res, next) => {
 
 export const deleteAthlete: RequestHandler = async (req, res, next) => {
   try {
-    const { workspaceId } = getApplicationUserContext(req);
-    const athlete = await setAthleteArchived(workspaceId, req.params.id, true);
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const athlete = await setAthleteStatus(workspaceId, userId, req.params.id, 'archived');
     res.json({ data: athlete });
   } catch (error) {
     next(error);
@@ -62,8 +62,18 @@ export const deleteAthlete: RequestHandler = async (req, res, next) => {
 
 export const unarchiveAthlete: RequestHandler = async (req, res, next) => {
   try {
-    const { workspaceId } = getApplicationUserContext(req);
-    const athlete = await setAthleteArchived(workspaceId, req.params.id, false);
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const athlete = await setAthleteStatus(workspaceId, userId, req.params.id, 'active');
+    res.json({ data: athlete });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAthleteStatus: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const athlete = await setAthleteStatus(workspaceId, userId, req.params.id, req.body.status);
     res.json({ data: athlete });
   } catch (error) {
     next(error);

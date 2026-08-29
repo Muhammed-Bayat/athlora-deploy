@@ -18,6 +18,7 @@ import { requireCoach } from '../middleware/capabilities.js';
 import {
   parseAthleteCreatePayload,
   parseAthleteReplacementPayload,
+  parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventReplacementPayload,
   parseSquadPayload,
@@ -37,6 +38,12 @@ athletesRouter.put(
 );
 athletesRouter.delete('/:id', requireCoach(), requireAthleteOwnership, athletes.deleteAthlete);
 athletesRouter.post('/:id/unarchive', requireCoach(), requireAthleteOwnership, athletes.unarchiveAthlete);
+athletesRouter.post(
+  '/:id/status',
+  requireCoach(), validateBody(parseAthleteStatusPayload),
+  requireAthleteOwnership,
+  athletes.updateAthleteStatus,
+);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);

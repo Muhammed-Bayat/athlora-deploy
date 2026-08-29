@@ -21,6 +21,9 @@ const athlete: Athlete = {
   squads: [squad],
   notes: 'Starts focus',
   archivedAt: null,
+  status: 'active',
+  statusChangedAt: '2026-08-16T10:00:00.000Z',
+  statusChangedBy: '22222222-2222-4222-8222-222222222222',
   createdAt: '2026-08-16T10:00:00.000Z',
   updatedAt: '2026-08-16T10:00:00.000Z',
 };
@@ -58,12 +61,12 @@ describe('athlete API', () => {
     const controller = new AbortController();
 
     await listAthletes(
-       { includeArchived: true, name: ' Ari & Bea ', squadId: squad.id },
+       { includeArchived: true, status: 'inactive', name: ' Ari & Bea ', squadId: squad.id },
       controller.signal,
     );
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-       `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1/athletes?includeArchived=true&name=Ari+%26+Bea&squadId=${squad.id}`,
+       `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1/athletes?includeArchived=true&status=inactive&name=Ari+%26+Bea&squadId=${squad.id}`,
     );
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ signal: controller.signal }),
@@ -108,5 +111,17 @@ describe('athlete API', () => {
     await expect(unarchiveAthlete(athlete.id)).resolves.toEqual(athlete);
     expect(fetchMock.mock.calls[0]?.[0]).toContain(`/api/v1/athletes/${athlete.id}/unarchive`);
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('changes athlete status with the exact transition payload', async () => {
+    const { updateAthleteStatus } = await import('./athletes');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ...athlete, status: 'inactive' } })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateAthleteStatus(athlete.id, 'inactive')).resolves.toEqual({ ...athlete, status: 'inactive' });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(`/api/v1/athletes/${athlete.id}/status`);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify({ status: 'inactive' }) }));
   });
 });
