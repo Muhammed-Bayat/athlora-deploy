@@ -110,6 +110,12 @@ export interface EventWeatherForecast {
   windSpeedMaxKmh: number | null;
 }
 
+export interface VenueSearchResult {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface CurrentWeather {
   timezone: string;
   temperatureC: number;

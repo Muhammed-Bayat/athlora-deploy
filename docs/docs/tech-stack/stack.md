@@ -17,6 +17,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
 | Weather | Open-Meteo | Keyless REST forecast for event venues |
+| Venue search/maps | Nominatim + OpenStreetMap | Explicit server-proxied venue lookup and read-only attributed map previews; no tile/map library |
 | Offline storage (Stage 2+) | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
 | PWA (Stage 2+) | vite-plugin-pwa | Service worker + manifest for offline shell |
 | Realtime (Stage 2+) | Socket.IO | Live broadcast of new/edited entries to event viewers |
@@ -40,6 +41,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Authentication | Auth0, `@auth0/auth0-react`, `jose` | Universal Login in the SPA and JWT verification in the API. | Coaches do not need Athlora-managed passwords. Auth0 handles identity flows while the API maps a verified subject to one local coach workspace. |
 | API protection | Helmet, CORS, ownership middleware | Security headers, origin allow-listing, authenticated user resolution, and non-enumerating resource checks. | A coach must never be able to discover or modify another coach's athletes, entries, or results. |
 | Weather | Open-Meteo | Event-day venue forecasts and the coach console's current-weather readout, both proxied by the API. | Wind, rain, and conditions matter when planning or logging athletics events; Open-Meteo provides these without storing a paid-provider API key in the project. |
+| Venue search/maps | Nominatim + OpenStreetMap | Server-side native-fetch venue lookup, existing persisted coordinates, and an iframe/external-link preview. | Avoids shipping provider credentials or a heavyweight interactive map dependency while retaining attribution, keyboard use, mobile layout, and manual coordinates. |
 | Unit and component tests | Vitest, React Testing Library, jsdom | Result rules, API wrappers, components, forms, mutations, and accessibility interactions. | Most correctness risks are in calculations and state transitions, so fast focused tests provide feedback before a coach uses the logger. |
 | API tests | Supertest | HTTP contracts, validation, ownership, lifecycle guards, and error behavior. | The frontend relies on predictable status codes and error envelopes when handling stale corrections and closed events. |
 | End-to-end tests | Playwright, axe-core/playwright | Anonymous checks plus authenticated desktop/mobile 100m vertical-slice and accessibility tests. | The real workflow crosses Auth0, the SPA, the API, and PostgreSQL; browser tests verify that a coach can complete it at a desk or track-side. |

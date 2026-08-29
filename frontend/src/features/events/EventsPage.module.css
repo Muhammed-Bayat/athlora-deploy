@@ -379,6 +379,33 @@
   font: 0.75rem var(--font-family-mono);
 }
 
+.venueLookup,
+.venuePreview {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-sm);
+  color: var(--console-muted);
+}
+
+.venueLookup legend,
+.venuePreview h3 { color: var(--console-ink); font-size: 0.9rem; font-weight: var(--font-weight-bold); }
+.venueLookup legend span { color: var(--console-faint); font-weight: var(--font-weight-normal); }
+.venueLookup p, .venuePreview p { margin: 0; font-size: var(--font-size-sm); }
+.venueLookup > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+.venueLookup button, .venueResults button { min-height: 44px; }
+.venueResults { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.venueResults button { width: 100%; display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--console-line); border-radius: var(--radius-sm); background: var(--console-row-surface); color: var(--console-ink); text-align: left; cursor: pointer; }
+.venueResults button:hover, .venueResults button:focus-visible { border-color: var(--console-focus); outline: 2px solid var(--console-focus); outline-offset: 2px; }
+.venueResults small, .venueHint, .attribution { color: var(--console-faint); font: 0.72rem var(--font-family-mono); }
+.venuePreview { margin-top: var(--space-4); background: var(--console-surface); }
+.venuePreview > header { display: flex; gap: var(--space-3); align-items: center; justify-content: space-between; }
+.venuePreview > header p { color: var(--console-cyan); font-size: 0.68rem; font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: 0.09em; }
+.venuePreview a { color: var(--console-teal); font-weight: var(--font-weight-bold); }
+.mapFrame { width: 100%; min-height: 240px; border: 0; border-radius: var(--radius-sm); background: var(--console-row-surface); }
+
 .weatherPanel {
   display: grid;
   gap: var(--space-3);
@@ -825,6 +852,9 @@
 }
 
 @media (max-width: 620px) {
+  .venueLookup > div { grid-template-columns: 1fr; }
+  .venueLookup > div button { width: 100%; }
+  .venuePreview > header { align-items: flex-start; flex-direction: column; }
   .weatherMetrics {
     grid-template-columns: 1fr;
   }

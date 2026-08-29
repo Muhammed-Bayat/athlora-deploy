@@ -250,7 +250,23 @@ precipitationMm, weatherCode, windSpeedKmh
 
 The response is `{ data: weather }`. Temperatures are Celsius, humidity is percent, precipitation is mm, wind is km/h, and `weatherCode` is a validated WMO code. Both query parameters are required, must be decimal numbers, and must fall within latitude `-90..90` and longitude `-180..180`; unknown parameters are rejected with `400 VALIDATION_ERROR`. Provider timeout, outage, or malformed data return the same safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, or `502 WEATHER_SERVICE_INVALID_RESPONSE` errors as event weather. Authentication runs before any provider request.
 
-### 4.5 Event participant
+### 4.5 Venue search
+
+| Method & path | Purpose |
+|---|---|
+| `GET /venues/search?q=` | Search OpenStreetMap venues after an explicit client action |
+
+The authenticated route accepts exactly one query field: a trimmed non-blank `q` of at most 200 characters. Unknown, missing, blank, repeated/non-string, or overlong fields return `400 VALIDATION_ERROR` before the provider boundary. It returns a stable, reduced list envelope with at most five results:
+
+```
+{ data: [{ displayName, latitude, longitude }], meta: { count } }
+```
+
+The browser never contacts Nominatim directly. `src/services/venues.ts` uses native server-side `fetch`, `NOMINATIM_BASE_URL` (default `https://nominatim.openstreetmap.org`), an identifiable `NOMINATIM_USER_AGENT`, a five-second timeout, a process-local five-minute query cache, and a process-local minimum one-second provider interval. It sends only the submitted query; the provider response is parsed strictly and reduced to the DTO above. Timeout, outage/rate-limit, and malformed payloads map to `504 VENUE_SERVICE_TIMEOUT`, `502 VENUE_SERVICE_UNAVAILABLE`, and `502 VENUE_SERVICE_INVALID_RESPONSE` without exposing provider data. This small cache/throttle is suitable for a first release, not shared across API instances.
+
+Venue search is an optional convenience, not event persistence: choosing a result fills the existing `locationName`, `latitude`, and `longitude` event fields. Users can manually type or adjust all three fields, including the coordinate "pin" position. Saved complete coordinates drive the existing weather request and read-only detail map. Event detail always exposes location/coordinates and an external OpenStreetMap link; the iframe preview is supplementary and may fail without hiding that fallback. Search results and map previews visibly attribute OpenStreetMap contributors. Respect the [Nominatim public usage policy](https://operations.osmfoundation.org/policies/nominatim/): configure a monitored contact in the User-Agent, do not implement keystroke autocomplete, keep traffic low, and replace this public endpoint with a suitable provider if usage grows. Tests must stub the Athlora endpoint/provider boundary and must never call public OSM services.
+
+### 4.6 Event participant
 
 ```
 eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'),
@@ -268,7 +284,7 @@ Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Partic
 
 Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; an archived athlete cannot be newly assigned and returns `409 ATHLETE_ARCHIVED`. Archiving an already assigned athlete does not remove the assignment, so historical participation remains visible. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
-### 4.6 Timeline entry (the live log)
+### 4.7 Timeline entry (the live log)
 
 ```
 id, eventId, athleteId, discipline ('100m'), entryType, value (number|null, seconds),
@@ -297,7 +313,7 @@ Edit uses a sparse `PATCH` body containing required positive-integer `expectedVe
 
 A stale active edit or undo returns `409 TIMELINE_ENTRY_VERSION_CONFLICT` with `details: { expectedVersion, actualVersion }`. Version comparison, ownership, event/entry parent matching, lifecycle enforcement, persistence, and result recomputation occur under the same transaction lock, so a stale request cannot overwrite newer state. Missing, deleted-for-PATCH, wrong-parent, and cross-coach resources retain the generic `404 NOT_FOUND` response.
 
-### 4.7 Result
+### 4.8 Result
 
 ```
 eventId, athleteId, discipline ('100m'), outcome, finalResult (number|null, seconds),
@@ -320,7 +336,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 **Placings:** `placing` is derived per event from effective results — derived valid results and `no_result` entries promoted by an override rank in ascending time (fastest places 1st), athletes with identical times share a place, and voided outcomes or uncorrected `no_result` entries carry `placing = null`.
 
-### 4.8 Statistics
+### 4.9 Statistics
 
 `GET /api/v1/athletes/:athleteId/statistics` returns one owner-scoped 100m summary and its purpose-built history in `{ data }`:
 
@@ -357,7 +373,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 }
 ```
 
-### 4.9 Dashboard data
+### 4.10 Dashboard data
 
 `GET /api/v1/dashboard/summary` returns one `{ data }` object with the same keys in summary and live modes:
 

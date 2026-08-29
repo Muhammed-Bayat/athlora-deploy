@@ -8,3 +8,4 @@ export * as resultsApi from './results';
 export * as statisticsApi from './statistics';
 export * as dashboardApi from './dashboard';
 export * as workspacesApi from './workspaces';
+export * as venuesApi from './venues';

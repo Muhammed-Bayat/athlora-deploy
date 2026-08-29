@@ -94,6 +94,10 @@ export interface WeatherCurrentQuery {
   longitude: number;
 }
 
+export interface VenueSearchQuery {
+  q: string;
+}
+
 export interface EventParticipantCreatePayload {
   athleteId: string;
 }
@@ -144,6 +148,7 @@ const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squadId'] as cons
 const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
+const VENUE_SEARCH_QUERY_FIELDS = ['q'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -599,6 +604,19 @@ export function parseWeatherCurrentQuery(input: Record<string, unknown>): Weathe
 
   if (issues.length > 0) throwValidation(issues);
   return { latitude: coordinates.get('latitude')!, longitude: coordinates.get('longitude')! };
+}
+
+export function parseVenueSearchQuery(input: Record<string, unknown>): VenueSearchQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, VENUE_SEARCH_QUERY_FIELDS, issues);
+  const q = optionalQueryString(input, 'q', issues);
+  if (q === undefined) {
+    if (!issues.some((entry) => entry.path === 'q')) issues.push(issue('q', 'required', 'Query is required'));
+  } else if (q.length > 200) {
+    issues.push(issue('q', 'too_long', 'Query must be 200 characters or fewer'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { q: q! };
 }
 
 function timelineStateIssues(state: TimelineEntryState): ValidationIssue[] {

@@ -9,6 +9,7 @@ import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
 import type { AthleticsEvent, EventMutationPayload, EventStatus } from '../../types';
 import { EventWeatherPanel } from './EventWeatherPanel';
+import { VenuePreview } from './VenuePreview';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
 import styles from './EventsPage.module.css';
 
@@ -99,7 +100,8 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
       <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>100m</span></div>
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Discipline</dt><dd>100m</dd></div></dl>
-      {(event.latitude !== null || event.longitude !== null) && <p className={styles.coordinates}>Coordinates: {event.latitude ?? 'Not set'}, {event.longitude ?? 'Not set'}</p>}
+       {(event.latitude !== null || event.longitude !== null) && <p className={styles.coordinates}>Coordinates: {event.latitude ?? 'Not set'}, {event.longitude ?? 'Not set'}</p>}
+       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
       <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
       <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
