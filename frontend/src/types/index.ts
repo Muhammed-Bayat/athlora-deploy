@@ -42,6 +42,7 @@ export const RESULT_UNIT_SECONDS = 'seconds' as const;
 export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
+export type AthleteStatus = 'active' | 'inactive' | 'archived';
 
 export interface Athlete {
   id: string;
@@ -53,6 +54,9 @@ export interface Athlete {
   squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
+  status: AthleteStatus;
+  statusChangedAt: string;
+  statusChangedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +80,7 @@ export interface AthleteMutationPayload {
 
 export interface AthleteListFilters {
   includeArchived?: boolean;
+  status?: AthleteStatus;
   name?: string;
   squadId?: string;
   squad?: string;
@@ -154,10 +159,12 @@ export interface EventParticipantAthleteSummary {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status: AthleteStatus;
 }
 
 export interface EventParticipantSummary extends EventParticipant {
   athlete: EventParticipantAthleteSummary;
+  statusReviewRequired: boolean;
 }
 
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
@@ -327,7 +334,9 @@ export interface DashboardSummary {
   asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
   archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
   activeEvent: DashboardActiveEvent | null;

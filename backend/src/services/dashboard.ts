@@ -110,10 +110,16 @@ export async function getDashboardSummary(
     const metricsResult = await client.query<DashboardMetricsRow>(
       `SELECT
           (SELECT COUNT(*) FROM athletes WHERE workspace_id = $1) AS athletes_count,
-         (SELECT COUNT(*) FROM athletes
-           WHERE workspace_id = $1 AND archived_at IS NULL) AS active_athletes_count,
-         (SELECT COUNT(*) FROM athletes
-           WHERE workspace_id = $1 AND archived_at IS NOT NULL) AS archived_athletes_count,
+          (SELECT COUNT(*) FROM athletes
+            WHERE workspace_id = $1 AND lifecycle_status = 'active') AS active_athletes_count,
+          (SELECT COUNT(*) FROM athletes
+            WHERE workspace_id = $1 AND lifecycle_status = 'inactive') AS inactive_athletes_count,
+          (SELECT COUNT(*) FROM athletes
+            WHERE workspace_id = $1 AND lifecycle_status = 'archived') AS archived_athletes_count,
+          (SELECT COUNT(*)
+           FROM event_participant_status_reviews epsr
+           JOIN events e ON e.id = epsr.event_id
+           WHERE e.workspace_id = $1 AND epsr.acknowledged_at IS NULL) AS status_review_count,
          (SELECT COUNT(*) FROM events
            WHERE workspace_id = $1
             AND status = 'scheduled'
@@ -243,7 +249,7 @@ export async function getDashboardSummary(
             AND e.workspace_id = $1
            AND e.status <> 'cancelled'
        ) best ON true
-        WHERE a.workspace_id = $1 AND a.archived_at IS NULL
+         WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'
        ORDER BY LOWER(a.name) ASC, a.created_at ASC, a.id ASC`,
        [workspaceId, DISCIPLINE_100M],
     );

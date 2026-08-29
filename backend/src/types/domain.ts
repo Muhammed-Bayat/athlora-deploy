@@ -23,6 +23,9 @@ export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 export const RESULT_OUTCOMES = ['no_result', 'valid', 'dq', 'dnf', 'dns'] as const;
 export type ResultOutcome = (typeof RESULT_OUTCOMES)[number];
 
+export const ATHLETE_LIFECYCLE_STATUSES = ['active', 'inactive', 'archived'] as const;
+export type AthleteLifecycleStatus = (typeof ATHLETE_LIFECYCLE_STATUSES)[number];
+
 export interface Athlete {
   id: string;
   coachId: string;
@@ -34,6 +37,9 @@ export interface Athlete {
   squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
+  status: AthleteLifecycleStatus;
+  statusChangedAt: string;
+  statusChangedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,10 +110,12 @@ export interface EventParticipantAthleteSummary {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status?: AthleteLifecycleStatus;
 }
 
 export interface EventParticipantSummary extends EventParticipant {
   athlete: EventParticipantAthleteSummary;
+  statusReviewRequired: boolean;
 }
 
 export const ENTRY_TYPES = ['attempt', 'split', 'penalty', 'note'] as const;
@@ -170,6 +178,7 @@ export interface AggregateAthleteIdentity {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status?: AthleteLifecycleStatus;
 }
 
 export interface AggregateEventIdentity {
@@ -252,7 +261,9 @@ export interface DashboardSummary {
   asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
   archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
   activeEvent: DashboardActiveEvent | null;

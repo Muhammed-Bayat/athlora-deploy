@@ -1,5 +1,5 @@
 import type { EventParticipantSummary, ApiList, RsvpStatus } from '../types';
-import { list, create, update, remove } from './client';
+import { list, create, update, remove, request } from './client';
 
 export async function listEventParticipants(
   eventId: string,
@@ -26,4 +26,10 @@ export async function updateEventParticipant(
 
 export async function removeEventParticipant(eventId: string, athleteId: string): Promise<void> {
   return remove(`events/${eventId}/participants`, athleteId);
+}
+
+export async function acknowledgeParticipantStatusReview(eventId: string, athleteId: string): Promise<void> {
+  await request<void>(`/api/v1/events/${eventId}/participants/${athleteId}/status-review/acknowledge`, {
+    method: 'POST',
+  });
 }

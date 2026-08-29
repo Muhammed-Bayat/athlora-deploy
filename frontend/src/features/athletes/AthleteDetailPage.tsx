@@ -40,6 +40,10 @@ function outcomeVariant(outcome: ResultOutcome): 'dq' | 'dnf' | 'dns' | 'neutral
   return outcome === 'dq' || outcome === 'dnf' || outcome === 'dns' ? outcome : 'neutral';
 }
 
+function statusLabel(status: Athlete['status']): string {
+  return status[0].toUpperCase() + status.slice(1);
+}
+
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
   const { event, result, effectiveOutcome, effectiveResult } = entry;
   const hasOverride = result.manualOverride !== null;
@@ -183,6 +187,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const selectedTab = activeTab ?? defaultTab;
   const activeEntries = statistics?.recentResults[selectedTab] ?? [];
   const activeResultType = selectedTab === 'competitions' ? 'competition' : 'training';
+  const isArchived = athlete?.status === 'archived';
 
   if (fitnessOpen) {
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
@@ -217,12 +222,13 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
         </div>
         <div className={styles.heroActions}>
           {athlete && (
-            <span className={athlete.archivedAt ? styles.archivedState : styles.activeState}>
-              {athlete.archivedAt ? 'Archived athlete' : 'Active athlete'}
+            <span className={athlete.status === 'archived' ? styles.archivedState : athlete.status === 'inactive' ? styles.inactiveState : styles.activeState}>
+              {statusLabel(athlete.status)} athlete
             </span>
           )}
-          {athlete && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
-          {isCoach && athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {athlete && !isArchived && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
+          {isCoach && athlete && !isArchived && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {isArchived && <span className={styles.readOnlyNotice}>Archived profiles are read-only.</span>}
         </div>
       </header>
 
@@ -256,8 +262,9 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
           <dl className={styles.profileDetails}>
             <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
             <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
-            <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
-             <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
+             <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
+              <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
+             <div><dt>Status changed</dt><dd><time dateTime={athlete.statusChangedAt}>{new Date(athlete.statusChangedAt).toLocaleDateString()}</time></dd></div>
             <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
           </dl>
         )}

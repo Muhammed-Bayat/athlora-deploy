@@ -4,6 +4,7 @@ import type { EventParticipantSummaryRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import {
   addEventParticipant,
+  acknowledgeParticipantStatusReview,
   listEventParticipants,
   removeEventParticipant,
   replaceEventParticipant,
@@ -41,6 +42,7 @@ const participant = {
     squadNames: [],
     archivedAt: null,
   },
+  statusReviewRequired: false,
 };
 
 beforeEach(() => {
@@ -128,6 +130,18 @@ describe('event participant service', () => {
     expect(sql).not.toContain('timeline_entries');
     expect(sql).not.toContain('results');
     expect(parameters).toEqual([EVENT_ID, ATHLETE_ID, USER_ID]);
+  });
+
+  it('acknowledges only the selected athlete review item within the workspace', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      acknowledgeParticipantStatusReview(USER_ID, USER_ID, EVENT_ID, ATHLETE_ID),
+    ).resolves.toBeUndefined();
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('event_participant_status_reviews');
+    expect(sql).toContain('acknowledged_at = now()');
+    expect(parameters).toEqual([USER_ID, EVENT_ID, ATHLETE_ID, USER_ID]);
   });
 
   it('uses generic not-found behavior for malformed and missing assignments', async () => {

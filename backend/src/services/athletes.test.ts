@@ -8,6 +8,7 @@ import {
   listAthletes,
   replaceAthlete,
   setAthleteArchived,
+  setAthleteStatus,
 } from './athletes.js';
 
 vi.mock('../db/client.js', () => ({
@@ -40,6 +41,9 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     squads: [],
     notes: null,
     archived_at: null,
+    lifecycle_status: 'active',
+    status_changed_at: new Date('2026-08-01T09:00:00.000Z'),
+    status_changed_by: USER_ID,
     created_at: new Date('2026-08-01T09:00:00.000Z'),
     updated_at: new Date('2026-08-01T09:00:00.000Z'),
     ...overrides,
@@ -56,6 +60,9 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-01T09:00:00.000Z',
+    statusChangedBy: USER_ID,
     createdAt: '2026-08-01T09:00:00.000Z',
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
@@ -71,7 +78,7 @@ describe('listAthletes', () => {
     expect(athletes).toEqual([athleteBody()]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('workspace_id = $1');
-    expect(sql).toContain('archived_at IS NULL');
+    expect(sql).toContain("lifecycle_status <> 'archived'");
     expect(sql).toMatch(/ORDER BY LOWER\(a\.name\) ASC, a\.created_at ASC, a\.id ASC/);
     expect(parameters).toEqual([USER_ID]);
   });
@@ -82,7 +89,7 @@ describe('listAthletes', () => {
     await listAthletes(USER_ID, { includeArchived: true });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).not.toContain('archived_at IS NULL');
+    expect(sql).not.toContain("lifecycle_status <> 'archived'");
     expect(parameters).toEqual([USER_ID]);
   });
 
@@ -220,5 +227,36 @@ describe('setAthleteArchived', () => {
       genericNotFound,
     );
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('setAthleteStatus', () => {
+  it('records an actor-attributed transition and flags existing assignments for review', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'active' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: '55555555-5555-4555-8555-555555555555' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [athleteRow({ lifecycle_status: 'inactive' })] });
+
+    const athlete = await setAthleteStatus(USER_ID, USER_ID, ATHLETE_ID, 'inactive', { query } as never);
+
+    expect(athlete.status).toBe('inactive');
+    expect(query.mock.calls[1]?.[0]).toContain('status_changed_by = $2');
+    expect(query.mock.calls[2]?.[0]).toContain('athlete_status_transitions');
+    expect(query.mock.calls[2]?.[1]).toEqual([USER_ID, ATHLETE_ID, 'active', 'inactive', USER_ID]);
+    expect(query.mock.calls[3]?.[0]).toContain('event_participant_status_reviews');
+  });
+
+  it('is a no-op when the requested status is already current', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'active' }] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] });
+
+    await expect(
+      setAthleteStatus(USER_ID, USER_ID, ATHLETE_ID, 'active', { query } as never),
+    ).resolves.toMatchObject({ status: 'active' });
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[0]?.[0]).toContain('FOR UPDATE');
   });
 });

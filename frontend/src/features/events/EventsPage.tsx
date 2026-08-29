@@ -5,6 +5,7 @@ import { createEvent, listEvents, updateEvent } from '../../api/events';
 import { listAthletes } from '../../api/athletes';
 import {
   addEventParticipant,
+  acknowledgeParticipantStatusReview,
   listEventParticipants,
   removeEventParticipant,
   updateEventParticipant,
@@ -156,6 +157,10 @@ export function formattedType(type: EventType): string {
 
 function formattedRsvp(status: RsvpStatus): string {
   return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : 'pending';
+}
+
+function formattedAthleteStatus(status: Athlete['status']): string {
+  return status[0].toUpperCase() + status.slice(1);
 }
 
 export function formattedDate(date: string, long = false): string {
@@ -399,9 +404,9 @@ export function ParticipantManager({
     let current = true;
     setAthletesLoading(true);
     setAthletesError(null);
-    void listAthletes({ includeArchived: false })
+    void listAthletes({ status: 'active' })
       .then(({ data }) => {
-        if (current) setAthletes(data.filter((athlete) => athlete.archivedAt === null));
+        if (current) setAthletes(data.filter((athlete) => athlete.status === 'active'));
       })
       .catch((error: unknown) => {
         if (current) setAthletesError(errorMessage(error));
@@ -453,6 +458,23 @@ export function ParticipantManager({
     }
   };
 
+  const acknowledgeStatusReview = async (participant: EventParticipantSummary) => {
+    setBusy(`review-${participant.athleteId}`);
+    setMutationError(null);
+    setFeedback(null);
+    try {
+      await acknowledgeParticipantStatusReview(eventId, participant.athleteId);
+      setParticipants((current) => current.map((item) =>
+        item.athleteId === participant.athleteId ? { ...item, statusReviewRequired: false } : item,
+      ));
+      setFeedback(`Status review acknowledged for ${participant.athlete.name}.`);
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const remove = async () => {
     if (!removeTarget) return;
     setBusy(`remove-${removeTarget.athleteId}`);
@@ -490,14 +512,15 @@ export function ParticipantManager({
           {participants.map((participant) => {
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
             return <li key={participant.athleteId}>
-              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
-               {isCoach && <><label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
+              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
+                {isCoach && <><label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
                <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
-               ]} disabled={Boolean(busy)} />
-               <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button></>}
+                ]} disabled={Boolean(busy)} />
+                {participant.statusReviewRequired && <Button variant="secondary" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void acknowledgeStatusReview(participant); }} disabled={Boolean(busy)}>{busy === `review-${participant.athleteId}` ? 'Acknowledging...' : 'Acknowledge review'}</Button>}
+                <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button></>}
             </li>;
           })}
         </ul>

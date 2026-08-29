@@ -39,5 +39,11 @@ router.delete(
   requireParticipantOwnership,
   participants.removeEventParticipant,
 );
+router.post(
+  '/:eventId/participants/:athleteId/status-review/acknowledge',
+  requireCoach(),
+  requireParticipantOwnership,
+  participants.acknowledgeParticipantStatusReview,
+);
 
 export default router;

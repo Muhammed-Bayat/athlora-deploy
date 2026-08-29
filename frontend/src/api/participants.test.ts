@@ -4,6 +4,7 @@ import {
   addEventParticipant,
   listEventParticipants,
   removeEventParticipant,
+  acknowledgeParticipantStatusReview,
   updateEventParticipant,
 } from './participants';
 
@@ -13,7 +14,8 @@ const participant: EventParticipantSummary = {
   eventId: EVENT_ID,
   athleteId: ATHLETE_ID,
   rsvpStatus: 'pending',
-  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null },
+  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null, status: 'active' },
+  statusReviewRequired: false,
 };
 
 afterEach(() => {
@@ -68,5 +70,14 @@ describe('participant API', () => {
     await expect(removeEventParticipant(EVENT_ID, ATHLETE_ID)).resolves.toBeUndefined();
     expect(fetchMock.mock.calls[0]?.[0]).toContain(`/events/${EVENT_ID}/participants/${ATHLETE_ID}`);
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('acknowledges a participant status review', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(acknowledgeParticipantStatusReview(EVENT_ID, ATHLETE_ID)).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(`/events/${EVENT_ID}/participants/${ATHLETE_ID}/status-review/acknowledge`);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
   });
 });

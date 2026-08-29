@@ -1381,3 +1381,24 @@ button.resultRow:hover {
   .liveKicker span { animation: none; }
   .summaryKicker span { animation: none; }
 }
+
+.statusAttention {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(226, 102, 79, 0.28);
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, rgba(226, 102, 79, 0.12), rgba(244, 201, 93, 0.08));
+  color: var(--ui-text);
+}
+
+.statusAttention p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.statusAttention strong {
+  color: var(--cyan-200);
+  font-family: var(--font-family-mono);
+}

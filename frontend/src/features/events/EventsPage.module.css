@@ -493,7 +493,7 @@
 
 .participantList li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.45fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.45fr) auto auto;
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-3);
@@ -529,6 +529,21 @@
   color: var(--console-badge-danger-text);
   font-style: normal;
   font-weight: var(--font-weight-bold);
+}
+
+.participantIdentity i[data-status='active'] {
+  background: var(--console-soft);
+  color: var(--console-teal);
+}
+
+.participantIdentity i[data-status='inactive'] {
+  background: color-mix(in srgb, #f4c95d 24%, var(--console-soft));
+  color: #8a6200;
+}
+
+.participantIdentity .reviewBadge {
+  background: color-mix(in srgb, var(--console-danger-surface) 26%, var(--console-soft));
+  color: var(--console-danger-text);
 }
 
 .participantList button {

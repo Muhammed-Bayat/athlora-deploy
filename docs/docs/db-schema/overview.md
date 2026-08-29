@@ -18,12 +18,15 @@ workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invite
                        accepted_at, accepted_by, revoked_at, revoked_by)
 workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
 athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, notes,
-                        archived_at, created_at, updated_at)
+                         lifecycle_status, archived_at, status_changed_at, status_changed_by, created_at, updated_at)
+athlete_status_transitions (id UUID PK, workspace_id, athlete_id, from_status, to_status, changed_by, changed_at)
 squads               (id UUID PK, workspace_id -> workspaces, name, archived_at, created_at, updated_at)
 athlete_squads       (workspace_id, athlete_id -> athletes, squad_id -> squads) — PK (athlete_id, squad_id)
 events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
                        location_name, latitude, longitude, timezone, status)
 event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
+event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status, flagged_at,
+                                  acknowledged_at, acknowledged_by) — PK (event_id, athlete_id)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
@@ -60,6 +63,12 @@ The assignment set for an event. The composite primary key prevents duplicate ev
 - Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
 - Participant reads aggregate squad names with the athlete name and archive state, so multi-squad membership never duplicates a participant row.
 
+### athlete lifecycle
+
+`athletes.lifecycle_status` is constrained to `active`, `inactive`, or `archived`. The current transition is recorded on the athlete row for efficient reads; `athlete_status_transitions` preserves every real change with its actor and timestamp. Legacy rows are backfilled as active or archived without fabricating an actor.
+
+Any real transition upserts a pending `event_participant_status_reviews` row for each existing assignment. The `(event_id, athlete_id)` key makes a review item independent per athlete and a later transition resets only that athlete's acknowledgement. Historical participant, timeline, result, squad, and injury data remains untouched.
+
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
 
@@ -93,6 +102,8 @@ Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer role
 
 Migration `0007_workspace_squads.sql` adds normalized workspace squads and multi-squad athlete memberships, including the legacy text migration and indexes used by roster filters.
 
+Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, current actor/timestamp metadata, transition audit rows, and per-assignment coach-review records.
+
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -103,7 +114,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; and `0007_workspace_squads.sql` normalizes athlete squads. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; and `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 

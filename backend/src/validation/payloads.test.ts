@@ -5,6 +5,7 @@ import {
   parseAthleteCreatePayload,
   parseAthleteListQuery,
   parseAthleteReplacementPayload,
+  parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventListQuery,
   parseEventParticipantCreatePayload,
@@ -154,6 +155,10 @@ describe('athlete list queries', () => {
     expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
   });
 
+  it('parses an exact lifecycle status filter', () => {
+    expect(parseAthleteListQuery({ status: 'inactive' })).toEqual({ includeArchived: false, status: 'inactive' });
+  });
+
   it('rejects unknown, malformed, blank, and non-string query values', () => {
     expectValidationError(
       () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squadId: 5 }),
@@ -164,6 +169,15 @@ describe('athlete list queries', () => {
         { path: 'squadId', code: 'invalid_type', message: 'Expected a string' },
       ],
     );
+  });
+});
+
+describe('athlete lifecycle payloads', () => {
+  it('accepts only a supported target status', () => {
+    expect(parseAthleteStatusPayload({ status: 'archived' })).toEqual({ status: 'archived' });
+    expectValidationError(() => parseAthleteStatusPayload({ status: 'paused' }), [
+      { path: 'status', code: 'invalid_value', message: 'Expected one of: active, inactive, archived' },
+    ]);
   });
 });
 

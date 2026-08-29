@@ -101,6 +101,9 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-16T10:00:00.000Z',
+    statusChangedBy: '55555555-5555-4555-8555-555555555555',
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -112,7 +115,8 @@ function participant(overrides: Partial<EventParticipantSummary> = {}): EventPar
     eventId: CITY_ID,
     athleteId: ARI_ID,
     rsvpStatus: 'pending',
-    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null, status: 'active' },
+    statusReviewRequired: false,
     ...overrides,
   };
 }
@@ -122,7 +126,7 @@ const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squads: [] });
 const ariParticipant = participant();
 const beaParticipant = participant({
   athleteId: BEA_ID,
-  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null },
+  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null, status: 'active' },
 });
 const currentUser: User = {
   id: '55555555-5555-4555-8555-555555555555',
@@ -370,7 +374,7 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Assigned athletes 1');
     expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
-    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: false });
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ status: 'active' });
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
 
@@ -555,7 +559,7 @@ describe('EventsPage', () => {
 
   it('keeps archived historical participants visible but out of assignment candidates', async () => {
     participantApi.listEventParticipants.mockResolvedValue({
-      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z' } })],
+      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z', status: 'archived' } })],
       meta: { count: 1 },
     });
     athleteApi.listAthletes.mockResolvedValue({ data: [bea], meta: { count: 1 } });

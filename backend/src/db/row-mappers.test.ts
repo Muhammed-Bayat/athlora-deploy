@@ -66,6 +66,9 @@ const athleteRow: AthleteRow = {
   squads: [],
   notes: 'Returning from injury',
   archived_at: null,
+  lifecycle_status: 'active',
+  status_changed_at: INPUT_TIMESTAMP,
+  status_changed_by: USER_ID,
   created_at: INPUT_TIMESTAMP,
   updated_at: INPUT_TIMESTAMP,
 };
@@ -255,6 +258,9 @@ describe('PostgreSQL row mapping', () => {
       squads: [],
       notes: 'Returning from injury',
       archivedAt: null,
+      status: 'active',
+      statusChangedAt: ISO_TIMESTAMP,
+      statusChangedBy: USER_ID,
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
     });
@@ -335,6 +341,7 @@ describe('PostgreSQL row mapping', () => {
         squadNames: [],
         archivedAt: null,
       },
+      statusReviewRequired: false,
     });
     expect(
       mapEventParticipantSummaryRow(
@@ -499,7 +506,9 @@ describe('PostgreSQL row mapping', () => {
     expect(mapDashboardMetricsRow(metricsRow)).toEqual({
       athletesCount: 30,
       activeAthletesCount: 28,
+      inactiveAthletesCount: 0,
       archivedAthletesCount: 2,
+      statusReviewCount: 0,
       upcomingEventCount: 3,
       seasonPbs: 7,
     });
