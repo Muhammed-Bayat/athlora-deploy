@@ -5,6 +5,8 @@ import styles from './App.module.css';
 import { CoachConsole } from './features/dashboard/CoachConsole';
 import { LandingPage } from './features/landing/LandingPage';
 import { acceptWorkspaceInvitation } from './api/workspaces';
+import { respondToFixtureInvitation } from './api/fixtures';
+import { Button, Input } from './components';
 import { useWorkspace } from './features/auth/WorkspaceContext';
 
 export default function App() {
@@ -17,7 +19,7 @@ function AppRoutes() {
   const returnTo = `${location.pathname}${location.search}${location.hash}`;
 
   const openConsole = () => {
-    void loginWithRedirect({ appState: { returnTo: returnTo.startsWith('/console') || /^\/invitations\/[^/]+$/.test(returnTo) ? returnTo : '/console' } });
+    void loginWithRedirect({ appState: { returnTo: returnTo.startsWith('/console') || /^\/(?:invitations|fixture-invitations)\/[^/]+$/.test(returnTo) ? returnTo : '/console' } });
   };
   const createAccount = () => {
     void loginWithRedirect({ authorizationParams: { screen_hint: 'signup' }, appState: { returnTo: returnTo.startsWith('/console') ? returnTo : '/console' } });
@@ -40,9 +42,29 @@ function AppRoutes() {
   return <Routes>
     <Route path="/" element={<Navigate to="/console" replace />} />
     <Route path="/invitations/:token" element={<InvitationAcceptance />} />
+    <Route path="/fixture-invitations/:token" element={<FixtureInvitationAcceptance />} />
     <Route path="/console/*" element={<CoachConsole />} />
     <Route path="*" element={<Navigate to="/console" replace />} />
   </Routes>;
+}
+
+function FixtureInvitationAcceptance() {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const respond = async (response: 'accepted' | 'declined' | 'change_requested') => {
+    if (!token) return;
+    setBusy(true); setError(null);
+    try {
+      await respondToFixtureInvitation(token, response, response === 'change_requested' ? message : undefined);
+      navigate('/console/fixtures', { replace: true });
+    } catch (responseError) {
+      setError(responseError instanceof Error ? responseError.message : 'Could not respond to this fixture invitation.');
+    } finally { setBusy(false); }
+  };
+  return <main className={styles.loading}><h1>Fixture invitation</h1><p>Respond as a coach in the currently selected workspace.</p>{error && <p role="alert">{error}</p>}<div><Button onClick={() => void respond('accepted')} disabled={busy}>Accept fixture</Button><Button variant="secondary" onClick={() => void respond('declined')} disabled={busy}>Decline</Button></div><label htmlFor="fixture-change-message">Request a change</label><Input id="fixture-change-message" value={message} onChange={(change) => setMessage(change.target.value)} disabled={busy} /><Button variant="secondary" onClick={() => void respond('change_requested')} disabled={busy || !message.trim()}>Send change request</Button></main>;
 }
 
 function InvitationAcceptance() {

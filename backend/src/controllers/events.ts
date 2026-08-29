@@ -43,8 +43,8 @@ export const createEvent: RequestHandler = async (req, res, next) => {
 
 export const updateEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { workspaceId } = getApplicationUserContext(req);
-    const event = await replaceEvent(workspaceId, req.params.id, req.body);
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const event = await replaceEvent(workspaceId, req.params.id, req.body, undefined, userId);
     res.json({ data: event });
   } catch (error) {
     next(error);

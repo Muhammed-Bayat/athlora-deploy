@@ -186,10 +186,9 @@ export async function setAthleteStatus(
     if (!transitionId) throw new Error('Athlete lifecycle transition was not recorded');
     await client.query(
       `INSERT INTO event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status)
-       SELECT ep.event_id, ep.athlete_id, $1, $2
-       FROM event_participants ep
-       JOIN events e ON e.id = ep.event_id
-       WHERE ep.athlete_id = $3 AND e.workspace_id = $4
+        SELECT ep.event_id, ep.athlete_id, $1, $2
+        FROM event_participants ep
+        WHERE ep.athlete_id = $3 AND ep.participant_workspace_id = $4
        ON CONFLICT (event_id, athlete_id) DO UPDATE
        SET transition_id = EXCLUDED.transition_id,
            lifecycle_status = EXCLUDED.lifecycle_status,

@@ -14,7 +14,7 @@ This Playwright package validates the current 100m coaching workflow across the 
 
 - Node.js 22 LTS and npm.
 - Docker Desktop or another disposable PostgreSQL 16 database.
-- An Auth0 test user with access to Athlora.
+- Two Auth0 test users with access to Athlora: a host coach and a guest coach.
 - Chromium, installed by the Playwright setup command.
 
 ## Installation Guide
@@ -29,7 +29,7 @@ Configure and run the suite:
 
 ```bash
 cp e2e/.env.example e2e/.env
-# Set the Auth0 test-user credentials in e2e/.env.
+# Set both host and guest Auth0 test-user credentials in e2e/.env.
 cd e2e
 npm install
 npm run test:install
@@ -46,7 +46,7 @@ Run all Playwright projects:
 npm test
 ```
 
-The configuration starts the API on port `4100` and Vite on port `5174`. It runs an Auth0 setup project, anonymous smoke checks, desktop Chromium, and Pixel 5 workflows. Test reports are written to `playwright-report/`.
+The configuration starts the API on port `4100` and Vite on port `5174`. It prepares separate host and guest Auth0 browser states for cross-workspace fixture flows, then runs anonymous smoke checks, desktop Chromium, and Pixel 5 workflows. Test reports are written to `playwright-report/`.
 
 ## Scripts
 

@@ -167,6 +167,43 @@ export interface EventParticipantSummary extends EventParticipant {
   statusReviewRequired: boolean;
 }
 
+export type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
+export type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'withdrawn';
+
+export interface FixtureInvitation {
+  id: string;
+  eventId: string;
+  email: string;
+  revision: number;
+  status: FixtureInvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+  targetWorkspaceId: string | null;
+  responseMessage: string | null;
+  respondedAt: string | null;
+  token?: string;
+}
+
+export interface FixtureTeam {
+  workspaceId: string;
+  workspaceName: string;
+  status: FixtureWorkspaceStatus;
+  acceptedRevision: number;
+  withdrawnAt: string | null;
+}
+
+export interface FixtureDetail {
+  event: AthleticsEvent;
+  revision: number;
+  teamStatus: FixtureWorkspaceStatus;
+  teams: FixtureTeam[];
+}
+
+export interface FixtureTeamRoster {
+  team: FixtureTeam;
+  participants: EventParticipantSummary[];
+}
+
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
 export type IncidentType = 'false_start' | 'dq' | 'dnf' | 'dns' | 'lane_infringement' | null;
 

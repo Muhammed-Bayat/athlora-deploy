@@ -122,8 +122,8 @@ export async function addEventParticipant(
     }
 
     const inserted = await client.query(
-      `INSERT INTO event_participants (event_id, athlete_id)
-       VALUES ($1, $2)
+      `INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id)
+       SELECT $1, $2, workspace_id FROM athletes WHERE id = $2
        RETURNING event_id`,
       [ownedEventId, payload.athleteId],
     );

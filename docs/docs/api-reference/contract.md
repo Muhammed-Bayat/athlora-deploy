@@ -110,6 +110,32 @@ Workspace roles are only `coach` and `assistant`. Coaches manage memberships and
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
+### 3.2 Fixture access
+
+A fixture connects one hosted, scheduled 100m competition to one or more guest workspaces without granting those workspaces membership in the host workspace. Fixture invitations are email-bound, token-hashed, copy/share links. They are not email delivery records. Only coaches may create invitations, respond, manage a fixture roster, or record/correct their team's results.
+
+| Method & path | Actor | Purpose |
+|---|---|---|
+| `POST /events/:eventId/fixture-invitations` | Host coach | Create a pending invitation; body `{ email, expiresInDays? }` |
+| `GET /events/:eventId/fixture-invitations` | Host workspace | Read invitation state and response history summary |
+| `POST /events/:eventId/fixture-invitations/:invitationId/resend` | Host coach | Revoke and replace a pending/declined/change-request invitation |
+| `DELETE /events/:eventId/fixture-invitations/:invitationId` | Host coach | Revoke an unused invitation |
+| `GET /events/:eventId/fixture-rosters` | Host workspace | Read participating-team rosters using the fixture-safe athlete summary |
+| `POST /events/:eventId/fixture-workspaces/:workspaceId/withdrawal` | Host coach | Record a guest withdrawal after start while preserving history |
+| `POST /fixtures/invitations/:token/respond` | Invited coach | Accept, decline, or request a change; body `{ response, message? }` |
+| `GET /fixtures` / `GET /fixtures/:eventId` | Accepted guest workspace | List/read fixture-safe details |
+| `GET|POST|PUT|DELETE /fixtures/:eventId/participants` | Accepted guest coach | Read/manage only the active guest workspace's roster and RSVP state |
+| `POST /fixtures/:eventId/withdrawal` | Guest coach | Withdraw before start |
+| `GET|POST|PATCH|DELETE /fixtures/:eventId/entries` | Accepted guest coach | Read/write only the guest team's timeline entries |
+| `GET /fixtures/:eventId/results` | Accepted guest workspace | Read only the guest team's results |
+| `PUT /fixtures/:eventId/results/:athleteId` | Accepted guest coach | Correct only the guest team's result |
+
+The invitation state machine is `pending -> accepted|declined|change_requested|revoked`; expiry makes a pending/change-request invitation unavailable. Every response is retained with its acting user, workspace and fixture revision. A guest acceptance creates the participating workspace relationship. A team may be `accepted`, `reacceptance_required`, or `withdrawn`.
+
+Changing a fixture's date, time, venue (including coordinates), or accepted participating-team set increments `fixtureRevision`, retains selected rosters, replaces outstanding reacceptance links, and marks guest teams `reacceptance_required`. The host cannot move a fixture out of `scheduled` until all non-withdrawn guests have accepted the current revision. Material changes and roster changes are unavailable after the fixture begins. Before start, a guest coach may withdraw its team; after start, only the host records a withdrawal. Neither withdrawal deletes participant, timeline, or result history.
+
+Guest responses and fixture reads reveal only the fixture metadata, participating-team display names, and the caller's own athlete summaries/results. They never expose another workspace's roster, athlete notes, date of birth, injury/private profile data, or unrelated workspace resources. Host fixture-roster reads use the same safe participant summary and never expose guest private athlete fields.
+
 ## 4. DTOs
 
 Field names are camelCase on the wire. Calendar dates are real Gregorian `YYYY-MM-DD` values. Local event clock times accept `HH:mm` or `HH:mm:ss` and are serialized as `HH:mm:ss` without timezone conversion. `createdAt`/`updatedAt` (and `archivedAt`, `overrideAt`) are `timestamptz` ISO 8601 strings.

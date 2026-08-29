@@ -271,6 +271,7 @@ async function lockOwnedEntry(
   workspaceId: string,
   eventId: string,
   entryId: string,
+  allowFixtureAccess = false,
 ): Promise<{ entry: TimelineEntry; eventType: EventType; eventStatus: EventStatus }> {
   const result = await client.query<LockedEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS},
@@ -279,12 +280,20 @@ async function lockOwnedEntry(
      FROM timeline_entries te
      JOIN events e ON e.id = te.event_id
      JOIN athletes a ON a.id = te.athlete_id
-     WHERE te.id = $1
-       AND te.event_id = $2
-        AND e.workspace_id = $3
-        AND a.workspace_id = $3
-     FOR UPDATE OF e, a, te`,
-    [entryId, eventId, workspaceId],
+      WHERE te.id = $1
+        AND te.event_id = $2
+        AND (
+          (e.workspace_id = $3 AND a.workspace_id = $3)
+          OR ($4::boolean AND a.workspace_id = $3 AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id
+              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))
+        )
+      FOR UPDATE OF e, a, te`,
+    [entryId, eventId, workspaceId, allowFixtureAccess],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -299,19 +308,31 @@ export async function listTimelineEntries(
   workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
+  allowFixtureAccess = false,
 ): Promise<TimelineEntry[]> {
   const [ownedEventId] = scopedIds(workspaceId, eventId);
+  const fixtureCondition = allowFixtureAccess
+    ? `OR ($3::boolean AND a.workspace_id = $2 AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id
+              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))`
+    : '';
   const result = await executor.query<TimelineEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS}
      FROM timeline_entries te
      JOIN events e ON e.id = te.event_id
      JOIN athletes a ON a.id = te.athlete_id
-     WHERE te.event_id = $1
-       AND te.deleted_at IS NULL
-        AND e.workspace_id = $2
-        AND a.workspace_id = $2
-     ORDER BY te.created_at ASC, te.id ASC`,
-    [ownedEventId, workspaceId],
+      WHERE te.event_id = $1
+        AND te.deleted_at IS NULL
+        AND (
+          (e.workspace_id = $2 AND a.workspace_id = $2)
+          ${fixtureCondition}
+        )
+      ORDER BY te.created_at ASC, te.id ASC`,
+    allowFixtureAccess ? [ownedEventId, workspaceId, true] : [ownedEventId, workspaceId],
   );
   return result.rows.map(mapTimelineEntryRow);
 }
@@ -322,16 +343,26 @@ export async function createTimelineEntry(
   payload: TimelineEntryCreatePayload,
   runTransaction: TransactionRunner = withTransaction,
   workspaceId = userId,
+  allowFixtureAccess = false,
 ): Promise<TimelineEntry> {
   const [ownedEventId] = scopedIds(workspaceId, eventId, payload.athleteId);
   return runTransaction(async (client) => {
     const locked = await client.query<LockedEventRow>(
       `SELECT e.type, e.status
-       FROM events e
-       JOIN athletes a ON a.id = $2
-        WHERE e.id = $1 AND e.workspace_id = $3 AND a.workspace_id = $3
-       FOR UPDATE OF e, a`,
-       [ownedEventId, payload.athleteId, workspaceId],
+        FROM events e
+        JOIN athletes a ON a.id = $2
+        WHERE e.id = $1 AND (
+          (e.workspace_id = $3 AND a.workspace_id = $3)
+          OR ($4::boolean AND a.workspace_id = $3 AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id
+              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))
+        )
+        FOR UPDATE OF e, a`,
+        [ownedEventId, payload.athleteId, workspaceId, allowFixtureAccess],
     );
     const event = locked.rows[0];
     if (!event) throw notFound();
@@ -368,14 +399,16 @@ export async function updateTimelineEntry(
   entryId: unknown,
   patch: TimelineEntryPatchPayload,
   runTransaction: TransactionRunner = withTransaction,
+  allowFixtureAccess = false,
 ): Promise<TimelineEntry> {
   const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   return runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
        workspaceId,
-      ownedEventId,
-      ownedEntryId,
+       ownedEventId,
+       ownedEntryId,
+       allowFixtureAccess,
     );
     if (entry.deletedAt !== null) throw notFound();
     assertLoggingOpen(eventStatus);
@@ -423,14 +456,16 @@ export async function removeTimelineEntry(
   entryId: unknown,
   payload: TimelineEntryDeletePayload,
   runTransaction: TransactionRunner = withTransaction,
+  allowFixtureAccess = false,
 ): Promise<void> {
   const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   await runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
        workspaceId,
-      ownedEventId,
-      ownedEntryId,
+       ownedEventId,
+       ownedEntryId,
+       allowFixtureAccess,
     );
     if (entry.deletedAt !== null) {
       if (entry.version === payload.expectedVersion + 1) return;
