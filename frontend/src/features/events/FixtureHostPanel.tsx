@@ -12,6 +12,9 @@ import { Button, Card, Input } from '../../components';
 import type { AthleticsEvent, FixtureInvitation, FixtureTeamRoster } from '../../types';
 
 function message(error: unknown): string {
+  if (error instanceof ApiError && error.status === 404 && error.code === 'NOT_FOUND') {
+    return 'This event is unavailable in the selected workspace. Select its host workspace and reopen the event.';
+  }
   return error instanceof ApiError ? error.message : 'Fixture details could not be updated.';
 }
 

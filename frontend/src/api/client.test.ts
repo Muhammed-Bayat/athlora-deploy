@@ -5,6 +5,7 @@ import {
   get,
   list,
   remove,
+  setActiveWorkspaceId,
   setAccessTokenGetter,
   syncCurrentUser,
 } from './client';
@@ -21,6 +22,7 @@ const synchronizedUser: User = {
 
 afterEach(() => {
   setAccessTokenGetter(undefined);
+  setActiveWorkspaceId(undefined);
   vi.unstubAllGlobals();
 });
 
@@ -73,6 +75,25 @@ describe('API client', () => {
     );
     const requestInit = fetchMock.mock.calls[0]?.[1];
     expect(new Headers(requestInit?.headers).get('Authorization')).toBe('Bearer access-token');
+  });
+
+  it('keeps the workspace selected when an authenticated request begins', async () => {
+    let resolveToken: (value: string) => void;
+    const token = new Promise<string>((resolve) => { resolveToken = resolve; });
+    setActiveWorkspaceId('workspace-a');
+    setAccessTokenGetter(() => token);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: synchronizedUser }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const requestPromise = get<User>('users', 'user-1');
+    setActiveWorkspaceId('workspace-b');
+    resolveToken!('access-token');
+    await requestPromise;
+
+    const requestInit = fetchMock.mock.calls[0]?.[1];
+    expect(new Headers(requestInit?.headers).get('X-Workspace-Id')).toBe('workspace-a');
   });
 
   it('handles single and list envelopes and an empty success body', async () => {

@@ -85,6 +85,8 @@ async function readBody(response: Response): Promise<unknown> {
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const tokenGetter = getAccessToken;
+  // Keep an action in the workspace in which it began while Auth0 obtains its token.
+  const workspaceId = activeWorkspaceId;
   let accessToken: string | undefined;
   if (tokenGetter) {
     try {
@@ -105,8 +107,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (accessToken && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
-  if (activeWorkspaceId && !headers.has('X-Workspace-Id')) {
-    headers.set('X-Workspace-Id', activeWorkspaceId);
+  if (workspaceId && !headers.has('X-Workspace-Id')) {
+    headers.set('X-Workspace-Id', workspaceId);
   }
 
   let response: Response;
