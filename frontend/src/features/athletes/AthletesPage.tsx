@@ -9,7 +9,10 @@ import {
 } from '../../api/athletes';
 import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
 import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
+import type { AthleteActiveInjurySummary } from '../../types';
+import { listAthleteInjurySummaries } from '../../api/injuries';
 import { listSquads } from '../../api/squads';
+import { CompactAnatomy } from '../fitness/CompactAnatomy';
 import { AthleteDetailPage } from './AthleteDetailPage';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage as errorMessage } from './athleteError';
@@ -71,6 +74,11 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(initialAthleteId);
+  const [openFitnessOnLoad, setOpenFitnessOnLoad] = useState(false);
+  const [injurySummaries, setInjurySummaries] = useState<Map<string, AthleteActiveInjurySummary>>(new Map());
+  const [injuryLoading, setInjuryLoading] = useState(true);
+  const [injuryError, setInjuryError] = useState<string | null>(null);
+  const [injuryReload, setInjuryReload] = useState(0);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const returnFocusAthleteId = useRef<string | null>(null);
@@ -95,6 +103,18 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
       current = false;
     };
   }, [reloadKey]);
+  useEffect(() => {
+    let current = true;
+    setInjuryLoading(true);
+    setInjuryError(null);
+    void listAthleteInjurySummaries()
+      .then((summaries) => {
+        if (current) setInjurySummaries(new Map(summaries.map((summary) => [summary.athleteId, summary])));
+      })
+      .catch((error: unknown) => { if (current) setInjuryError(errorMessage(error)); })
+      .finally(() => { if (current) setInjuryLoading(false); });
+    return () => { current = false; };
+  }, [injuryReload, reloadKey]);
   useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
 
   useEffect(() => {
@@ -196,9 +216,12 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
     return (
       <AthleteDetailPage
         athleteId={selectedAthleteId}
+        initialFitnessOpen={openFitnessOnLoad}
         onBack={() => {
           returnFocusAthleteId.current = selectedAthleteId;
+          setOpenFitnessOnLoad(false);
           setSelectedAthleteId(null);
+          setInjuryReload((value) => value + 1);
         }}
         onAthleteUpdated={storeAthlete}
       />
@@ -253,6 +276,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
 
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
       {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
+      {!loading && injuryError && <div className={styles.injuryError} role="alert">Injury summaries are unavailable. <Button variant="ghost" onClick={() => setInjuryReload((value) => value + 1)}>Retry injury summaries</Button></div>}
 
       {loading && (
         <div className={styles.loading} role="status" aria-live="polite">
@@ -310,6 +334,16 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
                 <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>
               </dl>
+              <div className={styles.injurySummary}>
+                {injuryLoading ? <span role="status">Loading injury summary...</span> : injuryError ? <span>Injury summary unavailable</span> : (
+                  <CompactAnatomy
+                    injuries={injurySummaries.get(athlete.id)?.activeInjuries ?? []}
+                    highestSeverity={injurySummaries.get(athlete.id)?.highestSeverity ?? null}
+                    onOpenFitness={() => { setOpenFitnessOnLoad(true); setSelectedAthleteId(athlete.id); }}
+                    disabled={athlete.status === 'archived'}
+                  />
+                )}
+              </div>
               {athlete.notes && <p className={styles.notes}>{athlete.notes}</p>}
               <div className={styles.cardActions}>
                 <Button
@@ -318,7 +352,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                     else performanceButtonRefs.current.delete(athlete.id);
                   }}
                   className={styles.performanceAction}
-                  onClick={() => setSelectedAthleteId(athlete.id)}
+                  onClick={() => { setOpenFitnessOnLoad(false); setSelectedAthleteId(athlete.id); }}
                   disabled={pendingId !== null}
                 >
                   View performance

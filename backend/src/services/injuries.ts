@@ -1,7 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { mapAthleteInjuryRow, type AthleteInjuryRow } from '../db/row-mappers.js';
-import type { AthleteInjury, InjuryRegion, InjurySide, InjurySeverity } from '../types/domain.js';
+import type { AthleteActiveInjurySummary, AthleteInjury, InjuryRegion, InjurySide, InjurySeverity } from '../types/domain.js';
 import { INJURY_REGIONS } from '../types/domain.js';
 import { assertAthleteOwnership } from './ownership.js';
 
@@ -94,6 +94,54 @@ export async function listInjuries(
   );
 
   return result.rows.map(mapAthleteInjuryRow);
+}
+
+const severityRank: Record<InjurySeverity, number> = { Minor: 1, Moderate: 2, Severe: 3 };
+
+interface ActiveInjurySummaryRow {
+  athlete_id: string;
+  body_region: InjuryRegion;
+  area: string;
+  side: InjurySide;
+  severity: InjurySeverity;
+}
+
+export async function listActiveInjurySummaries(
+  workspaceId: string,
+  executor: DbExecutor = getPool(),
+): Promise<AthleteActiveInjurySummary[]> {
+  const result = await executor.query<ActiveInjurySummaryRow>(
+    `SELECT athlete_id, body_region, area, side, severity
+     FROM athlete_injuries
+     WHERE workspace_id = $1 AND deleted_at IS NULL AND resolved_date IS NULL
+     ORDER BY athlete_id, occurrence_date DESC, created_at DESC`,
+    [workspaceId],
+  );
+
+  const summaries = new Map<string, AthleteActiveInjurySummary>();
+  for (const row of result.rows) {
+    const injury = {
+      bodyRegion: row.body_region,
+      area: row.area as AthleteInjury['area'],
+      side: row.side,
+      severity: row.severity,
+    };
+    const existing = summaries.get(row.athlete_id);
+    if (existing) {
+      existing.activeInjuryCount += 1;
+      existing.activeInjuries.push(injury);
+      if (severityRank[injury.severity] > severityRank[existing.highestSeverity]) existing.highestSeverity = injury.severity;
+    } else {
+      summaries.set(row.athlete_id, {
+        athleteId: row.athlete_id,
+        activeInjuryCount: 1,
+        highestSeverity: injury.severity,
+        activeInjuries: [injury],
+      });
+    }
+  }
+
+  return [...summaries.values()];
 }
 
 export async function createInjury(

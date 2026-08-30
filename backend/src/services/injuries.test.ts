@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
 import {
   createInjury,
+  listActiveInjurySummaries,
   listInjuries,
 } from './injuries.js';
 
@@ -87,5 +88,21 @@ describe('injury service', () => {
 
     const injuries = await listInjuries(WORKSPACE_ID, ATHLETE_ID);
     expect(injuries).toEqual([]);
+  });
+
+  it('groups active injuries by athlete and retains the highest severity', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { athlete_id: ATHLETE_ID, body_region: 'Arm', area: 'Forearm', side: 'Left', severity: 'Minor' },
+        { athlete_id: ATHLETE_ID, body_region: 'Arm', area: 'Forearm', side: 'Left', severity: 'Severe' },
+        { athlete_id: '55555555-5555-4555-8555-555555555555', body_region: 'Leg', area: 'Knee', side: 'Both', severity: 'Moderate' },
+      ],
+    });
+
+    await expect(listActiveInjurySummaries(WORKSPACE_ID)).resolves.toEqual([
+      expect.objectContaining({ athleteId: ATHLETE_ID, activeInjuryCount: 2, highestSeverity: 'Severe' }),
+      expect.objectContaining({ athleteId: '55555555-5555-4555-8555-555555555555', activeInjuryCount: 1, highestSeverity: 'Moderate' }),
+    ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('deleted_at IS NULL AND resolved_date IS NULL'), [WORKSPACE_ID]);
   });
 });

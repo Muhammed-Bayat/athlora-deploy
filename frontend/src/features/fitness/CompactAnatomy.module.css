@@ -1,0 +1,15 @@
+.compact { display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--console-ink); }
+.body { flex: 0 0 auto; width: 58px; height: 100px; overflow: visible; }
+.large .body { width: 92px; height: 158px; }
+.neutral { fill: color-mix(in srgb, var(--console-cyan) 18%, var(--console-soft)); stroke: var(--console-line); stroke-width: 1; }
+.severityMinor { fill: var(--console-cyan); stroke: var(--console-cyan); stroke-width: 1; }
+.severityModerate { fill: var(--color-warning); stroke: var(--color-warning); stroke-width: 1; }
+.severitySevere { fill: var(--console-danger); stroke: var(--console-danger); stroke-width: 1; }
+.copy { display: grid; gap: var(--space-1); min-width: 0; font-size: 0.75rem; }
+.copy strong { color: var(--console-ink); }
+.copy > span:not(.srOnly) { color: var(--console-muted); overflow-wrap: anywhere; }
+.link { width: fit-content; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--console-teal); font: inherit; font-weight: var(--font-weight-bold); text-align: left; text-decoration: underline; cursor: pointer; }
+.link:focus-visible { outline: 3px solid var(--console-focus); outline-offset: 3px; }
+.link:disabled { cursor: default; color: var(--console-muted); text-decoration: none; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 620px) { .large { align-items: flex-start; } .large .body { width: 76px; height: 132px; } }

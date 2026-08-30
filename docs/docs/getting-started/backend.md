@@ -81,6 +81,7 @@ Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separa
 
 - Auth0 JWT verification, synchronized local users, durable account-deletion tombstones, password-ticket generation, and non-enumerating ownership checks.
 - Coach-owned athlete CRUD with archive/restore, current 100m athlete statistics, results history, PBs, and SBs. Statistics will gain discipline-aware views as new events are implemented.
+- Workspace-scoped active injury summaries for roster cards, grouped server-side to avoid an injury request for every athlete. Resolved and deleted records remain available through athlete injury history but never appear in compact summaries.
 - Event CRUD for the current 100m slice, forward-only lifecycle transitions, cancellation that preserves history, participants, RSVPs, and event-day forecasts. The lifecycle model will be reused for the remaining athletics disciplines.
 - Cross-workspace 100m fixtures with hashed invitations, independent participating-team status, guest roster isolation, revision reacceptance, withdrawals, timeline logging, and result correction.
 - Timeline entries for current 100m finishes, incidents, and notes with optimistic versions, soft-delete undo, transaction locks, and automatic result recomputation. Future contracts will add measured attempts, fouls, heights, relay legs, and discipline-specific result rules.

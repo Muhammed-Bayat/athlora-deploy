@@ -1,8 +1,14 @@
-import type { ApiList, Injury } from '../types';
+import type { ApiList, AthleteActiveInjurySummary, Injury } from '../types';
 import { request } from './client';
 
-export async function listInjuries(athleteId: string, signal?: AbortSignal): Promise<Injury[]> {
-  const response = await request<ApiList<Injury>>(`/api/v1/athletes/${athleteId}/injuries`, { signal });
+export async function listInjuries(athleteId: string, signal?: AbortSignal, status?: 'active' | 'resolved' | 'all'): Promise<Injury[]> {
+  const query = status ? `?status=${status}` : '';
+  const response = await request<ApiList<Injury>>(`/api/v1/athletes/${athleteId}/injuries${query}`, { signal });
+  return response.data;
+}
+
+export async function listAthleteInjurySummaries(signal?: AbortSignal): Promise<AthleteActiveInjurySummary[]> {
+  const response = await request<ApiList<AthleteActiveInjurySummary>>('/api/v1/athletes/injury-summaries', { signal });
   return response.data;
 }
 

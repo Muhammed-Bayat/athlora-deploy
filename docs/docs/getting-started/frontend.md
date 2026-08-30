@@ -61,7 +61,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 
 - Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
 - API-backed dashboard with summary, live-event, loading, onboarding, and recovery states.
-- Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Athlete profiles are intended to become multi-discipline records.
+- Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
 - Event creation, explicit OpenStreetMap venue search/pin-coordinate selection with manual fallback, lifecycle changes, participant RSVP management, results, manual corrections, and event-day Open-Meteo forecasts.
 - Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
 - A responsive coach console with an optional weather-effects display, theme preference, live clock, and current local weather readout.

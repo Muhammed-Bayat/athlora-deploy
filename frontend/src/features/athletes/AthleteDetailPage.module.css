@@ -201,7 +201,8 @@
 }
 
 .profileCard,
-.historyCard {
+.historyCard,
+.injuryCard {
   min-width: 0;
   border-color: var(--console-edge);
   background: var(--console-surface);
@@ -209,7 +210,8 @@
 }
 
 .profileCard > header,
-.historyCard > header {
+.historyCard > header,
+.injuryCard > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -217,7 +219,8 @@
 }
 
 .profileCard h2,
-.historyCard h2 {
+.historyCard h2,
+.injuryCard h2 {
   margin: 0;
   color: var(--console-ink);
 }

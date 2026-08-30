@@ -436,4 +436,11 @@ export interface Injury {
   deletedBy: string | null;
 }
 
+export interface AthleteActiveInjurySummary {
+  athleteId: string;
+  activeInjuryCount: number;
+  highestSeverity: InjurySeverity;
+  activeInjuries: Array<Pick<Injury, 'bodyRegion' | 'area' | 'side' | 'severity'>>;
+}
+
 export type InjuryDraft = Omit<Injury, 'id' | 'workspaceId' | 'athleteId' | 'resolvedDate' | 'resolutionNotes' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'deletedBy'>;
