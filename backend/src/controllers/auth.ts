@@ -81,7 +81,7 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
     await getPool().query(
       `WITH created_workspace AS (
          INSERT INTO workspaces (name)
-         SELECT CONCAT($2, '''s workspace')
+         SELECT CONCAT($2::text, '''s workspace')
          WHERE NOT EXISTS (SELECT 1 FROM workspace_members WHERE user_id = $1)
          RETURNING id
        )
