@@ -323,3 +323,32 @@ export interface AthleteActiveInjurySummary {
   highestSeverity: InjurySeverity;
   activeInjuries: Array<Pick<AthleteInjury, 'bodyRegion' | 'area' | 'side' | 'severity'>>;
 }
+
+export interface ProgressionEntry {
+  event: AggregateEventIdentity;
+  result: Result;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+  runningPb: number | null;
+  isNewPb: boolean;
+}
+
+export interface ProgressionSummary {
+  allTimePb: number | null;
+  totalResults: number;
+  totalValid: number;
+}
+
+export interface ProgressionPagination {
+  nextCursor: string | null;
+  count: number;
+  total: number;
+}
+
+export interface ProgressionDetail {
+  athlete: AggregateAthleteIdentity;
+  entries: ProgressionEntry[];
+  pagination: ProgressionPagination;
+  summary: ProgressionSummary;
+}

@@ -15,6 +15,7 @@ import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
 import { useWorkspace } from '../auth/WorkspaceContext';
+import { ProgressionChart } from './ProgressionChart';
 import styles from './AthleteDetailPage.module.css';
 
 interface AthleteDetailPageProps {
@@ -271,6 +272,8 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
           </dl>
         )}
       </section>
+
+      <ProgressionChart athleteId={athleteId} athleteName={displayName} />
 
       <Card className={styles.injuryCard}>
         <header><div><p>Fitness overview</p><h2>Active injury map</h2></div></header>
