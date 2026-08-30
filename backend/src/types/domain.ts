@@ -23,6 +23,9 @@ export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 export const RESULT_OUTCOMES = ['no_result', 'valid', 'dq', 'dnf', 'dns'] as const;
 export type ResultOutcome = (typeof RESULT_OUTCOMES)[number];
 
+export const ATHLETE_LIFECYCLE_STATUSES = ['active', 'inactive', 'archived'] as const;
+export type AthleteLifecycleStatus = (typeof ATHLETE_LIFECYCLE_STATUSES)[number];
+
 export interface Athlete {
   id: string;
   coachId: string;
@@ -34,6 +37,9 @@ export interface Athlete {
   squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
+  status: AthleteLifecycleStatus;
+  statusChangedAt: string;
+  statusChangedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,10 +110,12 @@ export interface EventParticipantAthleteSummary {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status?: AthleteLifecycleStatus;
 }
 
 export interface EventParticipantSummary extends EventParticipant {
   athlete: EventParticipantAthleteSummary;
+  statusReviewRequired: boolean;
 }
 
 export const ENTRY_TYPES = ['attempt', 'split', 'penalty', 'note'] as const;
@@ -170,6 +178,7 @@ export interface AggregateAthleteIdentity {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status?: AthleteLifecycleStatus;
 }
 
 export interface AggregateEventIdentity {
@@ -252,7 +261,9 @@ export interface DashboardSummary {
   asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
   archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
   activeEvent: DashboardActiveEvent | null;
@@ -260,4 +271,48 @@ export interface DashboardSummary {
   upcomingEvents: DashboardUpcomingEvent[];
   recentResults: AthleteResultHistoryEntry[];
   recentPbs: AthleteResultHistoryEntry[];
+}
+
+export const INJURY_REGIONS = {
+  'Head & Neck': ['Head', 'Neck'],
+  Torso: ['Chest', 'Abdomen / core', 'Pelvis', 'Upper back', 'Lower back'],
+  Arm: ['Shoulder', 'Upper arm', 'Elbow', 'Forearm', 'Wrist', 'Hand'],
+  Leg: ['Hip', 'Thigh', 'Knee', 'Shin / calf', 'Ankle', 'Foot'],
+} as const;
+
+export type InjuryRegion = keyof typeof INJURY_REGIONS;
+export type InjuryArea = (typeof INJURY_REGIONS)[InjuryRegion][number];
+
+export const INJURY_SIDES = ['Left', 'Right', 'Both', 'Center'] as const;
+export type InjurySide = (typeof INJURY_SIDES)[number];
+
+export const INJURY_SEVERITIES = ['Minor', 'Moderate', 'Severe'] as const;
+export type InjurySeverity = (typeof INJURY_SEVERITIES)[number];
+
+export interface AthleteInjury {
+  id: string;
+  workspaceId: string;
+  athleteId: string;
+  bodyRegion: InjuryRegion;
+  region: InjuryRegion;
+  area: InjuryArea;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string;
+  expectedReturnDate: string | null;
+  resolvedDate: string | null;
+  resolutionNotes: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export interface AthleteInjuryAvailabilitySummary {
+  hasActiveInjuries: boolean;
+  activeSeverities: InjurySeverity[];
+  availabilityStatus: 'available' | 'restricted' | 'unavailable';
 }

@@ -1,6 +1,7 @@
 import type { ApplicationUserContext } from '../types/auth.js';
 import {
   DISCIPLINE_100M,
+  ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
   EVENT_STATUSES,
   EVENT_TYPES,
@@ -9,6 +10,12 @@ import {
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
   USER_ROLES,
+  INJURY_REGIONS,
+  INJURY_SIDES,
+  INJURY_SEVERITIES,
+  type InjuryRegion,
+  type InjuryArea,
+  type AthleteInjury,
   type AggregateAthleteIdentity,
   type AggregateEventIdentity,
   type Athlete,
@@ -67,6 +74,9 @@ export interface AthleteRow {
   squad?: string | null;
   notes: string | null;
   archived_at: TimestampValue | null;
+  lifecycle_status?: string;
+  status_changed_at?: TimestampValue;
+  status_changed_by?: string | null;
   created_at: TimestampValue;
   updated_at: TimestampValue;
 }
@@ -106,6 +116,8 @@ export interface EventParticipantSummaryRow extends EventParticipantRow {
   athlete_squad_names?: unknown;
   athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
+  athlete_lifecycle_status?: string;
+  status_review_required?: boolean;
 }
 
 export interface TimelineEntryRow {
@@ -226,7 +238,9 @@ export interface DashboardTimelineEntryRow extends TimelineEntryRow {
 export interface DashboardMetricsRow {
   athletes_count: CountValue;
   active_athletes_count: CountValue;
+  inactive_athletes_count?: CountValue;
   archived_athletes_count: CountValue;
+  status_review_count?: CountValue;
   upcoming_event_count: CountValue;
   season_pbs: CountValue;
 }
@@ -234,7 +248,9 @@ export interface DashboardMetricsRow {
 export interface DashboardMetrics {
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
   archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
 }
@@ -506,6 +522,11 @@ export function mapApplicationUserContextRow(
 }
 
 export function mapAthleteRow(row: AthleteRow): Athlete {
+  const status = enumValue(
+    row.lifecycle_status ?? (row.archived_at === null ? 'active' : 'archived'),
+    ATHLETE_LIFECYCLE_STATUSES,
+    'athletes.lifecycle_status',
+  );
   return {
     id: uuid(row.id, 'athletes.id'),
     coachId: uuid(row.coach_id, 'athletes.coach_id'),
@@ -515,6 +536,14 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     squads: row.squads === undefined ? [] : squads(row.squads, 'athletes.squads'),
     notes: nullableString(row.notes, 'athletes.notes'),
     archivedAt: nullableTimestamp(row.archived_at, 'athletes.archived_at'),
+    status,
+    statusChangedAt: timestamp(
+      row.status_changed_at ?? row.archived_at ?? row.created_at,
+      'athletes.status_changed_at',
+    ),
+    statusChangedBy: row.status_changed_by === undefined || row.status_changed_by === null
+      ? null
+      : uuid(row.status_changed_by, 'athletes.status_changed_by'),
     createdAt: timestamp(row.created_at, 'athletes.created_at'),
     updatedAt: timestamp(row.updated_at, 'athletes.updated_at'),
   };
@@ -578,7 +607,11 @@ export function mapEventParticipantSummaryRow(
         row.athlete_archived_at === null
           ? null
           : timestamp(row.athlete_archived_at, 'athletes.archived_at'),
+      ...(row.athlete_lifecycle_status === undefined ? {} : {
+        status: enumValue(row.athlete_lifecycle_status, ATHLETE_LIFECYCLE_STATUSES, 'athletes.lifecycle_status'),
+      }),
     },
+    statusReviewRequired: row.status_review_required ?? false,
   };
 }
 
@@ -895,14 +928,65 @@ export function mapDashboardMetricsRow(row: DashboardMetricsRow): DashboardMetri
       row.active_athletes_count,
       'dashboard metrics.active_athletes_count',
     ),
+    inactiveAthletesCount: row.inactive_athletes_count === undefined
+      ? 0
+      : count(row.inactive_athletes_count, 'dashboard metrics.inactive_athletes_count'),
     archivedAthletesCount: count(
       row.archived_athletes_count,
       'dashboard metrics.archived_athletes_count',
     ),
+    statusReviewCount: row.status_review_count === undefined
+      ? 0
+      : count(row.status_review_count, 'dashboard metrics.status_review_count'),
     upcomingEventCount: count(
       row.upcoming_event_count,
       'dashboard metrics.upcoming_event_count',
     ),
     seasonPbs: count(row.season_pbs, 'dashboard metrics.season_pbs'),
+  };
+}
+
+export interface AthleteInjuryRow {
+  id: string;
+  workspace_id: string;
+  athlete_id: string;
+  body_region: string;
+  area: string;
+  side: string;
+  severity: string;
+  notes: string | null;
+  occurrence_date: DateValue;
+  expected_return_date: DateValue | null;
+  resolved_date: TimestampValue | null;
+  resolution_notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+  deleted_at: TimestampValue | null;
+  deleted_by: string | null;
+}
+
+export function mapAthleteInjuryRow(row: AthleteInjuryRow): AthleteInjury {
+  return {
+    id: uuid(row.id, 'athlete_injury.id'),
+    workspaceId: uuid(row.workspace_id, 'athlete_injury.workspace_id'),
+    athleteId: uuid(row.athlete_id, 'athlete_injury.athlete_id'),
+    bodyRegion: enumValue(row.body_region, Object.keys(INJURY_REGIONS) as InjuryRegion[], 'athlete_injury.body_region'),
+    region: enumValue(row.body_region, Object.keys(INJURY_REGIONS) as InjuryRegion[], 'athlete_injury.body_region'),
+    area: nonemptyString(row.area, 'athlete_injury.area') as InjuryArea,
+    side: enumValue(row.side, INJURY_SIDES, 'athlete_injury.side'),
+    severity: enumValue(row.severity, INJURY_SEVERITIES, 'athlete_injury.severity'),
+    notes: nullableString(row.notes, 'athlete_injury.notes'),
+    occurrenceDate: databaseDate(row.occurrence_date, 'athlete_injury.occurrence_date'),
+    expectedReturnDate: row.expected_return_date === null ? null : databaseDate(row.expected_return_date, 'athlete_injury.expected_return_date'),
+    resolvedDate: nullableTimestamp(row.resolved_date, 'athlete_injury.resolved_date'),
+    resolutionNotes: nullableString(row.resolution_notes, 'athlete_injury.resolution_notes'),
+    createdBy: uuid(row.created_by, 'athlete_injury.created_by'),
+    updatedBy: nullableUuid(row.updated_by, 'athlete_injury.updated_by'),
+    createdAt: timestamp(row.created_at, 'athlete_injury.created_at'),
+    updatedAt: timestamp(row.updated_at, 'athlete_injury.updated_at'),
+    deletedAt: nullableTimestamp(row.deleted_at, 'athlete_injury.deleted_at'),
+    deletedBy: nullableUuid(row.deleted_by, 'athlete_injury.deleted_by'),
   };
 }

@@ -56,7 +56,8 @@ describe('syncCurrentUser', () => {
           created_at: new Date('2026-08-13T10:00:00.000Z'),
           updated_at: new Date('2026-08-13T10:00:00.000Z'),
         },
-      ] });
+      ] })
+      .mockResolvedValueOnce({ rows: [] });
 
     await syncCurrentUser(request(), response(), next);
 
@@ -67,6 +68,11 @@ describe('syncCurrentUser', () => {
       'auth0|user-1',
       'Coach One',
       'coach@example.com',
+    ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("CONCAT($2::text, '''s workspace')"), [
+      '11111111-1111-4111-8111-111111111111',
+      'Coach One',
+      'coach',
     ]);
     expect(json).toHaveBeenCalledWith({
       data: expect.objectContaining({

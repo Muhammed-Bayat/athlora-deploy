@@ -1,26 +1,7 @@
-export const INJURY_REGIONS = {
-  'Head & Neck': ['Head', 'Neck'],
-  Torso: ['Chest', 'Abdomen / core', 'Pelvis', 'Upper back', 'Lower back'],
-  Arm: ['Shoulder', 'Upper arm', 'Elbow', 'Forearm', 'Wrist', 'Hand'],
-  Leg: ['Hip', 'Thigh', 'Knee', 'Shin / calf', 'Ankle', 'Foot'],
-} as const;
+import type { Injury, InjuryDraft, InjuryRegion, InjuryArea, InjurySide, InjurySeverity } from '../../types';
+import { INJURY_REGIONS } from '../../types';
 
-export type InjuryRegion = keyof typeof INJURY_REGIONS;
-export type InjuryArea = (typeof INJURY_REGIONS)[InjuryRegion][number];
-export type InjurySide = 'Left' | 'Right' | 'Both' | 'Center';
-export type InjurySeverity = 'Minor' | 'Moderate' | 'Severe';
-
-export interface Injury {
-  id: string;
-  region: InjuryRegion;
-  area: InjuryArea;
-  side: InjurySide;
-  severity: InjurySeverity;
-  notes: string;
-  createdAt: string;
-}
-
-export type InjuryDraft = Omit<Injury, 'id' | 'createdAt'>;
+export { INJURY_REGIONS, type InjuryRegion, type InjuryArea, type InjurySide, type InjurySeverity, type Injury, type InjuryDraft };
 
 export const SEVERITY_LABELS: Record<InjurySeverity, string> = {
   Minor: 'Minor · amber',

@@ -1,19 +1,27 @@
 import { ApiError } from '../middleware/errors.js';
 import {
   DISCIPLINE_100M,
+  ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
   EVENT_STATUSES,
   EVENT_TYPES,
   INCIDENT_TYPES,
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
+  INJURY_REGIONS,
+  INJURY_SIDES,
+  INJURY_SEVERITIES,
   type Discipline,
+  type AthleteLifecycleStatus,
   type EntryType,
   type EventStatus,
   type EventType,
   type IncidentType,
   type ResultUnit,
   type RsvpStatus,
+  type InjuryRegion,
+  type InjurySide,
+  type InjurySeverity,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -53,9 +61,14 @@ export interface AthleteReplacementPayload {
 
 export interface AthleteListQuery {
   includeArchived: boolean;
+  status?: AthleteLifecycleStatus;
   name?: string;
   squadId?: string;
   squad?: string;
+}
+
+export interface AthleteStatusPayload {
+  status: AthleteLifecycleStatus;
 }
 
 export interface EventCreatePayload {
@@ -143,8 +156,19 @@ export interface ResultOverridePayload {
   overrideReason: string | null;
 }
 
+export interface FixtureInvitationCreatePayload {
+  email: string;
+  expiresInDays: number;
+}
+
+export interface FixtureInvitationResponsePayload {
+  response: 'accepted' | 'declined' | 'change_requested';
+  message: string | null;
+}
+
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squadId'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
+const ATHLETE_STATUS_FIELDS = ['status'] as const;
 const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
@@ -182,6 +206,8 @@ const TIMELINE_PATCH_FIELDS = [
 ] as const;
 const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
+const FIXTURE_INVITATION_CREATE_FIELDS = ['email', 'expiresInDays'] as const;
+const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
 
 type PayloadObject = Record<string, unknown>;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
@@ -493,6 +519,7 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   }
 
   const name = optionalQueryString(input, 'name', issues);
+  const status = optionalQueryEnum(input, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
   const squadId = optionalQueryString(input, 'squadId', issues);
   if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
 
@@ -500,9 +527,19 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
 
   return {
     includeArchived,
+    ...(status === undefined ? {} : { status }),
     ...(name === undefined ? {} : { name }),
     ...(squadId === undefined ? {} : { squadId }),
   };
+}
+
+export function parseAthleteStatusPayload(input: unknown): AthleteStatusPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ATHLETE_STATUS_FIELDS, issues);
+  const status = requiredEnum(payload, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
+  if (issues.length > 0) throwValidation(issues);
+  return { status };
 }
 
 export function parseSquadPayload(input: unknown): { name: string } {
@@ -894,4 +931,240 @@ export function parseResultOverridePayload(input: unknown): ResultOverridePayloa
 
   if (issues.length > 0) throwValidation(issues);
   return { manualOverride, overrideReason };
+}
+
+export function parseFixtureInvitationCreatePayload(input: unknown): FixtureInvitationCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_CREATE_FIELDS, issues);
+  const email = typeof payload.email === 'string' && /^\S+@\S+\.\S+$/.test(payload.email.trim())
+    ? payload.email.trim().toLowerCase()
+    : '';
+  if (!email) issues.push(issue('email', 'invalid_format', 'Expected an email address'));
+  let expiresInDays = 7;
+  if (payload.expiresInDays !== undefined) {
+    if (typeof payload.expiresInDays !== 'number' || !Number.isSafeInteger(payload.expiresInDays) || payload.expiresInDays < 1 || payload.expiresInDays > 30) {
+      issues.push(issue('expiresInDays', 'invalid_value', 'Expected an integer from 1 to 30'));
+    } else {
+      expiresInDays = payload.expiresInDays;
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { email, expiresInDays };
+}
+
+export function parseFixtureInvitationResponsePayload(input: unknown): FixtureInvitationResponsePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_RESPONSE_FIELDS, issues);
+  const response = requiredEnum(
+    payload,
+    'response',
+    ['accepted', 'declined', 'change_requested'] as const,
+    issues,
+  );
+  let message: string | null = null;
+  if (payload.message !== undefined && payload.message !== null) {
+    message = normalizeRequiredString(payload.message);
+    if (message === null) issues.push(issue('message', 'blank', 'Must not be blank'));
+  }
+  if (response === 'change_requested' && message === null) {
+    issues.push(issue('message', 'required', 'A change request needs a message'));
+  }
+  if (response !== 'change_requested' && message !== null) {
+    issues.push(issue('message', 'not_allowed', 'Only change requests may include a message'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { response, message };
+}
+
+export interface InjuryCreatePayload {
+  bodyRegion: InjuryRegion;
+  area: string;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string;
+  expectedReturnDate: string | null;
+}
+
+export interface InjuryUpdatePayload {
+  bodyRegion?: InjuryRegion;
+  area?: string;
+  side?: InjurySide;
+  severity?: InjurySeverity;
+  notes?: string | null;
+  occurrenceDate?: string;
+  expectedReturnDate?: string | null;
+}
+
+export interface InjuryResolvePayload {
+  resolvedDate?: string | null;
+  resolutionNotes?: string | null;
+}
+
+export interface InjuryListQuery {
+  includeDeleted?: boolean;
+  status?: 'active' | 'resolved' | 'all';
+  severity?: InjurySeverity;
+}
+
+const INJURY_CREATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_UPDATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_RESOLVE_FIELDS = ['resolvedDate', 'resolutionNotes'] as const;
+
+export function parseInjuryCreatePayload(input: unknown): InjuryCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_CREATE_FIELDS, issues);
+
+  const bodyRegion = requiredEnum(payload, 'bodyRegion', Object.keys(INJURY_REGIONS) as InjuryRegion[], issues);
+  const area = requiredString(payload, 'area', issues);
+  const side = requiredEnum(payload, 'side', INJURY_SIDES, issues);
+  const severity = requiredEnum(payload, 'severity', INJURY_SEVERITIES, issues);
+  const notes = nullableString(payload, 'notes', issues);
+
+  let occurrenceDate = '';
+  if (!hasOwn(payload, 'occurrenceDate')) {
+    issues.push(issue('occurrenceDate', 'required', 'Field is required'));
+  } else if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+    issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+  } else {
+    occurrenceDate = payload.occurrenceDate;
+  }
+
+  let expectedReturnDate: string | null = null;
+  if (hasOwn(payload, 'expectedReturnDate') && payload.expectedReturnDate !== null) {
+    if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      expectedReturnDate = payload.expectedReturnDate;
+      if (occurrenceDate && expectedReturnDate < occurrenceDate) {
+        issues.push(issue('expectedReturnDate', 'invalid_value', 'Expected return date must be on or after occurrence date'));
+      }
+    }
+  }
+
+  if (bodyRegion && area) {
+    const allowedAreas = INJURY_REGIONS[bodyRegion as InjuryRegion] as readonly string[];
+    if (allowedAreas && !allowedAreas.includes(area)) {
+      issues.push(issue('area', 'invalid_value', `Area "${area}" is not valid for body region "${bodyRegion}"`));
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return {
+    bodyRegion: bodyRegion as InjuryRegion,
+    area,
+    side: side as InjurySide,
+    severity: severity as InjurySeverity,
+    notes,
+    occurrenceDate,
+    expectedReturnDate,
+  };
+}
+
+export function parseInjuryUpdatePayload(input: unknown): InjuryUpdatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_UPDATE_FIELDS, issues);
+
+  const result: InjuryUpdatePayload = {};
+
+  if (hasOwn(payload, 'bodyRegion')) {
+    if (!isEnumValue(payload.bodyRegion, Object.keys(INJURY_REGIONS))) {
+      issues.push(issue('bodyRegion', 'invalid_value', 'Expected a valid body region'));
+    } else {
+      result.bodyRegion = payload.bodyRegion as InjuryRegion;
+    }
+  }
+
+  if (hasOwn(payload, 'area')) {
+    const norm = normalizeRequiredString(payload.area);
+    if (norm === null) {
+      issues.push(issue('area', 'blank', 'Must not be blank'));
+    } else {
+      result.area = norm;
+    }
+  }
+
+  if (hasOwn(payload, 'side')) {
+    if (!isEnumValue(payload.side, INJURY_SIDES)) {
+      issues.push(issue('side', 'invalid_value', 'Expected a valid side'));
+    } else {
+      result.side = payload.side as InjurySide;
+    }
+  }
+
+  if (hasOwn(payload, 'severity')) {
+    if (!isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+      issues.push(issue('severity', 'invalid_value', 'Expected a valid severity'));
+    } else {
+      result.severity = payload.severity as InjurySeverity;
+    }
+  }
+
+  if (hasOwn(payload, 'notes')) {
+    result.notes = nullableString(payload, 'notes', issues);
+  }
+
+  if (hasOwn(payload, 'occurrenceDate')) {
+    if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+      issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+    } else {
+      result.occurrenceDate = payload.occurrenceDate;
+    }
+  }
+
+  if (hasOwn(payload, 'expectedReturnDate')) {
+    if (payload.expectedReturnDate === null) {
+      result.expectedReturnDate = null;
+    } else if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      result.expectedReturnDate = payload.expectedReturnDate;
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return result;
+}
+
+export function parseInjuryResolvePayload(input: unknown): InjuryResolvePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_RESOLVE_FIELDS, issues);
+
+  let resolvedDate: string | null = null;
+  if (hasOwn(payload, 'resolvedDate') && payload.resolvedDate !== null) {
+    if (typeof payload.resolvedDate !== 'string') {
+      issues.push(issue('resolvedDate', 'invalid_type', 'Expected a timestamp string or null'));
+    } else {
+      resolvedDate = payload.resolvedDate;
+    }
+  }
+
+  const resolutionNotes = nullableString(payload, 'resolutionNotes', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { resolvedDate, resolutionNotes };
+}
+
+export function parseInjuryListQuery(input: unknown): InjuryListQuery {
+  const payload = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+  const query: InjuryListQuery = {};
+
+  if (payload.includeDeleted === 'true' || payload.includeDeleted === true) {
+    query.includeDeleted = true;
+  }
+
+  if (payload.status === 'active' || payload.status === 'resolved' || payload.status === 'all') {
+    query.status = payload.status;
+  }
+
+  if (payload.severity && isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+    query.severity = payload.severity as InjurySeverity;
+  }
+
+  return query;
 }

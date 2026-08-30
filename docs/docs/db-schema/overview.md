@@ -18,12 +18,20 @@ workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invite
                        accepted_at, accepted_by, revoked_at, revoked_by)
 workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
 athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, notes,
-                        archived_at, created_at, updated_at)
+                         lifecycle_status, archived_at, status_changed_at, status_changed_by, created_at, updated_at)
+athlete_status_transitions (id UUID PK, workspace_id, athlete_id, from_status, to_status, changed_by, changed_at)
 squads               (id UUID PK, workspace_id -> workspaces, name, archived_at, created_at, updated_at)
 athlete_squads       (workspace_id, athlete_id -> athletes, squad_id -> squads) — PK (athlete_id, squad_id)
 events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
-                       location_name, latitude, longitude, timezone, status)
-event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
+                        location_name, latitude, longitude, timezone, status, fixture_revision)
+event_fixture_workspaces (event_id, workspace_id, role ('host'|'guest'), status, accepted_revision, contact_email,
+                          joined_by, withdrawn_at, withdrawn_by) — PK (event_id, workspace_id)
+fixture_invitations  (id UUID PK, event_id, target_workspace_id, email, revision, token_hash, status, invited_by,
+                      expires_at, accepted_at, accepted_by, revoked_at, revoked_by)
+fixture_invitation_responses (id UUID PK, invitation_id, revision, workspace_id, response, message, responded_by)
+event_participants   (event_id, athlete_id, participant_workspace_id, rsvp_status) — PK (event_id, athlete_id)
+event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status, flagged_at,
+                                  acknowledged_at, acknowledged_by) — PK (event_id, athlete_id)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
@@ -31,7 +39,25 @@ results              (event_id, athlete_id, discipline, outcome, final_result, u
                        — PK (event_id, athlete_id, discipline)
 account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
                        requested_at, updated_at, completed_at)
+athlete_injuries     (id UUID PK, workspace_id -> workspaces, athlete_id -> athletes, body_region, area,
+                       side, severity, notes, occurrence_date, expected_return_date, resolved_date,
+                       resolution_notes, created_by, updated_by, deleted_at, deleted_by)
 ```
+
+### athlete_injuries
+Persistent athlete injury and recovery records.
+
+- `body_region`: `Head & Neck`, `Torso`, `Arm`, `Leg`.
+- `area`: specific anatomical area.
+- `side`: `Left`, `Right`, `Both`, `Center`.
+- `severity`: `Minor`, `Moderate`, `Severe`.
+- `notes`: optional coach notes.
+- `occurrence_date`: date of injury occurrence.
+- `expected_return_date`: expected return date.
+- `resolved_date`: timestamp when resolved.
+- `resolution_notes`: notes recorded upon resolution.
+- `created_by`, `updated_by`, `deleted_by`: user attribution for audit.
+- `deleted_at`: soft deletion timestamp (`NULL` unless soft deleted, preserving historical attribution).
 
 ### timeline_entries
 The append-only live log — the heart of the app.
@@ -59,6 +85,21 @@ The assignment set for an event. The composite primary key prevents duplicate ev
 - RSVP status replacement is idempotent.
 - Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
 - Participant reads aggregate squad names with the athlete name and archive state, so multi-squad membership never duplicates a participant row.
+- `participant_workspace_id` has composite foreign keys to both `(athlete_id, workspace_id)` and `(event_id, workspace_id)` fixture membership. An athlete therefore cannot be assigned to an event unless their workspace is explicitly participating in it.
+
+### fixtures
+
+Every event receives one `host` row in `event_fixture_workspaces`, including historical and newly-created single-workspace events. A guest row is created only after the email-bound invitation has been accepted by a coach in that guest workspace. The invitation token is stored only as a SHA-256 hash; invitation responses are immutable actor-attributed records.
+
+`events.fixture_revision` starts at `1`. A material date/time/venue change or accepted-team change advances it and marks guest teams as requiring reacceptance without removing their roster rows. A participant workspace may be withdrawn, but its participant, timeline, and result rows remain to preserve history.
+
+**Host authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can also view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side.
+
+### athlete lifecycle
+
+`athletes.lifecycle_status` is constrained to `active`, `inactive`, or `archived`. The current transition is recorded on the athlete row for efficient reads; `athlete_status_transitions` preserves every real change with its actor and timestamp. Legacy rows are backfilled as active or archived without fabricating an actor.
+
+Any real transition upserts a pending `event_participant_status_reviews` row for each existing assignment. The `(event_id, athlete_id)` key makes a review item independent per athlete and a later transition resets only that athlete's acknowledgement. Historical participant, timeline, result, squad, and injury data remains untouched.
 
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
@@ -72,7 +113,7 @@ Derived/materialized from `timeline_entries`. Recalculated after every entry cha
 
 Protected requests resolve the verified Auth0 subject to an active `workspace_members` row before resource access. `athletes.workspace_id` and `events.workspace_id` are the authorization boundary; dependent resources require their event and athlete to share that workspace. `coach_id`, `created_by`, `recorded_by` and `overridden_by` are audit actors, not ownership fields.
 
-Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. The policy is centralized in `backend/src/services/ownership.ts` so the Stage 2 sharing model can replace it consistently when assistants and cross-coach fixtures are introduced.
+Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. Fixture access is a separate, narrow allow-list: guest workspace queries must match an accepted `event_fixture_workspaces` row plus an `event_participants.participant_workspace_id` row for the requested athlete. No generic ownership query is relaxed for fixtures.
 
 ## Constraints and indexes
 
@@ -93,6 +134,14 @@ Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer role
 
 Migration `0007_workspace_squads.sql` adds normalized workspace squads and multi-squad athlete memberships, including the legacy text migration and indexes used by roster filters.
 
+Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, current actor/timestamp metadata, transition audit rows, and per-assignment coach-review records.
+
+Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, hashed/versioned invitations and response history, material-change revisions, and composite participant foreign keys that enforce fixture-team roster ownership.
+
+Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
+
+**Host authority and shared result authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side. Cancellation preserves an intelligible historical record: placings become null and PB/SB flags clear, but result rows and timeline entries remain. Post-start withdrawal preserves the withdrawn team's results and entries.
+
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -103,7 +152,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; and `0007_workspace_squads.sql` normalizes athlete squads. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces; and `0011_athlete_injuries.sql` adds persistent athlete injury records with recovery history and audit tracking. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
@@ -118,4 +167,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra], opencode[gpt-5.6-sol], and opencode[google/gemini-3.5-flash-lite].

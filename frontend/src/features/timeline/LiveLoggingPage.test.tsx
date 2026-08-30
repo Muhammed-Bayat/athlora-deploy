@@ -59,7 +59,9 @@ describe('LiveLoggingPage', () => {
       name: 'Amara Chen',
       squadNames: ['Sprint'],
       archivedAt: null,
+      status: 'active' as const,
     },
+    statusReviewRequired: false,
   };
 
   const mockTimelineEntry = {
@@ -733,6 +735,9 @@ describe('LiveLoggingPage', () => {
         squads: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Senior', archivedAt: null, createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z' }],
         notes: null,
         archivedAt: '2026-08-01T00:00:00.000Z',
+        status: 'archived',
+        statusChangedAt: '2026-08-01T00:00:00.000Z',
+        statusChangedBy: currentUser.id,
         createdAt: '2026-07-01T00:00:00.000Z',
         updatedAt: '2026-08-01T00:00:00.000Z',
       }],

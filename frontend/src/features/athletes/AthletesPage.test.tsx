@@ -38,6 +38,9 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     squads: [squad(SPRINT_ID, 'Sprint A')],
     notes: 'Starts focus',
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-16T10:00:00.000Z',
+    statusChangedBy: '33333333-3333-4333-8333-333333333333',
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -56,6 +59,7 @@ const bea = athlete({
 const archivedBea = athlete({
   ...bea,
   archivedAt: '2026-08-16T11:00:00.000Z',
+  status: 'archived',
 });
 
 beforeEach(() => {
@@ -269,7 +273,7 @@ describe('AthletesPage', () => {
   });
 
   it('requires confirmation before archiving and preserves history in the copy', async () => {
-    const archived = athlete({ archivedAt: '2026-08-16T12:00:00.000Z' });
+    const archived = athlete({ archivedAt: '2026-08-16T12:00:00.000Z', status: 'archived' });
     athleteApi.archiveAthlete.mockResolvedValue(archived);
     const user = userEvent.setup();
     render(<AthletesPage />);

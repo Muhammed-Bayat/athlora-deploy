@@ -45,6 +45,7 @@ const participantBody = {
     squadNames: [],
     archivedAt: null,
   },
+  statusReviewRequired: false,
 };
 
 beforeEach(() => {

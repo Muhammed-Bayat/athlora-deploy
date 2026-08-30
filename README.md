@@ -142,4 +142,4 @@ See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup.
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and fixture repair code generation and inline editing used opencode[gpt-5.6-sol]; AI code review was not used for these updates.

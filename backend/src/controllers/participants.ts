@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { getApplicationUserContext } from '../middleware/auth.js';
 import {
   addEventParticipant as addParticipant,
+  acknowledgeParticipantStatusReview as acknowledgeReview,
   listEventParticipants as listParticipants,
   removeEventParticipant as removeParticipant,
   replaceEventParticipant as replaceParticipant,
@@ -46,6 +47,16 @@ export const removeEventParticipant: RequestHandler = async (req, res, next) => 
   try {
     const { workspaceId } = getApplicationUserContext(req);
     await removeParticipant(workspaceId, req.params.eventId, req.params.athleteId);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const acknowledgeParticipantStatusReview: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    await acknowledgeReview(workspaceId, userId, req.params.eventId, req.params.athleteId);
     res.status(204).end();
   } catch (error) {
     next(error);

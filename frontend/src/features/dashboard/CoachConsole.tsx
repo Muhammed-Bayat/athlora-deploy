@@ -5,6 +5,7 @@ import { EventsPage } from '../events/EventsPage';
 import { EventDetailPage } from '../events/EventDetailPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import { AuthPage } from '../auth/AuthPage';
+import { FixturesPage } from '../fixtures/FixturesPage';
 import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
@@ -19,6 +20,7 @@ const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; i
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
+  { id: 'fixtures', label: 'Fixtures', shortLabel: 'Fixtures', icon: 'calendar' },
   { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
   { id: 'account', label: 'Account', shortLabel: 'Account', icon: 'athletes' },
 ];
@@ -33,6 +35,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
+  fixtures: { title: 'Fixtures', subtitle: 'Manage your team in hosted fixtures' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
   account: { title: 'Account', subtitle: 'Manage security, sign-out, and account deletion' },
 };
@@ -281,6 +284,7 @@ export function CoachConsole() {
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
     : location.pathname.includes('/events') ? 'events'
+      : location.pathname.includes('/fixtures') ? 'fixtures'
       : location.pathname.includes('/live') ? 'live'
         : location.pathname.includes('/account') ? 'account' : 'dashboard';
   const navigate = (view: ConsoleView, targetId?: string) => {
@@ -401,7 +405,8 @@ export function CoachConsole() {
         {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
         {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
         {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
-        {location.pathname.startsWith('/console/events/') && <EventDetailPage eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
+          {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
+         {location.pathname === '/console/fixtures' && <FixturesPage key={`fixtures:${activeWorkspace.id}`} />}
         {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
         {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
         {location.pathname === '/console/account' && <AuthPage />}

@@ -110,6 +110,32 @@ Workspace roles are only `coach` and `assistant`. Coaches manage memberships and
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
+### 3.2 Fixture access
+
+A fixture connects one hosted, scheduled 100m competition to one or more guest workspaces without granting those workspaces membership in the host workspace. Fixture invitations are email-bound, token-hashed, copy/share links. They are not email delivery records. Only coaches may create invitations, respond, manage a fixture roster, or record/correct their team's results.
+
+| Method & path | Actor | Purpose |
+|---|---|---|
+| `POST /events/:eventId/fixture-invitations` | Host coach | Create a pending invitation; body `{ email, expiresInDays? }` |
+| `GET /events/:eventId/fixture-invitations` | Host workspace | Read invitation state and response history summary |
+| `POST /events/:eventId/fixture-invitations/:invitationId/resend` | Host coach | Revoke and replace a pending/declined/change-request invitation |
+| `DELETE /events/:eventId/fixture-invitations/:invitationId` | Host coach | Revoke an unused invitation |
+| `GET /events/:eventId/fixture-rosters` | Host workspace | Read participating-team rosters using the fixture-safe athlete summary |
+| `POST /events/:eventId/fixture-workspaces/:workspaceId/withdrawal` | Host coach | Record a guest withdrawal after start while preserving history |
+| `POST /fixtures/invitations/:token/respond` | Invited coach | Accept, decline, or request a change; body `{ response, message? }` |
+| `GET /fixtures` / `GET /fixtures/:eventId` | Accepted guest workspace | List/read fixture-safe details |
+| `GET|POST|PUT|DELETE /fixtures/:eventId/participants` | Accepted guest coach | Read/manage only the active guest workspace's roster and RSVP state |
+| `POST /fixtures/:eventId/withdrawal` | Guest coach | Withdraw before start |
+| `GET|POST|PATCH|DELETE /fixtures/:eventId/entries` | Accepted guest coach | Read/write only the guest team's timeline entries |
+| `GET /fixtures/:eventId/results` | Accepted guest workspace | Read only the guest team's results |
+| `PUT /fixtures/:eventId/results/:athleteId` | Accepted guest coach | Correct only the guest team's result |
+
+The invitation state machine is `pending -> accepted|declined|change_requested|revoked`; expiry makes a pending/change-request invitation unavailable. Every response is retained with its acting user, workspace and fixture revision. A guest acceptance creates the participating workspace relationship. A team may be `accepted`, `reacceptance_required`, or `withdrawn`.
+
+Changing a fixture's date, time, venue (including coordinates), or accepted participating-team set increments `fixtureRevision`, retains selected rosters, replaces outstanding reacceptance links, and marks guest teams `reacceptance_required`. The host cannot move a fixture out of `scheduled` until all non-withdrawn guests have accepted the current revision. Material changes and roster changes are unavailable after the fixture begins. Before start, a guest coach may withdraw its team; after start, only the host records a withdrawal. Neither withdrawal deletes participant, timeline, or result history.
+
+Guest responses and fixture reads reveal only the fixture metadata, participating-team display names, and the caller's own athlete summaries/results. They never expose another workspace's roster, athlete notes, date of birth, injury/private profile data, or unrelated workspace resources. Host fixture-roster reads use the same safe participant summary and never expose guest private athlete fields.
+
 ## 4. DTOs
 
 Field names are camelCase on the wire. Calendar dates are real Gregorian `YYYY-MM-DD` values. Local event clock times accept `HH:mm` or `HH:mm:ss` and are serialized as `HH:mm:ss` without timezone conversion. `createdAt`/`updatedAt` (and `archivedAt`, `overrideAt`) are `timestamptz` ISO 8601 strings.
@@ -124,10 +150,11 @@ id, auth0Id, name, email, role ('coach'|'assistant'), createdAt, updatedAt
 
 ```
 id, coachId, name, dob (ISO date|null), gender (string|null), squads (Squad[]),
-notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
+notes (string|null), status ('active'|'inactive'|'archived'), archivedAt (ISO|null),
+statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 ```
 
-**Archival rule:** an athlete is archived when `archivedAt` is non-null. Archiving is reversible (set back to null); it is not deletion, and it preserves the athlete's event participation, timeline entries, and results. Archived athletes are excluded from roster and dashboard summaries by default.
+**Lifecycle rule:** active athletes can be newly assigned to events. Inactive athletes remain visible and editable but cannot be newly assigned. Archived athletes are hidden by default, read-only until restored, and cannot be newly assigned. Archiving is reversible and preserves event participation, timeline entries, results, squads, and injuries. `statusChangedAt` and `statusChangedBy` identify the current transition; the database retains the full transition audit.
 
 **Endpoints:**
 
@@ -139,16 +166,18 @@ notes (string|null), archivedAt (ISO|null), createdAt, updatedAt
 | `PUT /athletes/:id` | Full replacement of mutable fields |
 | `DELETE /athletes/:id` | Archive (sets `archivedAt`); returns `{ data: athlete }` |
 | `POST /athletes/:id/unarchive` | Restore (clears `archivedAt`); returns `{ data: athlete }` |
+| `POST /athletes/:id/status` | Transition status; body `{ status }`; returns `{ data: athlete }` |
 
 `GET /athletes` accepts strict query parameters (unknown parameters are rejected with `400`):
 
 | Parameter | Behavior |
 |---|---|
 | `includeArchived` | `'true'` or `'false'` (default `'false'`). When `false`, archived athletes are excluded. |
+| `status` | Exact lifecycle state (`'active'`, `'inactive'`, or `'archived'`) |
 | `name` | Case-insensitive substring match on `name` |
 | `squadId` | Canonical UUID; returns athletes with that membership without multiplying roster rows |
 
-Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable.
+Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable. Repeating an athlete status request for its current state is a successful no-op. Every real transition is workspace-authorized, actor-attributed, and flags existing event assignments for coach review.
 
 Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes` — all optional except `name`. `PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
@@ -269,8 +298,8 @@ Venue search is an optional convenience, not event persistence: choosing a resul
 ### 4.6 Event participant
 
 ```
-eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'),
-athlete { id, name, squad, archivedAt }
+eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'), statusReviewRequired,
+athlete { id, name, squad, archivedAt, status }
 ```
 
 Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
@@ -281,8 +310,9 @@ Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Partic
 | `POST /events/:eventId/participants` | Assign an active owned athlete; body `{ athleteId }`, returns `201` |
 | `PUT /events/:eventId/participants/:athleteId` | Idempotently replace RSVP status; body `{ rsvpStatus }` |
 | `DELETE /events/:eventId/participants/:athleteId` | Remove the assignment; returns `204` |
+| `POST /events/:eventId/participants/:athleteId/status-review/acknowledge` | Acknowledge that athlete's lifecycle review item; returns `204` |
 
-Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; an archived athlete cannot be newly assigned and returns `409 ATHLETE_ARCHIVED`. Archiving an already assigned athlete does not remove the assignment, so historical participation remains visible. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
+Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; archived and inactive athletes cannot be newly assigned and return `409 ATHLETE_ARCHIVED` and `409 ATHLETE_INACTIVE` respectively. A real lifecycle transition does not remove existing assignments; it creates a per-event, per-athlete review item. Coaches acknowledge review items independently, so a later change for one athlete cannot clear another athlete's alert. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
 ### 4.7 Timeline entry (the live log)
 
@@ -380,7 +410,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 ```
 {
   state ('summary'|'live'), asOfDate,
-  athletesCount, activeAthletesCount, archivedAthletesCount,
+  athletesCount, activeAthletesCount, inactiveAthletesCount, archivedAthletesCount, statusReviewCount,
   upcomingEventCount, seasonPbs,
   activeEvent: DashboardActiveEvent|null,
   rosterSnapshot: RosterSnapshotEntry[],      // { athleteId, name, squad, discipline, pb }
@@ -390,7 +420,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 }
 ```
 
-- `athletesCount` counts all owned athletes; `activeAthletesCount` and `rosterSnapshot` exclude archived athletes; `archivedAthletesCount` makes the difference explicit. Historical recent result/PB rows retain archived athlete identity.
+- `athletesCount` counts all owned athletes; `activeAthletesCount`, `inactiveAthletesCount`, and `archivedAthletesCount` make the lifecycle distribution explicit. `rosterSnapshot` includes active athletes only. `statusReviewCount` is the number of unacknowledged per-assignment lifecycle review items. Historical recent result/PB rows retain archived athlete identity.
 - `upcomingEvents` are owned 100m `scheduled` events with `date >= asOfDate`; cancelled, completed, active and legacy non-100m events are not upcoming. Ordering is date/time/creation/ID ascending and `upcomingEventCount` mirrors the array length.
 - `seasonPbs` counts non-cancelled `isPb` rows in the current calendar year. `recentResults` returns ten non-cancelled rows and `recentPbs` returns five non-cancelled PB rows, both in deterministic reverse event order.
 - One active event is selected from owned 100m `in_progress` events by date ascending, time ascending with nulls last, creation ascending, then ID ascending. This is a presentation rule; multiple events may remain in progress.
@@ -413,12 +443,12 @@ Every override mutation locks the event/result set and recomputes the whole even
 - `backend/src/types/domain.ts` and `frontend/src/types/index.ts` carry the aligned DTOs above.
 - `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
-- `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, archival, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
-- `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/archived athletes, filter by name/squad/archive state, create, fully replace mutable fields, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
+- `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, lifecycle transitions/audit, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover idempotent actor-attributed transitions and assignment review flags, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
+- `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/inactive/archived athletes, filter by name/squad/status, create, fully replace mutable fields, transition status, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
 - `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
-- `backend/src/services/participants.ts` implements the §4.5 assignment list/create/update/remove behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
-- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.5 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
+- `backend/src/services/participants.ts` implements the §4.5 assignment list/create/update/remove/review-acknowledgment behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.
+- `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/participants.ts` implement the §4.5 coach workflow in event detail: assigned and active-roster loading, active-athlete assignment, RSVP replacement, per-athlete lifecycle review acknowledgment, inactive/archived historical participants, and confirmed relationship removal with preserved-history messaging. API-wrapper and RTL tests cover exact requests, independent retry states, mutation failures, async ordering and keyboard focus.
 - `backend/src/services/timeline.ts` implements the §4.6 active-entry list and create/sparse-edit/soft-delete workflow with transactional ownership/lifecycle checks, optimistic version conflicts, retry-safe undo, and atomic §4.7 result, placing and PB/SB recomputation. Event replacement/cancellation invokes the same locked recomputation when type, chronology or scoring status changes. Route/service tests cover validation, envelopes, finish/incident/note edits, stale versions, tombstone exclusion, repeated undo and effective overrides; a `TEST_DATABASE_URL`-gated integration suite covers persistence, parent/coach isolation, competition/training timing, ranking and best flags.
 - `frontend/src/api/timeline.ts` and `LiveLoggingPage` expose the active list, normalized create, version-aware entry-type-valid correction, accessible confirmed undo, finish/incident logging and live standings. Finish/correction inputs use hundredth precision and decimal mobile semantics so displayed 100m times do not hide ranking-significant digits. The logger verifies fresh event status before exposing controls, distinguishes exact stale-version and event-closed conflicts, serializes writes through authoritative standings refresh, and isolates secondary standings/history failures from core logging.
 - Result read/override is live; override writes retain raw derivation and invoke canonical whole-event recomputation. The typed frontend wrapper and shared event-result view present effective competition/training outcomes in event detail and Live Logging, preserve backend tied placings/PB/SB, join active non-void penalties from the timeline, and show partial/historical rows. The correction workflow keeps raw derivation visible, requires a corrected time plus reason, exposes actor/time/reason, confirms paired-null clearing, and re-lists the whole event after mutation.

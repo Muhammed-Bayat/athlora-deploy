@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types';
+import { ApiError } from '../../api/client';
 import { Auth0TokenBridge } from './Auth0TokenBridge';
 import { useCurrentUser } from './CurrentUserContext';
 
@@ -22,11 +23,15 @@ vi.mock('@auth0/auth0-react', () => ({
   useAuth0: () => mocks.auth,
 }));
 
-vi.mock('../../api/client', () => ({
-  setAccessTokenGetter: mocks.setAccessTokenGetter,
-  setActiveWorkspaceId: mocks.setActiveWorkspaceId,
-  syncCurrentUser: mocks.syncCurrentUser,
-}));
+vi.mock('../../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/client')>();
+  return {
+    ...actual,
+    setAccessTokenGetter: mocks.setAccessTokenGetter,
+    setActiveWorkspaceId: mocks.setActiveWorkspaceId,
+    syncCurrentUser: mocks.syncCurrentUser,
+  };
+});
 
 vi.mock('../../api/workspaces', () => ({ listWorkspaces: mocks.listWorkspaces }));
 
@@ -121,5 +126,22 @@ describe('Auth0TokenBridge', () => {
 
     await waitFor(() => expect(mocks.syncCurrentUser).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Private application')).toBeInTheDocument();
+  });
+
+  it('shows a support-safe code and correlation reference for API failures', async () => {
+    mocks.auth.isAuthenticated = true;
+    mocks.auth.user = { sub: 'auth0|user-1' };
+    mocks.syncCurrentUser.mockRejectedValue(new ApiError(
+      500,
+      'INTERNAL_ERROR',
+      'Internal server error',
+      { requestId: 'request-123' },
+    ));
+
+    renderBridge();
+
+    expect(await screen.findByText(/Error code: INTERNAL_ERROR/)).toHaveTextContent(
+      'Reference: request-123',
+    );
   });
 });

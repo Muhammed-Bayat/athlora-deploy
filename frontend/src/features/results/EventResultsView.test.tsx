@@ -50,7 +50,8 @@ function participant(
     eventId: EVENT_ID,
     athleteId,
     rsvpStatus: 'yes',
-    athlete: { id: athleteId, name, squadNames: ['Sprint'], archivedAt: null },
+    athlete: { id: athleteId, name, squadNames: ['Sprint'], archivedAt: null, status: 'active' },
+    statusReviewRequired: false,
     ...overrides,
   };
 }
@@ -65,6 +66,9 @@ function athlete(athleteId: string, name: string, overrides: Partial<Athlete> = 
     squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-01T10:00:00.000Z',
+    statusChangedBy: 'coach-1',
     createdAt: '2026-08-01T10:00:00.000Z',
     updatedAt: '2026-08-01T10:00:00.000Z',
     ...overrides,
@@ -224,7 +228,7 @@ describe('EventResultsView', () => {
   it('renders PB/SB for an assigned partial athlete and identifies an archived historical result', () => {
     renderView({
       participants: [participant('assigned', 'Assigned Runner', {
-        athlete: { id: 'assigned', name: 'Assigned Runner', squadNames: ['Development'], archivedAt: null },
+        athlete: { id: 'assigned', name: 'Assigned Runner', squadNames: ['Development'], archivedAt: null, status: 'active' },
       })],
       results: [
         result('assigned', { finalResult: 10.75, isPb: true, isSb: true }),

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { setAccessTokenGetter, syncCurrentUser } from '../../api/client';
+import { ApiError, setAccessTokenGetter, syncCurrentUser } from '../../api/client';
 import { listWorkspaces } from '../../api/workspaces';
 import { Button } from '../../components';
 import type { User, Workspace } from '../../types';
@@ -16,7 +16,7 @@ type SynchronizationState =
   | { status: 'idle' }
   | { status: 'synchronizing'; subject: string }
   | { status: 'ready'; subject: string; user: User; workspaces: Workspace[]; activeWorkspace: Workspace }
-  | { status: 'error'; subject: string };
+  | { status: 'error'; subject: string; code: string; requestId?: string };
 
 interface SynchronizationAttempt {
   subject: string;
@@ -73,9 +73,17 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
           setSynchronization({ status: 'ready', subject, ...session });
         }
       },
-      () => {
+      (error: unknown) => {
         if (active) {
-          setSynchronization({ status: 'error', subject });
+          const requestId = error instanceof ApiError && typeof error.details.requestId === 'string'
+            ? error.details.requestId
+            : undefined;
+          setSynchronization({
+            status: 'error',
+            subject,
+            code: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR',
+            requestId,
+          });
         }
       },
     );
@@ -115,6 +123,10 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
           <h1 id="user-sync-error-title">We could not finish signing you in</h1>
           <p className={styles.description}>
             Your account could not be synchronized. Try again before continuing to Athlora.
+          </p>
+          <p className={styles.reference}>
+            Error code: {synchronization.code}
+            {synchronization.requestId ? <> | Reference: {synchronization.requestId}</> : null}
           </p>
           <Button onClick={() => setRetry((currentRetry) => currentRetry + 1)}>Try again</Button>
         </section>

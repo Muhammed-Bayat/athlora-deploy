@@ -44,7 +44,7 @@ async function completeUniversalLogin(page: Page, email: string, password: strin
   }
 }
 
-setup('authenticate', async ({ page }) => {
+setup('authenticate', async ({ page, browser }) => {
   const email = required('E2E_AUTH0_EMAIL');
   const password = required('E2E_AUTH0_PASSWORD');
 
@@ -62,4 +62,18 @@ setup('authenticate', async ({ page }) => {
     .waitFor({ state: 'visible', timeout: 90_000 });
 
   await page.context().storageState({ path: path.join(__dirname, '..', '.auth', 'coach.json') });
+
+  const guestContext = await browser.newContext();
+  const guestPage = await guestContext.newPage();
+  await guestPage.goto('/');
+  await guestPage
+    .getByRole('navigation', { name: 'Landing page' })
+    .getByRole('button', { name: 'Log in' })
+    .click();
+  await completeUniversalLogin(guestPage, required('E2E_GUEST_AUTH0_EMAIL'), required('E2E_GUEST_AUTH0_PASSWORD'));
+  await guestPage
+    .getByRole('navigation', { name: 'Coach console' })
+    .waitFor({ state: 'visible', timeout: 90_000 });
+  await guestContext.storageState({ path: path.join(__dirname, '..', '.auth', 'guest.json') });
+  await guestContext.close();
 });

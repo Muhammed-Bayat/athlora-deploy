@@ -64,6 +64,9 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     squads: [],
     notes: null,
     archived_at: null,
+    lifecycle_status: 'active',
+    status_changed_at: new Date('2026-08-01T09:00:00.000Z'),
+    status_changed_by: USER_ID,
     created_at: new Date('2026-08-01T09:00:00.000Z'),
     updated_at: new Date('2026-08-01T09:00:00.000Z'),
     ...overrides,
@@ -80,6 +83,9 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-01T09:00:00.000Z',
+    statusChangedBy: USER_ID,
     createdAt: '2026-08-01T09:00:00.000Z',
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
@@ -98,7 +104,7 @@ describe('GET /api/v1/athletes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toMatch(/archived_at IS NULL/);
+    expect(sql).toMatch(/lifecycle_status <> 'archived'/);
     expect(sql).toMatch(/workspace_id = \$1/);
     expect(parameters).toEqual([USER_ID]);
   });
@@ -125,7 +131,7 @@ describe('GET /api/v1/athletes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: expect.any(Array), meta: { count: 2 } });
     const [sql] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).not.toMatch(/archived_at IS NULL/);
+    expect(sql).not.toMatch(/lifecycle_status <> 'archived'/);
   });
 
   it('filters by name and squad ID', async () => {
@@ -349,8 +355,11 @@ describe('DELETE /api/v1/athletes/:id', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'active' }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
-      .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: new Date('2026-08-03T10:00:00.000Z') })] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [athleteRow({ lifecycle_status: 'archived', archived_at: new Date('2026-08-03T10:00:00.000Z') })] });
 
     const response = await request(app)
       .delete(`/api/v1/athletes/${ATHLETE_ID}`)
@@ -358,8 +367,8 @@ describe('DELETE /api/v1/athletes/:id', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.archivedAt).toBe('2026-08-03T10:00:00.000Z');
-    const [sql] = query.mock.calls[2] as [string, unknown[]];
-    expect(sql).toContain('archived_at = now()');
+    const [sql] = query.mock.calls[3] as [string, unknown[]];
+    expect(sql).toContain("archived_at = CASE WHEN $1 = 'archived' THEN now() ELSE NULL END");
     expect(sql).not.toContain('DELETE FROM');
   });
 
@@ -382,7 +391,10 @@ describe('POST /api/v1/athletes/:id/unarchive', () => {
     query
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'archived' }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: null })] });
 
     const response = await request(app)
@@ -391,8 +403,8 @@ describe('POST /api/v1/athletes/:id/unarchive', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.archivedAt).toBeNull();
-    const [sql] = query.mock.calls[2] as [string, unknown[]];
-    expect(sql).toContain('archived_at = NULL');
+    const [sql] = query.mock.calls[3] as [string, unknown[]];
+    expect(sql).toContain("archived_at = CASE WHEN $1 = 'archived' THEN now() ELSE NULL END");
   });
 
   it('hides a foreign athlete from unarchival', async () => {

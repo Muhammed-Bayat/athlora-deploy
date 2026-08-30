@@ -274,6 +274,7 @@ describe('cancelEvent', () => {
   it('cancels an owned event with an update, never a delete', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const event = await cancelEvent(USER_ID, EVENT_ID);
@@ -281,11 +282,43 @@ describe('cancelEvent', () => {
     expect(event.status).toBe('cancelled');
     const [lockSql] = query.mock.calls[0] as [string, unknown[]];
     expect(lockSql).toContain('FOR UPDATE');
-    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[2] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
     expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
+  });
+
+  it('rejects a non-host workspace when active guest teams exist', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [{ workspace_id: '99999999-9999-9999-8999-999999999999' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(cancelEvent(USER_ID, EVENT_ID)).rejects.toMatchObject({
+      code: 'FIXTURE_HOST_ONLY',
+    });
+    expect(recomputeEventResults).not.toHaveBeenCalled();
+  });
+
+  it('allows the host workspace to cancel when active guest teams exist', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [{ workspace_id: USER_ID }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
+
+    const event = await cancelEvent(USER_ID, EVENT_ID);
+
+    expect(event.status).toBe('cancelled');
+    const [lockSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(lockSql).toContain('FOR UPDATE');
+    const hasGuestsSql = query.mock.calls[1][0] as string;
+    expect(hasGuestsSql).toContain('role');
+    const hostCheckSql = query.mock.calls[2][0] as string;
+    expect(hostCheckSql).toContain('role');
+    expect(hostCheckSql).toContain("'host'");
+    expect(recomputeEventResults).toHaveBeenCalled();
   });
 
   it('returns the generic not-found error when no owned row exists', async () => {

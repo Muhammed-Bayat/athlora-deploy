@@ -17,7 +17,14 @@ const PARTICIPANT_COLUMNS = `ep.event_id,
        ep.rsvp_status,
        a.name AS athlete_name,
        COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
-       a.archived_at AS athlete_archived_at`;
+        a.archived_at AS athlete_archived_at,
+        a.lifecycle_status AS athlete_lifecycle_status,
+        EXISTS (
+          SELECT 1 FROM event_participant_status_reviews epsr
+          WHERE epsr.event_id = ep.event_id
+            AND epsr.athlete_id = ep.athlete_id
+            AND epsr.acknowledged_at IS NULL
+        ) AS status_review_required`;
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -81,9 +88,10 @@ export async function addEventParticipant(
   return runTransaction(async (client) => {
     const athlete = await client.query<{
       archived_at: Date | string | null;
+      lifecycle_status: 'active' | 'inactive' | 'archived';
       already_assigned: boolean;
     }>(
-      `SELECT a.archived_at,
+       `SELECT a.archived_at, a.lifecycle_status,
               EXISTS (
                 SELECT 1
                 FROM event_participants ep
@@ -109,10 +117,13 @@ export async function addEventParticipant(
     if (ownedAthlete.archived_at !== null) {
       throw new ApiError(409, 'ATHLETE_ARCHIVED', 'Archived athletes cannot be assigned to events');
     }
+    if (ownedAthlete.lifecycle_status === 'inactive') {
+      throw new ApiError(409, 'ATHLETE_INACTIVE', 'Inactive athletes cannot be assigned to events');
+    }
 
     const inserted = await client.query(
-      `INSERT INTO event_participants (event_id, athlete_id)
-       VALUES ($1, $2)
+      `INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id)
+       SELECT $1, $2, workspace_id FROM athletes WHERE id = $2
        RETURNING event_id`,
       [ownedEventId, payload.athleteId],
     );
@@ -167,4 +178,26 @@ export async function removeEventParticipant(
     [ownedEventId, ownedAthleteId, workspaceId],
   );
   if (result.rows.length === 0) throw notFound();
+}
+
+export async function acknowledgeParticipantStatusReview(
+  workspaceId: string,
+  actorId: string,
+  eventId: unknown,
+  athleteId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<void> {
+  const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
+  if (!isCanonicalUuid(actorId)) throw notFound();
+  await executor.query(
+    `UPDATE event_participant_status_reviews epsr
+     SET acknowledged_at = now(), acknowledged_by = $1
+     FROM events e
+     WHERE epsr.event_id = $2
+       AND epsr.athlete_id = $3
+       AND e.id = epsr.event_id
+       AND e.workspace_id = $4
+       AND epsr.acknowledged_at IS NULL`,
+    [actorId, ownedEventId, ownedAthleteId, workspaceId],
+  );
 }

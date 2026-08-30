@@ -140,12 +140,12 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, coverage, build | passing (237 Vitest/RTL and track-math tests) |
-| `backend` | lint, typecheck, test, coverage, build | passing (327 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, coverage, build | passing (242 Vitest/RTL and track-math tests) |
+| `backend` | lint, typecheck, test, coverage, build | passing (361 Vitest/Supertest tests; 40 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 
-The backend suite includes 38 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests, 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, and 3 cross-coach authorization tests proving every owned resource — including result overrides and athlete statistics — returns the generic `404` for a different coach while list endpoints never leak foreign rows. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
+The backend suite includes 40 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, and 1 injury-persistence test. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 
 ## Definition of done
 
@@ -153,4 +153,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].

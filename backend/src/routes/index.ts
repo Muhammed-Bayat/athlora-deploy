@@ -11,6 +11,8 @@ import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
 import workspacesRouter from './workspaces.js';
 import venuesRouter from './venues.js';
+import fixturesRouter, { fixtureHostRouter } from './fixtures.js';
+import injuriesRouter from './injuries.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -19,6 +21,7 @@ import { requireCoach } from '../middleware/capabilities.js';
 import {
   parseAthleteCreatePayload,
   parseAthleteReplacementPayload,
+  parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventReplacementPayload,
   parseSquadPayload,
@@ -38,6 +41,13 @@ athletesRouter.put(
 );
 athletesRouter.delete('/:id', requireCoach(), requireAthleteOwnership, athletes.deleteAthlete);
 athletesRouter.post('/:id/unarchive', requireCoach(), requireAthleteOwnership, athletes.unarchiveAthlete);
+athletesRouter.post(
+  '/:id/status',
+  requireCoach(), validateBody(parseAthleteStatusPayload),
+  requireAthleteOwnership,
+  athletes.updateAthleteStatus,
+);
+athletesRouter.use('/:id/injuries', injuriesRouter);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);
@@ -78,10 +88,12 @@ router.use(
   '/events',
   verifyAuth0Token,
   resolveApplicationUser,
+  fixtureHostRouter,
   participantsRouter,
   timelineRouter,
   resultsRouter,
   eventsRouter,
 );
+router.use('/fixtures', verifyAuth0Token, resolveApplicationUser, fixturesRouter);
 
 export default router;

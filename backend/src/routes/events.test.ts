@@ -525,6 +525,7 @@ describe('DELETE /api/v1/events/:id', () => {
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const response = await request(app)
@@ -533,7 +534,7 @@ describe('DELETE /api/v1/events/:id', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('cancelled');
-    const [sql, parameters] = query.mock.calls[3] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[4] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);

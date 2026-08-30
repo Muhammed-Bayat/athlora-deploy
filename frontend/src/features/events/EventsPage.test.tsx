@@ -33,6 +33,11 @@ const resultApi = vi.hoisted(() => ({
 const timelineApi = vi.hoisted(() => ({
   listTimelineEntries: vi.fn(),
 }));
+const fixturesApi = vi.hoisted(() => ({
+  listFixtureRosters: vi.fn(),
+  listFixtureInvitations: vi.fn(),
+  listHostedFixtureResults: vi.fn(),
+}));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
@@ -40,6 +45,7 @@ vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/results', () => resultApi);
 vi.mock('../../api/timeline', () => timelineApi);
 vi.mock('../../api/venues', () => venueApi);
+vi.mock('../../api/fixtures', () => fixturesApi);
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
@@ -103,6 +109,9 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-16T10:00:00.000Z',
+    statusChangedBy: '55555555-5555-4555-8555-555555555555',
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -114,7 +123,8 @@ function participant(overrides: Partial<EventParticipantSummary> = {}): EventPar
     eventId: CITY_ID,
     athleteId: ARI_ID,
     rsvpStatus: 'pending',
-    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null, status: 'active' },
+    statusReviewRequired: false,
     ...overrides,
   };
 }
@@ -124,7 +134,7 @@ const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squads: [] });
 const ariParticipant = participant();
 const beaParticipant = participant({
   athleteId: BEA_ID,
-  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null },
+  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null, status: 'active' },
 });
 const currentUser: User = {
   id: '55555555-5555-4555-8555-555555555555',
@@ -177,6 +187,9 @@ beforeEach(() => {
   resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
   timelineApi.listTimelineEntries.mockResolvedValue({ data: [], meta: { count: 0 } });
   venueApi.searchVenues.mockResolvedValue({ data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 } });
+  fixturesApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
@@ -393,7 +406,7 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Assigned athletes 1');
     expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
-    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: false });
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ status: 'active' });
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
     expect(within(detail).getByTitle(/OpenStreetMap preview/)).toHaveAttribute('src', expect.stringContaining('openstreetmap.org/export/embed.html'));
     expect(within(detail).getByRole('link', { name: /Open in OpenStreetMap/ })).toHaveAttribute('href', expect.stringContaining('mlat=-26.2041'));
@@ -580,7 +593,7 @@ describe('EventsPage', () => {
 
   it('keeps archived historical participants visible but out of assignment candidates', async () => {
     participantApi.listEventParticipants.mockResolvedValue({
-      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z' } })],
+      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z', status: 'archived' } })],
       meta: { count: 1 },
     });
     athleteApi.listAthletes.mockResolvedValue({ data: [bea], meta: { count: 1 } });

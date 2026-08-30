@@ -5,11 +5,14 @@ import {
   parseAthleteCreatePayload,
   parseAthleteListQuery,
   parseAthleteReplacementPayload,
+  parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventListQuery,
   parseEventParticipantCreatePayload,
   parseEventParticipantReplacementPayload,
   parseEventReplacementPayload,
+  parseFixtureInvitationCreatePayload,
+  parseFixtureInvitationResponsePayload,
   parseResultOverridePayload,
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
@@ -154,6 +157,10 @@ describe('athlete list queries', () => {
     expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
   });
 
+  it('parses an exact lifecycle status filter', () => {
+    expect(parseAthleteListQuery({ status: 'inactive' })).toEqual({ includeArchived: false, status: 'inactive' });
+  });
+
   it('rejects unknown, malformed, blank, and non-string query values', () => {
     expectValidationError(
       () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squadId: 5 }),
@@ -164,6 +171,15 @@ describe('athlete list queries', () => {
         { path: 'squadId', code: 'invalid_type', message: 'Expected a string' },
       ],
     );
+  });
+});
+
+describe('athlete lifecycle payloads', () => {
+  it('accepts only a supported target status', () => {
+    expect(parseAthleteStatusPayload({ status: 'archived' })).toEqual({ status: 'archived' });
+    expectValidationError(() => parseAthleteStatusPayload({ status: 'paused' }), [
+      { path: 'status', code: 'invalid_value', message: 'Expected one of: active, inactive, archived' },
+    ]);
   });
 });
 
@@ -649,6 +665,32 @@ describe('result override payloads', () => {
         { path: 'overriddenBy', code: 'unknown_field', message: 'Field is not allowed' },
         { path: 'overrideAt', code: 'unknown_field', message: 'Field is not allowed' },
       ],
+    );
+  });
+});
+
+describe('fixture invitation payloads', () => {
+  it('normalizes invitation email and accepts valid response states', () => {
+    expect(parseFixtureInvitationCreatePayload({ email: ' Guest@Example.com ' })).toEqual({
+      email: 'guest@example.com', expiresInDays: 7,
+    });
+    expect(parseFixtureInvitationResponsePayload({ response: 'change_requested', message: ' Move the start time ' })).toEqual({
+      response: 'change_requested', message: 'Move the start time',
+    });
+  });
+
+  it('requires a bounded expiry and a message only for change requests', () => {
+    expectValidationError(
+      () => parseFixtureInvitationCreatePayload({ email: 'guest@example.com', expiresInDays: 31 }),
+      [{ path: 'expiresInDays', code: 'invalid_value', message: 'Expected an integer from 1 to 30' }],
+    );
+    expectValidationError(
+      () => parseFixtureInvitationResponsePayload({ response: 'change_requested' }),
+      [{ path: 'message', code: 'required', message: 'A change request needs a message' }],
+    );
+    expectValidationError(
+      () => parseFixtureInvitationResponsePayload({ response: 'accepted', message: 'Thanks' }),
+      [{ path: 'message', code: 'not_allowed', message: 'Only change requests may include a message' }],
     );
   });
 });

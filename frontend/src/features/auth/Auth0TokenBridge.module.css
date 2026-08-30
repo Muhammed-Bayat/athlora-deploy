@@ -42,6 +42,14 @@
   line-height: 1.6;
 }
 
+.reference {
+  margin: calc(var(--space-3) * -1) auto var(--space-6);
+  color: var(--color-text-faint);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
 .status {
   color: var(--color-text-muted);
 }

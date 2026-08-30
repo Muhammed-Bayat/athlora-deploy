@@ -1,5 +1,5 @@
 import { lazy, Suspense, type KeyboardEvent, useEffect, useRef, useState } from 'react';
-import { getAthlete, updateAthlete } from '../../api/athletes';
+import { getAthlete, updateAthlete, updateAthleteStatus } from '../../api/athletes';
 import { getAthleteStatistics } from '../../api/statistics';
 import { Badge, Button, Card, Modal, Toast } from '../../components';
 import type {
@@ -12,7 +12,6 @@ import type {
 import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
-import type { Injury } from '../fitness/injuryRegions';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './AthleteDetailPage.module.css';
 
@@ -38,6 +37,10 @@ function initials(name: string): string {
 
 function outcomeVariant(outcome: ResultOutcome): 'dq' | 'dnf' | 'dns' | 'neutral' {
   return outcome === 'dq' || outcome === 'dnf' || outcome === 'dns' ? outcome : 'neutral';
+}
+
+function statusLabel(status: Athlete['status']): string {
+  return status[0].toUpperCase() + status.slice(1);
 }
 
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
@@ -105,7 +108,6 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const [fitnessOpen, setFitnessOpen] = useState(false);
-  const [injuries, setInjuries] = useState<Injury[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -183,15 +185,23 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const selectedTab = activeTab ?? defaultTab;
   const activeEntries = statistics?.recentResults[selectedTab] ?? [];
   const activeResultType = selectedTab === 'competitions' ? 'competition' : 'training';
+  const isArchived = athlete?.status === 'archived';
 
   if (fitnessOpen) {
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
+      athleteId={athleteId}
       athleteName={displayName}
-       athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
-      injuries={injuries}
-      onAddInjury={(injury) => setInjuries((current) => [...current, injury])}
-      onResolveInjury={(injuryId) => setInjuries((current) => current.filter((injury) => injury.id !== injuryId))}
+      athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
+      athleteStatus={athlete?.status ?? 'active'}
+      isCoach={isCoach}
       onBack={() => setFitnessOpen(false)}
+      onSetInactive={() => {
+        void updateAthleteStatus(athleteId, 'inactive').then((updated) => {
+          setAthlete(updated);
+          onAthleteUpdated(updated);
+          setNotice(`${updated.name} set to inactive.`);
+        });
+      }}
     /></Suspense>;
   }
 
@@ -217,12 +227,13 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
         </div>
         <div className={styles.heroActions}>
           {athlete && (
-            <span className={athlete.archivedAt ? styles.archivedState : styles.activeState}>
-              {athlete.archivedAt ? 'Archived athlete' : 'Active athlete'}
+            <span className={athlete.status === 'archived' ? styles.archivedState : athlete.status === 'inactive' ? styles.inactiveState : styles.activeState}>
+              {statusLabel(athlete.status)} athlete
             </span>
           )}
-          {athlete && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
-          {isCoach && athlete && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {athlete && !isArchived && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness</Button>}
+          {isCoach && athlete && !isArchived && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {isArchived && <span className={styles.readOnlyNotice}>Archived profiles are read-only.</span>}
         </div>
       </header>
 
@@ -256,8 +267,9 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
           <dl className={styles.profileDetails}>
             <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
             <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
-            <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
-             <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
+             <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
+              <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
+             <div><dt>Status changed</dt><dd><time dateTime={athlete.statusChangedAt}>{new Date(athlete.statusChangedAt).toLocaleDateString()}</time></dd></div>
             <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
           </dl>
         )}

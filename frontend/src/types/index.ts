@@ -42,6 +42,7 @@ export const RESULT_UNIT_SECONDS = 'seconds' as const;
 export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
+export type AthleteStatus = 'active' | 'inactive' | 'archived';
 
 export interface Athlete {
   id: string;
@@ -53,6 +54,9 @@ export interface Athlete {
   squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
+  status: AthleteStatus;
+  statusChangedAt: string;
+  statusChangedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +80,7 @@ export interface AthleteMutationPayload {
 
 export interface AthleteListFilters {
   includeArchived?: boolean;
+  status?: AthleteStatus;
   name?: string;
   squadId?: string;
   squad?: string;
@@ -160,10 +165,49 @@ export interface EventParticipantAthleteSummary {
   squadNames?: string[];
   squad?: string | null;
   archivedAt: string | null;
+  status: AthleteStatus;
 }
 
 export interface EventParticipantSummary extends EventParticipant {
   athlete: EventParticipantAthleteSummary;
+  statusReviewRequired: boolean;
+}
+
+export type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
+export type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'withdrawn';
+
+export interface FixtureInvitation {
+  id: string;
+  eventId: string;
+  email: string;
+  revision: number;
+  status: FixtureInvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+  targetWorkspaceId: string | null;
+  responseMessage: string | null;
+  respondedAt: string | null;
+  token?: string;
+}
+
+export interface FixtureTeam {
+  workspaceId: string;
+  workspaceName: string;
+  status: FixtureWorkspaceStatus;
+  acceptedRevision: number;
+  withdrawnAt: string | null;
+}
+
+export interface FixtureDetail {
+  event: AthleticsEvent;
+  revision: number;
+  teamStatus: FixtureWorkspaceStatus;
+  teams: FixtureTeam[];
+}
+
+export interface FixtureTeamRoster {
+  team: FixtureTeam;
+  participants: EventParticipantSummary[];
 }
 
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
@@ -333,7 +377,9 @@ export interface DashboardSummary {
   asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
   archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
   activeEvent: DashboardActiveEvent | null;
@@ -355,3 +401,39 @@ export interface ApiList<T> {
   data: T[];
   meta: { count: number };
 }
+
+export const INJURY_REGIONS = {
+  'Head & Neck': ['Head', 'Neck'],
+  Torso: ['Chest', 'Abdomen / core', 'Pelvis', 'Upper back', 'Lower back'],
+  Arm: ['Shoulder', 'Upper arm', 'Elbow', 'Forearm', 'Wrist', 'Hand'],
+  Leg: ['Hip', 'Thigh', 'Knee', 'Shin / calf', 'Ankle', 'Foot'],
+} as const;
+
+export type InjuryRegion = keyof typeof INJURY_REGIONS;
+export type InjuryArea = (typeof INJURY_REGIONS)[InjuryRegion][number];
+export type InjurySide = 'Left' | 'Right' | 'Both' | 'Center';
+export type InjurySeverity = 'Minor' | 'Moderate' | 'Severe';
+
+export interface Injury {
+  id: string;
+  workspaceId: string;
+  athleteId: string;
+  bodyRegion: InjuryRegion;
+  region: InjuryRegion;
+  area: InjuryArea;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string;
+  expectedReturnDate: string | null;
+  resolvedDate: string | null;
+  resolutionNotes: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export type InjuryDraft = Omit<Injury, 'id' | 'workspaceId' | 'athleteId' | 'resolvedDate' | 'resolutionNotes' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'deletedBy'>;

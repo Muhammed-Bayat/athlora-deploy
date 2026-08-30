@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardSummary } from './types';
+import { ApiError } from './api/client';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -19,13 +20,16 @@ const dashboardApi = vi.hoisted(() => ({
 }));
 
 const workspaceApi = vi.hoisted(() => ({ acceptWorkspaceInvitation: vi.fn() }));
+const fixtureApi = vi.hoisted(() => ({ respondToFixtureInvitation: vi.fn() }));
 
 const emptyDashboard: DashboardSummary = {
   state: 'summary',
   asOfDate: '2026-08-18',
   athletesCount: 0,
   activeAthletesCount: 0,
+  inactiveAthletesCount: 0,
   archivedAthletesCount: 0,
+  statusReviewCount: 0,
   upcomingEventCount: 0,
   seasonPbs: 0,
   activeEvent: null,
@@ -49,6 +53,10 @@ vi.mock('./api/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api/workspaces')>()),
   acceptWorkspaceInvitation: workspaceApi.acceptWorkspaceInvitation,
 }));
+vi.mock('./api/fixtures', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./api/fixtures')>()),
+  respondToFixtureInvitation: fixtureApi.respondToFixtureInvitation,
+}));
 
 vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
   PersistentWebGLStage: () => null,
@@ -69,6 +77,7 @@ describe('App', () => {
     dashboardApi.getDashboardSummary.mockReset();
     dashboardApi.getDashboardSummary.mockResolvedValue(emptyDashboard);
     workspaceApi.acceptWorkspaceInvitation.mockReset();
+    fixtureApi.respondToFixtureInvitation.mockReset();
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -176,5 +185,21 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Performance. In motion.' })).toBeInTheDocument();
     expect(workspaceApi.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
+  });
+
+  it('explains that an assistant must select a coach workspace for a fixture invitation', async () => {
+    const user = userEvent.setup();
+    authState.isAuthenticated = true;
+    fixtureApi.respondToFixtureInvitation.mockRejectedValue(
+      new ApiError(403, 'WORKSPACE_CAPABILITY_DENIED', 'Coach access is required'),
+    );
+    window.history.replaceState({}, '', '/fixture-invitations/token-123');
+
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Accept fixture' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This workspace has assistant access. Select a separate workspace where you are a coach to accept as a guest team.',
+    );
   });
 });
