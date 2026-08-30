@@ -389,6 +389,10 @@ describe('owned resource routes', () => {
       status: 'pending',
     });
     expect(response.body.data.token).toEqual(expect.any(String));
+    expect(query.mock.calls[3]).toEqual(expect.arrayContaining([
+      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
+      [EVENT_ID, USER_ID],
+    ]));
   });
 });
 

@@ -78,8 +78,9 @@ export function FixtureHostPanel({ event, isCoach }: { event: AthleticsEvent; is
   return <Card>
     <header><p>Cross-workspace fixture</p><h2>Participating teams</h2><span>Each guest team controls only its own roster. Changes to date, time, venue, or teams require reacceptance.</span></header>
     {eligible && <form onSubmit={(formEvent) => void submit(formEvent)}>
-      <label htmlFor={`fixture-email-${event.id}`}>Guest coach email</label>
+      <label htmlFor={`fixture-email-${event.id}`}>Guest team coach email</label>
       <Input id={`fixture-email-${event.id}`} type="email" value={email} onChange={(change) => setEmail(change.target.value)} required disabled={busy} />
+      <p>A coach already in this workspace can access this event directly. Fixture guests accept from a separate workspace.</p>
       <Button type="submit" disabled={busy}>{busy ? 'Creating...' : 'Create fixture invitation'}</Button>
     </form>}
     {!eligible && <p>Fixtures can only be invited to scheduled 100m competitions.</p>}
