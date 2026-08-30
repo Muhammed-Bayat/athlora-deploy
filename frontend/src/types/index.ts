@@ -395,3 +395,39 @@ export interface ApiList<T> {
   data: T[];
   meta: { count: number };
 }
+
+export const INJURY_REGIONS = {
+  'Head & Neck': ['Head', 'Neck'],
+  Torso: ['Chest', 'Abdomen / core', 'Pelvis', 'Upper back', 'Lower back'],
+  Arm: ['Shoulder', 'Upper arm', 'Elbow', 'Forearm', 'Wrist', 'Hand'],
+  Leg: ['Hip', 'Thigh', 'Knee', 'Shin / calf', 'Ankle', 'Foot'],
+} as const;
+
+export type InjuryRegion = keyof typeof INJURY_REGIONS;
+export type InjuryArea = (typeof INJURY_REGIONS)[InjuryRegion][number];
+export type InjurySide = 'Left' | 'Right' | 'Both' | 'Center';
+export type InjurySeverity = 'Minor' | 'Moderate' | 'Severe';
+
+export interface Injury {
+  id: string;
+  workspaceId: string;
+  athleteId: string;
+  bodyRegion: InjuryRegion;
+  region: InjuryRegion;
+  area: InjuryArea;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string;
+  expectedReturnDate: string | null;
+  resolvedDate: string | null;
+  resolutionNotes: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export type InjuryDraft = Omit<Injury, 'id' | 'workspaceId' | 'athleteId' | 'resolvedDate' | 'resolutionNotes' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'deletedBy'>;

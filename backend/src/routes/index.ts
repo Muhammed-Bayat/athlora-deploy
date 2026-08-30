@@ -11,6 +11,7 @@ import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
 import workspacesRouter from './workspaces.js';
 import fixturesRouter, { fixtureHostRouter } from './fixtures.js';
+import injuriesRouter from './injuries.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -45,6 +46,7 @@ athletesRouter.post(
   requireAthleteOwnership,
   athletes.updateAthleteStatus,
 );
+athletesRouter.use('/:id/injuries', injuriesRouter);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);

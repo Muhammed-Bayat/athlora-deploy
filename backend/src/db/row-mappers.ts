@@ -10,6 +10,12 @@ import {
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
   USER_ROLES,
+  INJURY_REGIONS,
+  INJURY_SIDES,
+  INJURY_SEVERITIES,
+  type InjuryRegion,
+  type InjuryArea,
+  type AthleteInjury,
   type AggregateAthleteIdentity,
   type AggregateEventIdentity,
   type Athlete,
@@ -937,5 +943,50 @@ export function mapDashboardMetricsRow(row: DashboardMetricsRow): DashboardMetri
       'dashboard metrics.upcoming_event_count',
     ),
     seasonPbs: count(row.season_pbs, 'dashboard metrics.season_pbs'),
+  };
+}
+
+export interface AthleteInjuryRow {
+  id: string;
+  workspace_id: string;
+  athlete_id: string;
+  body_region: string;
+  area: string;
+  side: string;
+  severity: string;
+  notes: string | null;
+  occurrence_date: DateValue;
+  expected_return_date: DateValue | null;
+  resolved_date: TimestampValue | null;
+  resolution_notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+  deleted_at: TimestampValue | null;
+  deleted_by: string | null;
+}
+
+export function mapAthleteInjuryRow(row: AthleteInjuryRow): AthleteInjury {
+  return {
+    id: uuid(row.id, 'athlete_injury.id'),
+    workspaceId: uuid(row.workspace_id, 'athlete_injury.workspace_id'),
+    athleteId: uuid(row.athlete_id, 'athlete_injury.athlete_id'),
+    bodyRegion: enumValue(row.body_region, Object.keys(INJURY_REGIONS) as InjuryRegion[], 'athlete_injury.body_region'),
+    region: enumValue(row.body_region, Object.keys(INJURY_REGIONS) as InjuryRegion[], 'athlete_injury.body_region'),
+    area: nonemptyString(row.area, 'athlete_injury.area') as InjuryArea,
+    side: enumValue(row.side, INJURY_SIDES, 'athlete_injury.side'),
+    severity: enumValue(row.severity, INJURY_SEVERITIES, 'athlete_injury.severity'),
+    notes: nullableString(row.notes, 'athlete_injury.notes'),
+    occurrenceDate: databaseDate(row.occurrence_date, 'athlete_injury.occurrence_date'),
+    expectedReturnDate: row.expected_return_date === null ? null : databaseDate(row.expected_return_date, 'athlete_injury.expected_return_date'),
+    resolvedDate: nullableTimestamp(row.resolved_date, 'athlete_injury.resolved_date'),
+    resolutionNotes: nullableString(row.resolution_notes, 'athlete_injury.resolution_notes'),
+    createdBy: uuid(row.created_by, 'athlete_injury.created_by'),
+    updatedBy: nullableUuid(row.updated_by, 'athlete_injury.updated_by'),
+    createdAt: timestamp(row.created_at, 'athlete_injury.created_at'),
+    updatedAt: timestamp(row.updated_at, 'athlete_injury.updated_at'),
+    deletedAt: nullableTimestamp(row.deleted_at, 'athlete_injury.deleted_at'),
+    deletedBy: nullableUuid(row.deleted_by, 'athlete_injury.deleted_by'),
   };
 }

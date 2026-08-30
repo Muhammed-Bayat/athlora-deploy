@@ -8,6 +8,9 @@ import {
   INCIDENT_TYPES,
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
+  INJURY_REGIONS,
+  INJURY_SIDES,
+  INJURY_SEVERITIES,
   type Discipline,
   type AthleteLifecycleStatus,
   type EntryType,
@@ -16,6 +19,9 @@ import {
   type IncidentType,
   type ResultUnit,
   type RsvpStatus,
+  type InjuryRegion,
+  type InjurySide,
+  type InjurySeverity,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -952,4 +958,195 @@ export function parseFixtureInvitationResponsePayload(input: unknown): FixtureIn
   }
   if (issues.length > 0) throwValidation(issues);
   return { response, message };
+}
+
+export interface InjuryCreatePayload {
+  bodyRegion: InjuryRegion;
+  area: string;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string;
+  expectedReturnDate: string | null;
+}
+
+export interface InjuryUpdatePayload {
+  bodyRegion?: InjuryRegion;
+  area?: string;
+  side?: InjurySide;
+  severity?: InjurySeverity;
+  notes?: string | null;
+  occurrenceDate?: string;
+  expectedReturnDate?: string | null;
+}
+
+export interface InjuryResolvePayload {
+  resolvedDate?: string | null;
+  resolutionNotes?: string | null;
+}
+
+export interface InjuryListQuery {
+  includeDeleted?: boolean;
+  status?: 'active' | 'resolved' | 'all';
+  severity?: InjurySeverity;
+}
+
+const INJURY_CREATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_UPDATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_RESOLVE_FIELDS = ['resolvedDate', 'resolutionNotes'] as const;
+
+export function parseInjuryCreatePayload(input: unknown): InjuryCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_CREATE_FIELDS, issues);
+
+  const bodyRegion = requiredEnum(payload, 'bodyRegion', Object.keys(INJURY_REGIONS) as InjuryRegion[], issues);
+  const area = requiredString(payload, 'area', issues);
+  const side = requiredEnum(payload, 'side', INJURY_SIDES, issues);
+  const severity = requiredEnum(payload, 'severity', INJURY_SEVERITIES, issues);
+  const notes = nullableString(payload, 'notes', issues);
+
+  let occurrenceDate = '';
+  if (!hasOwn(payload, 'occurrenceDate')) {
+    issues.push(issue('occurrenceDate', 'required', 'Field is required'));
+  } else if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+    issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+  } else {
+    occurrenceDate = payload.occurrenceDate;
+  }
+
+  let expectedReturnDate: string | null = null;
+  if (hasOwn(payload, 'expectedReturnDate') && payload.expectedReturnDate !== null) {
+    if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      expectedReturnDate = payload.expectedReturnDate;
+      if (occurrenceDate && expectedReturnDate < occurrenceDate) {
+        issues.push(issue('expectedReturnDate', 'invalid_value', 'Expected return date must be on or after occurrence date'));
+      }
+    }
+  }
+
+  if (bodyRegion && area) {
+    const allowedAreas = INJURY_REGIONS[bodyRegion as InjuryRegion] as readonly string[];
+    if (allowedAreas && !allowedAreas.includes(area)) {
+      issues.push(issue('area', 'invalid_value', `Area "${area}" is not valid for body region "${bodyRegion}"`));
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return {
+    bodyRegion: bodyRegion as InjuryRegion,
+    area,
+    side: side as InjurySide,
+    severity: severity as InjurySeverity,
+    notes,
+    occurrenceDate,
+    expectedReturnDate,
+  };
+}
+
+export function parseInjuryUpdatePayload(input: unknown): InjuryUpdatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_UPDATE_FIELDS, issues);
+
+  const result: InjuryUpdatePayload = {};
+
+  if (hasOwn(payload, 'bodyRegion')) {
+    if (!isEnumValue(payload.bodyRegion, Object.keys(INJURY_REGIONS))) {
+      issues.push(issue('bodyRegion', 'invalid_value', 'Expected a valid body region'));
+    } else {
+      result.bodyRegion = payload.bodyRegion as InjuryRegion;
+    }
+  }
+
+  if (hasOwn(payload, 'area')) {
+    const norm = normalizeRequiredString(payload.area);
+    if (norm === null) {
+      issues.push(issue('area', 'blank', 'Must not be blank'));
+    } else {
+      result.area = norm;
+    }
+  }
+
+  if (hasOwn(payload, 'side')) {
+    if (!isEnumValue(payload.side, INJURY_SIDES)) {
+      issues.push(issue('side', 'invalid_value', 'Expected a valid side'));
+    } else {
+      result.side = payload.side as InjurySide;
+    }
+  }
+
+  if (hasOwn(payload, 'severity')) {
+    if (!isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+      issues.push(issue('severity', 'invalid_value', 'Expected a valid severity'));
+    } else {
+      result.severity = payload.severity as InjurySeverity;
+    }
+  }
+
+  if (hasOwn(payload, 'notes')) {
+    result.notes = nullableString(payload, 'notes', issues);
+  }
+
+  if (hasOwn(payload, 'occurrenceDate')) {
+    if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+      issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+    } else {
+      result.occurrenceDate = payload.occurrenceDate;
+    }
+  }
+
+  if (hasOwn(payload, 'expectedReturnDate')) {
+    if (payload.expectedReturnDate === null) {
+      result.expectedReturnDate = null;
+    } else if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      result.expectedReturnDate = payload.expectedReturnDate;
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return result;
+}
+
+export function parseInjuryResolvePayload(input: unknown): InjuryResolvePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_RESOLVE_FIELDS, issues);
+
+  let resolvedDate: string | null = null;
+  if (hasOwn(payload, 'resolvedDate') && payload.resolvedDate !== null) {
+    if (typeof payload.resolvedDate !== 'string') {
+      issues.push(issue('resolvedDate', 'invalid_type', 'Expected a timestamp string or null'));
+    } else {
+      resolvedDate = payload.resolvedDate;
+    }
+  }
+
+  const resolutionNotes = nullableString(payload, 'resolutionNotes', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { resolvedDate, resolutionNotes };
+}
+
+export function parseInjuryListQuery(input: unknown): InjuryListQuery {
+  const payload = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+  const query: InjuryListQuery = {};
+
+  if (payload.includeDeleted === 'true' || payload.includeDeleted === true) {
+    query.includeDeleted = true;
+  }
+
+  if (payload.status === 'active' || payload.status === 'resolved' || payload.status === 'all') {
+    query.status = payload.status;
+  }
+
+  if (payload.severity && isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+    query.severity = payload.severity as InjurySeverity;
+  }
+
+  return query;
 }
