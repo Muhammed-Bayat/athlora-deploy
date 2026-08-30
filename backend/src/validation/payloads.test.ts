@@ -81,13 +81,13 @@ describe('event participant payloads', () => {
 
   it('requires a supported RSVP status for replacement', () => {
     expectValidationError(
-      () => parseEventParticipantReplacementPayload({ rsvpStatus: 'maybe', athleteId: ATHLETE_ID }),
+      () => parseEventParticipantReplacementPayload({ rsvpStatus: 'unknown', athleteId: ATHLETE_ID }),
       [
         { path: 'athleteId', code: 'unknown_field', message: 'Field is not allowed' },
         {
           path: 'rsvpStatus',
           code: 'invalid_value',
-          message: 'Expected one of: pending, yes, no',
+          message: 'Expected one of: pending, yes, no, maybe',
         },
       ],
     );
