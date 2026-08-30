@@ -585,7 +585,13 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     return () => {
       current = false;
     };
-  }, [reloadKey]);
+  }, [activeWorkspace.id, reloadKey]);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setEditor(null);
+    setNotice(null);
+  }, [activeWorkspace.id]);
 
   useEffect(() => {
     if (!loading && !loadError) {

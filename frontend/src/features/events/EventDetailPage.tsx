@@ -53,7 +53,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       if (current) setLoading(false);
     });
     return () => { current = false; };
-  }, [eventId, initialEvent, reloadKey]);
+  }, [activeWorkspace.id, eventId, initialEvent, reloadKey]);
 
   const saveEditor = async (payload: EventMutationPayload) => {
     if (!event) return;

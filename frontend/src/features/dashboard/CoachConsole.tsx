@@ -405,7 +405,7 @@ export function CoachConsole() {
         {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
         {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
         {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
-         {location.pathname.startsWith('/console/events/') && <EventDetailPage eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
+          {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
          {location.pathname === '/console/fixtures' && <FixturesPage key={`fixtures:${activeWorkspace.id}`} />}
         {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
         {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}

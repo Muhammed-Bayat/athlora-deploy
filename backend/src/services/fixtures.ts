@@ -55,8 +55,8 @@ function unavailable(): ApiError {
   return new ApiError(410, 'INVITATION_UNAVAILABLE', 'Invitation is expired, revoked, or no longer available');
 }
 
-function scopedIds(...ids: unknown[]): string[] {
-  if (!ids.every(isCanonicalUuid)) throw notFound();
+function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
+  if (!isCanonicalUuid(workspaceId) || !ids.every(isCanonicalUuid)) throw notFound();
   return ids as string[];
 }
 
@@ -198,7 +198,7 @@ export async function createFixtureInvitation(
   eventId: unknown,
   payload: FixtureInvitationCreatePayload,
 ): Promise<FixtureInvitation & { token: string }> {
-  const [ownedEventId] = scopedIds(workspaceId, actorId, eventId);
+  const [, ownedEventId] = scopedIds(workspaceId, actorId, eventId);
   return withTransaction(async (client) => {
     const event = await lockHostedFixture(client, workspaceId, ownedEventId);
     assertFixtureCanBeScheduled(event);
@@ -248,7 +248,7 @@ export async function resendFixtureInvitation(
   eventId: unknown,
   invitationId: unknown,
 ): Promise<FixtureInvitation & { token: string }> {
-  const [ownedEventId, ownedInvitationId] = scopedIds(workspaceId, actorId, eventId, invitationId);
+  const [, ownedEventId, ownedInvitationId] = scopedIds(workspaceId, actorId, eventId, invitationId);
   return withTransaction(async (client) => {
     const event = await lockHostedFixture(client, workspaceId, ownedEventId);
     assertFixtureCanBeScheduled(event);
@@ -284,7 +284,7 @@ export async function revokeFixtureInvitation(
   eventId: unknown,
   invitationId: unknown,
 ): Promise<void> {
-  const [ownedEventId, ownedInvitationId] = scopedIds(workspaceId, actorId, eventId, invitationId);
+  const [, ownedEventId, ownedInvitationId] = scopedIds(workspaceId, actorId, eventId, invitationId);
   const result = await getPool().query(
     `UPDATE fixture_invitations i
      SET status = 'revoked', revoked_at = now(), revoked_by = $3
@@ -612,7 +612,7 @@ export async function removeGuestFixtureParticipant(workspaceId: string, eventId
 }
 
 export async function withdrawGuestFixture(workspaceId: string, actorId: string, eventId: unknown): Promise<void> {
-  const [ownedEventId] = scopedIds(workspaceId, actorId, eventId);
+  const [, ownedEventId] = scopedIds(workspaceId, actorId, eventId);
   await withTransaction(async (client) => {
     const event = await client.query<{ status: string }>(
       `SELECT e.status FROM events e JOIN event_fixture_workspaces fw ON fw.event_id = e.id
@@ -637,7 +637,7 @@ export async function recordFixtureWithdrawal(
   eventId: unknown,
   guestWorkspaceId: unknown,
 ): Promise<void> {
-  const [ownedEventId, ownedGuestWorkspaceId] = scopedIds(hostWorkspaceId, actorId, eventId, guestWorkspaceId);
+  const [, ownedEventId, ownedGuestWorkspaceId] = scopedIds(hostWorkspaceId, actorId, eventId, guestWorkspaceId);
   await withTransaction(async (client) => {
     const event = await lockHostedFixture(client, hostWorkspaceId, ownedEventId);
     if (event.status === 'scheduled') throw new ApiError(409, 'FIXTURE_WITHDRAWAL_GUEST_ALLOWED', 'Guests record withdrawals before the fixture starts');
