@@ -18,12 +18,24 @@ interface LandingFitnessTeaserProps {
 
 const teaserInjury: Injury[] = [{
   id: 'landing-left-knee',
+  workspaceId: 'ws',
+  athleteId: 'ath',
+  bodyRegion: 'Leg',
   region: 'Leg',
   area: 'Knee',
   side: 'Left',
   severity: 'Moderate',
   notes: '',
+  occurrenceDate: '2026-01-01',
+  expectedReturnDate: null,
+  resolvedDate: null,
+  resolutionNotes: null,
+  createdBy: 'u',
+  updatedBy: null,
   createdAt: '',
+  updatedAt: '',
+  deletedAt: null,
+  deletedBy: null,
 }];
 
 function smoothstep(start: number, end: number, value: number) {

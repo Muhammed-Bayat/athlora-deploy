@@ -1,5 +1,5 @@
 import { lazy, Suspense, type KeyboardEvent, useEffect, useRef, useState } from 'react';
-import { getAthlete, updateAthlete } from '../../api/athletes';
+import { getAthlete, updateAthlete, updateAthleteStatus } from '../../api/athletes';
 import { getAthleteStatistics } from '../../api/statistics';
 import { Badge, Button, Card, Modal, Toast } from '../../components';
 import type {
@@ -12,7 +12,6 @@ import type {
 import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
-import type { Injury } from '../fitness/injuryRegions';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './AthleteDetailPage.module.css';
 
@@ -109,7 +108,6 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const [fitnessOpen, setFitnessOpen] = useState(false);
-  const [injuries, setInjuries] = useState<Injury[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -191,12 +189,19 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
 
   if (fitnessOpen) {
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
+      athleteId={athleteId}
       athleteName={displayName}
-       athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
-      injuries={injuries}
-      onAddInjury={(injury) => setInjuries((current) => [...current, injury])}
-      onResolveInjury={(injuryId) => setInjuries((current) => current.filter((injury) => injury.id !== injuryId))}
+      athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
+      athleteStatus={athlete?.status ?? 'active'}
+      isCoach={isCoach}
       onBack={() => setFitnessOpen(false)}
+      onSetInactive={() => {
+        void updateAthleteStatus(athleteId, 'inactive').then((updated) => {
+          setAthlete(updated);
+          onAthleteUpdated(updated);
+          setNotice(`${updated.name} set to inactive.`);
+        });
+      }}
     /></Suspense>;
   }
 
@@ -226,7 +231,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
               {statusLabel(athlete.status)} athlete
             </span>
           )}
-          {athlete && !isArchived && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness{injuries.length > 0 ? ` (${injuries.length})` : ''}</Button>}
+          {athlete && !isArchived && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness</Button>}
           {isCoach && athlete && !isArchived && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
           {isArchived && <span className={styles.readOnlyNotice}>Archived profiles are read-only.</span>}
         </div>

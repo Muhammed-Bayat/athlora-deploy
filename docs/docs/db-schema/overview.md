@@ -39,7 +39,25 @@ results              (event_id, athlete_id, discipline, outcome, final_result, u
                        — PK (event_id, athlete_id, discipline)
 account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
                        requested_at, updated_at, completed_at)
+athlete_injuries     (id UUID PK, workspace_id -> workspaces, athlete_id -> athletes, body_region, area,
+                       side, severity, notes, occurrence_date, expected_return_date, resolved_date,
+                       resolution_notes, created_by, updated_by, deleted_at, deleted_by)
 ```
+
+### athlete_injuries
+Persistent athlete injury and recovery records.
+
+- `body_region`: `Head & Neck`, `Torso`, `Arm`, `Leg`.
+- `area`: specific anatomical area.
+- `side`: `Left`, `Right`, `Both`, `Center`.
+- `severity`: `Minor`, `Moderate`, `Severe`.
+- `notes`: optional coach notes.
+- `occurrence_date`: date of injury occurrence.
+- `expected_return_date`: expected return date.
+- `resolved_date`: timestamp when resolved.
+- `resolution_notes`: notes recorded upon resolution.
+- `created_by`, `updated_by`, `deleted_by`: user attribution for audit.
+- `deleted_at`: soft deletion timestamp (`NULL` unless soft deleted, preserving historical attribution).
 
 ### timeline_entries
 The append-only live log — the heart of the app.
@@ -130,7 +148,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; and `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces; and `0011_athlete_injuries.sql` adds persistent athlete injury records with recovery history and audit tracking. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
@@ -145,4 +163,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra], opencode[gpt-5.6-sol], and opencode[google/gemini-3.5-flash-lite].
