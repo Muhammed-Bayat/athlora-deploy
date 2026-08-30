@@ -21,6 +21,9 @@ fixtureHostRouter.post('/:eventId/fixture-invitations/:invitationId/resend', req
 fixtureHostRouter.delete('/:eventId/fixture-invitations/:invitationId', requireCoach(), requireEventOwnership('eventId'), fixtures.revokeInvitation);
 fixtureHostRouter.get('/:eventId/fixture-rosters', requireCoach(), requireEventOwnership('eventId'), fixtures.hostedRosters);
 fixtureHostRouter.post('/:eventId/fixture-workspaces/:workspaceId/withdrawal', requireCoach(), requireEventOwnership('eventId'), fixtures.hostWithdrawal);
+fixtureHostRouter.get('/:eventId/fixture-entries', requireCoach(), requireEventOwnership('eventId'), fixtures.hostedEntries);
+fixtureHostRouter.get('/:eventId/fixture-results', requireCoach(), requireEventOwnership('eventId'), fixtures.hostedResults);
+fixtureHostRouter.put('/:eventId/fixture-results/:athleteId', requireCoach(), requireEventOwnership('eventId'), validateBody(parseResultOverridePayload), fixtures.overrideHostResult);
 
 const fixtureGuestRouter = Router();
 fixtureGuestRouter.post('/invitations/:token/respond', requireCoach(), validateBody(parseFixtureInvitationResponsePayload), fixtures.respond);

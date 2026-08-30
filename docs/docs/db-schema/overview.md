@@ -93,6 +93,8 @@ Every event receives one `host` row in `event_fixture_workspaces`, including his
 
 `events.fixture_revision` starts at `1`. A material date/time/venue change or accepted-team change advances it and marks guest teams as requiring reacceptance without removing their roster rows. A participant workspace may be withdrawn, but its participant, timeline, and result rows remain to preserve history.
 
+**Host authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can also view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side.
+
 ### athlete lifecycle
 
 `athletes.lifecycle_status` is constrained to `active`, `inactive`, or `archived`. The current transition is recorded on the athlete row for efficient reads; `athlete_status_transitions` preserves every real change with its actor and timestamp. Legacy rows are backfilled as active or archived without fabricating an actor.
@@ -137,6 +139,8 @@ Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, curren
 Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, hashed/versioned invitations and response history, material-change revisions, and composite participant foreign keys that enforce fixture-team roster ownership.
 
 Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
+
+**Host authority and shared result authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side. Cancellation preserves an intelligible historical record: placings become null and PB/SB flags clear, but result rows and timeline entries remain. Post-start withdrawal preserves the withdrawn team's results and entries.
 
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 

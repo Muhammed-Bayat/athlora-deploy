@@ -32,12 +32,18 @@ const resultApi = vi.hoisted(() => ({
 const timelineApi = vi.hoisted(() => ({
   listTimelineEntries: vi.fn(),
 }));
+const fixturesApi = vi.hoisted(() => ({
+  listFixtureRosters: vi.fn(),
+  listFixtureInvitations: vi.fn(),
+  listHostedFixtureResults: vi.fn(),
+}));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/results', () => resultApi);
 vi.mock('../../api/timeline', () => timelineApi);
+vi.mock('../../api/fixtures', () => fixturesApi);
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
@@ -178,6 +184,9 @@ beforeEach(() => {
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
   timelineApi.listTimelineEntries.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {

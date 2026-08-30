@@ -93,6 +93,19 @@ export async function deleteGuestFixtureEntry(eventId: string, entryId: string, 
   await request<void>(`/api/v1/fixtures/${eventId}/entries/${entryId}`, { method: 'DELETE', body: JSON.stringify(payload) });
 }
 
+export async function listHostedFixtureEntries(eventId: string): Promise<ApiList<TimelineEntry>> {
+  return list<TimelineEntry>(`events/${eventId}/fixture-entries`);
+}
+
+export async function listHostedFixtureResults(eventId: string): Promise<ApiList<Result>> {
+  return list<Result>(`events/${eventId}/fixture-results`);
+}
+
+export async function overrideHostFixtureResult(eventId: string, athleteId: string, payload: ResultOverridePayload): Promise<Result> {
+  const response = await request<{ data: Result }>(`/api/v1/events/${eventId}/fixture-results/${athleteId}`, { method: 'PUT', body: JSON.stringify(payload) });
+  return response.data;
+}
+
 export async function listGuestFixtureResults(eventId: string): Promise<ApiList<Result>> {
   return list<Result>(`fixtures/${eventId}/results`);
 }

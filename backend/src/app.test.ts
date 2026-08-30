@@ -502,6 +502,108 @@ describe('event weather', () => {
   });
 });
 
+describe('fixture host-only lifecycle', () => {
+  it('rejects non-host workspace from starting a fixture event', async () => {
+    configureAuth();
+    const eventData = { id: EVENT_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', time: null, location_name: null, latitude: null, longitude: null, status: 'scheduled', created_at: new Date(), updated_at: new Date(), fixture_revision: 1 };
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('FOR UPDATE') && sql.includes('fixture_revision')) return { rows: [eventData] };
+      if (sql.includes('event_fixture_workspaces') && sql.includes("'guest'")) return { rows: [{ workspace_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }] };
+      if (sql.includes('event_fixture_workspaces') && sql.includes("'host'")) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .put(`/api/v1/events/${EVENT_ID}`)
+      .set('Authorization', 'Bearer valid')
+      .send({ type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', status: 'in_progress' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
+  });
+});
+
+describe('fixture host shared results', () => {
+  it('lists fixture results from the host workspace', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [{ '1': 1 }] };
+      if (sql.includes('SELECT r.*') || sql.includes('SELECT * FROM results')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-results`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0 } });
+  });
+
+  it('rejects non-host workspace from listing fixture results', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-results`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
+  });
+});
+
+describe('fixture host shared entries', () => {
+  it('lists fixture entries from the host workspace', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [{ '1': 1 }] };
+      if (sql.includes('timeline_entries')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-entries`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0 } });
+  });
+
+  it('rejects non-host workspace from listing fixture entries', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-entries`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
+  });
+});
+
 describe('error handling', () => {
   it('returns the standard error shape for unknown routes', async () => {
     const response = await request(app).get('/api/v1/does-not-exist');

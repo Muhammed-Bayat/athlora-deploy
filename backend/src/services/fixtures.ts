@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { getPool, type DbExecutor } from '../db/client.js';
-import { mapEventParticipantSummaryRow, mapEventRow, mapResultRow, type EventParticipantSummaryRow, type EventRow } from '../db/row-mappers.js';
+import { mapEventParticipantSummaryRow, mapEventRow, mapResultRow, mapTimelineEntryRow, type EventParticipantSummaryRow, type EventRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import type { AthleticsEvent, EventParticipantSummary, Result } from '../types/domain.js';
+import type { AthleticsEvent, EventParticipantSummary, Result, TimelineEntry } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { FixtureInvitationCreatePayload, FixtureInvitationResponsePayload } from '../validation/payloads.js';
 
@@ -55,6 +55,10 @@ function unavailable(): ApiError {
   return new ApiError(410, 'INVITATION_UNAVAILABLE', 'Invitation is expired, revoked, or no longer available');
 }
 
+function fixtureHostOnly(): ApiError {
+  return new ApiError(403, 'FIXTURE_HOST_ONLY', 'Only the host workspace can perform this action');
+}
+
 function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
   if (!isCanonicalUuid(workspaceId) || !ids.every(isCanonicalUuid)) throw notFound();
   return ids as string[];
@@ -64,6 +68,20 @@ function timestamp(value: Date | string | null): string | null {
   if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
 }
+
+export async function assertHostWorkspace(
+  client: DbExecutor,
+  eventId: string,
+  workspaceId: string,
+): Promise<void> {
+  const result = await client.query(
+    `SELECT 1 FROM event_fixture_workspaces
+     WHERE event_id = $1 AND workspace_id = $2 AND role = 'host'`,
+    [eventId, workspaceId],
+  );
+  if (result.rows.length === 0) throw fixtureHostOnly();
+}
+
 
 function invitation(row: {
   id: string;
@@ -648,4 +666,51 @@ export async function recordFixtureWithdrawal(
     );
     if (!changed.rows[0]) throw notFound();
   });
+}
+
+export async function listHostedFixtureEntries(
+  workspaceId: string,
+  eventId: unknown,
+): Promise<TimelineEntry[]> {
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
+  await assertHostWorkspace(getPool(), ownedEventId, workspaceId);
+  const result = await getPool().query(
+    `SELECT te.id, te.event_id, te.athlete_id, te.discipline, te.entry_type,
+            te.value, te.unit, te.is_foul, te.incident_type, te.note_text,
+            te.recorded_by, te.version, te.device_id, te.created_at, te.updated_at, te.deleted_at
+     FROM timeline_entries te
+     JOIN events e ON e.id = te.event_id
+     WHERE te.event_id = $1 AND te.deleted_at IS NULL
+     ORDER BY te.created_at ASC, te.id ASC`,
+    [ownedEventId],
+  );
+  return result.rows.map(mapTimelineEntryRow);
+}
+
+export async function listHostedFixtureResults(
+  workspaceId: string,
+  eventId: unknown,
+): Promise<Result[]> {
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
+  await assertHostWorkspace(getPool(), ownedEventId, workspaceId);
+  const result = await getPool().query(
+    `SELECT r.* FROM results r
+     WHERE r.event_id = $1 AND r.discipline = '100m'
+     ORDER BY r.placing ASC NULLS LAST, r.athlete_id`,
+    [ownedEventId],
+  );
+  return result.rows.map(mapResultRow);
+}
+
+export async function overrideHostFixtureResult(
+  hostWorkspaceId: string,
+  actorId: string,
+  eventId: unknown,
+  athleteId: unknown,
+  payload: { manualOverride: number | null; overrideReason: string | null },
+): Promise<Result> {
+  const [, ownedEventId, ownedAthleteId] = scopedIds(hostWorkspaceId, actorId, eventId, athleteId);
+  await assertHostWorkspace(getPool(), ownedEventId, hostWorkspaceId);
+  const { overrideResultRecord } = await import('../controllers/results.js');
+  return overrideResultRecord(actorId, hostWorkspaceId, ownedEventId, ownedAthleteId, payload);
 }

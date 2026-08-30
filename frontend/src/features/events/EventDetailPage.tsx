@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cancelEvent, getEvent, updateEvent } from '../../api/events';
+import { listFixtureRosters } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import { Button, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
@@ -7,7 +8,7 @@ import { useWorkspace } from '../auth/WorkspaceContext';
 import { EventResultsSection } from '../results/EventResultsSection';
 import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
-import type { AthleticsEvent, EventMutationPayload, EventStatus } from '../../types';
+import type { AthleticsEvent, EventMutationPayload, EventStatus, FixtureTeamRoster } from '../../types';
 import { EventWeatherPanel } from './EventWeatherPanel';
 import { FixtureHostPanel } from './FixtureHostPanel';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
@@ -35,6 +36,8 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const [notice, setNotice] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [fixtureTeams, setFixtureTeams] = useState<FixtureTeamRoster[]>([]);
+  const [rosterState, setRosterState] = useState<'idle' | 'loaded' | 'failed'>('idle');
 
   useEffect(() => { onBusyChange?.(participantBusy || correctionBusy); }, [correctionBusy, onBusyChange, participantBusy]);
 
@@ -54,6 +57,14 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     });
     return () => { current = false; };
   }, [activeWorkspace.id, eventId, initialEvent, reloadKey]);
+
+  useEffect(() => {
+    if (!event || event.type !== 'competition') { setRosterState('loaded'); return; }
+    void listFixtureRosters(event.id).then((response) => {
+      setFixtureTeams(response.data);
+      setRosterState('loaded');
+    }).catch(() => { setRosterState('failed'); });
+  }, [event?.id, event?.type]);
 
   const saveEditor = async (payload: EventMutationPayload) => {
     if (!event) return;
@@ -93,6 +104,11 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   if (loadError) return <section className={styles.loadError} role="alert"><h1>{loadError.startsWith('This event') ? 'Event not found' : 'Event unavailable'}</h1><p>{loadError}</p><Button onClick={() => setReloadKey((key) => key + 1)}>Try again</Button><Button variant="secondary" onClick={onBack}>Back to events</Button></section>;
   if (!event) return null;
 
+  const rosterFailed = rosterState === 'failed';
+  const isHostWorkspace = !rosterFailed && (fixtureTeams.length === 0 || fixtureTeams.some((t) => t.team.workspaceId === activeWorkspace.id && t.team.status === 'accepted'));
+  const hasGuestTeams = fixtureTeams.length > 1;
+  const canManageLifecycle = isCoach && (rosterFailed ? event.type !== 'competition' : (!hasGuestTeams || isHostWorkspace));
+
   const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
     <header className={styles.viewHeader}><div><p className={styles.eyebrow}>100m season calendar</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
@@ -105,7 +121,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
        <FixtureHostPanel event={event} isCoach={isCoach} />
        <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
       <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
-       {isCoach && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
+       {canManageLifecycle && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>
     <Modal open={editor} title="Edit event" onClose={() => { if (!editorBusy) setEditor(false); }} closeDisabled={editorBusy}><EventForm event={event} onSave={saveEditor} onCancel={() => setEditor(false)} onSubmittingChange={setEditorBusy} /></Modal>
