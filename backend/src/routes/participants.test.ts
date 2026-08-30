@@ -184,6 +184,7 @@ describe('event participant routes', () => {
   it('updates RSVP status idempotently', async () => {
     query
       .mockResolvedValueOnce({ rows: [{}] })
+      .mockResolvedValueOnce({ rows: [{ rsvp_status: 'yes' }] })
       .mockResolvedValueOnce({ rows: [{ ...participantRow, rsvp_status: 'yes' }] });
 
     const response = await authorized(
@@ -199,7 +200,7 @@ describe('event participant routes', () => {
     const response = await authorized(
       'put',
       `/api/v1/events/${EVENT_ID}/participants/${ATHLETE_ID}`,
-    ).send({ rsvpStatus: 'maybe' });
+    ).send({ rsvpStatus: 'unknown' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -209,6 +210,22 @@ describe('event participant routes', () => {
       },
     });
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('accepts maybe as a valid RSVP status', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{}] })
+      .mockResolvedValueOnce({ rows: [{ rsvp_status: 'pending' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ ...participantRow, rsvp_status: 'maybe' }] });
+
+    const response = await authorized(
+      'put',
+      `/api/v1/events/${EVENT_ID}/participants/${ATHLETE_ID}`,
+    ).send({ rsvpStatus: 'maybe' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ ...participantBody, rsvpStatus: 'maybe' });
   });
 
   it('removes an assignment without returning a body', async () => {

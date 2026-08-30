@@ -38,9 +38,12 @@ const APP_TABLES = [
   'fixture_invitation_responses',
   'event_participants',
   'event_participant_status_reviews',
+  'event_participant_rsvp_audit',
   'timeline_entries',
   'results',
   'account_deletions',
+  'event_reminders',
+  'event_reminder_mutes',
 ];
 
 async function resetDatabase(): Promise<void> {

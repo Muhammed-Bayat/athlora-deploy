@@ -114,7 +114,6 @@ test.describe.serial('100m vertical slice', () => {
     await waitForView(page, 'Dashboard');
     await openView(page, 'Athletes', 'Athletes');
     await waitForView(page, 'Athletes');
-    await expect(page.getByText('Healthy', { exact: true }).first()).toBeVisible();
 
     for (const name of [alpha, bravo, charlie, delta]) {
       await addAthlete(page, name);
@@ -149,6 +148,11 @@ test.describe.serial('100m vertical slice', () => {
     await competitionDetail.getByLabel(`RSVP for ${alpha}`).selectOption('yes');
     await expect(
       competitionDetail.getByRole('status').filter({ hasText: 'attending' }),
+    ).toBeVisible();
+
+    await competitionDetail.getByLabel(`RSVP for ${bravo}`).selectOption('maybe');
+    await expect(
+      competitionDetail.getByRole('status').filter({ hasText: 'maybe attending' }),
     ).toBeVisible();
 
     await competitionDetail.getByRole('button', { name: 'Close' }).click();

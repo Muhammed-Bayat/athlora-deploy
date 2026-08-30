@@ -592,7 +592,7 @@ describe('persisted value validation', () => {
     expectMappingError(() => mapEventRow(changed(eventRow, { status: 'postponed' })));
     expectMappingError(() => mapEventRow(changed(eventRow, { discipline: '200m' })));
     expectMappingError(() =>
-      mapEventParticipantRow(changed(participantRow, { rsvp_status: 'maybe' })),
+      mapEventParticipantRow(changed(participantRow, { rsvp_status: 'invalid' })),
     );
     expectMappingError(() =>
       mapTimelineEntryRow(changed(timelineRow, { entry_type: 'measurement' })),
