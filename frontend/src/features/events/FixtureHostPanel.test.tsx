@@ -49,7 +49,7 @@ describe('FixtureHostPanel', () => {
     const user = userEvent.setup();
 
     render(<FixtureHostPanel event={event} isCoach />);
-    await user.type(screen.getByLabelText('Guest coach email'), 'guest@example.com');
+    await user.type(screen.getByLabelText('Guest team coach email'), 'guest@example.com');
     await user.click(screen.getByRole('button', { name: 'Create fixture invitation' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
