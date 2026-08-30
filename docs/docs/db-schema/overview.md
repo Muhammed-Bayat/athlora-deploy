@@ -118,6 +118,8 @@ Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, curren
 
 Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, hashed/versioned invitations and response history, material-change revisions, and composite participant foreign keys that enforce fixture-team roster ownership.
 
+Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
+
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
@@ -128,7 +130,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; and `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; and `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
@@ -143,4 +145,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].

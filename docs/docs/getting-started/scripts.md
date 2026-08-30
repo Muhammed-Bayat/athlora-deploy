@@ -141,11 +141,11 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 | Package | Checks | Result |
 |---------|--------|--------|
 | `frontend` | lint, typecheck, test, coverage, build | passing (238 Vitest/RTL and track-math tests) |
-| `backend` | lint, typecheck, test, coverage, build | passing (332 Vitest/Supertest tests; 38 database tests skipped when unconfigured) |
+| `backend` | lint, typecheck, test, coverage, build | passing (333 Vitest/Supertest tests; 39 database tests skipped when unconfigured) |
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 
-The backend suite includes 38 database integration tests that exercise real SQL against PostgreSQL: 6 migration tests, 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, and 3 cross-coach authorization tests proving every owned resource — including result overrides and athlete statistics — returns the generic `404` for a different coach while list endpoints never leak foreign rows. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
+The backend suite includes 39 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, and 3 cross-coach authorization tests proving every owned resource — including result overrides and athlete statistics — returns the generic `404` for a different coach while list endpoints never leak foreign rows. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 
 ## Definition of done
 

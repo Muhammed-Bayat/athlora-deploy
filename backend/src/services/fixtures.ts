@@ -7,7 +7,7 @@ import type { AthleticsEvent, EventParticipantSummary, Result } from '../types/d
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { FixtureInvitationCreatePayload, FixtureInvitationResponsePayload } from '../validation/payloads.js';
 
-const EVENT_COLUMNS = 'id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status, created_at, updated_at';
+const EVENT_COLUMNS = 'e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at';
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
@@ -425,7 +425,7 @@ async function guestFixtureEvent(
   eventId: string,
 ): Promise<{ event: AthleticsEvent; revision: number; teamStatus: FixtureWorkspaceStatus }> {
   const result = await executor.query<EventRow & { fixture_revision: number; fixture_status: FixtureWorkspaceStatus }>(
-    `SELECT e.${EVENT_COLUMNS}, e.fixture_revision, fw.status AS fixture_status
+    `SELECT ${EVENT_COLUMNS}, e.fixture_revision, fw.status AS fixture_status
      FROM events e
      JOIN event_fixture_workspaces fw ON fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
      WHERE e.id = $1`,
@@ -479,10 +479,13 @@ export async function listHostedFixtureRosters(workspaceId: string, eventId: unk
   return teams.map((team) => ({ team, participants: byWorkspace.get(team.workspaceId) ?? [] }));
 }
 
-export async function listGuestFixtures(workspaceId: string): Promise<FixtureDetail[]> {
+export async function listGuestFixtures(
+  workspaceId: string,
+  executor: DbExecutor = getPool(),
+): Promise<FixtureDetail[]> {
   if (!isCanonicalUuid(workspaceId)) throw notFound();
-  const result = await getPool().query<EventRow & { fixture_revision: number; fixture_status: FixtureWorkspaceStatus }>(
-    `SELECT e.${EVENT_COLUMNS}, e.fixture_revision, fw.status AS fixture_status
+  const result = await executor.query<EventRow & { fixture_revision: number; fixture_status: FixtureWorkspaceStatus }>(
+    `SELECT ${EVENT_COLUMNS}, e.fixture_revision, fw.status AS fixture_status
      FROM events e
      JOIN event_fixture_workspaces fw ON fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
      ORDER BY e.date, e.time NULLS LAST, e.id`,
@@ -490,7 +493,7 @@ export async function listGuestFixtures(workspaceId: string): Promise<FixtureDet
   );
   return Promise.all(result.rows.map(async (row) => ({
     event: mapEventRow(row), revision: row.fixture_revision, teamStatus: row.fixture_status,
-    teams: await fixtureTeams(getPool(), row.id),
+    teams: await fixtureTeams(executor, row.id),
   })));
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, afterEach, beforeAll } from 'vitest';
 import pg from 'pg';
 import { applyMigrations, loadMigrations } from './migrate.js';
+import { listGuestFixtures } from '../services/fixtures.js';
 
 /**
  * Migration integration tests against a real PostgreSQL database.
@@ -19,6 +20,9 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'fixture_invitation_responses',
+  'fixture_invitations',
+  'event_fixture_workspaces',
   'athlete_squads',
   'squads',
   'workspace_membership_audit',
@@ -48,6 +52,7 @@ describeDB('migrations against a real database', () => {
     const client = await pool.connect();
     try {
       await client.query(`DROP TABLE IF EXISTS ${TABLES.join(', ')} CASCADE`);
+      await client.query('DROP FUNCTION IF EXISTS create_event_fixture_host() CASCADE');
     } finally {
       client.release();
     }
@@ -84,7 +89,13 @@ describeDB('migrations against a real database', () => {
       '0001_init.sql',
       '0002_contract_100m.sql',
       '0003_aggregate_indexes.sql',
-       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql', '0009_intermediate_fixtures.sql',
+      '0004_account_lifecycle.sql',
+      '0005_workspace_tenancy.sql',
+      '0006_workspace_roles_and_invitations.sql',
+      '0007_workspace_squads.sql',
+      '0008_athlete_lifecycle.sql',
+      '0009_intermediate_fixtures.sql',
+      '0010_fixture_workspace_status_index.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -128,7 +139,13 @@ describeDB('migrations against a real database', () => {
       '0001_init.sql',
       '0002_contract_100m.sql',
       '0003_aggregate_indexes.sql',
-       '0004_account_lifecycle.sql', '0005_workspace_tenancy.sql', '0006_workspace_roles_and_invitations.sql', '0007_workspace_squads.sql', '0008_athlete_lifecycle.sql', '0009_intermediate_fixtures.sql',
+      '0004_account_lifecycle.sql',
+      '0005_workspace_tenancy.sql',
+      '0006_workspace_roles_and_invitations.sql',
+      '0007_workspace_squads.sql',
+      '0008_athlete_lifecycle.sql',
+      '0009_intermediate_fixtures.sql',
+      '0010_fixture_workspace_status_index.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -138,7 +155,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(9);
+    expect(rows).toHaveLength(10);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 
@@ -254,6 +271,59 @@ describeDB('migrations against a real database', () => {
       );
       expect(defaults[0].outcome).toBe('no_result');
       expect(defaults[0].final_result).toBeNull();
+    } finally {
+      client.release();
+    }
+  });
+
+  it('allows host and guest workspaces to share an accepted fixture status', async () => {
+    await migrate();
+    const client = await pool.connect();
+    try {
+      const { rows: userRows } = await client.query(
+        `INSERT INTO users (auth0_id, name, email)
+         VALUES ('auth|host', 'Host Coach', 'host@example.com'),
+                ('auth|guest', 'Guest Coach', 'guest@example.com')
+         RETURNING id`,
+      );
+      const [hostUserId, guestUserId] = userRows.map((row) => row.id);
+      const { rows: workspaceRows } = await client.query(
+        `INSERT INTO workspaces (name) VALUES ('Host team'), ('Guest team') RETURNING id`,
+      );
+      const [hostWorkspaceId, guestWorkspaceId] = workspaceRows.map((row) => row.id);
+      const { rows: eventRows } = await client.query(
+        `INSERT INTO events (created_by, workspace_id, type, discipline, title, date)
+         VALUES ($1, $2, 'competition', '100m', 'Fixture', '2026-09-01')
+         RETURNING id`,
+        [hostUserId, hostWorkspaceId],
+      );
+
+      await client.query(
+        `INSERT INTO event_fixture_workspaces
+           (event_id, workspace_id, role, status, contact_email, joined_by)
+         VALUES ($1, $2, 'guest', 'accepted', 'guest@example.com', $3)`,
+        [eventRows[0].id, guestWorkspaceId, guestUserId],
+      );
+
+      const { rows } = await client.query(
+        `SELECT role, status FROM event_fixture_workspaces
+         WHERE event_id = $1 ORDER BY role`,
+        [eventRows[0].id],
+      );
+      expect(rows).toEqual([
+        { role: 'guest', status: 'accepted' },
+        { role: 'host', status: 'accepted' },
+      ]);
+      await expect(listGuestFixtures(guestWorkspaceId, client)).resolves.toMatchObject([
+        {
+          event: { id: eventRows[0].id, title: 'Fixture', status: 'scheduled' },
+          teamStatus: 'accepted',
+          teams: [
+            { workspaceId: hostWorkspaceId, status: 'accepted' },
+            { workspaceId: guestWorkspaceId, status: 'accepted' },
+          ],
+        },
+      ]);
     } finally {
       client.release();
     }
