@@ -9,11 +9,14 @@ import {
   listGuestFixtureParticipants,
   listGuestFixtureResults,
   listGuestFixtures,
+  listHostedFixtureEntries,
   listHostedFixtureRosters,
+  listHostedFixtureResults,
+  overrideHostFixtureResult,
   recordFixtureWithdrawal,
   removeGuestFixtureParticipant,
-  resendFixtureInvitation,
   respondToFixtureInvitation,
+  resendFixtureInvitation,
   revokeFixtureInvitation,
   updateGuestFixtureParticipant,
   withdrawGuestFixture,
@@ -181,6 +184,30 @@ export const overrideGuestResult: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId, userId } = getApplicationUserContext(req);
     const result = await overrideResultRecord(userId, workspaceId, parameter(req.params.eventId), parameter(req.params.athleteId), req.body, true);
+    res.json({ data: result });
+  } catch (error) { next(error); }
+};
+
+export const hostedEntries: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const entries = await listHostedFixtureEntries(workspaceId, req.params.eventId);
+    res.json({ data: entries, meta: { count: entries.length } });
+  } catch (error) { next(error); }
+};
+
+export const hostedResults: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const results = await listHostedFixtureResults(workspaceId, req.params.eventId);
+    res.json({ data: results, meta: { count: results.length } });
+  } catch (error) { next(error); }
+};
+
+export const overrideHostResult: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const result = await overrideHostFixtureResult(workspaceId, userId, req.params.eventId, req.params.athleteId, req.body);
     res.json({ data: result });
   } catch (error) { next(error); }
 };

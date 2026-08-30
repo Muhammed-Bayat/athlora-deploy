@@ -5,7 +5,7 @@ import { ApiError } from '../middleware/errors.js';
 import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { recomputeEventResults } from './timeline.js';
-import { assertFixtureReadyToStart, markFixtureReacceptanceRequired } from './fixtures.js';
+import { assertFixtureReadyToStart, assertHostWorkspace, markFixtureReacceptanceRequired } from './fixtures.js';
 import type {
   EventCreatePayload,
   EventListQuery,
@@ -170,6 +170,7 @@ export async function replaceEvent(
         [eventId],
       );
     if (activeGuestTeams.rows.length > 0) {
+      await assertHostWorkspace(client, eventId as string, workspaceId);
       if (payload.type !== 'competition' || payload.discipline !== '100m') {
         throw new ApiError(409, 'FIXTURE_EVENT_INELIGIBLE', 'Fixtures must remain 100m competition events');
       }
@@ -243,6 +244,15 @@ export async function cancelEvent(
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
     const currentEvent = mapEventRow(currentRow);
+    const hasGuests = await client.query<{ workspace_id: string }>(
+      `SELECT workspace_id FROM event_fixture_workspaces
+       WHERE event_id = $1 AND role = 'guest' AND status <> 'withdrawn'
+       LIMIT 1`,
+      [eventId as string],
+    );
+    if (hasGuests.rows.length > 0) {
+      await assertHostWorkspace(client, eventId as string, workspaceId);
+    }
     const result = await client.query<EventRow>(
       `UPDATE events
        SET status = 'cancelled',
