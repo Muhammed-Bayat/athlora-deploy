@@ -6,7 +6,7 @@ import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, Resul
 import { AthleteDetailPage } from './AthleteDetailPage';
 
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
-const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
+const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listInjuries: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
@@ -112,6 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   athleteApi.getAthlete.mockResolvedValue(athlete());
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
+  statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
   injuriesApi.listInjuries.mockResolvedValue([]);
 });
 

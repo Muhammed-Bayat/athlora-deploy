@@ -29,6 +29,7 @@ import {
   type EventParticipant,
   type EventParticipantSummary,
   type Result,
+  type ProgressionEntry,
   type RosterSnapshotEntry,
   type Squad,
   type TimelineEntry,
@@ -190,6 +191,24 @@ export interface AthleteResultHistoryRow extends ResultRow {
   effective_result: NumericValue | null;
   effective_outcome: string;
   counts_towards_statistics: boolean;
+}
+
+export interface ProgressionEntryRow extends ResultRow {
+  athlete_name: string;
+  athlete_squad_names?: unknown;
+  athlete_archived_at: TimestampValue | null;
+  event_title: string;
+  event_type: string;
+  event_discipline: string;
+  event_date: DateValue;
+  event_time: string | null;
+  event_location_name: string | null;
+  event_status: string;
+  effective_result: NumericValue | null;
+  effective_outcome: string;
+  counts_towards_statistics: boolean;
+  running_pb: NumericValue | null;
+  is_new_pb: boolean;
 }
 
 export interface RosterSnapshotRow {
@@ -841,6 +860,46 @@ export function mapAthleteResultHistoryRow(
     effectiveResult,
     effectiveOutcome,
     countsTowardsStatistics,
+  };
+}
+
+export function mapProgressionEntryRow(row: ProgressionEntryRow): ProgressionEntry {
+  const event = mapAggregateEventIdentity(row, 'progression.event');
+  const effectiveResult = nullablePositiveNumeric(
+    row.effective_result,
+    'progression.effective_result',
+  );
+  const effectiveOutcome = enumValue(
+    row.effective_outcome,
+    RESULT_OUTCOMES,
+    'progression.effective_outcome',
+  );
+  if ((effectiveOutcome === 'valid') !== (effectiveResult !== null)) {
+    invalid(
+      'progression effective outcome/result',
+      'only a valid effective outcome may have an effective result',
+    );
+  }
+
+  const countsTowardsStatistics = booleanValue(
+    row.counts_towards_statistics,
+    'progression.counts_towards_statistics',
+  );
+  if (countsTowardsStatistics !== (event.status !== 'cancelled' && effectiveOutcome === 'valid')) {
+    invalid(
+      'progression.counts_towards_statistics',
+      'expected non-cancelled effective valid result semantics',
+    );
+  }
+
+  return {
+    event,
+    result: mapResultRow(row),
+    effectiveResult,
+    effectiveOutcome,
+    countsTowardsStatistics,
+    runningPb: nullablePositiveNumeric(row.running_pb, 'progression.running_pb'),
+    isNewPb: booleanValue(row.is_new_pb, 'progression.is_new_pb'),
   };
 }
 

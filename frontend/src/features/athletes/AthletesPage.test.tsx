@@ -13,7 +13,7 @@ const athleteApi = vi.hoisted(() => ({
   archiveAthlete: vi.fn(),
   unarchiveAthlete: vi.fn(),
 }));
-const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
+const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
 
@@ -78,6 +78,7 @@ beforeEach(() => {
     resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
     latest: null, recentResults: { competitions: [], training: [] },
   });
+  statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ARI_ID, name: ari.name, squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
 });
 
 describe('AthletesPage', () => {

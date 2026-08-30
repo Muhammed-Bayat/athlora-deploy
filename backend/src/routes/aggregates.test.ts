@@ -3,8 +3,9 @@ import { jwtVerify } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
 import { getAthleteStatisticsDetail } from '../services/statistics.js';
+import { getAthleteProgressionDetail } from '../services/progression.js';
 import { getDashboardSummary } from '../services/dashboard.js';
-import type { AthleteStatisticsDetail, DashboardSummary } from '../types/domain.js';
+import type { AthleteStatisticsDetail, ProgressionDetail, DashboardSummary } from '../types/domain.js';
 import { createApp } from '../app.js';
 
 vi.mock('jose', () => ({
@@ -19,6 +20,10 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../services/statistics.js', () => ({
   getAthleteStatisticsDetail: vi.fn(),
+}));
+
+vi.mock('../services/progression.js', () => ({
+  getAthleteProgressionDetail: vi.fn(),
 }));
 
 vi.mock('../services/dashboard.js', () => ({
@@ -134,5 +139,61 @@ describe('aggregate API routes', () => {
     expect(dashboardResponse.status).toBe(401);
     expect(getAthleteStatisticsDetail).not.toHaveBeenCalled();
     expect(getDashboardSummary).not.toHaveBeenCalled();
+  });
+
+  it('returns an owned athlete progression detail envelope', async () => {
+    const progression = {
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      entries: [],
+      pagination: { nextCursor: null, count: 0, total: 0 },
+      summary: { allTimePb: null, totalResults: 0, totalValid: 0 },
+    } satisfies ProgressionDetail;
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+    vi.mocked(getAthleteProgressionDetail).mockResolvedValue(progression);
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/${ATHLETE_ID}/progression`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: progression });
+    expect(getAthleteProgressionDetail).toHaveBeenCalledWith(USER_ID, ATHLETE_ID, {
+      cursor: undefined,
+      limit: undefined,
+      type: undefined,
+    });
+  });
+
+  it('passes cursor, limit, and type query parameters to progression service', async () => {
+    const progression = {
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      entries: [],
+      pagination: { nextCursor: null, count: 0, total: 0 },
+      summary: { allTimePb: null, totalResults: 0, totalValid: 0 },
+    } satisfies ProgressionDetail;
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+    vi.mocked(getAthleteProgressionDetail).mockResolvedValue(progression);
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/${ATHLETE_ID}/progression?cursor=abc|def&limit=10&type=competition`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(getAthleteProgressionDetail).toHaveBeenCalledWith(USER_ID, ATHLETE_ID, {
+      cursor: 'abc|def',
+      limit: 10,
+      type: 'competition',
+    });
+  });
+
+  it('uses the generic not-found response for foreign athlete progression', async () => {
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/${ATHLETE_ID}/progression`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(404);
+    expect(getAthleteProgressionDetail).not.toHaveBeenCalled();
   });
 });
