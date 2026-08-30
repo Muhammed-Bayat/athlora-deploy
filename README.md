@@ -31,7 +31,7 @@ Tested development environment: Linux, macOS, or Windows with a current Node.js 
 /e2e        Playwright browser tests
 ```
 
-The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; Open-Meteo provides weather through server-side proxies.
+The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; Open-Meteo provides weather and Nominatim/OpenStreetMap provides opt-in venue lookup through server-side proxies.
 
 ## Installation Guide
 
@@ -55,6 +55,8 @@ cp backend/.env.example backend/.env
 ```
 
 At minimum, set `DATABASE_URL`, `AUTH0_DOMAIN`, and `AUTH0_AUDIENCE`. Password-ticket creation and permanent account deletion also require the Auth0 Management API client variables. Never commit `.env` files.
+
+Venue lookup uses the public Nominatim service. Set `NOMINATIM_USER_AGENT` to an identifiable product/contact string before deployment; the backend defaults to Nominatim's public endpoint, caches identical searches for five minutes, and spaces provider requests by at least one second. Search is optional: coaches can always enter a location and coordinates manually. Provider data is not called by unit tests; mock `/api/v1/venues/search` in browser tests.
 
 Run the migrations and API:
 
@@ -99,7 +101,7 @@ Expected response:
 
 1. Sign in through Auth0 and let Athlora synchronize the local coach profile.
 2. Create athletes from **Athletes**.
-3. Create a 100m competition or training event from **Events**, assign athletes, and start it.
+3. Create a 100m competition or training event from **Events**. Optionally search and select an OpenStreetMap venue, or enter its name/coordinates manually; detail shows a read-only map and external OpenStreetMap link.
 4. Use **Live Logger** to record finishes or incidents; correct or undo entries if needed.
 5. Review derived results, manual corrections, PB/SB information, athlete history, and the dashboard summary.
 

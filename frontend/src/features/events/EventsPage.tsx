@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { EventDetailPage } from './EventDetailPage';
 import { createEvent, listEvents, updateEvent } from '../../api/events';
+import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
 import {
   addEventParticipant,
@@ -21,6 +22,7 @@ import {
   type EventStatus,
   type EventType,
   type RsvpStatus,
+  type VenueSearchResult,
 } from '../../types';
 import styles from './EventsPage.module.css';
 import { useWorkspace } from '../auth/WorkspaceContext';
@@ -204,6 +206,10 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [venueQuery, setVenueQuery] = useState('');
+  const [venueResults, setVenueResults] = useState<VenueSearchResult[]>([]);
+  const [venueSearching, setVenueSearching] = useState(false);
+  const [venueError, setVenueError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
 
@@ -239,6 +245,29 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     }
   };
 
+  const lookupVenue = async () => {
+    if (!venueQuery.trim()) {
+      setVenueError('Enter a venue or address to search.');
+      return;
+    }
+    setVenueSearching(true);
+    setVenueError(null);
+    try {
+      const response = await searchVenues(venueQuery.trim());
+      setVenueResults(response.data);
+    } catch (error) {
+      setVenueError(errorMessage(error));
+    } finally {
+      setVenueSearching(false);
+    }
+  };
+
+  const selectVenue = (venue: VenueSearchResult) => {
+    setDraft((current) => ({ ...current, locationName: venue.displayName, latitude: String(venue.latitude), longitude: String(venue.longitude) }));
+    setVenueResults([]);
+    setVenueError(null);
+  };
+
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
@@ -259,7 +288,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
       />
       {errors.title && <span id="event-title-error" className={styles.fieldError}>{errors.title}</span>}
 
-      <div className={styles.formRow}>
+       <div className={styles.formRow}>
         <div>
           <label htmlFor="event-type">Event type</label>
           <Select
@@ -291,9 +320,20 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
           />
           {errors.date && <span id="event-date-error" className={styles.fieldError}>{errors.date}</span>}
         </div>
-      </div>
+       </div>
 
-      <div className={styles.formRow}>
+       <fieldset className={styles.venueLookup} disabled={submitting || venueSearching}>
+         <legend>Find a venue <span>Optional</span></legend>
+         <p>Search only when you choose. Select a result to set the location and pin coordinates, or use the manual fields below.</p>
+         <label htmlFor="venue-search" className={styles.srOnly}>Venue or address</label>
+         <div><Input id="venue-search" value={venueQuery} onChange={(input) => setVenueQuery(input.target.value)} placeholder="Venue or address" /><Button type="button" onClick={() => void lookupVenue()}>{venueSearching ? 'Searching...' : 'Search venues'}</Button></div>
+         {venueError && <p className={styles.formError} role="alert">{venueError}</p>}
+         {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => <li key={`${venue.latitude}-${venue.longitude}-${venue.displayName}`}><button type="button" onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>{venue.latitude}, {venue.longitude}</small></button></li>)}</ul>}
+         {!venueSearching && !venueError && venueQuery && venueResults.length === 0 && <p className={styles.venueHint}>No search has been run yet, or no matching venues were found.</p>}
+         <p className={styles.attribution}>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>, via Nominatim.</p>
+       </fieldset>
+
+       <div className={styles.formRow}>
         <div>
           <label htmlFor="event-time">Time <span>Optional</span></label>
           <Input id="event-time" type="time" step="1" value={draft.time} onChange={(input) => setField('time', input.target.value)} invalid={Boolean(errors.time)} aria-invalid={Boolean(errors.time)} aria-describedby={errors.time ? 'event-time-error' : undefined} disabled={submitting} />

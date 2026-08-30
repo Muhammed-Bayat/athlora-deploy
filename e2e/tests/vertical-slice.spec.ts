@@ -64,6 +64,9 @@ async function addEvent(page: Page, title: string, type: 'competition' | 'traini
   await dialog.getByLabel('Event title').fill(title);
   await dialog.getByLabel('Event type').selectOption(type);
   await dialog.getByLabel('Date').fill(todayIso());
+  await dialog.getByLabel('Venue or address').fill('Central Stadium');
+  await dialog.getByRole('button', { name: 'Search venues' }).click();
+  await dialog.getByRole('button', { name: /Central Stadium, Johannesburg/ }).click();
   await dialog.getByRole('button', { name: 'Add event', exact: true }).click();
   await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible();
 }
@@ -97,6 +100,12 @@ async function expectNoSeriousViolations(page: Page): Promise<void> {
 }
 
 test.describe.serial('100m vertical slice', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/v1/venues/search**', async (route) => route.fulfill({ json: {
+      data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 },
+    } }));
+  });
+
   test('roster, events, assignment, and starting the competition', async ({ page }) => {
     const token = test.info().project.name;
     const { alpha, bravo, charlie, delta, competition, training } = names(token);
@@ -117,6 +126,15 @@ test.describe.serial('100m vertical slice', () => {
     await addEvent(page, training, 'training');
 
     const competitionDetail = await openEventDetail(page, competition);
+    await expect(competitionDetail.getByTitle(/OpenStreetMap preview/)).toBeVisible();
+    await expect(competitionDetail.getByRole('link', { name: /Open in OpenStreetMap/ })).toHaveAttribute('href', /mlat=-26.2041/);
+    await competitionDetail.getByRole('button', { name: 'Edit event' }).click();
+    const editVenue = page.getByRole('dialog', { name: 'Edit event' });
+    await editVenue.getByLabel('Venue or address').fill('Central Stadium');
+    await editVenue.getByRole('button', { name: 'Search venues' }).click();
+    await editVenue.getByRole('button', { name: /Central Stadium, Johannesburg/ }).click();
+    await editVenue.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('dialog', { name: 'Edit event' })).toHaveCount(0);
     const candidate = competitionDetail.getByLabel('Assign an active athlete');
     await expect(candidate).toBeEnabled();
     for (const name of [alpha, bravo, charlie, delta]) {

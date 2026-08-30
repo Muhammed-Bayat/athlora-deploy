@@ -12,11 +12,12 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Frontend framework | React + Vite (TypeScript, strict) | Fast dev/build, strict typing, standard React data flow |
 | Styling | Plain CSS (variables + modules) | Design tokens from approved mockups, no runtime dependency |
 | Landing visuals | SVG + CSS (shared `TrackArtwork`) + DOM chase-camera | Mockup-exact oval art for the hero reveal and cinematic lap; no WebGL dependency |
-| Fitness body viewer | Three.js + React Three Fiber + Drei | On-demand static anatomical viewer for temporary injury mapping with topology-bound surface heat maps |
+| Fitness body viewer | Three.js + React Three Fiber + Drei | On-demand static anatomical viewer for persistent injury mapping with topology-bound surface heat maps |
 | Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
 | Weather | Open-Meteo | Keyless REST forecast for event venues |
+| Venue search/maps | Nominatim + OpenStreetMap | Explicit server-proxied venue lookup and read-only attributed map previews; no tile/map library |
 | Offline storage (Stage 2+) | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
 | PWA (Stage 2+) | vite-plugin-pwa | Service worker + manifest for offline shell |
 | Realtime (Stage 2+) | Socket.IO | Live broadcast of new/edited entries to event viewers |
@@ -40,6 +41,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Authentication | Auth0, `@auth0/auth0-react`, `jose` | Universal Login in the SPA and JWT verification in the API. | Coaches do not need Athlora-managed passwords. Auth0 handles identity flows while the API maps a verified subject to one local coach workspace. |
 | API protection | Helmet, CORS, ownership middleware | Security headers, origin allow-listing, authenticated user resolution, and non-enumerating resource checks. | A coach must never be able to discover or modify another coach's athletes, entries, or results. |
 | Weather | Open-Meteo | Event-day venue forecasts and the coach console's current-weather readout, both proxied by the API. | Wind, rain, and conditions matter when planning or logging athletics events; Open-Meteo provides these without storing a paid-provider API key in the project. |
+| Venue search/maps | Nominatim + OpenStreetMap | Server-side native-fetch venue lookup, existing persisted coordinates, and an iframe/external-link preview. | Avoids shipping provider credentials or a heavyweight interactive map dependency while retaining attribution, keyboard use, mobile layout, and manual coordinates. |
 | Unit and component tests | Vitest, React Testing Library, jsdom | Result rules, API wrappers, components, forms, mutations, and accessibility interactions. | Most correctness risks are in calculations and state transitions, so fast focused tests provide feedback before a coach uses the logger. |
 | API tests | Supertest | HTTP contracts, validation, ownership, lifecycle guards, and error behavior. | The frontend relies on predictable status codes and error envelopes when handling stale corrections and closed events. |
 | End-to-end tests | Playwright, axe-core/playwright | Anonymous checks plus authenticated desktop/mobile 100m vertical-slice and accessibility tests. | The real workflow crosses Auth0, the SPA, the API, and PostgreSQL; browser tests verify that a coach can complete it at a desk or track-side. |
@@ -77,7 +79,7 @@ All authenticated dialogs (add, edit, correction, confirmation) use the shared `
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
 - **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
-- **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Its current injury state is intentionally temporary until a dedicated backend contract is introduced.
+- **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Injury records use the dedicated workspace-scoped backend contract.
 - **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
 - **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 

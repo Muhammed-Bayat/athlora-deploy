@@ -25,6 +25,7 @@ const participantApi = vi.hoisted(() => ({
 const athleteApi = vi.hoisted(() => ({
   listAthletes: vi.fn(),
 }));
+const venueApi = vi.hoisted(() => ({ searchVenues: vi.fn() }));
 const resultApi = vi.hoisted(() => ({
   listResults: vi.fn(),
   overrideResult: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock('../../api/participants', () => participantApi);
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/results', () => resultApi);
 vi.mock('../../api/timeline', () => timelineApi);
+vi.mock('../../api/venues', () => venueApi);
 vi.mock('../../api/fixtures', () => fixturesApi);
 
 const TODAY = '2026-08-16';
@@ -184,6 +186,7 @@ beforeEach(() => {
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
   timelineApi.listTimelineEntries.mockResolvedValue({ data: [], meta: { count: 0 } });
+  venueApi.searchVenues.mockResolvedValue({ data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 } });
   fixturesApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
@@ -322,6 +325,26 @@ describe('EventsPage', () => {
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
+  it('searches only after an explicit keyboard-activatable action, then selects a venue while retaining manual fallback fields', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+    const lookup = within(dialog).getByLabelText('Venue or address');
+    await user.type(lookup, 'Central Stadium');
+    expect(venueApi.searchVenues).not.toHaveBeenCalled();
+    await user.keyboard('{Tab}{Enter}');
+    await waitFor(() => expect(venueApi.searchVenues).toHaveBeenCalledWith('Central Stadium'));
+    const result = await within(dialog).findByRole('button', { name: /Central Stadium, Johannesburg/ });
+    await user.keyboard('{Tab}{Enter}');
+    expect(within(dialog).getByLabelText(/Location/)).toHaveValue('Central Stadium, Johannesburg');
+    expect(within(dialog).getByLabelText(/Latitude/)).toHaveValue(-26.2041);
+    expect(within(dialog).getByLabelText(/Longitude/)).toHaveValue(28.0473);
+    expect(within(dialog).getByText(/Search data/)).toHaveTextContent('OpenStreetMap contributors');
+    expect(result).not.toBeInTheDocument();
+  });
+
   it('validates coordinate ranges and preserves backend-invalid drafts', async () => {
     eventApi.createEvent.mockRejectedValue(
       new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', {
@@ -385,6 +408,8 @@ describe('EventsPage', () => {
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ status: 'active' });
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
+    expect(within(detail).getByTitle(/OpenStreetMap preview/)).toHaveAttribute('src', expect.stringContaining('openstreetmap.org/export/embed.html'));
+    expect(within(detail).getByRole('link', { name: /Open in OpenStreetMap/ })).toHaveAttribute('href', expect.stringContaining('mlat=-26.2041'));
   });
 
   it('loads event results and opens the correction modal body', async () => {

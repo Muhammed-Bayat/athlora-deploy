@@ -34,7 +34,7 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary. Business logic is never buried in route handlers.
+- **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary and `src/services/venues.ts` is the Nominatim provider boundary. Business logic is never buried in route handlers.
 - **Database access**: migration `0005_workspace_tenancy.sql` adds workspaces and migration `0006_workspace_roles_and_invitations.sql` limits memberships to coach/assistant, adds hashed expiring invitations, and records membership audit events.
 - **Auth and account lifecycle**: authenticated resource context includes a validated active workspace selected with `X-Workspace-Id`. Central capability middleware enforces coach-only management/mutation actions and assistant-owned timeline corrections. The final coach cannot leave, be removed, demoted, or delete their account until another coach remains.
 
@@ -62,6 +62,7 @@ Stage 2 will extend this path by writing to IndexedDB before sync and broadcasti
 - **Derived results with manual override** — stats come from the timeline log, but a coach can correct with `manual_override` + audit trail.
 - **Timed vs measured disciplines** — the schema and result-service foundation accommodate track times and field measurements. The deployed API/UI currently enforces 100m timing; each later discipline will add its own validation, entry controls, derivation, and placing rules.
 - **Non-enumerating workspace isolation** — workspace selection and audit actors come from authenticated server context, never request payloads. A resource that is missing, malformed, nested under the wrong parent or in another workspace produces the same generic not-found response.
+- **Provider boundary and fallback** — the browser calls authenticated `/venues/search`, not Nominatim. The server validates/reduces provider data, identifies itself, times out, caches and throttles according to the public policy. Search is explicit rather than autocomplete; selected and manually adjusted coordinates remain the existing event data, with a read-only OSM preview and external-link/coordinate fallback.
 
 ## Implementation status
 
