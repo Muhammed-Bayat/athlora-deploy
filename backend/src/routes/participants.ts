@@ -10,6 +10,7 @@ import { requireCoach } from '../middleware/capabilities.js';
 import {
   parseEventParticipantCreatePayload,
   parseEventParticipantReplacementPayload,
+  parseEventParticipantBulkRsvpPayload,
 } from '../validation/payloads.js';
 
 const router = Router();
@@ -25,6 +26,9 @@ router.post(
   requireCoach(),
   requireEventAthleteOwnership,
   participants.addEventParticipant,
+);
+router.put(
+  '/:eventId/participants/rsvp', validateBody(parseEventParticipantBulkRsvpPayload), requireCoach(), requireEventOwnership('eventId'), participants.bulkUpdateEventParticipants,
 );
 router.put(
   '/:eventId/participants/:athleteId',

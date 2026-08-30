@@ -151,7 +151,7 @@ export interface EventListFilters {
   dateTo?: string;
 }
 
-export type RsvpStatus = 'pending' | 'yes' | 'no';
+export type RsvpStatus = 'pending' | 'yes' | 'no' | 'maybe';
 
 export interface EventParticipant {
   eventId: string;

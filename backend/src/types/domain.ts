@@ -95,7 +95,7 @@ export interface CurrentWeather {
   windSpeedKmh: number;
 }
 
-export const RSVP_STATUSES = ['pending', 'yes', 'no'] as const;
+export const RSVP_STATUSES = ['pending', 'yes', 'no', 'maybe'] as const;
 export type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
 export interface EventParticipant {

@@ -483,6 +483,8 @@
   background: var(--console-surface);
 }
 
+.rsvpSummary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); color: var(--console-muted); font-size: var(--font-size-sm); }
+
 .participants > header p {
   margin: 0 0 var(--space-1);
   color: var(--console-cyan);

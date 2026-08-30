@@ -10,6 +10,7 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 import type {
   EventParticipantCreatePayload,
   EventParticipantReplacementPayload,
+  EventParticipantBulkRsvpPayload,
 } from '../validation/payloads.js';
 
 const PARTICIPANT_COLUMNS = `ep.event_id,
@@ -138,11 +139,27 @@ export async function replaceEventParticipant(
   athleteId: unknown,
   payload: EventParticipantReplacementPayload,
   executor: DbExecutor = getPool(),
+  actorId: string | null = null,
 ): Promise<EventParticipantSummary> {
   const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
+  if (actorId) {
+  const previous = await executor.query<{ rsvp_status: string }>(
+    `SELECT ep.rsvp_status FROM event_participants ep JOIN events e ON e.id = ep.event_id JOIN athletes a ON a.id = ep.athlete_id
+     WHERE ep.event_id = $1 AND ep.athlete_id = $2 AND e.workspace_id = $3 AND a.workspace_id = $3 FOR UPDATE`,
+    [ownedEventId, ownedAthleteId, workspaceId],
+  );
+  if (!previous.rows[0]) throw notFound();
+  if (previous.rows[0].rsvp_status !== payload.rsvpStatus) {
+    await executor.query(
+      `INSERT INTO event_participant_rsvp_audit (event_id, athlete_id, previous_status, next_status, changed_by)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [ownedEventId, ownedAthleteId, previous.rows[0].rsvp_status, payload.rsvpStatus, actorId],
+    );
+  }
+  }
   const result = await executor.query<EventParticipantSummaryRow>(
     `UPDATE event_participants ep
-     SET rsvp_status = $1
+      SET rsvp_status = $1, rsvp_updated_at = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN now() ELSE ep.rsvp_updated_at END, rsvp_updated_by = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN $5 ELSE ep.rsvp_updated_by END
      FROM events e, athletes a
      WHERE ep.event_id = $2
        AND ep.athlete_id = $3
@@ -151,11 +168,20 @@ export async function replaceEventParticipant(
         AND e.workspace_id = $4
         AND a.workspace_id = $4
      RETURNING ${PARTICIPANT_COLUMNS}`,
-    [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId],
+    actorId ? [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId, actorId] : [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
   return mapEventParticipantSummaryRow(row);
+}
+
+export async function bulkReplaceEventParticipants(workspaceId: string, eventId: unknown, actorId: string, payload: EventParticipantBulkRsvpPayload): Promise<EventParticipantSummary[]> {
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
+  return withTransaction(async (client) => {
+    const updated: EventParticipantSummary[] = [];
+    for (const item of payload.updates) updated.push(await replaceEventParticipant(workspaceId, ownedEventId, item.athleteId, { rsvpStatus: item.rsvpStatus }, client, actorId));
+    return updated;
+  });
 }
 
 export async function removeEventParticipant(

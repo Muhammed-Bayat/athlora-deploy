@@ -158,7 +158,7 @@ export function formattedType(type: EventType): string {
 }
 
 function formattedRsvp(status: RsvpStatus): string {
-  return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : 'pending';
+  return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : status === 'maybe' ? 'maybe attending' : 'pending';
 }
 
 function formattedAthleteStatus(status: Athlete['status']): string {
@@ -462,6 +462,8 @@ export function ParticipantManager({
   const candidates = athletes.filter((athlete) =>
     !participants.some((participant) => participant.athleteId === athlete.id),
   );
+  const [rsvpFilter, setRsvpFilter] = useState<RsvpStatus | 'all'>('all');
+  const rsvpCounts = participants.reduce<Record<RsvpStatus, number>>((counts, participant) => ({ ...counts, [participant.rsvpStatus]: counts[participant.rsvpStatus] + 1 }), { pending: 0, yes: 0, no: 0, maybe: 0 });
 
   const assign = async () => {
     if (!candidateId) return;
@@ -549,7 +551,7 @@ export function ParticipantManager({
       {!participantsLoading && !participantsError && participants.length === 0 && <p className={styles.inlineEmpty}>No athletes are assigned to this event yet.</p>}
       {!participantsLoading && !participantsError && participants.length > 0 && (
         <ul className={styles.participantList}>
-          {participants.map((participant) => {
+          {participants.filter((participant) => rsvpFilter === 'all' || participant.rsvpStatus === rsvpFilter).map((participant) => {
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
@@ -558,6 +560,7 @@ export function ParticipantManager({
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
+                { value: 'maybe', label: 'Maybe' },
                 ]} disabled={Boolean(busy)} />
                 {participant.statusReviewRequired && <Button variant="secondary" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void acknowledgeStatusReview(participant); }} disabled={Boolean(busy)}>{busy === `review-${participant.athleteId}` ? 'Acknowledging...' : 'Acknowledge review'}</Button>}
                 <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button></>}
@@ -565,6 +568,8 @@ export function ParticipantManager({
           })}
         </ul>
       )}
+
+      {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span><label className={styles.srOnly} htmlFor="rsvp-filter">Filter RSVP</label><Select id="rsvp-filter" variant="field" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All RSVP states' }, { value: 'pending', label: 'Pending' }, { value: 'yes', label: 'Attending' }, { value: 'no', label: 'Not attending' }, { value: 'maybe', label: 'Maybe' }]} /></div>}
 
       {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 
