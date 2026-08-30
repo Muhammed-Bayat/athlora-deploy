@@ -80,7 +80,7 @@ export function FixtureHostPanel({ event, isCoach }: { event: AthleticsEvent; is
     {eligible && <form onSubmit={(formEvent) => void submit(formEvent)}>
       <label htmlFor={`fixture-email-${event.id}`}>Guest team coach email</label>
       <Input id={`fixture-email-${event.id}`} type="email" value={email} onChange={(change) => setEmail(change.target.value)} required disabled={busy} />
-      <p>A coach already in this workspace can access this event directly. Fixture guests accept from a separate workspace.</p>
+      <p>Workspace members, including assistants, already have event access. Fixture guests accept from a separate workspace.</p>
       <Button type="submit" disabled={busy}>{busy ? 'Creating...' : 'Create fixture invitation'}</Button>
     </form>}
     {!eligible && <p>Fixtures can only be invited to scheduled 100m competitions.</p>}

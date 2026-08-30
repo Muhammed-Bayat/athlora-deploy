@@ -6,6 +6,7 @@ import { CoachConsole } from './features/dashboard/CoachConsole';
 import { LandingPage } from './features/landing/LandingPage';
 import { acceptWorkspaceInvitation } from './api/workspaces';
 import { respondToFixtureInvitation } from './api/fixtures';
+import { ApiError } from './api/client';
 import { Button, Input } from './components';
 import { useWorkspace } from './features/auth/WorkspaceContext';
 
@@ -51,6 +52,7 @@ function AppRoutes() {
 function FixtureInvitationAcceptance() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,10 +63,30 @@ function FixtureInvitationAcceptance() {
       await respondToFixtureInvitation(token, response, response === 'change_requested' ? message : undefined);
       navigate('/console/fixtures', { replace: true });
     } catch (responseError) {
-      setError(responseError instanceof Error ? responseError.message : 'Could not respond to this fixture invitation.');
+      if (responseError instanceof ApiError && responseError.code === 'WORKSPACE_CAPABILITY_DENIED') {
+        setError('This workspace has assistant access. Select a separate workspace where you are a coach to accept as a guest team.');
+      } else if (responseError instanceof ApiError && responseError.code === 'FIXTURE_HOST_CANNOT_ACCEPT') {
+        setError('The host workspace already has access to this event. Select a separate workspace to accept as a guest team.');
+      } else {
+        setError(responseError instanceof Error ? responseError.message : 'Could not respond to this fixture invitation.');
+      }
     } finally { setBusy(false); }
   };
-  return <main className={styles.loading}><h1>Fixture invitation</h1><p>Respond as a coach in the currently selected workspace.</p>{error && <p role="alert">{error}</p>}<div><Button onClick={() => void respond('accepted')} disabled={busy}>Accept fixture</Button><Button variant="secondary" onClick={() => void respond('declined')} disabled={busy}>Decline</Button></div><label htmlFor="fixture-change-message">Request a change</label><Input id="fixture-change-message" value={message} onChange={(change) => setMessage(change.target.value)} disabled={busy} /><Button variant="secondary" onClick={() => void respond('change_requested')} disabled={busy || !message.trim()}>Send change request</Button></main>;
+  const canRespond = activeWorkspace.role === 'coach';
+  return <main className={styles.loading}>
+    <h1>Fixture invitation</h1>
+    <p>Accept as a coach in a separate guest workspace. The host workspace already has direct access to this event.</p>
+    <label htmlFor="fixture-workspace">Guest workspace</label>
+    <select id="fixture-workspace" value={activeWorkspace.id} onChange={(change) => selectWorkspace(change.target.value)} disabled={busy}>
+      {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.role})</option>)}
+    </select>
+    {!canRespond && <p role="status">Select a workspace where you are a coach to respond.</p>}
+    {error && <p role="alert">{error}</p>}
+    <div><Button onClick={() => void respond('accepted')} disabled={busy || !canRespond}>Accept fixture</Button><Button variant="secondary" onClick={() => void respond('declined')} disabled={busy || !canRespond}>Decline</Button></div>
+    <label htmlFor="fixture-change-message">Request a change</label>
+    <Input id="fixture-change-message" value={message} onChange={(change) => setMessage(change.target.value)} disabled={busy || !canRespond} />
+    <Button variant="secondary" onClick={() => void respond('change_requested')} disabled={busy || !canRespond || !message.trim()}>Send change request</Button>
+  </main>;
 }
 
 function InvitationAcceptance() {
