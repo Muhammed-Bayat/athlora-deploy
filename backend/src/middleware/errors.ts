@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 
 export class ApiError extends Error {
@@ -17,7 +18,7 @@ export const notFoundHandler: RequestHandler = (_req, res) => {
   });
 };
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ApiError) {
     res.status(err.status).json({
       error: { code: err.code, message: err.message, details: err.details },
@@ -45,7 +46,18 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     });
     return;
   }
+
+  const requestId = randomUUID();
+  console.error(
+    'Unhandled API error',
+    { requestId, method: req.method, path: req.originalUrl },
+    err,
+  );
   res.status(500).json({
-    error: { code: 'INTERNAL_ERROR', message: 'Internal server error', details: {} },
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+      details: { requestId },
+    },
   });
 };
