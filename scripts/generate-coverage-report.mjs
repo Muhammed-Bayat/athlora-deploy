@@ -30,7 +30,13 @@ const combined = Object.fromEntries(
 );
 const sha = (process.env.GITEA_SHA ?? process.env.GITHUB_SHA)?.slice(0, 7) ?? 'local';
 
-const markdown = `# Coverage
+const overallLinePct = combined.lines.total === 0
+  ? 'N/A'
+  : `${((combined.lines.covered / combined.lines.total) * 100).toFixed(1)}%`;
+
+const markdown = `# Code Coverage
+
+## Overall Coverage: ${overallLinePct}
 
 | Area | Lines | Branches | Functions |
 |---|---:|---:|---:|
@@ -39,8 +45,12 @@ ${reports.map(({ name, total }) => `| ${name} | ${percent(total.lines)} | ${perc
 
 Commit: \`${sha}\`. Coverage is informational.`;
 
-if (process.env.GITHUB_STEP_SUMMARY) {
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
+const stepSummary =
+  process.env.GITEA_STEP_SUMMARY ||
+  process.env.GITHUB_STEP_SUMMARY;
+
+if (stepSummary) {
+  appendFileSync(stepSummary, `${markdown}\n`);
 }
 
 console.log(markdown);
