@@ -8,9 +8,11 @@ import { AthleteDetailPage } from './AthleteDetailPage';
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
+const injuriesApi = vi.hoisted(() => ({ listInjuries: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
 vi.mock('../../api/squads', () => squadsApi);
+vi.mock('../../api/injuries', () => injuriesApi);
 vi.mock('../fitness/FitnessView', () => ({
   FitnessView: ({ athleteName, onBack }: { athleteName: string; onBack: () => void }) => <section><h1>Fitness & injury map</h1><p>{athleteName}</p><button type="button" onClick={onBack}>Back to performance</button></section>,
 }));
@@ -110,9 +112,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   athleteApi.getAthlete.mockResolvedValue(athlete());
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
+  injuriesApi.listInjuries.mockResolvedValue([]);
 });
 
 describe('AthleteDetailPage', () => {
+  it('shows active injuries in the compact summary and excludes resolved history', async () => {
+    injuriesApi.listInjuries.mockResolvedValueOnce([{
+      id: 'injury-1', workspaceId: 'workspace', athleteId: ATHLETE_ID, bodyRegion: 'Leg', region: 'Leg', area: 'Knee', side: 'Both', severity: 'Moderate', notes: null, occurrenceDate: '2026-08-01', expectedReturnDate: null, resolvedDate: null, resolutionNotes: null, createdBy: 'coach', updatedBy: null, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z', deletedAt: null, deletedBy: null,
+    }]);
+    renderDetail();
+
+    expect(await screen.findByText('1 active injury')).toBeInTheDocument();
+    expect(screen.getByText('Moderate active injury status')).toBeInTheDocument();
+    expect(injuriesApi.listInjuries).toHaveBeenCalledWith(ATHLETE_ID, undefined, 'active');
+  });
+
   it('shows a focused identity, current-year KPIs, profile, active state, empty history, and back behavior', async () => {
     statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
       pb: 10.95,

@@ -167,6 +167,7 @@ statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 | `DELETE /athletes/:id` | Archive (sets `archivedAt`); returns `{ data: athlete }` |
 | `POST /athletes/:id/unarchive` | Restore (clears `archivedAt`); returns `{ data: athlete }` |
 | `POST /athletes/:id/status` | Transition status; body `{ status }`; returns `{ data: athlete }` |
+| `GET /athletes/injury-summaries` | List active-injury summaries for roster athletes in the active workspace |
 
 `GET /athletes` accepts strict query parameters (unknown parameters are rejected with `400`):
 
@@ -180,6 +181,8 @@ statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable. Repeating an athlete status request for its current state is a successful no-op. Every real transition is workspace-authorized, actor-attributed, and flags existing event assignments for coach review.
 
 Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes` — all optional except `name`. `PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
+
+`GET /athletes/injury-summaries` avoids per-card injury requests. It returns only athletes with active records; absent athletes are healthy. Each row contains `athleteId`, `activeInjuryCount`, `highestSeverity`, and an `activeInjuries` array of `{ bodyRegion, area, side, severity }`. Resolved and soft-deleted injuries are excluded.
 
 ### 4.3 Squad
 

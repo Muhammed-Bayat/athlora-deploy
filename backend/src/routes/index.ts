@@ -31,6 +31,7 @@ const router = Router();
 
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
+athletesRouter.get('/injury-summaries', athletes.listAthleteInjurySummaries);
 athletesRouter.post('/', requireCoach(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);
 athletesRouter.put(

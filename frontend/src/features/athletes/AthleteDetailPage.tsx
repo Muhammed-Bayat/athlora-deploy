@@ -1,6 +1,8 @@
 import { lazy, Suspense, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { getAthlete, updateAthlete, updateAthleteStatus } from '../../api/athletes';
 import { getAthleteStatistics } from '../../api/statistics';
+import { listInjuries } from '../../api/injuries';
+import { CompactAnatomy } from '../fitness/CompactAnatomy';
 import { Badge, Button, Card, Modal, Toast } from '../../components';
 import type {
   Athlete,
@@ -19,6 +21,7 @@ interface AthleteDetailPageProps {
   athleteId: string;
   onBack: () => void;
   onAthleteUpdated: (athlete: Athlete) => void;
+  initialFitnessOpen?: boolean;
 }
 
 type HistoryTab = 'competitions' | 'training';
@@ -93,7 +96,7 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
   );
 }
 
-export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: AthleteDetailPageProps) {
+export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initialFitnessOpen = false }: AthleteDetailPageProps) {
   const { activeWorkspace } = useWorkspace();
   const isCoach = activeWorkspace.role === 'coach';
   const [athlete, setAthlete] = useState<Athlete | null>(null);
@@ -107,7 +110,11 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
   const [activeTab, setActiveTab] = useState<HistoryTab | null>(null);
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
-  const [fitnessOpen, setFitnessOpen] = useState(false);
+  const [fitnessOpen, setFitnessOpen] = useState(initialFitnessOpen);
+  const [activeInjuries, setActiveInjuries] = useState<import('../../types').Injury[]>([]);
+  const [injuryLoading, setInjuryLoading] = useState(true);
+  const [injuryError, setInjuryError] = useState<string | null>(null);
+  const [injuryRetry, setInjuryRetry] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -143,6 +150,17 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
       .finally(() => { if (current) setStatisticsLoading(false); });
     return () => { current = false; };
   }, [athleteId, statisticsRetry]);
+
+  useEffect(() => {
+    let current = true;
+    setInjuryLoading(true);
+    setInjuryError(null);
+    void listInjuries(athleteId, undefined, 'active')
+      .then((injuries) => { if (current) setActiveInjuries(injuries); })
+      .catch((error: unknown) => { if (current) setInjuryError(athleteErrorMessage(error)); })
+      .finally(() => { if (current) setInjuryLoading(false); });
+    return () => { current = false; };
+  }, [athleteId, injuryRetry]);
 
   useEffect(() => {
     if (!statistics) return;
@@ -253,6 +271,14 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated }: Athle
           </dl>
         )}
       </section>
+
+      <Card className={styles.injuryCard}>
+        <header><div><p>Fitness overview</p><h2>Active injury map</h2></div></header>
+        {injuryLoading && <p role="status">Loading injury summary...</p>}
+        {!injuryLoading && injuryError && <div className={styles.sectionError} role="alert"><strong>Injury summary unavailable</strong><p>{injuryError}</p><Button onClick={() => setInjuryRetry((value) => value + 1)}>Retry injury summary</Button></div>}
+        {!injuryLoading && !injuryError && <CompactAnatomy injuries={activeInjuries} highestSeverity={activeInjuries.reduce<import('../../types').InjurySeverity | null>((highest, injury) => !highest || ({ Minor: 1, Moderate: 2, Severe: 3 }[injury.severity] > { Minor: 1, Moderate: 2, Severe: 3 }[highest]) ? injury.severity : highest, null)} size="large" onOpenFitness={() => setFitnessOpen(true)} disabled={isArchived} />}
+        {isArchived && <p className={styles.injuryHint}>Archived athlete injury records remain visible but read-only.</p>}
+      </Card>
 
       <Card className={styles.profileCard}>
         <header><div><p>Profile</p><h2>Personal details</h2></div></header>

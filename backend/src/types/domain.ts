@@ -316,3 +316,10 @@ export interface AthleteInjuryAvailabilitySummary {
   activeSeverities: InjurySeverity[];
   availabilityStatus: 'available' | 'restricted' | 'unavailable';
 }
+
+export interface AthleteActiveInjurySummary {
+  athleteId: string;
+  activeInjuryCount: number;
+  highestSeverity: InjurySeverity;
+  activeInjuries: Array<Pick<AthleteInjury, 'bodyRegion' | 'area' | 'side' | 'severity'>>;
+}

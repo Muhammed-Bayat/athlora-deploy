@@ -15,10 +15,12 @@ const athleteApi = vi.hoisted(() => ({
 }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
+const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
 vi.mock('../../api/squads', () => squadsApi);
+vi.mock('../../api/injuries', () => injuriesApi);
 
 const ARI_ID = '11111111-1111-4111-8111-111111111111';
 const BEA_ID = '22222222-2222-4222-8222-222222222222';
@@ -67,6 +69,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   athleteApi.getAthlete.mockResolvedValue(ari);
+  injuriesApi.listAthleteInjurySummaries.mockResolvedValue([]);
+  injuriesApi.listInjuries.mockResolvedValue([]);
   statisticsApi.getAthleteStatistics.mockResolvedValue({
     athleteId: ARI_ID, discipline: '100m', unit: 'seconds', pb: null, sb: null,
     resultsCount: 0, latestResult: null, latestOutcome: 'no_result', updatedAt: '2026-08-17T10:00:00.000Z',
@@ -77,6 +81,25 @@ beforeEach(() => {
 });
 
 describe('AthletesPage', () => {
+  it('renders active injury counts and highest severity without loading Fitness', async () => {
+    injuriesApi.listAthleteInjurySummaries.mockResolvedValueOnce([{
+      athleteId: ARI_ID,
+      activeInjuryCount: 2,
+      highestSeverity: 'Severe',
+      activeInjuries: [
+        { bodyRegion: 'Arm', area: 'Forearm', side: 'Left', severity: 'Minor' },
+        { bodyRegion: 'Arm', area: 'Forearm', side: 'Left', severity: 'Severe' },
+      ],
+    }]);
+
+    render(<AthletesPage />);
+    const heading = await screen.findByRole('heading', { name: 'Ari Runner' });
+    const card = heading.closest('article') ?? heading.parentElement!;
+    expect(within(card).getByText('2 active injuries')).toBeInTheDocument();
+    expect(within(card).getByText('Severe active injury status')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Open Fitness & injury map' })).toBeInTheDocument();
+  });
+
   it('opens an athlete detail supplied by dashboard navigation', async () => {
     render(<AthletesPage initialAthleteId={ARI_ID} />);
 
