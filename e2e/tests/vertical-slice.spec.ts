@@ -114,6 +114,7 @@ test.describe.serial('100m vertical slice', () => {
     await waitForView(page, 'Dashboard');
     await openView(page, 'Athletes', 'Athletes');
     await waitForView(page, 'Athletes');
+    await expect(page.getByText('Healthy', { exact: true }).first()).toBeVisible();
 
     for (const name of [alpha, bravo, charlie, delta]) {
       await addAthlete(page, name);
@@ -310,6 +311,8 @@ test.describe.serial('100m vertical slice', () => {
     await page.getByRole('button', { name: 'View performance' }).click();
 
     await expect(page.getByRole('heading', { name: alpha, level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Active injury map', level: 2 })).toBeVisible();
+    await expect(page.getByText('Healthy', { exact: true })).toBeVisible();
     const kpi = page.getByRole('region', { name: '100m performance summary' });
     await expect(kpi.getByText('10.40s', { exact: true })).toHaveCount(2);
 
