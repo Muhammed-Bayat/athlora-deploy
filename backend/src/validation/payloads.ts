@@ -118,6 +118,7 @@ export interface EventParticipantCreatePayload {
 export interface EventParticipantReplacementPayload {
   rsvpStatus: RsvpStatus;
 }
+export interface EventParticipantBulkRsvpPayload { updates: Array<{ athleteId: string; rsvpStatus: RsvpStatus }>; }
 
 export interface TimelineEntryCreatePayload {
   athleteId: string;
@@ -270,6 +271,21 @@ export function parseEventParticipantReplacementPayload(
 
   if (issues.length > 0) throwValidation(issues);
   return { rsvpStatus };
+}
+
+export function parseEventParticipantBulkRsvpPayload(input: unknown): EventParticipantBulkRsvpPayload {
+  const payload = payloadObject(input); const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ['updates'], issues);
+  if (!Array.isArray(payload.updates) || payload.updates.length === 0 || payload.updates.length > 100) issues.push(issue('updates', 'invalid_value', 'Provide 1 to 100 RSVP updates'));
+  const seen = new Set<string>(); const updates: Array<{ athleteId: string; rsvpStatus: RsvpStatus }> = [];
+  if (Array.isArray(payload.updates)) payload.updates.forEach((value, index) => {
+    const row = payloadObject(value); rejectUnknownFields(row, ['athleteId', 'rsvpStatus'], issues);
+    const athleteId = typeof row.athleteId === 'string' && isCanonicalUuid(row.athleteId) ? row.athleteId : '';
+    if (!athleteId || seen.has(athleteId)) issues.push(issue(`updates.${index}.athleteId`, 'invalid_value', 'Athlete ID must be unique and valid')); else seen.add(athleteId);
+    const rsvpStatus = requiredEnum(row, 'rsvpStatus', RSVP_STATUSES, issues);
+    if (athleteId && rsvpStatus) updates.push({ athleteId, rsvpStatus });
+  });
+  if (issues.length > 0) throwValidation(issues); return { updates };
 }
 
 function rejectUnknownFields(
