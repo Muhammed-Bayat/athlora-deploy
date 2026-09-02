@@ -47,6 +47,7 @@ export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
   onOpenEvent?: (eventId: string) => void;
   today?: string;
+  defaultView?: EventView;
 }
 
 function localToday(): string {
@@ -589,7 +590,7 @@ export function ParticipantManager({
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday() }: EventsPageProps = {}) {
+export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday(), defaultView }: EventsPageProps = {}) {
   const { activeWorkspace } = useWorkspace();
   const isCoach = activeWorkspace.role === 'coach';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -602,7 +603,10 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const [dateTab, setDateTab] = useState<DateTab>(() => searchParams.get('date') === 'past' || searchParams.get('date') === 'all' ? searchParams.get('date') as DateTab : 'upcoming');
   const [typeFilter, setTypeFilter] = useState<EventType | ''>(() => searchParams.get('type') === 'competition' || searchParams.get('type') === 'training' ? searchParams.get('type') as EventType : '');
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>(() => ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventStatus : '');
-  const [view, setView] = useState<EventView>('list');
+  const [view, setView] = useState<EventView>(() => {
+    if (defaultView) return defaultView;
+    return window.innerWidth <= 768 ? 'list' : 'list';
+  });
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
@@ -768,21 +772,61 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
 
       {!loading && !loadError && (view === 'list' ? filtered : calendarEvents).length > 0 && (
         <div className={styles.list} aria-label="Event calendar list">
-          {(view === 'list' ? filtered : calendarEvents).map((event) => {
-            const date = new Date(`${event.date}T00:00:00`);
-            return (
-              <Card className={styles.eventCard} key={event.id}>
-                  <button type="button" className={styles.eventOpen} onClick={() => {
-                    const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
-                    if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
-                  }}>
-                  <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
-                  <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
-                  <span aria-hidden="true">›</span>
-                </button>
-              </Card>
-            );
-          })}
+          {view === 'list' ? (
+            // Group events by date for mobile agenda / list view
+            Object.entries(
+              filtered.reduce<Record<string, AthleticsEvent[]>>((groups, event) => {
+                const d = event.date;
+                groups[d] ??= [];
+                groups[d].push(event);
+                return groups;
+              }, {})
+            ).sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate)).map(([dateKey, dateEvents]) => (
+              <div key={dateKey} className={styles.agendaGroup}>
+                <h3 className={styles.agendaDateHeading}>{formattedDate(dateKey, true)}</h3>
+                <div className={styles.agendaGroupEvents}>
+                  {dateEvents.map((event) => {
+                    const date = new Date(`${event.date}T00:00:00`);
+                    return (
+                      <Card className={styles.eventCard} key={event.id}>
+                        <button type="button" className={styles.eventOpen} onClick={() => {
+                          const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+                          if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
+                        }}>
+                          <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
+                          <span className={styles.eventBody}>
+                            <strong>{event.title}</strong>
+                            <span>
+                              <i data-type={event.type}>{formattedType(event.type)}</i>
+                              <i data-status={event.status}>{formattedStatus(event.status)}</i>
+                            </span>
+                            <small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small>
+                          </span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            calendarEvents.map((event) => {
+              const date = new Date(`${event.date}T00:00:00`);
+              return (
+                <Card className={styles.eventCard} key={event.id}>
+                    <button type="button" className={styles.eventOpen} onClick={() => {
+                      const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+                      if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
+                    }}>
+                    <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
+                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </Card>
+              );
+            })
+          )}
         </div>
       )}
 
