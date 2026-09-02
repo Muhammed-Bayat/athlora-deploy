@@ -386,3 +386,20 @@ export interface ProgressionDetail {
   pagination: ProgressionPagination;
   summary: ProgressionSummary;
 }
+
+export interface ComparisonAthleteAggregate {
+  athlete: AggregateAthleteIdentity;
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  latestEffectiveOutcome: ResultOutcome;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+  progression: ProgressionEntry[];
+}
+
+export interface ComparisonDetail {
+  athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate];
+}

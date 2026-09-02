@@ -1,0 +1,174 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  color: var(--console-ink);
+}
+
+.selectorRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.selector label {
+  color: var(--console-muted);
+  font: var(--font-weight-bold) 0.75rem var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.metricCard {
+  padding: var(--space-4);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-sm);
+  background: var(--console-surface);
+}
+
+.metricLabel {
+  margin: 0 0 var(--space-2);
+  color: var(--console-muted);
+  font: 600 0.7rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--console-ink);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.metricEmpty {
+  color: var(--console-faint);
+  font-style: italic;
+}
+
+.comparisonTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--console-line);
+  text-align: left;
+}
+
+.comparisonTable th {
+  background: var(--console-row-surface);
+  font: 600 0.75rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--console-muted);
+}
+
+.comparisonTable td {
+  color: var(--console-ink);
+}
+
+.chartWrap {
+  overflow-x: auto;
+  margin-top: var(--space-4);
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--console-muted);
+  font-size: 0.75rem;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legendDot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.legendDotA {
+  background: var(--cyan-400);
+}
+
+.legendDotB {
+  background: var(--blue-500);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--console-line);
+  border-radius: var(--radius-sm);
+  color: var(--console-muted);
+  text-align: center;
+}
+
+.error {
+  color: var(--console-muted);
+}
+
+.error strong {
+  color: var(--console-danger-surface);
+}
+
+.error p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .selectorRow {
+    grid-template-columns: 1fr;
+  }
+
+  .metricsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .legend {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+}

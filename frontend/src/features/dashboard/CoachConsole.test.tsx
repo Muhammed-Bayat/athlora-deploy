@@ -35,6 +35,8 @@ vi.mock('../timeline/LiveLoggingPage', () => ({
 
 vi.mock('../auth/AuthPage', () => ({ AuthPage: () => <p>Account view</p> }));
 
+vi.mock('../comparison/ComparisonPage', () => ({ ComparisonPage: () => <p>Comparison view</p> }));
+
 describe('CoachConsole dashboard navigation', () => {
   beforeAll(() => {
     Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
