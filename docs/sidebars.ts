@@ -27,7 +27,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'API Reference',
-      items: ['api-reference/contract'],
+      items: ['api-reference/contract', 'api-reference/comparison'],
     },
     {
       type: 'category',

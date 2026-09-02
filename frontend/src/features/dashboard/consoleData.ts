@@ -1,4 +1,4 @@
-export type ConsoleView = 'dashboard' | 'athletes' | 'events' | 'fixtures' | 'live' | 'account';
+export type ConsoleView = 'dashboard' | 'athletes' | 'comparison' | 'events' | 'fixtures' | 'live' | 'account';
 
 export type WeatherPreset =
   | 'clear'

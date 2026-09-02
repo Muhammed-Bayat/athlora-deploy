@@ -6,6 +6,7 @@ import { EventDetailPage } from '../events/EventDetailPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import { AuthPage } from '../auth/AuthPage';
 import { FixturesPage } from '../fixtures/FixturesPage';
+import { ComparisonPage } from '../comparison/ComparisonPage';
 import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
@@ -19,6 +20,7 @@ type IconName = 'home' | 'athletes' | 'calendar' | 'activity';
 const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; icon: IconName }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
+  { id: 'comparison', label: 'Compare', shortLabel: 'Compare', icon: 'activity' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
   { id: 'fixtures', label: 'Fixtures', shortLabel: 'Fixtures', icon: 'calendar' },
   { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
@@ -34,6 +36,7 @@ const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; tempera
 const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
+  comparison: { title: 'Compare Athletes', subtitle: 'Compare all-time 100m progression for two athletes' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
   fixtures: { title: 'Fixtures', subtitle: 'Manage your team in hosted fixtures' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
@@ -283,6 +286,7 @@ export function CoachConsole() {
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
+    : location.pathname.includes('/comparison') ? 'comparison'
     : location.pathname.includes('/events') ? 'events'
       : location.pathname.includes('/fixtures') ? 'fixtures'
       : location.pathname.includes('/live') ? 'live'
@@ -404,6 +408,7 @@ export function CoachConsole() {
         {location.pathname === '/console' && <DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
         {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
         {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
+        {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
         {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
          {location.pathname === '/console/fixtures' && <FixturesPage key={`fixtures:${activeWorkspace.id}`} />}
