@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoachConsole } from './CoachConsole';
 
 vi.mock('./DashboardPage', () => ({
@@ -40,6 +40,13 @@ vi.mock('../comparison/ComparisonPage', () => ({ ComparisonPage: () => <p>Compar
 describe('CoachConsole dashboard navigation', () => {
   beforeAll(() => {
     Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
+  });
+
+  beforeEach(() => {
+    // CoachConsole makes real fetch calls to Open-Meteo/geocoding on mount.
+    // Stub fetch to reject fast so the component's catch handlers fire
+    // immediately instead of hanging the test in CI.
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network blocked'));
   });
 
   it('opens exact athlete, event, and live logging destinations', async () => {
