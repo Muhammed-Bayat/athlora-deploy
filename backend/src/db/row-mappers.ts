@@ -1049,3 +1049,71 @@ export function mapAthleteInjuryRow(row: AthleteInjuryRow): AthleteInjury {
     deletedBy: nullableUuid(row.deleted_by, 'athlete_injury.deleted_by'),
   };
 }
+
+export interface EventHelperInvitationRow {
+  id: string;
+  event_id: string;
+  secret_hash: string;
+  human_code: string;
+  max_cap: number;
+  status: string;
+  created_by: string;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+}
+
+export interface EventHelperGrantRow {
+  id: string;
+  invitation_id: string;
+  event_id: string;
+  auth0_sub: string;
+  status: string;
+  redeemed_at: TimestampValue;
+}
+
+export interface EventHelperAuditLogRow {
+  id: string;
+  event_id: string;
+  invitation_id: string | null;
+  action: string;
+  actor_sub: string;
+  details: unknown;
+  created_at: TimestampValue;
+}
+
+export function mapEventHelperInvitationRow(row: EventHelperInvitationRow) {
+  return {
+    id: uuid(row.id, 'event_helper_invitation.id'),
+    eventId: uuid(row.event_id, 'event_helper_invitation.event_id'),
+    secretHash: nonemptyString(row.secret_hash, 'event_helper_invitation.secret_hash'),
+    humanCode: nonemptyString(row.human_code, 'event_helper_invitation.human_code'),
+    maxCap: count(row.max_cap, 'event_helper_invitation.max_cap'),
+    status: enumValue(row.status, ['active', 'closed', 'revoked'] as const, 'event_helper_invitation.status'),
+    createdBy: nonemptyString(row.created_by, 'event_helper_invitation.created_by'),
+    createdAt: timestamp(row.created_at, 'event_helper_invitation.created_at'),
+    updatedAt: timestamp(row.updated_at, 'event_helper_invitation.updated_at'),
+  };
+}
+
+export function mapEventHelperGrantRow(row: EventHelperGrantRow) {
+  return {
+    id: uuid(row.id, 'event_helper_grant.id'),
+    invitationId: uuid(row.invitation_id, 'event_helper_grant.invitation_id'),
+    eventId: uuid(row.event_id, 'event_helper_grant.event_id'),
+    auth0Sub: nonemptyString(row.auth0_sub, 'event_helper_grant.auth0_sub'),
+    status: enumValue(row.status, ['active', 'revoked'] as const, 'event_helper_grant.status'),
+    redeemedAt: timestamp(row.redeemed_at, 'event_helper_grant.redeemed_at'),
+  };
+}
+
+export function mapEventHelperAuditLogRow(row: EventHelperAuditLogRow) {
+  return {
+    id: uuid(row.id, 'event_helper_audit_log.id'),
+    eventId: uuid(row.event_id, 'event_helper_audit_log.event_id'),
+    invitationId: nullableUuid(row.invitation_id, 'event_helper_audit_log.invitation_id'),
+    action: nonemptyString(row.action, 'event_helper_audit_log.action'),
+    actorSub: nonemptyString(row.actor_sub, 'event_helper_audit_log.actor_sub'),
+    details: (row.details as Record<string, unknown>) || null,
+    createdAt: timestamp(row.created_at, 'event_helper_audit_log.created_at'),
+  };
+}

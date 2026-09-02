@@ -143,6 +143,40 @@ export interface TimelineEntry {
   deletedAt: string | null;
 }
 
+export type InvitationStatus = 'active' | 'closed' | 'revoked';
+export type GrantStatus = 'active' | 'revoked';
+
+export interface EventHelperInvitation {
+  id: string;
+  eventId: string;
+  secretHash: string;
+  humanCode: string;
+  maxCap: number;
+  status: InvitationStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventHelperGrant {
+  id: string;
+  invitationId: string;
+  eventId: string;
+  auth0Sub: string;
+  status: GrantStatus;
+  redeemedAt: string;
+}
+
+export interface EventHelperAuditLog {
+  id: string;
+  eventId: string;
+  invitationId: string | null;
+  action: string;
+  actorSub: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface Result {
   eventId: string;
   athleteId: string;
