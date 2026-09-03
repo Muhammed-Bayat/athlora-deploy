@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProgressionDetail } from '../../types';
 import { ProgressionChart } from './ProgressionChart';
@@ -59,5 +59,17 @@ describe('ProgressionChart', () => {
     expect(await screen.findByRole('heading', { name: 'All-time 100m progression' })).toBeInTheDocument();
     expect(screen.getByText('All-time PB: 11.05s · 1 of 1 valid')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Ari Runner 100m progression chart' })).toBeInTheDocument();
+  });
+
+  it('shows the result value when a point receives keyboard focus', async () => {
+    statisticsApi.getAthleteProgression.mockResolvedValue(progression);
+
+    render(<ProgressionChart athleteId={ATHLETE_ID} athleteName="Ari Runner" />);
+
+    const point = await screen.findByRole('img', { name: '17 Aug 2026: 11.05s, personal best' });
+    fireEvent.focus(point);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('17 Aug 2026');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('11.05s');
   });
 });

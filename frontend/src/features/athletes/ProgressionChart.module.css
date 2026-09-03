@@ -54,6 +54,32 @@
   height: auto;
 }
 
+.lineHitArea {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  pointer-events: stroke;
+}
+
+.tooltip {
+  pointer-events: none;
+}
+
+.tooltipBox {
+  fill: var(--console-surface-strong);
+  stroke: var(--console-line-strong);
+}
+
+.tooltipText {
+  fill: var(--console-muted);
+  font: 0.625rem var(--font-family-mono);
+}
+
+.tooltipValue {
+  fill: var(--console-ink);
+  font: 600 0.75rem var(--font-family-mono);
+}
+
 .axisLabel {
   fill: var(--console-muted);
   font: 0.65rem var(--font-family-mono);

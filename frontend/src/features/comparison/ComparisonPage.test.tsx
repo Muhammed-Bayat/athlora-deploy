@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -142,11 +142,22 @@ describe('ComparisonPage', () => {
     const chart = screen.getByRole('img', { name: /progression chart/i });
     expect(chart).toBeInTheDocument();
     expect(chart.querySelector('title')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Alice Sprint vs Bob Dash: 100m Progression' })).toBeInTheDocument();
+    expect(chart).toHaveTextContent('Date');
+    expect(chart).toHaveTextContent('Time (s)');
     const firstSeries = chart.querySelector('polyline[data-series="athlete-1"]');
     const secondSeries = chart.querySelector('polyline[data-series="athlete-2"]');
     expect(firstSeries).toBeTruthy();
     expect(secondSeries).toBeTruthy();
     expect(firstSeries?.getAttribute('class')).not.toBe(secondSeries?.getAttribute('class'));
+
+    fireEvent.pointerMove(screen.getByTestId('comparison-line-hit-area-1'), { clientX: 120, clientY: 120 });
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Alice Sprint');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('11.50s');
+
+    fireEvent.pointerMove(screen.getByTestId('comparison-line-hit-area-2'), { clientX: 120, clientY: 120 });
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Bob Dash');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('11.80s');
   });
 
   it('preserves athlete selection in URL query params', async () => {

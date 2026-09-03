@@ -14,14 +14,28 @@ const CHART_WIDTH = SVG_WIDTH - SVG_PADDING.left - SVG_PADDING.right;
 const CHART_HEIGHT = SVG_HEIGHT - SVG_PADDING.top - SVG_PADDING.bottom;
 
 type ViewMode = 'chart' | 'table';
+type ChartPoint = { x: number; y: number; entry: ProgressionEntry; athleteIndex: number };
 
 interface ChartGeometry {
-  series: Array<Array<{ x: number; y: number; entry: ProgressionEntry; athleteIndex: number }>>;
+  series: ChartPoint[][];
   yTickValues: number[];
   yMin: number;
   yRange: number;
   minTime: number;
   maxTime: number;
+}
+
+function closestPoint(points: ChartPoint[], svg: SVGSVGElement | null, clientX: number, clientY: number): ChartPoint | null {
+  if (!svg || points.length === 0) return null;
+  const bounds = svg.getBoundingClientRect();
+  if (bounds.width === 0 || bounds.height === 0) return points[0];
+  const x = ((clientX - bounds.left) / bounds.width) * SVG_WIDTH;
+  const y = ((clientY - bounds.top) / bounds.height) * SVG_HEIGHT;
+  return points.reduce((nearest, point) => (
+    (point.x - x) ** 2 + (point.y - y) ** 2 < (nearest.x - x) ** 2 + (nearest.y - y) ** 2
+      ? point
+      : nearest
+  ));
 }
 
 function buildComparisonChartGeometry(athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate]): ChartGeometry | null {
@@ -119,6 +133,7 @@ function ComparisonTable({ comparison }: { comparison: ComparisonDetail }) {
 }
 
 function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
+  const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
   const geometry = useMemo(
     () => buildComparisonChartGeometry(comparison.athletes),
     [comparison],
@@ -130,6 +145,9 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
 
   return (
     <div className={styles.chartWrap}>
+      <h2 className={styles.chartHeading}>
+        {`${comparison.athletes[0].athlete.name} vs ${comparison.athletes[1].athlete.name}: 100m Progression`}
+      </h2>
       <svg
         className={styles.svg}
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
@@ -140,6 +158,23 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
         <desc>
           {`Chronological progression of valid 100m results for ${comparison.athletes[0].athlete.name} and ${comparison.athletes[1].athlete.name}`}
         </desc>
+
+        <line
+          x1={SVG_PADDING.left}
+          y1={SVG_PADDING.top}
+          x2={SVG_PADDING.left}
+          y2={SVG_HEIGHT - SVG_PADDING.bottom}
+          stroke="var(--console-line)"
+          strokeWidth="1"
+        />
+        <line
+          x1={SVG_PADDING.left}
+          y1={SVG_HEIGHT - SVG_PADDING.bottom}
+          x2={SVG_WIDTH - SVG_PADDING.right}
+          y2={SVG_HEIGHT - SVG_PADDING.bottom}
+          stroke="var(--console-line)"
+          strokeWidth="1"
+        />
 
         {yTickValues.map((y) => (
           <g key={y}>
@@ -157,7 +192,7 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
               textAnchor="end"
               className={styles.axisLabel}
             >
-              {format100mSeconds(y)}
+              {y.toFixed(2)}
             </text>
           </g>
         ))}
@@ -170,15 +205,38 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
         >
           Date
         </text>
+        <text
+          x={12}
+          y={SVG_HEIGHT / 2}
+          textAnchor="middle"
+          transform={`rotate(-90 12 ${SVG_HEIGHT / 2})`}
+          className={styles.axisTitle}
+        >
+          Time (s)
+        </text>
 
         {series.map((athleteSeries, athleteIndex) => (
           <g key={comparison.athletes[athleteIndex].athlete.id}>
             {athleteSeries.length > 1 && (
-              <polyline
-                data-series={`athlete-${athleteIndex + 1}`}
-                points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
-                className={athleteIndex === 0 ? styles.seriesLineA : styles.seriesLineB}
-              />
+              <>
+                <polyline
+                  data-series={`athlete-${athleteIndex + 1}`}
+                  points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
+                  className={athleteIndex === 0 ? styles.seriesLineA : styles.seriesLineB}
+                />
+                <polyline
+                  data-testid={`comparison-line-hit-area-${athleteIndex + 1}`}
+                  points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
+                  className={styles.lineHitArea}
+                  onPointerMove={(event) => setHoveredPoint(closestPoint(
+                    athleteSeries,
+                    event.currentTarget.ownerSVGElement,
+                    event.clientX,
+                    event.clientY,
+                  ))}
+                  onPointerLeave={() => setHoveredPoint(null)}
+                />
+              </>
             )}
             {athleteSeries.map((point) => (
               <circle
@@ -187,12 +245,32 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
                 cy={point.y}
                 r={4.5}
                 className={athleteIndex === 0 ? styles.seriesPointA : styles.seriesPointB}
+                tabIndex={0}
+                role="img"
+                aria-label={`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}
+                onPointerEnter={() => setHoveredPoint(point)}
+                onPointerLeave={() => setHoveredPoint(null)}
+                onFocus={() => setHoveredPoint(point)}
+                onBlur={() => setHoveredPoint(null)}
               >
                 <title>{`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}</title>
               </circle>
             ))}
           </g>
         ))}
+        {hoveredPoint && (
+          <g
+            role="tooltip"
+            className={styles.tooltip}
+            transform={`translate(${Math.min(hoveredPoint.x + 12, SVG_WIDTH - 190)} ${Math.max(hoveredPoint.y - 42, SVG_PADDING.top)})`}
+          >
+            <rect width="178" height="36" rx="6" className={styles.tooltipBox} />
+            <text x="10" y="14" className={styles.tooltipText}>{comparison.athletes[hoveredPoint.athleteIndex].athlete.name}</text>
+            <text x="10" y="28" className={styles.tooltipValue}>
+              {`${formatDateOnly(hoveredPoint.entry.event.date)} · ${format100mSeconds(hoveredPoint.entry.effectiveResult!)}`}
+            </text>
+          </g>
+        )}
       </svg>
       <div className={styles.legend} role="list" aria-label="Chart legend">
         <span className={styles.legendItem} role="listitem">
