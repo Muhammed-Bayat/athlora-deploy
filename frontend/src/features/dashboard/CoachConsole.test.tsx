@@ -60,6 +60,8 @@ describe('CoachConsole dashboard navigation', () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
 
+    expect(screen.queryByRole('button', { name: 'Stats' })).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: 'Open athlete record' }));
     expect(screen.getByText('Athlete target: athlete-42')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /athletes/i })[0]).toHaveAttribute('aria-current', 'page');
@@ -68,11 +70,15 @@ describe('CoachConsole dashboard navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Open event record' }));
     expect(screen.getByText('Event target: event-42')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /events/i })[0]).toHaveAttribute('aria-current', 'page');
+    await user.click(screen.getAllByRole('button', { name: /events/i })[0]);
+    expect(screen.getByText('Events list')).toBeInTheDocument();
 
     await user.click(screen.getAllByRole('button', { name: /dashboard/i })[0]);
     await user.click(screen.getByRole('button', { name: 'Resume event logging' }));
     expect(screen.getByText('Live target: live-42')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /live logger/i })[0]).toHaveAttribute('aria-current', 'page');
+    await user.click(screen.getAllByRole('button', { name: /live logger/i })[0]);
+    expect(screen.getByText('Live target: none')).toBeInTheDocument();
   });
 
   it('clears a targeted record when standard navigation is used', async () => {
