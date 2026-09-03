@@ -62,7 +62,7 @@ function progressionRow(overrides: Partial<ProgressionEntryRow> = {}): Progressi
   };
 }
 
-function summaryFields(overrides: { summary_pb?: number | null; summary_total?: number; summary_valid?: number } = {}): { summary_pb: number | null; summary_total: number; summary_valid: number } {
+function summaryFields(overrides: { summary_pb?: number | string | null; summary_total?: number; summary_valid?: number } = {}): { summary_pb: number | string | null; summary_total: number; summary_valid: number } {
   return {
     summary_pb: overrides.summary_pb ?? null,
     summary_total: overrides.summary_total ?? 0,
@@ -70,9 +70,9 @@ function summaryFields(overrides: { summary_pb?: number | null; summary_total?: 
   };
 }
 
-type ProgressionQueryRow = ProgressionEntryRow & { summary_pb: number | null; summary_total: number; summary_valid: number };
+type ProgressionQueryRow = ProgressionEntryRow & { summary_pb: number | string | null; summary_total: number; summary_valid: number };
 
-function queryRow(entryOverrides: Partial<ProgressionEntryRow> = {}, summaryOverrides: { summary_pb?: number | null; summary_total?: number; summary_valid?: number } = {}): ProgressionQueryRow {
+function queryRow(entryOverrides: Partial<ProgressionEntryRow> = {}, summaryOverrides: { summary_pb?: number | string | null; summary_total?: number; summary_valid?: number } = {}): ProgressionQueryRow {
   return { ...progressionRow(entryOverrides), ...summaryFields(summaryOverrides) };
 }
 
@@ -115,7 +115,7 @@ describe('getAthleteProgressionDetail', () => {
             effective_result: '11.50',
             running_pb: null,
             is_new_pb: true,
-          }, { summary_pb: 11.05, summary_total: 3, summary_valid: 3 }),
+          }, { summary_pb: '11.05', summary_total: 3, summary_valid: 3 }),
           queryRow({
             event_id: 'aaaa2222-2222-4222-8222-222222222222',
             event_date: '2026-07-01',
@@ -339,7 +339,7 @@ describe('getAthleteProgressionDetail', () => {
     );
 
     const [sql, params] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toContain('e.type = $4');
+    expect(sql).toContain('e.type = $5');
     expect(params).toContain('competition');
   });
 
