@@ -21,7 +21,6 @@ type IconName = 'home' | 'athletes' | 'calendar' | 'activity';
 
 const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; icon: IconName }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
-  { id: 'stats', label: 'Stats', shortLabel: 'Stats', icon: 'activity' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'comparison', label: 'Compare', shortLabel: 'Compare', icon: 'activity' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
