@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoachConsole } from './CoachConsole';
+import { ApiError } from '../../api/client';
+
+const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
+
+vi.mock('../../api/weather', () => weatherApi);
 
 vi.mock('./DashboardPage', () => ({
   DashboardPage: ({
@@ -43,10 +48,12 @@ describe('CoachConsole dashboard navigation', () => {
   });
 
   beforeEach(() => {
-    // CoachConsole makes real fetch calls to Open-Meteo/geocoding on mount.
-    // Stub fetch to reject fast so the component's catch handlers fire
-    // immediately instead of hanging the test in CI.
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network blocked'));
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: -26.2041, longitude: 28.0473 } } as GeolocationPosition) },
+    });
+    vi.mocked(weatherApi.getCurrentWeather).mockRejectedValue(new Error('Weather service unavailable'));
   });
 
   it('opens exact athlete, event, and live logging destinations', async () => {
@@ -77,5 +84,33 @@ describe('CoachConsole dashboard navigation', () => {
 
     await user.click(screen.getAllByRole('button', { name: /athletes/i })[0]);
     expect(screen.getByText('Athlete target: none')).toBeInTheDocument();
+  });
+
+  it('shows current live weather from the resolved device location', async () => {
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
+      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+    });
+
+    render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
+
+    expect(await screen.findByText('Partly cloudy · 25°')).toBeInTheDocument();
+    expect(weatherApi.getCurrentWeather).toHaveBeenCalledWith(-26.2041, 28.0473);
+  });
+
+  it('explains when authentication prevents the live weather request', async () => {
+    weatherApi.getCurrentWeather.mockRejectedValue(new ApiError(401, 'UNAUTHORIZED', 'Missing token'));
+
+    render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
+
+    const message = await screen.findByText('Weather unavailable');
+    expect(message.parentElement).toHaveAttribute('title', 'Sign in for live weather.');
+  });
+
+  it('explains when the live weather provider is unavailable', async () => {
+    render(<MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>);
+
+    const message = await screen.findByText('Weather unavailable');
+    expect(message.parentElement).toHaveAttribute('title', 'Weather unavailable. Check location permissions or try again.');
   });
 });
