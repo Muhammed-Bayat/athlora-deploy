@@ -49,7 +49,7 @@ export function ActiveInjuries({ injuries, isCoach, isArchived, onResolve, onReo
                 <div>
                   <strong>{injuryLabel(injury)}</strong>
                   <span>
-                    {injury.bodyRegion} · {injury.severity} · Occurred {injury.occurrenceDate}
+                    {injury.bodyRegion} · {injury.severity} · {injury.occurrenceDate ? `Occurred ${injury.occurrenceDate}` : 'Date not recorded'}
                     {injury.expectedReturnDate && ` · Expected return ${injury.expectedReturnDate}`}
                     {isResolved && ` · Resolved ${new Date(injury.resolvedDate!).toLocaleDateString()}`}
                   </span>

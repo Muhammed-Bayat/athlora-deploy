@@ -55,7 +55,7 @@ describe('EventWeatherPanel', () => {
   it('does not request weather without both coordinates', () => {
     render(<EventWeatherPanel event={{ ...event, longitude: null }} />);
 
-    expect(screen.getByText('Add latitude and longitude to view the forecast.')).toBeInTheDocument();
+    expect(screen.getByText('Select a venue when editing this event to view the forecast.')).toBeInTheDocument();
     expect(getEventWeather).not.toHaveBeenCalled();
   });
 

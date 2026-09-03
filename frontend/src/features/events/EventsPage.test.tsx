@@ -307,8 +307,6 @@ describe('EventsPage', () => {
     await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
     await user.type(within(dialog).getByLabelText(/Time/), '10:15');
     await user.type(within(dialog).getByLabelText(/Location/), '  North Track  ');
-    await user.type(within(dialog).getByLabelText(/Latitude/), '-26.2');
-    await user.type(within(dialog).getByLabelText(/Longitude/), '28.1');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 
     await waitFor(() => expect(eventApi.createEvent).toHaveBeenCalledWith({
@@ -318,14 +316,14 @@ describe('EventsPage', () => {
       date: '2026-09-05',
       time: '10:15',
       locationName: 'North Track',
-      latitude: -26.2,
-      longitude: 28.1,
+      latitude: null,
+      longitude: null,
       status: 'scheduled',
     }));
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
-  it('searches only after an explicit keyboard-activatable action, then selects a venue while retaining manual fallback fields', async () => {
+  it('searches while typing, then selects and retains the highlighted venue', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: /City Sprint Meet/ });
@@ -333,19 +331,15 @@ describe('EventsPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
     const lookup = within(dialog).getByLabelText('Venue or address');
     await user.type(lookup, 'Central Stadium');
-    expect(venueApi.searchVenues).not.toHaveBeenCalled();
-    await user.keyboard('{Tab}{Enter}');
     await waitFor(() => expect(venueApi.searchVenues).toHaveBeenCalledWith('Central Stadium'));
     const result = await within(dialog).findByRole('button', { name: /Central Stadium, Johannesburg/ });
-    await user.keyboard('{Tab}{Enter}');
+    await user.click(result);
     expect(within(dialog).getByLabelText(/Location/)).toHaveValue('Central Stadium, Johannesburg');
-    expect(within(dialog).getByLabelText(/Latitude/)).toHaveValue(-26.2041);
-    expect(within(dialog).getByLabelText(/Longitude/)).toHaveValue(28.0473);
     expect(within(dialog).getByText(/Search data/)).toHaveTextContent('OpenStreetMap contributors');
-    expect(result).not.toBeInTheDocument();
+    expect(result).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('validates coordinate ranges and preserves backend-invalid drafts', async () => {
+  it('preserves backend-invalid drafts', async () => {
     eventApi.createEvent.mockRejectedValue(
       new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', {
         issues: [{ path: 'title', code: 'invalid_value', message: 'Title is unavailable' }],
@@ -358,12 +352,6 @@ describe('EventsPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
     await user.type(within(dialog).getByLabelText('Event title'), 'Taken Meet');
     await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
-    await user.type(within(dialog).getByLabelText(/Latitude/), '91');
-    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
-    expect(within(dialog).getByText('Latitude must be between -90 and 90.')).toBeInTheDocument();
-    expect(eventApi.createEvent).not.toHaveBeenCalled();
-
-    await user.clear(within(dialog).getByLabelText(/Latitude/));
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
     expect(await within(dialog).findByText('Title is unavailable')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Event title')).toHaveValue('Taken Meet');

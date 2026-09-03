@@ -7,6 +7,7 @@ import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import { AuthPage } from '../auth/AuthPage';
 import { FixturesPage } from '../fixtures/FixturesPage';
 import { ComparisonPage } from '../comparison/ComparisonPage';
+import { IncomingFixtureInvitations } from '../fixtures/IncomingFixtureInvitations';
 import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
@@ -19,6 +20,7 @@ type IconName = 'home' | 'athletes' | 'calendar' | 'activity';
 
 const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; icon: IconName }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
+  { id: 'stats', label: 'Stats', shortLabel: 'Stats', icon: 'activity' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'comparison', label: 'Compare', shortLabel: 'Compare', icon: 'activity' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
@@ -35,6 +37,7 @@ const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; tempera
 ];
 const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
+  stats: { title: 'Season Stats', subtitle: 'Teams, athletes, results, and performance trends' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   comparison: { title: 'Compare Athletes', subtitle: 'Compare all-time 100m progression for two athletes' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
@@ -286,6 +289,7 @@ export function CoachConsole() {
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
+    : location.pathname.includes('/stats') ? 'stats'
     : location.pathname.includes('/comparison') ? 'comparison'
     : location.pathname.includes('/events') ? 'events'
       : location.pathname.includes('/fixtures') ? 'fixtures'
@@ -405,13 +409,14 @@ export function CoachConsole() {
         </div>
       </header>
       <main className={styles.content}>
-        {location.pathname === '/console' && <DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
+        {location.pathname === '/console' && <><IncomingFixtureInvitations compact /><DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} /></>}
+        {location.pathname === '/console/stats' && <DashboardPage key={`stats:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
         {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
         {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
         {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
         {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
-         {location.pathname === '/console/fixtures' && <FixturesPage key={`fixtures:${activeWorkspace.id}`} />}
+          {location.pathname === '/console/fixtures' && <><IncomingFixtureInvitations /><FixturesPage key={`fixtures:${activeWorkspace.id}`} /></>}
         {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
         {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
         {location.pathname === '/console/account' && <AuthPage />}

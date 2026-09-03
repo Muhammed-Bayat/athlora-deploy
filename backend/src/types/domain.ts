@@ -333,7 +333,7 @@ export interface AthleteInjury {
   side: InjurySide;
   severity: InjurySeverity;
   notes: string | null;
-  occurrenceDate: string;
+  occurrenceDate: string | null;
   expectedReturnDate: string | null;
   resolvedDate: string | null;
   resolutionNotes: string | null;

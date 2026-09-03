@@ -11,7 +11,7 @@ export interface InjuryCreatePayload {
   side: InjurySide;
   severity: InjurySeverity;
   notes: string | null;
-  occurrenceDate: string;
+  occurrenceDate: string | null;
   expectedReturnDate: string | null;
 }
 
@@ -21,7 +21,7 @@ export interface InjuryUpdatePayload {
   side?: InjurySide;
   severity?: InjurySeverity;
   notes?: string | null;
-  occurrenceDate?: string;
+  occurrenceDate?: string | null;
   expectedReturnDate?: string | null;
 }
 
@@ -89,7 +89,7 @@ export async function listInjuries(
   }
 
   const result = await executor.query<AthleteInjuryRow>(
-    `SELECT * FROM athlete_injuries WHERE ${conditions.join(' AND ')} ORDER BY occurrence_date DESC, created_at DESC`,
+     `SELECT * FROM athlete_injuries WHERE ${conditions.join(' AND ')} ORDER BY occurrence_date DESC NULLS LAST, created_at DESC`,
     params,
   );
 
@@ -114,7 +114,7 @@ export async function listActiveInjurySummaries(
     `SELECT athlete_id, body_region, area, side, severity
      FROM athlete_injuries
      WHERE workspace_id = $1 AND deleted_at IS NULL AND resolved_date IS NULL
-     ORDER BY athlete_id, occurrence_date DESC, created_at DESC`,
+     ORDER BY athlete_id, occurrence_date DESC NULLS LAST, created_at DESC`,
     [workspaceId],
   );
 
@@ -214,11 +214,11 @@ export async function updateInjury(
          side = COALESCE($3, side),
          severity = COALESCE($4, severity),
          notes = CASE WHEN $5::boolean THEN $6 ELSE notes END,
-         occurrence_date = COALESCE($7, occurrence_date),
-         expected_return_date = CASE WHEN $8::boolean THEN $9 ELSE expected_return_date END,
-         updated_by = $10,
+          occurrence_date = CASE WHEN $7::boolean THEN $8 ELSE occurrence_date END,
+          expected_return_date = CASE WHEN $9::boolean THEN $10 ELSE expected_return_date END,
+          updated_by = $11,
          updated_at = now()
-     WHERE id = $11 AND workspace_id = $12
+      WHERE id = $12 AND workspace_id = $13
      RETURNING *`,
     [
       payload.bodyRegion ?? null,
@@ -227,12 +227,13 @@ export async function updateInjury(
       payload.severity ?? null,
       payload.notes !== undefined,
       payload.notes ?? null,
-      payload.occurrenceDate ?? null,
-      payload.expectedReturnDate !== undefined,
-      payload.expectedReturnDate ?? null,
-      userId,
-      injuryId,
-      workspaceId,
+       payload.occurrenceDate !== undefined,
+       payload.occurrenceDate ?? null,
+       payload.expectedReturnDate !== undefined,
+       payload.expectedReturnDate ?? null,
+       userId,
+       injuryId,
+       workspaceId,
     ],
   );
 

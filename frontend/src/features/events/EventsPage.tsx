@@ -211,6 +211,8 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [venueResults, setVenueResults] = useState<VenueSearchResult[]>([]);
   const [venueSearching, setVenueSearching] = useState(false);
   const [venueError, setVenueError] = useState<string | null>(null);
+  const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
+  const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
 
@@ -246,26 +248,35 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     }
   };
 
-  const lookupVenue = async () => {
-    if (!venueQuery.trim()) {
-      setVenueError('Enter a venue or address to search.');
-      return;
-    }
+  const lookupVenue = async (query: string) => {
+    const request = ++venueRequestRef.current;
     setVenueSearching(true);
     setVenueError(null);
     try {
-      const response = await searchVenues(venueQuery.trim());
-      setVenueResults(response.data);
+      const response = await searchVenues(query);
+      if (request === venueRequestRef.current) setVenueResults(response.data);
     } catch (error) {
-      setVenueError(errorMessage(error));
+      if (request === venueRequestRef.current) setVenueError(errorMessage(error));
     } finally {
-      setVenueSearching(false);
+      if (request === venueRequestRef.current) setVenueSearching(false);
     }
   };
 
+  useEffect(() => {
+    const query = venueQuery.trim();
+    if (query.length < 2) {
+      setVenueResults([]);
+      setVenueError(null);
+      setVenueSearching(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => { void lookupVenue(query); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [venueQuery]);
+
   const selectVenue = (venue: VenueSearchResult) => {
     setDraft((current) => ({ ...current, locationName: venue.displayName, latitude: String(venue.latitude), longitude: String(venue.longitude) }));
-    setVenueResults([]);
+    setSelectedVenueKey(`${venue.latitude}-${venue.longitude}-${venue.displayName}`);
     setVenueError(null);
   };
 
@@ -323,14 +334,14 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
         </div>
        </div>
 
-       <fieldset className={styles.venueLookup} disabled={submitting || venueSearching}>
+       <fieldset className={styles.venueLookup} disabled={submitting}>
          <legend>Find a venue <span>Optional</span></legend>
-         <p>Search only when you choose. Select a result to set the location and pin coordinates, or use the manual fields below.</p>
-         <label htmlFor="venue-search" className={styles.srOnly}>Venue or address</label>
-         <div><Input id="venue-search" value={venueQuery} onChange={(input) => setVenueQuery(input.target.value)} placeholder="Venue or address" /><Button type="button" onClick={() => void lookupVenue()}>{venueSearching ? 'Searching...' : 'Search venues'}</Button></div>
-         {venueError && <p className={styles.formError} role="alert">{venueError}</p>}
-         {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => <li key={`${venue.latitude}-${venue.longitude}-${venue.displayName}`}><button type="button" onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>{venue.latitude}, {venue.longitude}</small></button></li>)}</ul>}
-         {!venueSearching && !venueError && venueQuery && venueResults.length === 0 && <p className={styles.venueHint}>No search has been run yet, or no matching venues were found.</p>}
+          <p>Start typing to search. Selecting a venue saves its map location for forecasts and directions.</p>
+          <label htmlFor="venue-search" className={styles.srOnly}>Venue or address</label>
+          <div><Input id="venue-search" value={venueQuery} onChange={(input) => { setVenueQuery(input.target.value); setSelectedVenueKey(null); }} placeholder="Venue or address" /><span className={styles.venueSearchState} role="status">{venueSearching ? 'Searching...' : 'Type at least 2 letters'}</span></div>
+          {venueError && <p className={styles.formError} role="alert">{venueError}</p>}
+          {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => { const key = `${venue.latitude}-${venue.longitude}-${venue.displayName}`; return <li key={key}><button type="button" aria-pressed={selectedVenueKey === key} className={selectedVenueKey === key ? styles.venueSelected : undefined} onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>{selectedVenueKey === key ? 'Selected venue' : 'Select venue'}</small></button></li>; })}</ul>}
+          {!venueSearching && !venueError && venueQuery.length >= 2 && venueResults.length === 0 && <p className={styles.venueHint}>No matching venues found.</p>}
          <p className={styles.attribution}>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>, via Nominatim.</p>
        </fieldset>
 
@@ -344,19 +355,6 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
           <label htmlFor="event-location">Location <span>Optional</span></label>
           <Input id="event-location" value={draft.locationName} onChange={(input) => setField('locationName', input.target.value)} invalid={Boolean(errors.locationName)} aria-invalid={Boolean(errors.locationName)} aria-describedby={errors.locationName ? 'event-location-error' : undefined} disabled={submitting} />
           {errors.locationName && <span id="event-location-error" className={styles.fieldError}>{errors.locationName}</span>}
-        </div>
-      </div>
-
-      <div className={styles.formRow}>
-        <div>
-          <label htmlFor="event-latitude">Latitude <span>Optional</span></label>
-          <Input id="event-latitude" type="number" step="any" value={draft.latitude} onChange={(input) => setField('latitude', input.target.value)} invalid={Boolean(errors.latitude)} aria-invalid={Boolean(errors.latitude)} aria-describedby={errors.latitude ? 'event-latitude-error' : undefined} disabled={submitting} />
-          {errors.latitude && <span id="event-latitude-error" className={styles.fieldError}>{errors.latitude}</span>}
-        </div>
-        <div>
-          <label htmlFor="event-longitude">Longitude <span>Optional</span></label>
-          <Input id="event-longitude" type="number" step="any" value={draft.longitude} onChange={(input) => setField('longitude', input.target.value)} invalid={Boolean(errors.longitude)} aria-invalid={Boolean(errors.longitude)} aria-describedby={errors.longitude ? 'event-longitude-error' : undefined} disabled={submitting} />
-          {errors.longitude && <span id="event-longitude-error" className={styles.fieldError}>{errors.longitude}</span>}
         </div>
       </div>
 
@@ -545,6 +543,7 @@ export function ParticipantManager({
     <section ref={sectionRef} className={styles.participants} aria-labelledby="event-participants-heading" aria-busy={participantsLoading || athletesLoading || Boolean(busy)} tabIndex={-1}>
       <header>
         <div><p>Event roster</p><h3 id="event-participants-heading">Assigned athletes <span>{participantsLoading ? '...' : participantsError ? 'Unavailable' : participants.length}</span></h3></div>
+        {!participantsLoading && !participantsError && <label className={styles.rosterFilter}>Roster filter<Select variant="field" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, { value: 'yes', label: 'Attending' }, { value: 'maybe', label: 'Maybe attending' }, { value: 'pending', label: 'Pending' }, { value: 'no', label: 'Not attending' }]} /></label>}
       </header>
 
       {participantsLoading && <p className={styles.inlineStatus} role="status">Loading assigned athletes...</p>}
@@ -570,7 +569,7 @@ export function ParticipantManager({
         </ul>
       )}
 
-      {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span><label className={styles.srOnly} htmlFor="rsvp-filter">Filter RSVP</label><Select id="rsvp-filter" variant="field" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All RSVP states' }, { value: 'pending', label: 'Pending' }, { value: 'yes', label: 'Attending' }, { value: 'no', label: 'Not attending' }, { value: 'maybe', label: 'Maybe' }]} /></div>}
+      {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
 
       {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 

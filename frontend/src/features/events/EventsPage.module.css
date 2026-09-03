@@ -415,9 +415,12 @@
 .venueLookup p, .venuePreview p { margin: 0; font-size: var(--font-size-sm); }
 .venueLookup > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
 .venueLookup button, .venueResults button { min-height: 44px; }
-.venueResults { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.venueSearchState { align-self: center; color: var(--console-faint); font: 0.72rem var(--font-family-mono); }
+.venueResults { display: grid; gap: var(--space-2); max-height: 15rem; margin: 0; padding: 0 var(--space-1) 0 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
 .venueResults button { width: 100%; display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--console-line); border-radius: var(--radius-sm); background: var(--console-row-surface); color: var(--console-ink); text-align: left; cursor: pointer; }
 .venueResults button:hover, .venueResults button:focus-visible { border-color: var(--console-focus); outline: 2px solid var(--console-focus); outline-offset: 2px; }
+.venueResults .venueSelected { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); background: var(--mist-100); }
+.rosterFilter { display: grid; gap: var(--space-1); color: var(--console-faint); font-size: var(--font-size-sm); }
 .venueResults small, .venueHint, .attribution { color: var(--console-faint); font: 0.72rem var(--font-family-mono); }
 .venuePreview { margin-top: var(--space-4); background: var(--console-surface); }
 .venuePreview > header { display: flex; gap: var(--space-3); align-items: center; justify-content: space-between; }

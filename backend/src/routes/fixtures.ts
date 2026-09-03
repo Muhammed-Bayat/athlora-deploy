@@ -26,6 +26,8 @@ fixtureHostRouter.get('/:eventId/fixture-results', requireCoach(), requireEventO
 fixtureHostRouter.put('/:eventId/fixture-results/:athleteId', requireCoach(), requireEventOwnership('eventId'), validateBody(parseResultOverridePayload), fixtures.overrideHostResult);
 
 const fixtureGuestRouter = Router();
+fixtureGuestRouter.get('/incoming', fixtures.listIncoming);
+fixtureGuestRouter.post('/incoming/:invitationId/respond', requireCoach(), validateBody(parseFixtureInvitationResponsePayload), fixtures.respondIncoming);
 fixtureGuestRouter.post('/invitations/:token/respond', requireCoach(), validateBody(parseFixtureInvitationResponsePayload), fixtures.respond);
 fixtureGuestRouter.get('/', fixtures.listGuest);
 fixtureGuestRouter.get('/:eventId', fixtures.getGuest);

@@ -1014,7 +1014,7 @@ export interface AthleteInjuryRow {
   side: string;
   severity: string;
   notes: string | null;
-  occurrence_date: DateValue;
+  occurrence_date: DateValue | null;
   expected_return_date: DateValue | null;
   resolved_date: TimestampValue | null;
   resolution_notes: string | null;
@@ -1037,7 +1037,7 @@ export function mapAthleteInjuryRow(row: AthleteInjuryRow): AthleteInjury {
     side: enumValue(row.side, INJURY_SIDES, 'athlete_injury.side'),
     severity: enumValue(row.severity, INJURY_SEVERITIES, 'athlete_injury.severity'),
     notes: nullableString(row.notes, 'athlete_injury.notes'),
-    occurrenceDate: databaseDate(row.occurrence_date, 'athlete_injury.occurrence_date'),
+    occurrenceDate: row.occurrence_date === null ? null : databaseDate(row.occurrence_date, 'athlete_injury.occurrence_date'),
     expectedReturnDate: row.expected_return_date === null ? null : databaseDate(row.expected_return_date, 'athlete_injury.expected_return_date'),
     resolvedDate: nullableTimestamp(row.resolved_date, 'athlete_injury.resolved_date'),
     resolutionNotes: nullableString(row.resolution_notes, 'athlete_injury.resolution_notes'),

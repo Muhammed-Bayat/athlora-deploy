@@ -23,10 +23,10 @@ function AppRoutes() {
     void loginWithRedirect({ appState: { returnTo: returnTo.startsWith('/console') || /^\/(?:invitations|fixture-invitations)\/[^/]+$/.test(returnTo) ? returnTo : '/console' } });
   };
   const createAccount = () => {
-    void loginWithRedirect({ authorizationParams: { screen_hint: 'signup' }, appState: { returnTo: returnTo.startsWith('/console') ? returnTo : '/console' } });
+    void loginWithRedirect({ authorizationParams: { screen_hint: 'signup' }, appState: { returnTo: returnTo.startsWith('/console') || /^\/(?:invitations|fixture-invitations)\/[^/]+$/.test(returnTo) ? returnTo : '/console' } });
   };
   const openPasswordHelp = () => {
-    void loginWithRedirect({ authorizationParams: { prompt: 'login' }, appState: { returnTo: returnTo.startsWith('/console') ? returnTo : '/console' } });
+    void loginWithRedirect({ authorizationParams: { prompt: 'login' }, appState: { returnTo: returnTo.startsWith('/console') || /^\/(?:invitations|fixture-invitations)\/[^/]+$/.test(returnTo) ? returnTo : '/console' } });
   };
 
   if (isLoading) {

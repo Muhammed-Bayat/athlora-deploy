@@ -6,7 +6,6 @@ import {
 import { withReadTransaction } from '../db/transaction.js';
 import {
   DISCIPLINE_100M,
-  RESULT_UNIT_SECONDS,
   type ComparisonDetail,
   type ComparisonAthleteAggregate,
 } from '../types/domain.js';
@@ -126,7 +125,6 @@ async function fetchAthleteAggregate(
     athlete.id,
     workspaceId,
     DISCIPLINE_100M,
-    RESULT_UNIT_SECONDS,
   ]);
 
   const entries = result.rows.map(mapProgressionEntryRow);

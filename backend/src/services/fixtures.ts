@@ -47,6 +47,10 @@ export interface FixtureTeamRoster {
   participants: EventParticipantSummary[];
 }
 
+export interface IncomingFixtureInvitation extends FixtureInvitation {
+  event: AthleticsEvent;
+}
+
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
@@ -315,13 +319,13 @@ export async function revokeFixtureInvitation(
   if (result.rows.length === 0) throw notFound();
 }
 
-export async function respondToFixtureInvitation(
+async function respondToFixtureInvitationWhere(
   workspaceId: string,
   actorId: string,
-  token: unknown,
+  invitationValue: string,
+  invitationCondition: string,
   payload: FixtureInvitationResponsePayload,
 ): Promise<FixtureInvitation> {
-  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(actorId) || typeof token !== 'string' || token.length < 20) throw notFound();
   return withTransaction(async (client) => {
     const result = await client.query<{
       id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
@@ -333,10 +337,10 @@ export async function respondToFixtureInvitation(
        FROM fixture_invitations i
        JOIN events e ON e.id = i.event_id
        JOIN users u ON u.id = $2
-       WHERE i.token_hash = $1 AND i.status IN ('pending', 'change_requested')
+        WHERE ${invitationCondition} AND i.status IN ('pending', 'change_requested')
          AND i.expires_at > now()
        FOR UPDATE OF i, e`,
-      [hashToken(token), actorId],
+      [invitationValue, actorId],
     );
     const current = result.rows[0];
     if (!current || current.user_email.toLowerCase() !== current.email.toLowerCase()) throw unavailable();
@@ -404,6 +408,50 @@ export async function respondToFixtureInvitation(
     );
     return invitation(updated.rows[0]);
   });
+}
+
+export async function respondToFixtureInvitation(
+  workspaceId: string,
+  actorId: string,
+  token: unknown,
+  payload: FixtureInvitationResponsePayload,
+): Promise<FixtureInvitation> {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(actorId) || typeof token !== 'string' || token.length < 20) throw notFound();
+  return respondToFixtureInvitationWhere(workspaceId, actorId, hashToken(token), 'i.token_hash = $1', payload);
+}
+
+export async function respondToIncomingFixtureInvitation(
+  workspaceId: string,
+  actorId: string,
+  invitationId: unknown,
+  payload: FixtureInvitationResponsePayload,
+): Promise<FixtureInvitation> {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(actorId) || !isCanonicalUuid(invitationId)) throw notFound();
+  return respondToFixtureInvitationWhere(workspaceId, actorId, invitationId, 'i.id = $1', payload);
+}
+
+export async function listIncomingFixtureInvitations(
+  actorId: string,
+  executor: DbExecutor = getPool(),
+): Promise<IncomingFixtureInvitation[]> {
+  if (!isCanonicalUuid(actorId)) throw notFound();
+  const result = await executor.query<{
+    invitation_id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
+    expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
+    response_message: string | null; responded_at: Date | string | null;
+  } & EventRow>(
+    `SELECT i.id AS invitation_id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
+            NULL::text AS response_message, NULL::timestamptz AS responded_at, ${EVENT_COLUMNS}
+     FROM fixture_invitations i
+     JOIN events e ON e.id = i.event_id
+     JOIN users u ON u.id = $1
+     WHERE lower(i.email) = lower(u.email)
+       AND i.status IN ('pending', 'change_requested')
+       AND i.expires_at > now()
+     ORDER BY e.date ASC, e.time ASC NULLS LAST, i.created_at DESC`,
+    [actorId],
+  );
+  return result.rows.map((row) => ({ ...invitation({ ...row, id: row.invitation_id }), event: mapEventRow(row) }));
 }
 
 export async function markFixtureReacceptanceRequired(

@@ -6,6 +6,7 @@ import {
   createFixtureInvitation,
   getGuestFixture,
   listFixtureInvitations,
+  listIncomingFixtureInvitations,
   listGuestFixtureParticipants,
   listGuestFixtureResults,
   listGuestFixtures,
@@ -16,6 +17,7 @@ import {
   recordFixtureWithdrawal,
   removeGuestFixtureParticipant,
   respondToFixtureInvitation,
+  respondToIncomingFixtureInvitation,
   resendFixtureInvitation,
   revokeFixtureInvitation,
   updateGuestFixtureParticipant,
@@ -81,6 +83,22 @@ export const respond: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId, userId } = getApplicationUserContext(req);
     const invitation = await respondToFixtureInvitation(workspaceId, userId, req.params.token, req.body);
+    res.json({ data: invitation });
+  } catch (error) { next(error); }
+};
+
+export const listIncoming: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getApplicationUserContext(req);
+    const invitations = await listIncomingFixtureInvitations(userId);
+    res.json({ data: invitations, meta: { count: invitations.length } });
+  } catch (error) { next(error); }
+};
+
+export const respondIncoming: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const invitation = await respondToIncomingFixtureInvitation(workspaceId, userId, req.params.invitationId, req.body);
     res.json({ data: invitation });
   } catch (error) { next(error); }
 };

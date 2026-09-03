@@ -19,9 +19,9 @@ interface InjuryEditorProps {
     side: InjurySide;
     severity: InjurySeverity;
     notes: string | null;
-    occurrenceDate: string;
+    occurrenceDate: string | null;
     expectedReturnDate: string | null;
-  }) => void;
+  }) => Promise<void>;
 }
 
 interface DraftValues {
@@ -93,17 +93,18 @@ export function InjuryEditor({ onPreview, onSave }: InjuryEditorProps) {
   const [side, setSide] = useState<InjurySide | ''>('');
   const [severity, setSeverity] = useState<InjurySeverity | ''>('');
   const [notes, setNotes] = useState('');
-  const [occurrenceDate, setOccurrenceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [occurrenceDate, setOccurrenceDate] = useState('');
   const [expectedReturnDate, setExpectedReturnDate] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const draft = region && area && side && severity && occurrenceDate ? {
+  const draft = region && area && side && severity ? {
     bodyRegion: region,
     region,
     area,
     side,
     severity,
     notes: notes.trim() || null,
-    occurrenceDate,
+    occurrenceDate: occurrenceDate || null,
     expectedReturnDate: expectedReturnDate || null,
   } : null;
 
@@ -120,29 +121,35 @@ export function InjuryEditor({ onPreview, onSave }: InjuryEditorProps) {
       side: candidate.side,
       severity: candidate.severity,
       notes: candidate.notes.trim() || null,
-      occurrenceDate: candidate.occurrenceDate,
+      occurrenceDate: candidate.occurrenceDate || null,
       expectedReturnDate: candidate.expectedReturnDate || null,
     });
   };
 
-  const save = () => {
+  const save = async () => {
     if (!draft || !region || !area || !side || !severity) return;
-    onSave({
-      bodyRegion: region,
-      area,
-      side,
-      severity,
-      notes: notes.trim() || null,
-      occurrenceDate,
-      expectedReturnDate: expectedReturnDate || null,
-    });
-    setRegion('');
-    setArea('');
-    setSide('');
-    setSeverity('');
-    setNotes('');
-    setExpectedReturnDate('');
-    onPreview(null);
+    setSaving(true);
+    try {
+      await onSave({
+        bodyRegion: region,
+        area,
+        side,
+        severity,
+        notes: notes.trim() || null,
+        occurrenceDate: occurrenceDate || null,
+        expectedReturnDate: expectedReturnDate || null,
+      });
+      setRegion('');
+      setArea('');
+      setSide('');
+      setSeverity('');
+      setNotes('');
+      setOccurrenceDate('');
+      setExpectedReturnDate('');
+      onPreview(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return <section className={styles.editorCard} aria-labelledby="injury-editor-heading">
@@ -155,18 +162,18 @@ export function InjuryEditor({ onPreview, onSave }: InjuryEditorProps) {
     {side && <InjurySelect label="4. Severity" placeholder="Select severity..." value={severity} options={severityOptions} onChange={(value) => { const next = value as InjurySeverity; setSeverity(next); updatePreview({ severity: next }); }} />}
     {severity && <>
       <label className={styles.field}>
-        <span>Occurrence date</span>
-        <input type="date" value={occurrenceDate} onChange={(e) => setOccurrenceDate(e.target.value)} />
+        <span>Date injured <em>Optional</em></span>
+        <input type="date" value={occurrenceDate} onChange={(e) => { setOccurrenceDate(e.target.value); updatePreview({ occurrenceDate: e.target.value }); }} disabled={saving} />
       </label>
       <label className={styles.field}>
         <span>Expected return date <em>Optional</em></span>
-        <input type="date" value={expectedReturnDate} onChange={(e) => setExpectedReturnDate(e.target.value)} />
+        <input type="date" value={expectedReturnDate} onChange={(e) => { setExpectedReturnDate(e.target.value); updatePreview({ expectedReturnDate: e.target.value }); }} disabled={saving} />
       </label>
       <label className={styles.field}>
         <span>Coach notes <em>Optional</em></span>
-        <textarea value={notes} onChange={(event) => { setNotes(event.target.value); updatePreview({ notes: event.target.value }); }} placeholder="Injury details, athlete feedback, training limits, physio guidance, recovery progress..." />
+        <textarea value={notes} onChange={(event) => { setNotes(event.target.value); updatePreview({ notes: event.target.value }); }} placeholder="Injury details, athlete feedback, training limits, physio guidance, recovery progress..." disabled={saving} />
       </label>
     </>}
-    <Button className={styles.saveButton} onClick={save} disabled={!draft}>Save injury</Button>
+    <Button className={styles.saveButton} onClick={() => void save()} disabled={!draft || saving}>{saving ? 'Saving injury...' : 'Save injury'}</Button>
   </section>;
 }

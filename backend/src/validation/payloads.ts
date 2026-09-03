@@ -67,6 +67,12 @@ export interface AthleteListQuery {
   squad?: string;
 }
 
+export interface AthleteProgressionQuery {
+  cursor?: string;
+  limit?: number;
+  type?: EventType;
+}
+
 export interface AthleteStatusPayload {
   status: AthleteLifecycleStatus;
 }
@@ -169,6 +175,7 @@ export interface FixtureInvitationResponsePayload {
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
+const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
 const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
@@ -546,6 +553,28 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
     ...(status === undefined ? {} : { status }),
     ...(name === undefined ? {} : { name }),
     ...(squadId === undefined ? {} : { squadId }),
+  };
+}
+
+export function parseAthleteProgressionQuery(input: Record<string, unknown>): AthleteProgressionQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, ATHLETE_PROGRESSION_QUERY_FIELDS, issues);
+  const cursor = optionalQueryString(input, 'cursor', issues);
+  const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
+  let limit: number | undefined;
+  if (hasOwn(input, 'limit')) {
+    const raw = input.limit;
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw) || Number(raw) < 1 || Number(raw) > 200) {
+      issues.push(issue('limit', 'invalid_value', 'Expected an integer from 1 to 200'));
+    } else {
+      limit = Number(raw);
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return {
+    ...(cursor === undefined ? {} : { cursor }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(type === undefined ? {} : { type }),
   };
 }
 
@@ -1000,7 +1029,7 @@ export interface InjuryCreatePayload {
   side: InjurySide;
   severity: InjurySeverity;
   notes: string | null;
-  occurrenceDate: string;
+  occurrenceDate: string | null;
   expectedReturnDate: string | null;
 }
 
@@ -1010,7 +1039,7 @@ export interface InjuryUpdatePayload {
   side?: InjurySide;
   severity?: InjurySeverity;
   notes?: string | null;
-  occurrenceDate?: string;
+  occurrenceDate?: string | null;
   expectedReturnDate?: string | null;
 }
 
@@ -1040,13 +1069,13 @@ export function parseInjuryCreatePayload(input: unknown): InjuryCreatePayload {
   const severity = requiredEnum(payload, 'severity', INJURY_SEVERITIES, issues);
   const notes = nullableString(payload, 'notes', issues);
 
-  let occurrenceDate = '';
-  if (!hasOwn(payload, 'occurrenceDate')) {
-    issues.push(issue('occurrenceDate', 'required', 'Field is required'));
-  } else if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+  let occurrenceDate: string | null = null;
+  if (hasOwn(payload, 'occurrenceDate') && payload.occurrenceDate !== null) {
+    if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
     issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
-  } else {
-    occurrenceDate = payload.occurrenceDate;
+    } else {
+      occurrenceDate = payload.occurrenceDate;
+    }
   }
 
   let expectedReturnDate: string | null = null;
@@ -1055,7 +1084,7 @@ export function parseInjuryCreatePayload(input: unknown): InjuryCreatePayload {
       issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
     } else {
       expectedReturnDate = payload.expectedReturnDate;
-      if (occurrenceDate && expectedReturnDate < occurrenceDate) {
+      if (occurrenceDate !== null && expectedReturnDate < occurrenceDate) {
         issues.push(issue('expectedReturnDate', 'invalid_value', 'Expected return date must be on or after occurrence date'));
       }
     }
@@ -1125,7 +1154,9 @@ export function parseInjuryUpdatePayload(input: unknown): InjuryUpdatePayload {
   }
 
   if (hasOwn(payload, 'occurrenceDate')) {
-    if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+    if (payload.occurrenceDate === null) {
+      result.occurrenceDate = null;
+    } else if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
       issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
     } else {
       result.occurrenceDate = payload.occurrenceDate;

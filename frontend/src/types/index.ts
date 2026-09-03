@@ -190,6 +190,10 @@ export interface FixtureInvitation {
   token?: string;
 }
 
+export interface IncomingFixtureInvitation extends FixtureInvitation {
+  event: AthleticsEvent;
+}
+
 export interface FixtureTeam {
   workspaceId: string;
   workspaceName: string;
@@ -424,7 +428,7 @@ export interface Injury {
   side: InjurySide;
   severity: InjurySeverity;
   notes: string | null;
-  occurrenceDate: string;
+  occurrenceDate: string | null;
   expectedReturnDate: string | null;
   resolvedDate: string | null;
   resolutionNotes: string | null;

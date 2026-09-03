@@ -55,7 +55,7 @@ export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
         {forecast && <span>{weatherLabel(forecast.weatherCode)}</span>}
       </header>
 
-      {!hasCoordinates && <p className={styles.inlineEmpty}>Add latitude and longitude to view the forecast.</p>}
+      {!hasCoordinates && <p className={styles.inlineEmpty}>Select a venue when editing this event to view the forecast.</p>}
       {hasCoordinates && loading && <p className={styles.inlineStatus} role="status">Loading event forecast...</p>}
       {!loading && unavailable && <p className={styles.inlineEmpty}>{unavailable}</p>}
       {!loading && error && <div className={styles.inlineError} role="alert"><p>{error}</p><Button variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>Retry forecast</Button></div>}

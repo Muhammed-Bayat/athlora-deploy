@@ -20,7 +20,7 @@ export async function createInjury(
     side: string;
     severity: string;
     notes?: string | null;
-    occurrenceDate: string;
+    occurrenceDate?: string | null;
     expectedReturnDate?: string | null;
   },
 ): Promise<Injury> {

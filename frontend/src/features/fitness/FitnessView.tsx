@@ -59,7 +59,7 @@ export function FitnessView({
     side: string;
     severity: string;
     notes: string | null;
-    occurrenceDate: string;
+    occurrenceDate: string | null;
     expectedReturnDate: string | null;
   }) => {
     try {

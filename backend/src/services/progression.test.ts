@@ -339,7 +339,7 @@ describe('getAthleteProgressionDetail', () => {
     );
 
     const [sql, params] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toContain('e.type = $8');
+    expect(sql).toContain('e.type = $4');
     expect(params).toContain('competition');
   });
 

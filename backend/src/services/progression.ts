@@ -6,7 +6,6 @@ import {
 import { withReadTransaction } from '../db/transaction.js';
 import {
   DISCIPLINE_100M,
-  RESULT_UNIT_SECONDS,
   type ProgressionDetail,
 } from '../types/domain.js';
 import { getAthlete } from './athletes.js';
@@ -48,22 +47,22 @@ export async function getAthleteProgressionDetail(
   return runTransaction(async (client) => {
     const athlete = await getAthlete(workspaceId, athleteId, client);
 
-    const cursorCondition = cursor
-      ? `AND (e.date, COALESCE(e.time, '99:99'), r.event_id) > ($5::date, $6::text, $7::uuid)`
-      : '';
-
-    const typeCondition = typeFilter
-      ? `AND e.type = $8`
-      : '';
-
     const params: unknown[] = [
       athlete.id,
       workspaceId,
       DISCIPLINE_100M,
-      RESULT_UNIT_SECONDS,
-      ...(cursor ? [cursor.date, cursor.time, cursor.eventId] : []),
-      ...(typeFilter ? [typeFilter] : []),
     ];
+    const cursorCondition = cursor
+      ? (() => {
+        const dateIndex = params.push(cursor.date);
+        const timeIndex = params.push(cursor.time);
+        const eventIdIndex = params.push(cursor.eventId);
+        return `AND (e.date, COALESCE(e.time, '99:99'), r.event_id) > ($${dateIndex}::date, $${timeIndex}::text, $${eventIdIndex}::uuid)`;
+      })()
+      : '';
+    const typeCondition = typeFilter
+      ? `AND e.type = $${params.push(typeFilter)}`
+      : '';
 
     const progressionQuery = `
       WITH effective AS (

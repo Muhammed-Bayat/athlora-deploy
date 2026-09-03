@@ -117,7 +117,6 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
       <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>100m</span></div>
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Discipline</dt><dd>100m</dd></div></dl>
-      {(event.latitude !== null || event.longitude !== null) && <p className={styles.coordinates}>Coordinates: {event.latitude ?? 'Not set'}, {event.longitude ?? 'Not set'}</p>}
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
       <FixtureHostPanel event={event} isCoach={isCoach} />

@@ -4,6 +4,7 @@ import type {
   EventParticipantSummary,
   FixtureDetail,
   FixtureInvitation,
+  IncomingFixtureInvitation,
   FixtureInvitationStatus,
   FixtureTeamRoster,
   Result,
@@ -42,6 +43,17 @@ export async function recordFixtureWithdrawal(eventId: string, workspaceId: stri
 
 export async function respondToFixtureInvitation(token: string, response: Exclude<FixtureInvitationStatus, 'pending' | 'revoked'>, message?: string): Promise<FixtureInvitation> {
   const result = await request<{ data: FixtureInvitation }>(`/api/v1/fixtures/invitations/${token}/respond`, {
+    method: 'POST', body: JSON.stringify({ response, ...(message ? { message } : {}) }),
+  });
+  return result.data;
+}
+
+export async function listIncomingFixtureInvitations(): Promise<ApiList<IncomingFixtureInvitation>> {
+  return list<IncomingFixtureInvitation>('fixtures/incoming');
+}
+
+export async function respondToIncomingFixtureInvitation(invitationId: string, response: Exclude<FixtureInvitationStatus, 'pending' | 'revoked'>, message?: string): Promise<FixtureInvitation> {
+  const result = await request<{ data: FixtureInvitation }>(`/api/v1/fixtures/incoming/${invitationId}/respond`, {
     method: 'POST', body: JSON.stringify({ response, ...(message ? { message } : {}) }),
   });
   return result.data;
