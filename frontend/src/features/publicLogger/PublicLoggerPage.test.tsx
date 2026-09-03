@@ -35,7 +35,9 @@ describe('PublicLoggerPage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.type(screen.getByLabelText('Name'), 'Timekeeper Sam');
-    await user.type(screen.getByLabelText('Club'), 'North Club');
+    expect(screen.getByLabelText('Club or organization')).toHaveValue('Independent');
+    await user.clear(screen.getByLabelText('Club or organization'));
+    await user.type(screen.getByLabelText('Club or organization'), 'North Club');
     await user.click(screen.getByRole('button', { name: 'Open logger' }));
 
     await screen.findByRole('heading', { name: 'City Sprint Meet' });
