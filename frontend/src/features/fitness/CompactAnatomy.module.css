@@ -1,10 +1,11 @@
-.compact { display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--console-ink); }
+.compact { --compact-injury-minor: #d17b00; --compact-injury-moderate: #e23b00; --compact-injury-severe: #dc002f; display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--console-ink); }
 .body { flex: 0 0 auto; width: 58px; height: 100px; overflow: visible; }
 .large .body { width: 92px; height: 158px; }
-.neutral { fill: color-mix(in srgb, var(--console-cyan) 18%, var(--console-soft)); stroke: var(--console-line); stroke-width: 1; }
-.severityMinor { fill: var(--console-cyan); stroke: var(--console-cyan); stroke-width: 1; }
-.severityModerate { fill: var(--color-warning); stroke: var(--color-warning); stroke-width: 1; }
-.severitySevere { fill: var(--console-danger); stroke: var(--console-danger); stroke-width: 1; }
+.body path { stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.neutral { fill: color-mix(in srgb, var(--console-cyan) 28%, var(--console-soft)); stroke: color-mix(in srgb, var(--console-cyan) 46%, var(--console-line)); stroke-width: .75; }
+.severityMinor { fill: var(--compact-injury-minor); stroke: var(--compact-injury-minor); stroke-width: 1; }
+.severityModerate { fill: var(--compact-injury-moderate); stroke: var(--compact-injury-moderate); stroke-width: 1; }
+.severitySevere { fill: var(--compact-injury-severe); stroke: var(--compact-injury-severe); stroke-width: 1; }
 .copy { display: grid; gap: var(--space-1); min-width: 0; font-size: 0.75rem; }
 .copy strong { color: var(--console-ink); }
 .copy > span:not(.srOnly) { color: var(--console-muted); overflow-wrap: anywhere; }
