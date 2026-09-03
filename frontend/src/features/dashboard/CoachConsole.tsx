@@ -10,6 +10,7 @@ import { ComparisonPage } from '../comparison/ComparisonPage';
 import { IncomingFixtureInvitations } from '../fixtures/IncomingFixtureInvitations';
 import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
+import { ApiError } from '../../api/client';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
@@ -285,6 +286,7 @@ export function CoachConsole() {
   const [isNight, setIsNight] = useState(false);
   const [weatherPrecipitation, setWeatherPrecipitation] = useState(4);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const [liveWeatherError, setLiveWeatherError] = useState<string | null>(null);
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
@@ -321,8 +323,20 @@ export function CoachConsole() {
   }, [themeLight]);
 
   useEffect(() => {
-    if (!weatherEnabled) return;
+    if (!weatherEnabled) {
+      setLiveWeather(null);
+      setLiveWeatherError(null);
+      return;
+    }
     let current = true;
+
+    const reportUnavailableWeather = (error?: unknown) => {
+      if (!current) return;
+      setLiveWeather(null);
+      setLiveWeatherError(error instanceof ApiError && error.status === 401
+        ? 'Sign in for live weather.'
+        : 'Weather unavailable. Check location permissions or try again.');
+    };
 
     const applyLiveWeather = (coords: Coordinates, source: 'device' | 'timezone') => {
       void getCurrentWeather(coords.latitude, coords.longitude)
@@ -342,17 +356,23 @@ export function CoachConsole() {
           });
           setIsNight(!data.isDay);
           setWeatherPrecipitation(data.precipitationMm);
+          setLiveWeatherError(null);
         })
-        .catch(() => { /* Live readout is best-effort; fall back to the preset label. */ });
+        .catch(reportUnavailableWeather);
     };
 
     const load = async () => {
+      setLiveWeatherError(null);
       const deviceCoords = await resolveDeviceCoordinates();
       if (!current) return;
       if (deviceCoords) { applyLiveWeather(deviceCoords, 'device'); return; }
       const zoneCoords = await resolveTimezoneCoordinates();
       if (!current) return;
-      if (zoneCoords) applyLiveWeather(zoneCoords, 'timezone');
+      if (zoneCoords) {
+        applyLiveWeather(zoneCoords, 'timezone');
+      } else {
+        reportUnavailableWeather();
+      }
     };
     void load();
 
@@ -365,10 +385,18 @@ export function CoachConsole() {
 
   const liveReadout = liveWeather
     ? `${liveWeather.label} · ${liveWeather.temperature}°`
-    : `${weatherMeta.label} · ${weatherMeta.temperature}°`;
+    : liveWeatherError
+      ? 'Weather unavailable'
+      : weatherEnabled
+        ? 'Loading live weather...'
+        : `${weatherMeta.label} · ${weatherMeta.temperature}°`;
   const readoutSource = liveWeather
     ? `${liveWeather.label} — current conditions from ${liveWeather.source === 'device' ? 'approximate device location' : 'timezone fallback'}`
-    : 'Live weather unavailable; using local atmosphere';
+    : liveWeatherError
+      ? liveWeatherError
+      : weatherEnabled
+        ? 'Retrieving current conditions for this device.'
+        : 'Weather effects use the selected local atmosphere preset.';
 
   const sceneLayers: string[] = [];
   if (isNight) sceneLayers.push('sparks');
