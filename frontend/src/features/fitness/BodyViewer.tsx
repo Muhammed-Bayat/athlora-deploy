@@ -1,17 +1,10 @@
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { ContactShadows, Html, OrbitControls, useGLTF } from '@react-three/drei';
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  Box3,
-  DoubleSide,
-  FileLoader,
-  Mesh,
-  MeshPhysicalMaterial,
-  PerspectiveCamera,
-  Vector3,
-} from 'three';
+import { Box3, FileLoader, Mesh, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { anatomyRegionNames, attachAnatomyAttributes, parseAnatomyMap, updateInjuryAttributes } from './anatomySurfaceMap';
+import { createAnatomyMaterial } from './anatomyMaterial';
 import type { Injury, InjuryDraft } from './injuryRegions';
 import styles from './FitnessView.module.css';
 
@@ -24,40 +17,6 @@ interface ModelFrame {
   height: number;
   width: number;
   centerY: number;
-}
-
-function createBodyMaterial() {
-  const material = new MeshPhysicalMaterial({
-    color: '#75fff8',
-    emissive: '#087b95',
-    emissiveIntensity: .54,
-    metalness: .04,
-    roughness: .32,
-    transmission: .42,
-    thickness: .22,
-    clearcoat: .58,
-    clearcoatRoughness: .18,
-    transparent: true,
-    opacity: .64,
-    side: DoubleSide,
-  });
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 injuryColor;\nattribute float injuryStrength;\nvarying vec3 vInjuryColor;\nvarying float vInjuryStrength;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvInjuryColor = injuryColor;\nvInjuryStrength = injuryStrength;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>
-varying vec3 vInjuryColor;
-varying float vInjuryStrength;`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-float injuryMix = clamp(vInjuryStrength, 0.0, 1.0);
-injuryMix = smoothstep(0.18, 0.82, injuryMix);
-diffuseColor.rgb = mix(diffuseColor.rgb, vInjuryColor, injuryMix);
-diffuseColor.a = mix(diffuseColor.a, 0.98, injuryMix);
-totalEmissiveRadiance += vInjuryColor * injuryMix * 0.9;`);
-  };
-  material.customProgramCacheKey = () => 'athlora-anatomy-injury-map-v2';
-  return material;
 }
 
 function HumanModel({ injuries, preview, debugRegion, onFrame, onMapReady }: BodyViewerProps & { debugRegion: string; onFrame: (frame: ModelFrame) => void; onMapReady: (regions: string[]) => void }) {
@@ -85,7 +44,7 @@ function HumanModel({ injuries, preview, debugRegion, onFrame, onMapReady }: Bod
       frame: { height: sourceSize.y * scale, width: sourceSize.x * scale, centerY: sourceSize.y * scale * .52 },
     };
   }, [map, scene]);
-  const material = useMemo(() => createBodyMaterial(), []);
+  const material = useMemo(() => createAnatomyMaterial(), []);
 
   useEffect(() => {
     model.traverse((object) => {
