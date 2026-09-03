@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { aggregateCompactInjuries, CompactAnatomy, injurySummaryText } from './CompactAnatomy';
+import styles from './CompactAnatomy.module.css';
 
 vi.mock('three', () => { throw new Error('Compact anatomy must not import Three.js'); });
 
@@ -22,5 +23,15 @@ describe('CompactAnatomy', () => {
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /No active injuries/i })).toBeInTheDocument();
     expect(injurySummaryText([])).toBe('No active injuries. Athlete is healthy.');
+  });
+
+  it('renders contoured paths and applies injury severity to mapped regions', () => {
+    render(<CompactAnatomy injuries={[{ bodyRegion: 'Leg', area: 'Knee', side: 'Both', severity: 'Severe' }]} highestSeverity="Severe" />);
+
+    const body = screen.getByRole('img', { name: /1 active injury/i });
+    expect(body.querySelectorAll('path')).not.toHaveLength(0);
+    expect(body.querySelectorAll('rect')).toHaveLength(0);
+    expect(body.querySelector('[data-zone="left:Knee"]')).toHaveClass(styles.severitySevere);
+    expect(body.querySelector('[data-zone="right:Knee"]')).toHaveClass(styles.severitySevere);
   });
 });
