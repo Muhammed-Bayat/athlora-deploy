@@ -53,6 +53,11 @@ const PROGRESSION_SELECT = `
       AND a.workspace_id = $2
       AND e.workspace_id = $2
       AND e.status <> 'cancelled'
+  ), enriched AS (
+    SELECT *,
+           (event_status <> 'cancelled' AND effective_outcome = 'valid')
+             AS counts_towards_statistics
+    FROM effective
   ), ranked AS (
     SELECT *,
            CASE
@@ -66,13 +71,13 @@ const PROGRESSION_SELECT = `
            ROW_NUMBER() OVER (
              ORDER BY event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC
            ) AS row_num
-    FROM effective
+    FROM enriched
   ), summary AS (
     SELECT
       MIN(effective_result) FILTER (WHERE effective_outcome = 'valid') AS all_time_pb,
       COUNT(*) AS total_results,
       COUNT(*) FILTER (WHERE effective_outcome = 'valid') AS total_valid
-    FROM effective
+    FROM enriched
   )
   SELECT ranked.*,
          (summary.all_time_pb) AS summary_pb,
@@ -118,7 +123,7 @@ async function fetchAthleteAggregate(
   const athlete = await getAthlete(workspaceId, athleteId, client);
 
   const result = await client.query<ProgressionEntryRow & {
-    summary_pb: number | null;
+    summary_pb: number | string | null;
     summary_total: number;
     summary_valid: number;
   }>(PROGRESSION_SELECT, [
@@ -129,7 +134,10 @@ async function fetchAthleteAggregate(
 
   const entries = result.rows.map(mapProgressionEntryRow);
   const firstRow = result.rows[0];
-  const pb = firstRow ? (firstRow.summary_pb as number | null) : null;
+  // PostgreSQL NUMERIC aggregates are returned as strings by pg.
+  const pb = firstRow?.summary_pb === null || firstRow === undefined
+    ? null
+    : Number(firstRow.summary_pb);
   const totalResults = firstRow ? Number(firstRow.summary_total) : 0;
   const totalValid = firstRow ? Number(firstRow.summary_valid) : 0;
 

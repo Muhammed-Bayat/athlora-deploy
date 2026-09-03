@@ -101,11 +101,57 @@
   margin-top: var(--space-4);
 }
 
+.chartHeading {
+  margin: 0 0 var(--space-3);
+  color: var(--console-ink);
+  font: var(--font-weight-bold) var(--font-size-lg)/1.2 var(--font-display);
+  text-align: center;
+}
+
 .svg {
   display: block;
   width: 100%;
   max-width: 700px;
   height: auto;
+  margin: 0 auto;
+}
+
+.axisLabel {
+  fill: var(--console-muted);
+  font: 0.65rem var(--font-family-mono);
+}
+
+.axisTitle {
+  fill: var(--console-faint);
+  font: 600 0.7rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lineHitArea {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  pointer-events: stroke;
+}
+
+.tooltip {
+  pointer-events: none;
+}
+
+.tooltipBox {
+  fill: var(--console-surface-strong);
+  stroke: var(--console-line-strong);
+}
+
+.tooltipText {
+  fill: var(--console-muted);
+  font: 0.625rem var(--font-family-mono);
+}
+
+.tooltipValue {
+  fill: var(--console-ink);
+  font: 600 0.7rem var(--font-family-mono);
 }
 
 .legend {
@@ -122,19 +168,49 @@
   gap: var(--space-2);
 }
 
-.legendDot {
+.seriesLineA,
+.seriesLineB {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.seriesLineA {
+  stroke: var(--console-comparison-series-a);
+}
+
+.seriesLineB {
+  stroke: var(--console-comparison-series-b);
+}
+
+.seriesPointA,
+.seriesPointB {
+  stroke: var(--console-surface-strong);
+  stroke-width: 2;
+}
+
+.seriesPointA {
+  fill: var(--console-comparison-series-a);
+}
+
+.seriesPointB {
+  fill: var(--console-comparison-series-b);
+}
+
+.legendLine {
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  width: 24px;
+  height: 3px;
+  border-radius: var(--radius-pill);
 }
 
-.legendDotA {
-  background: var(--cyan-400);
+.legendLineA {
+  background: var(--console-comparison-series-a);
 }
 
-.legendDotB {
-  background: var(--blue-500);
+.legendLineB {
+  background: var(--console-comparison-series-b);
 }
 
 .empty {

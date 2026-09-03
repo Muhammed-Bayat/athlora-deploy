@@ -11,6 +11,7 @@ interface ProgressionChartProps {
 }
 
 type ViewMode = 'chart' | 'table';
+type ChartPoint = { x: number; y: number; entry: ProgressionEntry };
 
 const SVG_PADDING = { top: 28, right: 24, bottom: 48, left: 64 };
 const SVG_WIDTH = 700;
@@ -57,6 +58,19 @@ function buildChartGeometry(entries: ProgressionEntry[]) {
   return { points, yTickValues, yMin, yRange, minTime, maxTime, xScale, yScale };
 }
 
+function closestPoint(points: ChartPoint[], svg: SVGSVGElement | null, clientX: number, clientY: number): ChartPoint | null {
+  if (!svg || points.length === 0) return null;
+  const bounds = svg.getBoundingClientRect();
+  if (bounds.width === 0 || bounds.height === 0) return points[0];
+  const x = ((clientX - bounds.left) / bounds.width) * SVG_WIDTH;
+  const y = ((clientY - bounds.top) / bounds.height) * SVG_HEIGHT;
+  return points.reduce((nearest, point) => (
+    (point.x - x) ** 2 + (point.y - y) ** 2 < (nearest.x - x) ** 2 + (nearest.y - y) ** 2
+      ? point
+      : nearest
+  ));
+}
+
 function ProgressionRow({ entry }: { entry: ProgressionEntry }) {
   const { event, effectiveResult, effectiveOutcome, isNewPb } = entry;
   const isPb = isNewPb && effectiveResult !== null;
@@ -84,6 +98,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
+  const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const liveRegionRef = useRef<HTMLDivElement>(null);
 
@@ -235,14 +250,28 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
             })}
 
             {geometry.points.length > 1 && (
-              <polyline
-                points={geometry.points.map((p) => `${p.x},${p.y}`).join(' ')}
-                fill="none"
-                stroke="var(--cyan-400)"
-                strokeWidth="2.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
+              <>
+                <polyline
+                  points={geometry.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke="var(--cyan-400)"
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+                <polyline
+                  data-testid="progression-line-hit-area"
+                  points={geometry.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                  className={styles.lineHitArea}
+                  onPointerMove={(event) => setHoveredPoint(closestPoint(
+                    geometry.points,
+                    event.currentTarget.ownerSVGElement,
+                    event.clientX,
+                    event.clientY,
+                  ))}
+                  onPointerLeave={() => setHoveredPoint(null)}
+                />
+              </>
             )}
 
             {geometry.points.map((point) => {
@@ -259,6 +288,13 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={isPb ? 2 : 0}
+                  tabIndex={0}
+                  role="img"
+                  aria-label={`${formatDateOnly(point.entry.event.date)}: ${point.entry.effectiveResult !== null ? format100mSeconds(point.entry.effectiveResult) : point.entry.effectiveOutcome}${isPb ? ', personal best' : ''}`}
+                  onPointerEnter={() => setHoveredPoint(point)}
+                  onPointerLeave={() => setHoveredPoint(null)}
+                  onFocus={() => setHoveredPoint(point)}
+                  onBlur={() => setHoveredPoint(null)}
                 >
                   <title>
                     {`${formatDateOnly(point.entry.event.date)} \u2014 ${point.entry.effectiveResult !== null ? format100mSeconds(point.entry.effectiveResult) : point.entry.effectiveOutcome}${isPb ? ' (PB)' : ''}`}
@@ -266,6 +302,22 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
                 </circle>
               );
             })}
+
+            {hoveredPoint && (
+              <g
+                role="tooltip"
+                className={styles.tooltip}
+                transform={`translate(${Math.min(hoveredPoint.x + 12, SVG_WIDTH - 178)} ${Math.max(hoveredPoint.y - 42, SVG_PADDING.top)})`}
+              >
+                <rect width="166" height="36" rx="6" className={styles.tooltipBox} />
+                <text x="10" y="14" className={styles.tooltipText}>{formatDateOnly(hoveredPoint.entry.event.date)}</text>
+                <text x="10" y="28" className={styles.tooltipValue}>
+                  {hoveredPoint.entry.effectiveResult !== null
+                    ? format100mSeconds(hoveredPoint.entry.effectiveResult)
+                    : hoveredPoint.entry.effectiveOutcome}
+                </text>
+              </g>
+            )}
 
             <text
               x={SVG_WIDTH / 2}
