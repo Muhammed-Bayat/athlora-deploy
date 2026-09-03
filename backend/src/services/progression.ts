@@ -51,6 +51,7 @@ export async function getAthleteProgressionDetail(
       athlete.id,
       workspaceId,
       DISCIPLINE_100M,
+      pageSize,
     ];
     const cursorCondition = cursor
       ? (() => {
