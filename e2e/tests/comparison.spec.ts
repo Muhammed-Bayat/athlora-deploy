@@ -44,6 +44,52 @@ async function addAthlete(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
 }
 
+async function recordComparisonResults(
+  page: Page,
+  eventTitle: string,
+  athletes: Array<{ name: string; result: string }>,
+): Promise<void> {
+  await openView(page, 'Events', 'Events');
+  await waitForView(page, 'Events');
+  await page.getByRole('button', { name: 'Add event', exact: true }).first().click();
+
+  const eventDialog = page.getByRole('dialog', { name: 'Add event' });
+  await eventDialog.getByLabel('Event title').fill(eventTitle);
+  await eventDialog.getByLabel('Event type').selectOption('competition');
+  await eventDialog.getByLabel('Date').fill(todayIso());
+  await eventDialog.getByRole('button', { name: 'Add event', exact: true }).click();
+
+  await page.getByRole('button', { name: new RegExp(eventTitle) }).click();
+  const eventDetail = page.getByRole('dialog', { name: eventTitle });
+  const candidate = eventDetail.getByLabel('Assign an active athlete');
+  for (const athlete of athletes) {
+    await candidate.selectOption({ label: athlete.name });
+    await eventDetail.getByRole('button', { name: 'Assign athlete' }).click();
+    await expect(
+      eventDetail.getByRole('status').filter({ hasText: 'assigned with a pending RSVP' }),
+    ).toBeVisible();
+    await eventDetail.getByLabel(`RSVP for ${athlete.name}`).selectOption('yes');
+    await expect(eventDetail.getByRole('status').filter({ hasText: 'attending' })).toBeVisible();
+  }
+  await eventDetail.getByRole('button', { name: 'Close' }).click();
+
+  await openView(page, 'Live Logger', 'Live');
+  await waitForView(page, 'Live Race Logger');
+  const eventCard = page.getByRole('heading', { name: eventTitle, level: 3 }).locator('xpath=..');
+  await eventCard.getByRole('button', { name: 'Start Event' }).click();
+
+  const loggingConsole = page.getByRole('region', { name: 'Athlete logging console' });
+  const feed = page.getByRole('complementary', { name: 'Timeline feed and standings' });
+  for (const athlete of athletes) {
+    const finishInput = loggingConsole.getByLabel(`Finish time for ${athlete.name}`);
+    await finishInput.fill(athlete.result);
+    await finishInput.locator('xpath=..').getByRole('button', { name: 'Record' }).click();
+    await expect(feed.getByText(`Finish: ${athlete.result}s`, { exact: true })).toBeVisible();
+  }
+  await page.getByRole('button', { name: 'Complete Event' }).click();
+  await expect(page.getByRole('heading', { name: eventTitle, level: 3 })).toHaveCount(0);
+}
+
 test.describe('two-athlete comparison', () => {
   test('allows selecting two athletes and viewing comparison metrics', async ({ page }) => {
     const token = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -69,13 +115,16 @@ test.describe('two-athlete comparison', () => {
     await select1.selectOption({ label: alpha });
     await select2.selectOption({ label: bravo });
 
-    await expect(page.getByText('PB')).toBeVisible();
-    await expect(page.getByText('Valid result count')).toBeVisible();
+    const metrics = page.getByRole('list', { name: 'Comparison metrics summary' });
+    await expect(metrics.getByText(`${alpha} PB`, { exact: true })).toBeVisible();
+    await expect(metrics.getByText(`${bravo} PB`, { exact: true })).toBeVisible();
 
     const tableButton = page.getByRole('button', { name: 'Table' });
     await tableButton.click();
 
-    await expect(page.getByRole('table', { name: /comparison metrics/i })).toBeVisible();
+    const table = page.getByRole('table', { name: /comparison metrics/i });
+    await expect(table).toBeVisible();
+    await expect(table.getByText('Valid result count')).toBeVisible();
   });
 
   test('prevents selecting the same athlete twice', async ({ page }) => {
@@ -122,7 +171,9 @@ test.describe('two-athlete comparison', () => {
     await select1.selectOption({ label: alpha });
     await select2.selectOption({ label: bravo });
 
-    await expect(page.getByText('PB')).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Comparison metrics summary' }),
+    ).toBeVisible();
 
     const url = new URL(page.url());
     expect(url.searchParams.get('athlete1Id')).toBeTruthy();
@@ -141,6 +192,11 @@ test.describe('two-athlete comparison', () => {
 
     await addAthlete(page, alpha);
     await addAthlete(page, bravo);
+
+    await recordComparisonResults(page, `E2E Compare Event ${token}`, [
+      { name: alpha, result: '11.42' },
+      { name: bravo, result: '11.58' },
+    ]);
 
     await openView(page, 'Compare', 'Compare');
     await waitForView(page, 'Two-Athlete 100m Comparison');

@@ -21,7 +21,7 @@ The vertical slice creates athletes and events, assigns participants, records an
 
 - Node.js 22 LTS and npm
 - Docker or another disposable PostgreSQL 16 database
-- An Auth0 test user that can sign in to Athlora
+- Two Auth0 test users that can sign in to Athlora: a host coach and a guest coach
 - The Auth0 application configured for the local E2E URLs
 
 ## Configure Auth0
@@ -33,7 +33,7 @@ http://localhost:5174
 http://localhost:4100
 ```
 
-Use a dedicated test account. The test suite records real data and resets its configured database on every run.
+Use dedicated host and guest test accounts. The test suite records real data and resets its configured database on every run.
 
 ## Run locally
 
@@ -54,7 +54,7 @@ npm run test:install
 npm test
 ```
 
-`e2e/.env` is ignored by Git. It needs `DATABASE_URL`, the public `VITE_AUTH0_*` settings, and `E2E_AUTH0_EMAIL`/`E2E_AUTH0_PASSWORD`. Point `DATABASE_URL` at a scratch database only: global setup runs migrations and truncates all application tables before each test run.
+`e2e/.env` is ignored by Git. It needs `DATABASE_URL`, the public `VITE_AUTH0_*` settings, and both the `E2E_AUTH0_*` host credentials and `E2E_GUEST_AUTH0_*` guest credentials. Point `DATABASE_URL` at a scratch database only: global setup runs migrations and truncates all application tables before each test run.
 
 Playwright starts the backend on `http://localhost:4100` and Vite on `http://localhost:5174`; do not start those services yourself. It supplies the matching CORS and API-base configuration automatically.
 
@@ -69,4 +69,4 @@ The HTML report is written to `e2e/playwright-report`. On a failed test, traces 
 
 ## AI declaration
 
-This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].

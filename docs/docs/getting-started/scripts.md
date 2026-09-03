@@ -31,7 +31,7 @@ The backend also provides `db:migrate` for source migrations and `db:migrate:pro
 | `docs` | `npm ci`, `npm run build` |
 | `e2e` | Postgres 16 service container, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
 
-The `e2e` job provisions a `postgres:16` service container (`postgresql://postgres:postgres@localhost:5432/athlora_e2e`) that `global-setup` migrates and truncates before every run. It requires five repository secrets — `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`, `E2E_AUTH0_EMAIL`, `E2E_AUTH0_PASSWORD` — and when any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
+The `e2e` job provisions a `postgres:16` service container (`postgresql://postgres:postgres@localhost:5432/athlora_e2e`) that `global-setup` migrates and truncates before every run. It requires seven repository secrets: the three public Auth0 settings plus host and guest test-account credentials. When any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
 
 | Job | Work performed |
 |---|---|
@@ -48,6 +48,8 @@ VITE_AUTH0_CLIENT_ID
 VITE_AUTH0_AUDIENCE
 E2E_AUTH0_EMAIL
 E2E_AUTH0_PASSWORD
+E2E_GUEST_AUTH0_EMAIL
+E2E_GUEST_AUTH0_PASSWORD
 ```
 
 On an E2E failure, CI uploads `e2e/playwright-report` for seven days. A skipped E2E job is not evidence that the browser workflow has passed; run it locally or configure the secrets before release.
@@ -95,7 +97,7 @@ The `/e2e` package drives the full 100m vertical slice against real servers and 
 Prerequisites:
 
 - A dedicated PostgreSQL database (the recommended local setup is the same Docker Postgres used for the backend integration tests). `global-setup` applies migrations and truncates all application tables before each run, so **use a scratch database** — never point it at a database with data you care about.
-- An Auth0 test user with access to the application, and the origins below registered in the Auth0 SPA application (callback, logout and web-origin URLs):
+- Two Auth0 test users with access to the application (a host coach and a guest coach), and the origins below registered in the Auth0 SPA application (callback, logout and web-origin URLs):
   - `http://localhost:5174` (E2E frontend)
   - `http://localhost:4100` (E2E backend)
 - The E2E backend runs with `CORS_ORIGINS=http://localhost:5174` automatically.
@@ -109,7 +111,7 @@ cd e2e && npm install && npm run test:install
 npm test
 ```
 
-`playwright.config.ts` boots both servers itself (`webServer` array): the backend on `http://localhost:4100` and the Vite frontend on `http://localhost:5174` (strict ports), with all required environment variables supplied. `DATABASE_URL`, `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`, `E2E_AUTH0_EMAIL` and `E2E_AUTH0_PASSWORD` come from `e2e/.env` (gitignored) or the environment.
+`playwright.config.ts` boots both servers itself (`webServer` array): the backend on `http://localhost:4100` and the Vite frontend on `http://localhost:5174` (strict ports), with all required environment variables supplied. `DATABASE_URL`, the public `VITE_AUTH0_*` values, and the `E2E_AUTH0_*` host and `E2E_GUEST_AUTH0_*` guest credentials come from `e2e/.env` (gitignored) or the environment.
 
 Projects:
 
