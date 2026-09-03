@@ -88,7 +88,9 @@ export async function getAthleteProgressionDetail(
                  WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                  WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                  ELSE r.outcome
-               END AS effective_outcome
+               END AS effective_outcome,
+               (e.status <> 'cancelled' AND effective_outcome = 'valid')
+                 AS counts_towards_statistics
         FROM results r
         JOIN events e ON e.id = r.event_id
         JOIN athletes a ON a.id = r.athlete_id
