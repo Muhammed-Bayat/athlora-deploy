@@ -4,7 +4,7 @@ import { Auth0Provider } from '@auth0/auth0-react';
 import './styles/global.css';
 import App from './App';
 import { Auth0TokenBridge } from './features/auth/Auth0TokenBridge';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { PublicLoggerPage } from './features/publicLogger/PublicLoggerPage';
 
 const rootElement = document.getElementById('root');
@@ -25,7 +25,7 @@ if (!isPublicLoggerRoute && (!domain || !clientId || !audience)) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    {isPublicLoggerRoute ? <BrowserRouter><PublicLoggerPage /></BrowserRouter> :
+    {isPublicLoggerRoute ? <BrowserRouter><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></BrowserRouter> :
     <Auth0Provider
       domain={domain!}
       clientId={clientId!}
