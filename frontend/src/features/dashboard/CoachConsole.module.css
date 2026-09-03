@@ -31,6 +31,8 @@
   --console-primary-end: var(--cyan-400);
   --console-primary-text: #001018;
   --console-cyan: var(--cyan-300);
+  --console-comparison-series-a: #59E5F4;
+  --console-comparison-series-b: #C194FF;
   --console-edge: var(--ui-line);
   --console-shadow: var(--ui-shadow);
   --console-teal: var(--cyan-300);
@@ -901,6 +903,8 @@
   --console-primary-end: var(--teal-700);
   --console-primary-text: #FFFFFF;
   --console-cyan: #0086AC;
+  --console-comparison-series-a: #007F9B;
+  --console-comparison-series-b: #6D3BB5;
   --console-edge: rgba(0, 94, 131, 0.10);
   --console-shadow: 0 14px 40px rgba(0, 48, 72, 0.08);
   --console-teal: #007FA7;

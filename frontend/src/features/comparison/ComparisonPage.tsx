@@ -16,7 +16,7 @@ const CHART_HEIGHT = SVG_HEIGHT - SVG_PADDING.top - SVG_PADDING.bottom;
 type ViewMode = 'chart' | 'table';
 
 interface ChartGeometry {
-  points: Array<{ x: number; y: number; entry: ProgressionEntry; athleteIndex: number }>;
+  series: Array<Array<{ x: number; y: number; entry: ProgressionEntry; athleteIndex: number }>>;
   yTickValues: number[];
   yMin: number;
   yRange: number;
@@ -25,11 +25,12 @@ interface ChartGeometry {
 }
 
 function buildComparisonChartGeometry(athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate]): ChartGeometry | null {
-  const allValid = athletes.flatMap((a, idx) =>
+  const series = athletes.map((a, athleteIndex) =>
     a.progression
       .filter((e) => e.effectiveOutcome === 'valid' && e.effectiveResult !== null)
-      .map((e) => ({ entry: e, athleteIndex: idx })),
+      .map((e) => ({ entry: e, athleteIndex })),
   );
+  const allValid = series.flat();
   if (allValid.length === 0) return null;
 
   const times = allValid.map((p) => new Date(p.entry.event.date).getTime());
@@ -53,30 +54,30 @@ function buildComparisonChartGeometry(athletes: [ComparisonAthleteAggregate, Com
     return SVG_PADDING.top + ((result - yMin) / yRange) * CHART_HEIGHT;
   }
 
-  const points = allValid.map((p) => ({
+  const scaledSeries = series.map((athleteSeries) => athleteSeries.map((p) => ({
     x: xScale(new Date(p.entry.event.date).getTime()),
     y: yScale(p.entry.effectiveResult!),
     entry: p.entry,
     athleteIndex: p.athleteIndex,
-  }));
+  })));
 
   const yTicks = 5;
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => yMin + (i / yTicks) * yRange);
 
-  return { points, yTickValues, yMin, yRange, minTime, maxTime };
+  return { series: scaledSeries, yTickValues, yMin, yRange, minTime, maxTime };
 }
 
-function formatMetric(value: number | null, unit = 's'): string {
+function formatMetric(value: number | null): string {
   if (value === null) return '—';
-  return `${format100mSeconds(value)}${unit}`;
+  return format100mSeconds(value);
 }
 
-function MetricCard({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
+function MetricCard({ label, value }: { label: string; value: number | null }) {
   return (
     <div className={styles.metricCard}>
       <p className={styles.metricLabel}>{label}</p>
       {value !== null ? (
-        <p className={styles.metricValue}>{formatMetric(value, unit)}</p>
+        <p className={styles.metricValue}>{formatMetric(value)}</p>
       ) : (
         <p className={`${styles.metricValue} ${styles.metricEmpty}`}>—</p>
       )}
@@ -125,7 +126,7 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
 
   if (!geometry) return null;
 
-  const { points, yTickValues } = geometry;
+  const { series, yTickValues } = geometry;
 
   return (
     <div className={styles.chartWrap}>
@@ -170,27 +171,36 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
           Date
         </text>
 
-        {points.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={4}
-            fill={p.athleteIndex === 0 ? 'var(--cyan-400)' : 'var(--blue-500)'}
-            stroke="var(--white)"
-            strokeWidth={1.5}
-          >
-            <title>{`${p.athleteIndex === 0 ? comparison.athletes[0].athlete.name : comparison.athletes[1].athlete.name}: ${format100mSeconds(p.entry.effectiveResult!)} on ${formatDateOnly(p.entry.event.date)}`}</title>
-          </circle>
+        {series.map((athleteSeries, athleteIndex) => (
+          <g key={comparison.athletes[athleteIndex].athlete.id}>
+            {athleteSeries.length > 1 && (
+              <polyline
+                data-series={`athlete-${athleteIndex + 1}`}
+                points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
+                className={athleteIndex === 0 ? styles.seriesLineA : styles.seriesLineB}
+              />
+            )}
+            {athleteSeries.map((point) => (
+              <circle
+                key={point.entry.event.id}
+                cx={point.x}
+                cy={point.y}
+                r={4.5}
+                className={athleteIndex === 0 ? styles.seriesPointA : styles.seriesPointB}
+              >
+                <title>{`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}</title>
+              </circle>
+            ))}
+          </g>
         ))}
       </svg>
       <div className={styles.legend} role="list" aria-label="Chart legend">
         <span className={styles.legendItem} role="listitem">
-          <span className={`${styles.legendDot} ${styles.legendDotA}`} aria-hidden="true" />
+          <span className={`${styles.legendLine} ${styles.legendLineA}`} aria-hidden="true" />
           {comparison.athletes[0].athlete.name}
         </span>
         <span className={styles.legendItem} role="listitem">
-          <span className={`${styles.legendDot} ${styles.legendDotB}`} aria-hidden="true" />
+          <span className={`${styles.legendLine} ${styles.legendLineB}`} aria-hidden="true" />
           {comparison.athletes[1].athlete.name}
         </span>
       </div>

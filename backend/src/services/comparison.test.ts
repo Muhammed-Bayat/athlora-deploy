@@ -61,7 +61,7 @@ function progressionRow(overrides: Partial<ProgressionEntryRow> = {}): Progressi
   };
 }
 
-function summaryFields(overrides: { summary_pb?: number | null; summary_total?: number; summary_valid?: number } = {}): { summary_pb: number | null; summary_total: number; summary_valid: number } {
+function summaryFields(overrides: { summary_pb?: number | string | null; summary_total?: number; summary_valid?: number } = {}): { summary_pb: number | string | null; summary_total: number; summary_valid: number } {
   return {
     summary_pb: overrides.summary_pb ?? null,
     summary_total: overrides.summary_total ?? 0,
@@ -69,9 +69,9 @@ function summaryFields(overrides: { summary_pb?: number | null; summary_total?: 
   };
 }
 
-type ProgressionQueryRow = ProgressionEntryRow & { summary_pb: number | null; summary_total: number; summary_valid: number };
+type ProgressionQueryRow = ProgressionEntryRow & { summary_pb: number | string | null; summary_total: number; summary_valid: number };
 
-function queryRow(entryOverrides: Partial<ProgressionEntryRow> = {}, summaryOverrides: { summary_pb?: number | null; summary_total?: number; summary_valid?: number } = {}): ProgressionQueryRow {
+function queryRow(entryOverrides: Partial<ProgressionEntryRow> = {}, summaryOverrides: { summary_pb?: number | string | null; summary_total?: number; summary_valid?: number } = {}): ProgressionQueryRow {
   return { ...progressionRow(entryOverrides), ...summaryFields(summaryOverrides) };
 }
 
@@ -127,22 +127,22 @@ describe('getTwoAthleteComparison', () => {
     const a1Results = [
       queryRow(
         { event_id: EVENT_1_ID, athlete_id: ATHLETE_1_ID, event_date: '2026-01-01', effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
-        { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
+        { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
         { event_id: 'aaaa1111-1111-4111-8111-111111111111', athlete_id: ATHLETE_1_ID, event_date: '2026-02-01', effective_result: '11.30', final_result: '11.30', running_pb: '11.50', is_new_pb: true },
-        { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
+        { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
         { event_id: 'bbbb2222-2222-4222-8222-222222222222', athlete_id: ATHLETE_1_ID, event_date: '2026-03-01', effective_result: '11.20', final_result: '11.20', running_pb: '11.30', is_new_pb: true },
-        { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
+        { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
     ];
 
     const a2Results = [
       queryRow(
         { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-01-15', effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
-        { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
+        { summary_pb: '11.80', summary_total: 1, summary_valid: 1 },
       ),
     ];
 
@@ -161,6 +161,7 @@ describe('getTwoAthleteComparison', () => {
 
     expect(a1.athlete.name).toBe('Athlete One');
     expect(a1.pb).toBe(11.20);
+    expect(typeof a1.pb).toBe('number');
     expect(a1.validResultCount).toBe(3);
     expect(a1.latestEffectiveResult).toBe(11.20);
     expect(a1.average).toBe(11.33);
@@ -168,12 +169,17 @@ describe('getTwoAthleteComparison', () => {
     expect(a1.improvement).toBe(0.30);
 
     expect(a2.athlete.name).toBe('Athlete Two');
+    expect(typeof a2.pb).toBe('number');
     expect(a2.pb).toBe(11.80);
     expect(a2.validResultCount).toBe(1);
     expect(a2.latestEffectiveResult).toBe(11.80);
     expect(a2.average).toBe(11.80);
     expect(a2.consistency).toBeNull();
     expect(a2.improvement).toBeNull();
+
+    const [sql] = query.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain('), enriched AS (');
+    expect(sql).toContain('AS counts_towards_statistics');
   });
 
   it('excludes void outcomes from valid count and PB', async () => {

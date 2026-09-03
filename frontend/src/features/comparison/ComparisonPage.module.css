@@ -122,19 +122,49 @@
   gap: var(--space-2);
 }
 
-.legendDot {
+.seriesLineA,
+.seriesLineB {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.seriesLineA {
+  stroke: var(--console-comparison-series-a);
+}
+
+.seriesLineB {
+  stroke: var(--console-comparison-series-b);
+}
+
+.seriesPointA,
+.seriesPointB {
+  stroke: var(--console-surface-strong);
+  stroke-width: 2;
+}
+
+.seriesPointA {
+  fill: var(--console-comparison-series-a);
+}
+
+.seriesPointB {
+  fill: var(--console-comparison-series-b);
+}
+
+.legendLine {
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  width: 24px;
+  height: 3px;
+  border-radius: var(--radius-pill);
 }
 
-.legendDotA {
-  background: var(--cyan-400);
+.legendLineA {
+  background: var(--console-comparison-series-a);
 }
 
-.legendDotB {
-  background: var(--blue-500);
+.legendLineB {
+  background: var(--console-comparison-series-b);
 }
 
 .empty {

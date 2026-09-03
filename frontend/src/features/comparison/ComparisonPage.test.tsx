@@ -47,6 +47,7 @@ const comparisonResult = {
       improvement: 0.20,
       progression: [
         { event: { id: 'e3', title: 'Race 3', type: 'competition', discipline: '100m', date: '2026-01-15', time: '10:00', locationName: null, status: 'completed' }, result: { eventId: 'e3', athleteId: ATHLETE_2.id, discipline: '100m', outcome: 'valid', finalResult: 11.80, unit: 'seconds', placing: 2, isPb: true, isSb: true, manualOverride: null, overrideReason: null, overriddenBy: null, overrideAt: null, updatedAt: '2026-01-15T00:00:00.000Z' }, effectiveResult: 11.80, effectiveOutcome: 'valid', countsTowardsStatistics: true, runningPb: null, isNewPb: true },
+        { event: { id: 'e4', title: 'Race 4', type: 'competition', discipline: '100m', date: '2026-02-15', time: '10:00', locationName: null, status: 'completed' }, result: { eventId: 'e4', athleteId: ATHLETE_2.id, discipline: '100m', outcome: 'valid', finalResult: 11.60, unit: 'seconds', placing: 2, isPb: true, isSb: true, manualOverride: null, overrideReason: null, overriddenBy: null, overrideAt: null, updatedAt: '2026-02-15T00:00:00.000Z' }, effectiveResult: 11.60, effectiveOutcome: 'valid', countsTowardsStatistics: true, runningPb: 11.80, isNewPb: true },
       ],
     },
   ],
@@ -95,6 +96,8 @@ describe('ComparisonPage', () => {
     expect(screen.getByText('Bob Dash PB')).toBeInTheDocument();
     expect(screen.getByText('Alice Sprint latest')).toBeInTheDocument();
     expect(screen.getByText('Bob Dash latest')).toBeInTheDocument();
+    expect(screen.getByText('11.20s')).toBeInTheDocument();
+    expect(screen.queryByText('11.20ss')).not.toBeInTheDocument();
   });
 
   it('displays chart/table toggle and table view shows metrics', async () => {
@@ -139,6 +142,11 @@ describe('ComparisonPage', () => {
     const chart = screen.getByRole('img', { name: /progression chart/i });
     expect(chart).toBeInTheDocument();
     expect(chart.querySelector('title')).toBeTruthy();
+    const firstSeries = chart.querySelector('polyline[data-series="athlete-1"]');
+    const secondSeries = chart.querySelector('polyline[data-series="athlete-2"]');
+    expect(firstSeries).toBeTruthy();
+    expect(secondSeries).toBeTruthy();
+    expect(firstSeries?.getAttribute('class')).not.toBe(secondSeries?.getAttribute('class'));
   });
 
   it('preserves athlete selection in URL query params', async () => {
