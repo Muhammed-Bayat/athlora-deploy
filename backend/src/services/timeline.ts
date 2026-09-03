@@ -26,7 +26,7 @@ import {
 import { isCanonicalUuid } from '../validation/primitives.js';
 
 const TIMELINE_COLUMNS =
-  'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, version, device_id, created_at, updated_at, deleted_at';
+  'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id, created_at, updated_at, deleted_at';
 const TIMELINE_SELECT_COLUMNS = TIMELINE_COLUMNS.split(', ')
   .map((column) => `te.${column}`)
   .join(', ');

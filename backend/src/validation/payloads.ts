@@ -556,6 +556,12 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   };
 }
 
+export interface PublicLoggerSessionPayload {
+  linkToken: string;
+  name: string;
+  club: string;
+}
+
 export function parseAthleteProgressionQuery(input: Record<string, unknown>): AthleteProgressionQuery {
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(input, ATHLETE_PROGRESSION_QUERY_FIELDS, issues);
@@ -850,6 +856,42 @@ export function parseTimelineEntryCreatePayload(input: unknown): TimelineEntryCr
     noteText,
     deviceId,
   };
+}
+
+export function parsePublicLoggerSessionPayload(input: unknown): PublicLoggerSessionPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ['linkToken', 'name', 'club'], issues);
+  const fields = ['linkToken', 'name', 'club'] as const;
+  const values = {} as PublicLoggerSessionPayload;
+  for (const field of fields) {
+    const value = payload[field];
+    if (typeof value !== 'string') issues.push(issue(field, 'required', 'Field is required'));
+    else {
+      const normalized = normalizeRequiredString(value);
+      if (normalized === null) issues.push(issue(field, 'blank', 'Must not be blank'));
+      else if (normalized.length > (field === 'linkToken' ? 200 : 120)) issues.push(issue(field, 'too_long', 'Value is too long'));
+      else values[field] = normalized;
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return values;
+}
+
+export function parsePublicLoggerEntryPayload(input: unknown): TimelineEntryCreatePayload {
+  const entry = parseTimelineEntryCreatePayload(input);
+  const issues: ValidationIssue[] = [];
+  if (entry.entryType !== 'attempt' && entry.entryType !== 'penalty') {
+    issues.push(issue('entryType', 'invalid_value', 'Public loggers can create attempts or incidents only'));
+  }
+  if (entry.entryType === 'attempt' && entry.value === null) {
+    issues.push(issue('value', 'required', 'An attempt requires a race time'));
+  }
+  if (entry.entryType === 'penalty' && entry.incidentType === null) {
+    issues.push(issue('incidentType', 'required', 'An incident requires an incident type'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return entry;
 }
 
 export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPatchPayload {

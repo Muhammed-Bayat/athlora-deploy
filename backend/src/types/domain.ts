@@ -135,7 +135,8 @@ export interface TimelineEntry {
   isFoul: boolean;
   incidentType: IncidentType | null;
   noteText: string | null;
-  recordedBy: string;
+  recordedBy: string | null;
+  publicLoggerSessionId?: string | null;
   version: number;
   deviceId: string | null;
   createdAt: string;

@@ -132,7 +132,8 @@ export interface TimelineEntryRow {
   is_foul: boolean;
   incident_type: string | null;
   note_text: string | null;
-  recorded_by: string;
+  recorded_by: string | null;
+  public_logger_session_id?: string | null;
   version: number;
   device_id: string | null;
   created_at: TimestampValue;
@@ -670,7 +671,10 @@ export function mapTimelineEntryRow(row: TimelineEntryRow): TimelineEntry {
     isFoul,
     incidentType,
     noteText,
-    recordedBy: uuid(row.recorded_by, 'timeline_entries.recorded_by'),
+    recordedBy: nullableUuid(row.recorded_by, 'timeline_entries.recorded_by'),
+    ...(row.public_logger_session_id === undefined ? {} : {
+      publicLoggerSessionId: nullableUuid(row.public_logger_session_id, 'timeline_entries.public_logger_session_id'),
+    }),
     version: positiveInteger(row.version, 'timeline_entries.version'),
     deviceId: nullableString(row.device_id, 'timeline_entries.device_id'),
     createdAt: timestamp(row.created_at, 'timeline_entries.created_at'),

@@ -228,7 +228,8 @@ export interface TimelineEntry {
   isFoul: boolean;
   incidentType: IncidentType;
   noteText: string | null;
-  recordedBy: string;
+  recordedBy: string | null;
+  publicLoggerSessionId?: string | null;
   version: number;
   deviceId: string | null;
   createdAt: string;
@@ -258,6 +259,22 @@ export interface TimelineEntryPatchPayload {
 
 export interface TimelineEntryDeletePayload {
   expectedVersion: number;
+}
+
+export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt'>;
+
+export interface PublicLoggerLink {
+  id: string;
+  eventId: string;
+  status: 'active' | 'revoked';
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface PublicLoggerSnapshot {
+  event: Pick<AthleticsEvent, 'id' | 'title' | 'status'>;
+  participants: Array<{ athleteId: string; name: string }>;
+  timeline: PublicTimelineEntry[];
 }
 
 export interface Result {
