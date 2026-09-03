@@ -4,7 +4,7 @@ import type { Injury, InjuryDraft, InjurySeverity, InjurySide } from './injuryRe
 export const ANATOMY_VERTEX_COUNT = 79534;
 
 type AnatomyMapSide = 'left' | 'right' | 'both' | 'center';
-type VisualInjury = Pick<Injury | InjuryDraft, 'region' | 'area' | 'side' | 'severity'>;
+export type VisualInjury = Pick<Injury | InjuryDraft, 'region' | 'area' | 'side' | 'severity'>;
 
 export interface AnatomyMap {
   format: string;
@@ -80,8 +80,8 @@ export function resolveInjuryRegionIds(map: AnatomyMap, injury: VisualInjury) {
 export function updateInjuryAttributes(
   geometry: BufferGeometry,
   map: AnatomyMap,
-  injuries: Injury[],
-  preview: InjuryDraft | null,
+  injuries: VisualInjury[],
+  preview: VisualInjury | null,
   debugRegion: string,
 ) {
   const colorAttribute = geometry.getAttribute('injuryColor') as BufferAttribute;
