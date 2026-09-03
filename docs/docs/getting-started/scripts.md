@@ -29,18 +29,18 @@ The backend also provides `db:migrate` for source migrations and `db:migrate:pro
 | `frontend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `backend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `docs` | `npm ci`, `npm run build` |
-| `e2e` | Postgres 16 service container, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
+| `e2e` | PostgreSQL on port `55432`, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
 
-The `e2e` job provisions a `postgres:16` service container (`postgresql://postgres:postgres@localhost:5432/athlora_e2e`) that `global-setup` migrates and truncates before every run. It requires seven repository secrets: the three public Auth0 settings plus host and guest test-account credentials. When any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
+The `e2e` job provisions an isolated PostgreSQL cluster inside the job container on port `55432` so host-networked Gitea runners cannot collide with an existing database on `5432`. Playwright `global-setup` migrates and truncates that database before every run. The job requires seven repository secrets: the three public Auth0 settings plus host and guest test-account credentials. When any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
 
 | Job | Work performed |
 |---|---|
 | `frontend` | Install, lint, type-check, test, and build the SPA. |
 | `backend` | Install, lint, type-check, test, and build the API. |
 | `docs` | Install and build the Docusaurus site. |
-| `e2e` | Install all test dependencies, provision PostgreSQL 16, install Chromium, and run Playwright when Auth0 secrets are available. |
+| `e2e` | Install all test dependencies, provision PostgreSQL on isolated port `55432`, install Chromium, and run Playwright when Auth0 secrets are available. |
 
-The E2E job uses `postgres:16` and a disposable `athlora_e2e` database. It skips with an explicit message until these repository secrets are configured:
+The E2E job uses an in-job PostgreSQL cluster and a disposable `athlora_e2e` database. It skips with an explicit message until these repository secrets are configured:
 
 ```text
 VITE_AUTH0_DOMAIN

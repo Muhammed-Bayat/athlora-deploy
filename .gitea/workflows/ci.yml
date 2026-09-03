@@ -73,21 +73,8 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: athlora_e2e
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/athlora_e2e
+      DATABASE_URL: postgresql://postgres:postgres@localhost:55432/athlora_e2e
       VITE_AUTH0_DOMAIN: ${{ secrets.VITE_AUTH0_DOMAIN }}
       VITE_AUTH0_CLIENT_ID: ${{ secrets.VITE_AUTH0_CLIENT_ID }}
       VITE_AUTH0_AUDIENCE: ${{ secrets.VITE_AUTH0_AUDIENCE }}
@@ -100,6 +87,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Provision PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql libpq-dev
+          PG_BINDIR="$(pg_config --bindir)"
+          sudo install -d -o postgres -g postgres /tmp/athlora-postgres
+          sudo -u postgres "$PG_BINDIR/initdb" -D /tmp/athlora-postgres --auth-local=trust --auth-host=scram-sha-256
+          sudo -u postgres "$PG_BINDIR/pg_ctl" -D /tmp/athlora-postgres -l /tmp/athlora-postgres.log -o "-p 55432 -h 127.0.0.1 -k /tmp" -w start
+          sudo -u postgres "$PG_BINDIR/createdb" -h /tmp -p 55432 athlora_e2e
+          sudo -u postgres "$PG_BINDIR/psql" -h /tmp -p 55432 -d postgres -c "ALTER USER postgres PASSWORD 'postgres'"
+          "$PG_BINDIR/pg_isready" -h 127.0.0.1 -p 55432 -U postgres -d athlora_e2e
       - name: Install dependencies
         run: |
           npm ci --prefix backend
