@@ -6,7 +6,8 @@ import { Button, Card, Input, Modal } from '../../components';
 import { useCurrentUser } from './CurrentUserContext';
 import { useWorkspace } from './WorkspaceContext';
 import { inviteWorkspaceMember, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../../api/workspaces';
-import type { WorkspaceInvitation, WorkspaceMember } from '../../types';
+import { approveClubJoinRequest, listClubJoinRequests, listClubs, rejectClubJoinRequest } from '../../api/clubs';
+import type { ClubJoinRequest, WorkspaceInvitation, WorkspaceMember } from '../../types';
 import styles from './AuthPage.module.css';
 
 function message(error: unknown): string {
@@ -35,6 +36,11 @@ export function AuthPage() {
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
+  const [clubJoinRequests, setClubJoinRequests] = useState<ClubJoinRequest[]>([]);
+  const [clubJoinRequestsLoading, setClubJoinRequestsLoading] = useState(isCoach);
+  const [clubJoinRequestError, setClubJoinRequestError] = useState<string | null>(null);
+  const [clubRequestBusy, setClubRequestBusy] = useState<string | null>(null);
+  const [activeClubId, setActiveClubId] = useState<string | null>(null);
   const hasAuth0Password = currentUser?.auth0Id.startsWith('auth0|') ?? false;
 
   const requestPasswordChange = async () => {
@@ -74,6 +80,26 @@ export function AuthPage() {
       if (active) setMemberError(message(requestError));
     }).finally(() => {
       if (active) setMembersLoading(false);
+    });
+    return () => { active = false; };
+  }, [activeWorkspace.id, isCoach]);
+
+  useEffect(() => {
+    if (!isCoach) return;
+    let active = true;
+    setClubJoinRequestsLoading(true);
+    setClubJoinRequestError(null);
+    void listClubs().then((response) => {
+      const club = response.data.find((candidate) => candidate.workspaceId === activeWorkspace.id);
+      if (!club) return [];
+      if (active) setActiveClubId(club.id);
+      return listClubJoinRequests(club.id).then((requests) => requests.data);
+    }).then((requests) => {
+      if (active) setClubJoinRequests(requests);
+    }).catch((requestError: unknown) => {
+      if (active) setClubJoinRequestError(message(requestError));
+    }).finally(() => {
+      if (active) setClubJoinRequestsLoading(false);
     });
     return () => { active = false; };
   }, [activeWorkspace.id, isCoach]);
@@ -149,9 +175,22 @@ export function AuthPage() {
     }
   };
 
+  const reviewClubRequest = async (request: ClubJoinRequest, decision: 'approved' | 'rejected', role?: 'coach' | 'assistant') => {
+    if (!activeClubId) return;
+    setClubRequestBusy(request.id);
+    setClubJoinRequestError(null);
+    try {
+      if (decision === 'approved' && role) await approveClubJoinRequest(activeClubId, request.id, role);
+      if (decision === 'rejected') await rejectClubJoinRequest(activeClubId, request.id);
+      setClubJoinRequests((current) => current.filter((candidate) => candidate.id !== request.id));
+    } catch (requestError) {
+      setClubJoinRequestError(message(requestError));
+    } finally { setClubRequestBusy(null); }
+  };
+
   return (
     <section className={styles.page} aria-labelledby="account-heading">
-      <header><p>Identity and access</p><h1 id="account-heading">Account settings</h1><span>Manage sign-in security and your Athlora workspace.</span></header>
+      <header><p>Identity and access</p><h1 id="account-heading">Account settings</h1><span>Manage sign-in security and your Athlora Club.</span></header>
       <Card className={styles.profile}>
         <div className={styles.avatar}>{(currentUser?.name ?? user?.name ?? 'A').slice(0, 1).toUpperCase()}</div>
         <div><h2>{currentUser?.name ?? user?.name ?? 'Athlora user'}</h2><p>{currentUser?.email ?? user?.email}</p><small>{currentUser?.role ?? 'coach'} account</small></div>
@@ -172,23 +211,29 @@ export function AuthPage() {
 
         <Card className={styles.danger}>
           <p>Danger zone</p><h2>Delete account</h2>
-          <span>Permanently remove your Auth0 identity and Athlora workspace, including athletes, events, assignments, timeline entries, and results.</span>
+          <span>Permanently remove your Auth0 identity and Athlora Club access, including athletes, events, assignments, timeline entries, and results.</span>
           <Button variant="danger" onClick={() => { setDeleteError(null); setConfirmation(''); setDeleteOpen(true); }}>Delete my account</Button>
         </Card>
       </div>
 
       {isCoach && <Card className={styles.members}>
-        <div><p>Workspace access</p><h2>Members and invitations</h2><span>Invite coaches or assistants to {activeWorkspace.name}.</span></div>
+        <div><p>Club join requests</p><h2>Pending requests</h2><span>Choose the role each approved member will have in {activeWorkspace.name}.</span></div>
+        {clubJoinRequestError && <p className={styles.error} role="alert">{clubJoinRequestError}</p>}
+        {clubJoinRequestsLoading ? <p role="status">Loading Club requests...</p> : clubJoinRequests.length === 0 ? <p className={styles.muted}>No pending Club requests.</p> : <ul className={styles.memberList}>{clubJoinRequests.map((request) => <li key={request.id}><span><strong>{request.userName ?? 'Applicant'}</strong><small>{request.userEmail ?? 'Email unavailable'}</small></span><div className={styles.actions}><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'approved', 'assistant')} disabled={clubRequestBusy !== null}>{clubRequestBusy === request.id ? 'Saving...' : 'Approve assistant'}</Button><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'approved', 'coach')} disabled={clubRequestBusy !== null}>Approve coach</Button><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'rejected')} disabled={clubRequestBusy !== null}>Reject</Button></div></li>)}</ul>}
+      </Card>}
+
+      {isCoach && <Card className={styles.members}>
+        <div><p>Club access</p><h2>Members and invitations</h2><span>Invite coaches or assistants to {activeWorkspace.name}.</span></div>
         <form className={styles.inviteForm} onSubmit={(event) => void inviteMember(event)}>
           <label htmlFor="workspace-invite-email">Email address</label>
           <Input id="workspace-invite-email" type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required disabled={inviteBusy} />
-          <label htmlFor="workspace-invite-role">Workspace role</label>
+          <label htmlFor="workspace-invite-role">Club role</label>
           <select id="workspace-invite-role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as 'coach' | 'assistant')} disabled={inviteBusy}><option value="assistant">Assistant</option><option value="coach">Coach</option></select>
           <Button type="submit" disabled={inviteBusy}>{inviteBusy ? 'Sending...' : 'Create invitation'}</Button>
         </form>
         {inviteLink && <p className={styles.ticket} role="status">Invitation created. <a href={inviteLink}>Open invitation link</a>.</p>}
         {memberError && <p className={styles.error} role="alert">{memberError}</p>}
-        {membersLoading ? <p role="status">Loading workspace members...</p> : <><ul className={styles.memberList}>{members.map((member) => <li key={member.userId}><span><strong>{member.name}{member.userId === currentUser?.id ? ' (you)' : ''}</strong><small>{member.email} · {member.role}</small></span><select aria-label={`Role for ${member.name}`} value={member.role} onChange={(event) => void changeMemberRole(member, event.target.value as 'coach' | 'assistant')} disabled={memberBusy !== null}><option value="coach">Coach</option><option value="assistant">Assistant</option></select><Button variant="ghost" onClick={() => void removeMember(member)} disabled={memberBusy !== null}>{memberBusy === member.userId ? 'Removing...' : 'Remove'}</Button></li>)}</ul>{invitations.length > 0 && <section className={styles.pendingInvitations} aria-labelledby="pending-invitations-heading"><h3 id="pending-invitations-heading">Pending invitations</h3><ul>{invitations.map((invitation) => <li key={invitation.id}><span>{invitation.email} · {invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</span><Button variant="ghost" onClick={() => void resendInvitation(invitation)} disabled={inviteBusy}>Resend</Button><Button variant="ghost" onClick={() => { setInviteLink(`${window.location.origin}/invitations/${invitation.token}`); }} disabled={!invitation.token}>Open link</Button><Button variant="ghost" onClick={() => void revokeInvitation(invitation)} disabled={inviteBusy}>Revoke</Button></li>)}</ul></section>}</>}
+        {membersLoading ? <p role="status">Loading Club members...</p> : <><ul className={styles.memberList}>{members.map((member) => <li key={member.userId}><span><strong>{member.name}{member.userId === currentUser?.id ? ' (you)' : ''}</strong><small>{member.email} · {member.role}</small></span><select aria-label={`Role for ${member.name}`} value={member.role} onChange={(event) => void changeMemberRole(member, event.target.value as 'coach' | 'assistant')} disabled={memberBusy !== null}><option value="coach">Coach</option><option value="assistant">Assistant</option></select><Button variant="ghost" onClick={() => void removeMember(member)} disabled={memberBusy !== null}>{memberBusy === member.userId ? 'Removing...' : 'Remove'}</Button></li>)}</ul>{invitations.length > 0 && <section className={styles.pendingInvitations} aria-labelledby="pending-invitations-heading"><h3 id="pending-invitations-heading">Pending invitations</h3><ul>{invitations.map((invitation) => <li key={invitation.id}><span>{invitation.email} · {invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</span><Button variant="ghost" onClick={() => void resendInvitation(invitation)} disabled={inviteBusy}>Resend</Button><Button variant="ghost" onClick={() => { setInviteLink(`${window.location.origin}/invitations/${invitation.token}`); }} disabled={!invitation.token}>Open link</Button><Button variant="ghost" onClick={() => void revokeInvitation(invitation)} disabled={inviteBusy}>Revoke</Button></li>)}</ul></section>}</>}
       </Card>}
 
       <Modal open={deleteOpen} title="Permanently delete account" onClose={() => { if (!deleteBusy) setDeleteOpen(false); }} closeDisabled={deleteBusy}>

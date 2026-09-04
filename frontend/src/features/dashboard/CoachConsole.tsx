@@ -410,8 +410,8 @@ export function CoachConsole() {
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
       <label className={styles.workspaceSwitcher}>
-        <span>Workspace</span>
-        <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active workspace">
+        <span>Club</span>
+         <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       </label>

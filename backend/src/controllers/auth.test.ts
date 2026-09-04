@@ -46,7 +46,7 @@ describe('syncCurrentUser', () => {
     );
     query
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [
+       .mockResolvedValueOnce({ rows: [
         {
           id: '11111111-1111-4111-8111-111111111111',
           auth0_id: 'auth0|user-1',
@@ -56,8 +56,7 @@ describe('syncCurrentUser', () => {
           created_at: new Date('2026-08-13T10:00:00.000Z'),
           updated_at: new Date('2026-08-13T10:00:00.000Z'),
         },
-      ] })
-      .mockResolvedValueOnce({ rows: [] });
+       ] });
 
     await syncCurrentUser(request(), response(), next);
 
@@ -69,11 +68,7 @@ describe('syncCurrentUser', () => {
       'Coach One',
       'coach@example.com',
     ]);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("CONCAT($2::text, '''s workspace')"), [
-      '11111111-1111-4111-8111-111111111111',
-      'Coach One',
-      'coach',
-    ]);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(json).toHaveBeenCalledWith({
       data: expect.objectContaining({
         id: '11111111-1111-4111-8111-111111111111',

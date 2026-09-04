@@ -34,6 +34,30 @@ export interface WorkspaceInvitation {
   token?: string;
 }
 
+export interface Club {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+export interface ClubJoinRequest {
+  id: string;
+  clubId: string;
+  userId: string;
+  status: ClubJoinRequestStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  clubName?: string;
+  userName?: string;
+  userEmail?: string;
+}
+
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
 export const DISCIPLINE_100M = '100m' as const;
 export type Discipline = typeof DISCIPLINE_100M;

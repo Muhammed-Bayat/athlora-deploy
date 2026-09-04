@@ -16,6 +16,7 @@ import injuriesRouter from './injuries.js';
 import comparisonRouter from './comparison.js';
 import eventHelpersRouter from './eventHelpers.js';
 import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js';
+import clubsRouter from './clubs.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -78,6 +79,7 @@ router.use('/public/logger', publicLoggerRouter);
 // Acceptance cannot require an existing workspace membership.
 router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
 router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRouter);
+router.use('/clubs', clubsRouter);
 router.use('/', eventHelpersRouter);
 router.use(
   '/athletes',

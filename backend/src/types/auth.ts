@@ -12,3 +12,9 @@ export interface ApplicationUserContext {
   workspaceId: string;
   workspaceRole: UserRole;
 }
+
+export interface LocalApplicationUserContext {
+  userId: string;
+  auth0Id: string;
+  role: UserRole;
+}

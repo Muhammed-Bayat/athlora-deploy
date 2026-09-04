@@ -1,0 +1,13 @@
+.page { display: grid; gap: var(--space-6); max-width: 980px; margin: 0 auto; padding: var(--space-8) var(--space-4); }
+.intro p, .card > p, .requests > p { margin: 0 0 var(--space-1); color: var(--color-primary); font-size: 0.72rem; font-weight: var(--font-weight-bold); letter-spacing: 0.09em; text-transform: uppercase; }
+.intro h1, .card h2, .requests h2 { margin: 0; color: var(--color-text); }
+.intro span, .card > span, .requests small { color: var(--color-text-muted); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.card, .requests, .card form { display: grid; gap: var(--space-3); }
+.card form { margin-top: var(--space-2); }
+.card label { color: var(--color-text); font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); }
+.clubList, .requests ul { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.clubList li, .requests li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); border-top: 1px solid var(--color-border); padding-top: var(--space-2); }
+.requests li span { display: grid; gap: var(--space-1); }
+.error { margin: 0; padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent); border-radius: var(--radius-sm); background: var(--alert-soft); color: var(--color-danger); }
+@media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }

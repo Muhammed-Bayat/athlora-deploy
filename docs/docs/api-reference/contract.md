@@ -70,7 +70,7 @@ Unless explicitly noted, application resource routes require `Authorization: Bea
 
 ### 3.1 Authentication context and ownership
 
-`PUT /api/v1/auth/me` verifies the Auth0 token and synchronizes its subject/profile to `users`; it intentionally does not require an existing `users` row and creates a default UTC workspace for a new account. Every protected resource route performs a second step after JWT verification: it resolves the verified Auth0 `sub` by `users.auth0_id`, validates the selected membership, and exposes the application user UUID, audit role, active workspace UUID and workspace role to controllers through typed request context.
+`PUT /api/v1/auth/me` verifies the Auth0 token and synchronizes its subject/profile to `users`; it intentionally does not require an existing `users` row. A new account creates a Club or requests membership through the Club onboarding routes before it receives an active workspace membership. Resource routes perform a second step after JWT verification: they resolve the verified Auth0 `sub` by `users.auth0_id`, validate the selected membership, and expose the application user UUID, audit role, active workspace UUID and workspace role to controllers through typed request context.
 
 A valid Auth0 identity that has not completed synchronization receives:
 
@@ -102,9 +102,19 @@ The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHO
 | `POST /workspaces/:workspaceId/invitations/:invitationId/resend` | Coach membership | Revokes the active token and issues a replacement invitation. |
 | `DELETE /workspaces/:workspaceId/invitations/:invitationId` | Coach membership | Revokes an unused invitation. |
 | `POST /workspaces/invitations/:token/accept` | Verified JWT | Accepts one active invitation only when the synchronized account email matches. |
+| `GET /clubs?q=` | Verified JWT + synchronized local user | Searches all Clubs by name; no existing membership is required. |
+| `POST /clubs` | Verified JWT + synchronized local user | Creates a named Club, its backing workspace, and a coach membership. |
+| `POST /clubs/:clubId/join-requests` | Verified JWT + synchronized local user | Creates a pending request to join a Club. |
+| `GET /clubs/join-requests/me` | Verified JWT + synchronized local user | Lists the caller's requests. |
+| `POST /clubs/join-requests/:id/withdraw` | Verified JWT + synchronized local user | Withdraws the caller's pending request. |
+| `GET /clubs/:clubId/join-requests` | Active Club coach | Lists pending requests for the selected Club. |
+| `POST /clubs/:clubId/join-requests/:id/approve` | Active Club coach | Approves with a role of coach or assistant. |
+| `POST /clubs/:clubId/join-requests/:id/reject` | Active Club coach | Rejects a pending request. |
 | `GET /auth/login`, `/auth/callback`, `/auth/logout` | Public | Legacy scaffolding only; each returns `501 NOT_IMPLEMENTED`. The SPA uses Auth0 Universal Login instead. |
 
 Workspace membership is server-derived and is the authorization boundary: athletes and events carry `workspace_id`, and dependent rows require event and athlete workspace equality. `coachId`, `createdBy`, `recordedBy` and `overriddenBy` remain attribution actors, not ownership controls. A workspace has a default IANA timezone; events can store an optional timezone override. Client mutation payloads never control workspace or attribution fields.
+
+Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
 Workspace roles are only `coach` and `assistant`. Coaches manage memberships and invitations and can mutate athletes, events, participants, lifecycle state, and result overrides. Assistants may read private workspace data and create timeline entries, but may edit or undo only entries they recorded. Every assistant-restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 

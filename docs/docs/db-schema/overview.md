@@ -12,6 +12,8 @@ The schema is the shared foundation for Athlora's full athletics-meet scope. The
 
 ```
 users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
+clubs                (id UUID PK, workspace_id -> workspaces UNIQUE, name)
+club_join_requests   (id UUID PK, club_id -> clubs, user_id -> users, status, reviewed_by, reviewed_at)
 workspaces           (id UUID PK, name, timezone)
 workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK (workspace_id, user_id)
 workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invited_by, expires_at,
@@ -77,6 +79,12 @@ The append-only live log — the heart of the app.
 
 Migration `0007_workspace_squads.sql` backfills each distinct trimmed nonblank legacy `athletes.squad` value into a squad in that athlete's workspace and creates the matching membership. The old text column remains only for compatibility with pre-migration deployments; application reads and writes use the normalized tables.
 
+### clubs and club_join_requests
+
+`clubs` is the product-facing organization record. Each Club has exactly one backing workspace, retaining established workspace-scoped foreign keys and authorization without moving athlete, event, fixture, or audit history. Migration `0017_clubs.sql` backfills one Club for every existing workspace.
+
+Authenticated users can search every Club and create one pending request per Club. A request is `pending`, `approved`, `rejected`, or `withdrawn`; approval records its coach actor and timestamp, then atomically creates or updates the backing workspace membership with the selected `coach` or `assistant` role.
+
 ### event_participants
 The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
 
@@ -140,6 +148,8 @@ Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, ha
 
 Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
 
+Migration `0017_clubs.sql` adds the Club discovery layer and coach-reviewed membership requests. Existing workspace data is backfilled into Clubs; new users synchronize without receiving an automatic personal workspace and create or request a Club through authenticated onboarding.
+
 **Host authority and shared result authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side. Cancellation preserves an intelligible historical record: placings become null and PB/SB flags clear, but result rows and timeline entries remain. Post-start withdrawal preserves the withdrawn team's results and entries.
 
 The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
@@ -152,7 +162,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces; and `0011_athlete_injuries.sql` adds persistent athlete injury records with recovery history and audit tracking. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces; `0011_athlete_injuries.sql` adds persistent athlete injury records with recovery history and audit tracking; and `0017_clubs.sql` adds Clubs and Club join requests. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
