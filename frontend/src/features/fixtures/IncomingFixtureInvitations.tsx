@@ -35,7 +35,6 @@ export function IncomingFixtureInvitations({ compact = false }: { compact?: bool
   }, [activeWorkspace.id]);
 
   const respond = async (invitation: IncomingFixtureInvitation, response: 'accepted' | 'declined' | 'change_requested') => {
-    if (activeWorkspace.role !== 'coach') return;
     if (response === 'change_requested' && !changeMessage.trim()) return;
     setBusyId(invitation.id);
     setError(null);
@@ -58,13 +57,12 @@ export function IncomingFixtureInvitations({ compact = false }: { compact?: bool
   if (loading || invitations.length === 0) return null;
   return <section aria-labelledby="incoming-fixtures-heading">
     <header><p>Event invitations</p><h2 id="incoming-fixtures-heading">{invitations.length} incoming fixture invitation{invitations.length === 1 ? '' : 's'}</h2></header>
-    {activeWorkspace.role !== 'coach' && <p role="status">Select a coach workspace to respond to an invitation.</p>}
     {error && <p role="alert">{error}</p>}
     {invitations.map((invitation) => <Card key={invitation.id}>
       <h3>{invitation.event.title}</h3>
       <p>{invitation.event.date} · {invitation.event.time ?? 'Time not set'} · {invitation.event.locationName ?? 'Venue not set'}</p>
       {!compact && <p>Review the event details before accepting. Your team’s roster stays private from the host until event participation is active.</p>}
-      {changeFor === invitation.id ? <div><label htmlFor={`fixture-change-${invitation.id}`}>Requested changes</label><Input id={`fixture-change-${invitation.id}`} value={changeMessage} onChange={(event) => setChangeMessage(event.target.value)} disabled={busyId === invitation.id} /><Button variant="secondary" onClick={() => void respond(invitation, 'change_requested')} disabled={busyId === invitation.id || !changeMessage.trim()}>Send request</Button><Button variant="ghost" onClick={() => { setChangeFor(null); setChangeMessage(''); }} disabled={busyId === invitation.id}>Cancel</Button></div> : <div><Button onClick={() => void respond(invitation, 'accepted')} disabled={busyId === invitation.id || activeWorkspace.role !== 'coach'}>{busyId === invitation.id ? 'Saving...' : 'Accept event'}</Button><Button variant="secondary" onClick={() => setChangeFor(invitation.id)} disabled={busyId === invitation.id || activeWorkspace.role !== 'coach'}>Request changes</Button><Button variant="ghost" onClick={() => void respond(invitation, 'declined')} disabled={busyId === invitation.id || activeWorkspace.role !== 'coach'}>Decline</Button></div>}
+       {changeFor === invitation.id ? <div><label htmlFor={`fixture-change-${invitation.id}`}>Requested changes</label><Input id={`fixture-change-${invitation.id}`} value={changeMessage} onChange={(event) => setChangeMessage(event.target.value)} disabled={busyId === invitation.id} /><Button variant="secondary" onClick={() => void respond(invitation, 'change_requested')} disabled={busyId === invitation.id || !changeMessage.trim()}>Send request</Button><Button variant="ghost" onClick={() => { setChangeFor(null); setChangeMessage(''); }} disabled={busyId === invitation.id}>Cancel</Button></div> : <div><Button onClick={() => void respond(invitation, 'accepted')} disabled={busyId === invitation.id}>{busyId === invitation.id ? 'Saving...' : 'Accept event'}</Button><Button variant="secondary" onClick={() => setChangeFor(invitation.id)} disabled={busyId === invitation.id}>Request changes</Button><Button variant="ghost" onClick={() => void respond(invitation, 'declined')} disabled={busyId === invitation.id}>Decline</Button></div>}
     </Card>)}
   </section>;
 }

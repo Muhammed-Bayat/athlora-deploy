@@ -7,7 +7,6 @@ import {
   requireTimelineEntryOwnership,
 } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
-import { requireTimelineWriteAccess } from '../middleware/capabilities.js';
 import {
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
@@ -25,7 +24,6 @@ router.get(
 router.post(
   '/:eventId/entries',
   validateBody(parseTimelineEntryCreatePayload),
-  requireTimelineWriteAccess,
   requireEventAthleteOwnership,
   requireEventLoggingOpen,
   timeline.createTimelineEntry,
@@ -33,7 +31,6 @@ router.post(
 router.patch(
   '/:eventId/entries/:entryId',
   requireTimelineEntryOwnership,
-  requireTimelineWriteAccess,
   validateBody(parseTimelineEntryPatchPayload),
   requireEventLoggingOpen,
   timeline.updateTimelineEntry,
@@ -41,7 +38,6 @@ router.patch(
 router.delete(
   '/:eventId/entries/:entryId',
   requireTimelineEntryOwnership,
-  requireTimelineWriteAccess,
   validateBody(parseTimelineEntryDeletePayload),
   timeline.removeTimelineEntry,
 );

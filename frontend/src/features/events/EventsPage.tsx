@@ -591,7 +591,6 @@ export function ParticipantManager({
 
 export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday(), defaultView }: EventsPageProps = {}) {
   const { activeWorkspace } = useWorkspace();
-  const isCoach = activeWorkspace.role === 'coach';
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -733,7 +732,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
             <button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button>
             <button type="button" aria-label="Calendar view" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>□</button>
           </div>
-           {isCoach && <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>}
+            <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>
         </div>
       </header>
 
@@ -741,7 +740,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
-       {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." />{isCoach && <Button onClick={() => setEditor('new')}>Add your first event</Button>}</div>}
+       {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
 
       {!loading && !loadError && events.length > 0 && view === 'calendar' && (
         <div className={styles.calendar}>

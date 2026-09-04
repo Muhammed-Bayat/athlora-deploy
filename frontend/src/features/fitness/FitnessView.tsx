@@ -12,7 +12,7 @@ interface FitnessViewProps {
   athleteName: string;
   athleteSquad: string | null;
   athleteStatus: string;
-  isCoach: boolean;
+  canOperate: boolean;
   onBack: () => void;
   onSetInactive: () => void;
 }
@@ -22,7 +22,7 @@ export function FitnessView({
   athleteName,
   athleteSquad,
   athleteStatus,
-  isCoach,
+  canOperate,
   onBack,
   onSetInactive,
 }: FitnessViewProps) {
@@ -142,13 +142,13 @@ export function FitnessView({
         <p className={styles.loadingState} role="status">Loading injury history...</p>
       ) : (
         <div className={styles.layout}>
-          {isCoach && !isArchived && (
+          {canOperate && !isArchived && (
             <InjuryEditor onPreview={setPreview} onSave={handleAdd} />
           )}
           <BodyViewer injuries={injuries.filter((i) => !i.resolvedDate && !i.deletedAt)} preview={preview} />
           <ActiveInjuries
             injuries={injuries}
-            isCoach={isCoach}
+            canOperate={canOperate}
             isArchived={isArchived}
             onResolve={handleResolve}
             onReopen={handleReopen}

@@ -62,7 +62,7 @@ describe('FitnessView', () => {
         athleteName="Ari Runner"
         athleteSquad="Sprint A"
         athleteStatus="active"
-        isCoach={true}
+        canOperate
         onBack={vi.fn()}
         onSetInactive={vi.fn()}
       />

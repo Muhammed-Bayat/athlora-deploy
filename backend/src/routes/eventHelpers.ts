@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
+import { requireOperationalAccess } from '../middleware/capabilities.js';
+import { requireEventOwnership } from '../middleware/ownership.js';
 import {
   handleCreateInvitation,
   handleRotateInvitation,
@@ -12,14 +14,15 @@ import {
 
 const router = Router();
 
-// Coach invitation management routes
-router.post('/events/:eventId/helpers/invitations', requireAuth, handleCreateInvitation);
-router.get('/events/:eventId/helpers/invitations', requireAuth, handleListInvitations);
-router.post('/events/:eventId/helpers/invitations/:invitationId/rotate', requireAuth, handleRotateInvitation);
-router.patch('/events/:eventId/helpers/invitations/:invitationId', requireAuth, handleUpdateInvitationStatus);
-router.delete('/events/:eventId/helpers/grants/:grantId', requireAuth, handleRevokeGrant);
+const managementAccess = [verifyAuth0Token, resolveApplicationUser, requireOperationalAccess(), requireEventOwnership('eventId')];
+
+router.post('/events/:eventId/helpers/invitations', ...managementAccess, handleCreateInvitation);
+router.get('/events/:eventId/helpers/invitations', ...managementAccess, handleListInvitations);
+router.post('/events/:eventId/helpers/invitations/:invitationId/rotate', ...managementAccess, handleRotateInvitation);
+router.patch('/events/:eventId/helpers/invitations/:invitationId', ...managementAccess, handleUpdateInvitationStatus);
+router.delete('/events/:eventId/helpers/grants/:grantId', ...managementAccess, handleRevokeGrant);
 
 // Helper redemption route (rate limited)
-router.post('/events/helpers/redeem', requireAuth, rateLimitRedemption, handleRedeemInvitation);
+router.post('/events/helpers/redeem', verifyAuth0Token, rateLimitRedemption, handleRedeemInvitation);
 
 export default router;

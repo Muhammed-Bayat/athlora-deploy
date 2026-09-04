@@ -63,24 +63,21 @@ function FixtureInvitationAcceptance() {
       await respondToFixtureInvitation(token, response, response === 'change_requested' ? message : undefined);
       navigate('/console/fixtures', { replace: true });
     } catch (responseError) {
-      if (responseError instanceof ApiError && responseError.code === 'WORKSPACE_CAPABILITY_DENIED') {
-        setError('This workspace has assistant access. Select a separate workspace where you are a coach to accept as a guest team.');
-      } else if (responseError instanceof ApiError && responseError.code === 'FIXTURE_HOST_CANNOT_ACCEPT') {
+      if (responseError instanceof ApiError && responseError.code === 'FIXTURE_HOST_CANNOT_ACCEPT') {
         setError('The host workspace already has access to this event. Select a separate workspace to accept as a guest team.');
       } else {
         setError(responseError instanceof Error ? responseError.message : 'Could not respond to this fixture invitation.');
       }
     } finally { setBusy(false); }
   };
-  const canRespond = activeWorkspace.role === 'coach';
+  const canRespond = activeWorkspace.role === 'coach' || activeWorkspace.role === 'assistant';
   return <main className={styles.loading}>
     <h1>Fixture invitation</h1>
-    <p>Accept as a coach in a separate guest Club. The host Club already has direct access to this event.</p>
+    <p>Accept in a separate guest Club. The host Club already has direct access to this event.</p>
     <label htmlFor="fixture-workspace">Guest Club</label>
     <select id="fixture-workspace" value={activeWorkspace.id} onChange={(change) => selectWorkspace(change.target.value)} disabled={busy}>
       {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.role})</option>)}
     </select>
-    {!canRespond && <p role="status">Select a Club where you are a coach to respond.</p>}
     {error && <p role="alert">{error}</p>}
     <div><Button onClick={() => void respond('accepted')} disabled={busy || !canRespond}>Accept fixture</Button><Button variant="secondary" onClick={() => void respond('declined')} disabled={busy || !canRespond}>Decline</Button></div>
     <label htmlFor="fixture-change-message">Request a change</label>

@@ -74,9 +74,20 @@ describe('injuries routes', () => {
     expect(response.body.data).toEqual([]);
   });
 
-  it('forbids assistants from creating injuries', async () => {
+  it('allows assistants to create injuries', async () => {
     configureAuth();
-    query.mockResolvedValueOnce(synchronizedUser('assistant'));
+    query
+      .mockResolvedValueOnce(synchronizedUser('assistant'))
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+      .mockResolvedValueOnce({ rows: [{ archived_at: null }] })
+      .mockResolvedValueOnce({ rows: [{
+        id: '33333333-3333-4333-8333-333333333333', workspace_id: WORKSPACE_ID, athlete_id: ATHLETE_ID,
+        body_region: 'Leg', area: 'Knee', side: 'Left', severity: 'Moderate', notes: null,
+        occurrence_date: '2026-08-30', expected_return_date: null, resolved_date: null, resolution_notes: null,
+        created_by: USER_ID, updated_by: USER_ID, created_at: new Date('2026-08-30T10:00:00.000Z'),
+        updated_at: new Date('2026-08-30T10:00:00.000Z'), deleted_at: null, deleted_by: null,
+      }] });
 
     const response = await request(app)
       .post(`/api/v1/athletes/${ATHLETE_ID}/injuries`)
@@ -90,7 +101,6 @@ describe('injuries routes', () => {
         occurrenceDate: '2026-08-30',
       });
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe('WORKSPACE_CAPABILITY_DENIED');
+    expect(response.status).toBe(201);
   });
 });

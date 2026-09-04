@@ -22,6 +22,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const currentUser = useCurrentUser();
   const { activeWorkspace } = useWorkspace();
   const isCoach = activeWorkspace.role === 'coach';
+  const canOperate = activeWorkspace.role === 'coach' || activeWorkspace.role === 'assistant';
   const [event, setEvent] = useState<AthleticsEvent | null>(initialEvent ?? null);
   const [loading, setLoading] = useState(!initialEvent);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const rosterFailed = rosterState === 'failed';
   const isHostWorkspace = !rosterFailed && (fixtureTeams.length === 0 || fixtureTeams.some((t) => t.team.workspaceId === activeWorkspace.id && t.team.status === 'accepted'));
   const hasGuestTeams = fixtureTeams.length > 1;
-  const canManageLifecycle = isCoach && (rosterFailed ? event.type !== 'competition' : (!hasGuestTeams || isHostWorkspace));
+  const canManageLifecycle = canOperate && (rosterFailed ? event.type !== 'competition' : (!hasGuestTeams || isHostWorkspace));
 
   const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
@@ -120,9 +121,9 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Discipline</dt><dd>100m</dd></div></dl>
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
-       <FixtureHostPanel event={event} isCoach={isCoach} />
-       {isCoach && <PublicLoggerPanel event={event} />}
-      <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
+       <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />
+        {canOperate && <PublicLoggerPanel event={event} />}
+       <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={canOperate ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
       <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
        {canManageLifecycle && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>

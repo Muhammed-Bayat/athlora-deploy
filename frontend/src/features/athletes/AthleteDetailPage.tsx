@@ -14,7 +14,6 @@ import type {
 import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
-import { useWorkspace } from '../auth/WorkspaceContext';
 import { ProgressionChart } from './ProgressionChart';
 import styles from './AthleteDetailPage.module.css';
 
@@ -98,8 +97,6 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
 }
 
 export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initialFitnessOpen = false }: AthleteDetailPageProps) {
-  const { activeWorkspace } = useWorkspace();
-  const isCoach = activeWorkspace.role === 'coach';
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -212,7 +209,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
       athleteName={displayName}
       athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
       athleteStatus={athlete?.status ?? 'active'}
-      isCoach={isCoach}
+      canOperate
       onBack={() => setFitnessOpen(false)}
       onSetInactive={() => {
         void updateAthleteStatus(athleteId, 'inactive').then((updated) => {
@@ -251,7 +248,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
             </span>
           )}
           {athlete && !isArchived && <Button ref={fitnessButtonRef} onClick={() => setFitnessOpen(true)}>Fitness</Button>}
-          {isCoach && athlete && !isArchived && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
+          {athlete && !isArchived && <Button ref={editButtonRef} variant="secondary" onClick={() => setEditing(true)}>Edit profile</Button>}
           {isArchived && <span className={styles.readOnlyNotice}>Archived profiles are read-only.</span>}
         </div>
       </header>

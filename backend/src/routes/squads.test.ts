@@ -41,16 +41,16 @@ describe('squad routes', () => {
     expect(query.mock.calls[1][1]).not.toContain(OTHER_WORKSPACE_ID);
   });
 
-  it('allows coaches, but not assistants, to create squads', async () => {
+  it('allows assistants to create squads', async () => {
     query.mockResolvedValueOnce(context()).mockResolvedValueOnce({ rows: [squad()] });
     const created = await request(app).post('/api/v1/squads').set('Authorization', 'Bearer valid').send({ name: 'Sprint' });
     expect(created.status).toBe(201);
     expect(query.mock.calls[1][1]).toEqual([WORKSPACE_ID, 'Sprint']);
 
-    query.mockResolvedValueOnce(context('assistant'));
-    const forbidden = await request(app).post('/api/v1/squads').set('Authorization', 'Bearer valid').send({ name: 'Throws' });
-    expect(forbidden.status).toBe(403);
-    expect(forbidden.body.error.code).toBe('WORKSPACE_CAPABILITY_DENIED');
+    query.mockResolvedValueOnce(context('assistant')).mockResolvedValueOnce({ rows: [squad()] });
+    const assistantCreated = await request(app).post('/api/v1/squads').set('Authorization', 'Bearer valid').send({ name: 'Throws' });
+    expect(assistantCreated.status).toBe(201);
+    expect(query.mock.calls[3][1]).toEqual([WORKSPACE_ID, 'Throws']);
   });
 
   it('archives and restores a squad within the active workspace', async () => {

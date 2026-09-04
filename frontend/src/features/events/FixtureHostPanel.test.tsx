@@ -52,7 +52,7 @@ describe('FixtureHostPanel', () => {
     );
     const user = userEvent.setup();
 
-    render(<FixtureHostPanel event={event} isCoach />);
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
     await user.type(screen.getByLabelText('Guest team coach email'), 'guest@example.com');
     await user.click(screen.getByRole('button', { name: 'Create fixture invitation' }));
 
@@ -89,11 +89,35 @@ describe('FixtureHostPanel', () => {
       meta: { count: 1 },
     });
 
-    render(<FixtureHostPanel event={event} isCoach />);
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
 
     expect(await screen.findByText('Shared results')).toBeInTheDocument();
     expect(screen.getAllByText('Ari Sprint').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('11.2s')).toBeInTheDocument();
     expect(screen.getAllByText('PB').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lets assistants operate host fixture controls but not record team withdrawals', async () => {
+    vi.mocked(listFixtureRosters).mockResolvedValue({
+      data: [
+        { team: { workspaceId: 'host', workspaceName: 'Host Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
+        { team: { workspaceId: 'guest', workspaceName: 'Guest Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
+      ],
+      meta: { count: 2 },
+    });
+    vi.mocked(listHostedFixtureResults).mockResolvedValue({
+      data: [{
+        eventId: event.id, athleteId: 'assistant-athlete', discipline: '100m', outcome: 'valid',
+        finalResult: 11.2, unit: 'seconds', placing: 1, isPb: false, isSb: false,
+        manualOverride: null, overrideReason: null, overriddenBy: null, overrideAt: null,
+        updatedAt: '2026-08-16T10:00:00.000Z',
+      }],
+      meta: { count: 1 },
+    });
+
+    render(<FixtureHostPanel event={{ ...event, status: 'in_progress' }} canOperate isCoach={false} />);
+
+    expect(await screen.findByRole('button', { name: 'Correct' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record withdrawal' })).not.toBeInTheDocument();
   });
 });

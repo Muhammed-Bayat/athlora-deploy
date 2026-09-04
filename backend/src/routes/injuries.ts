@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as injuries from '../controllers/injuries.js';
-import { requireCoach } from '../middleware/capabilities.js';
+import { requireOperationalAccess } from '../middleware/capabilities.js';
 import { requireAthleteOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
 import {
@@ -14,34 +14,34 @@ const router = Router({ mergeParams: true });
 router.get('/', requireAthleteOwnership, injuries.listAthleteInjuries);
 router.post(
   '/',
-  requireCoach(),
+  requireOperationalAccess(),
   requireAthleteOwnership,
   validateBody(parseInjuryCreatePayload),
   injuries.createAthleteInjury,
 );
 router.put(
   '/:injuryId',
-  requireCoach(),
+  requireOperationalAccess(),
   requireAthleteOwnership,
   validateBody(parseInjuryUpdatePayload),
   injuries.updateAthleteInjury,
 );
 router.post(
   '/:injuryId/resolve',
-  requireCoach(),
+  requireOperationalAccess(),
   requireAthleteOwnership,
   validateBody(parseInjuryResolvePayload),
   injuries.resolveAthleteInjury,
 );
 router.post(
   '/:injuryId/reopen',
-  requireCoach(),
+  requireOperationalAccess(),
   requireAthleteOwnership,
   injuries.reopenAthleteInjury,
 );
 router.delete(
   '/:injuryId',
-  requireCoach(),
+  requireOperationalAccess(),
   requireAthleteOwnership,
   injuries.deleteAthleteInjury,
 );

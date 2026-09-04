@@ -5,14 +5,14 @@ import styles from './FitnessView.module.css';
 
 interface ActiveInjuriesProps {
   injuries: Injury[];
-  isCoach: boolean;
+  canOperate: boolean;
   isArchived: boolean;
   onResolve: (id: string, notes?: string) => void;
   onReopen: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function ActiveInjuries({ injuries, isCoach, isArchived, onResolve, onReopen, onDelete }: ActiveInjuriesProps) {
+export function ActiveInjuries({ injuries, canOperate, isArchived, onResolve, onReopen, onDelete }: ActiveInjuriesProps) {
   const [filter, setFilter] = useState<'active' | 'resolved' | 'all'>('active');
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
@@ -57,7 +57,7 @@ export function ActiveInjuries({ injuries, isCoach, isArchived, onResolve, onReo
                   {injury.resolutionNotes && <p>Resolution: {injury.resolutionNotes}</p>}
                 </div>
                 <div className={styles.injuryActions}>
-                  {isCoach && !isArchived && (
+                  {canOperate && !isArchived && (
                     <>
                       {!isResolved ? (
                         <>
