@@ -75,12 +75,12 @@ function FixtureInvitationAcceptance() {
   const canRespond = activeWorkspace.role === 'coach';
   return <main className={styles.loading}>
     <h1>Fixture invitation</h1>
-    <p>Accept as a coach in a separate guest workspace. The host workspace already has direct access to this event.</p>
-    <label htmlFor="fixture-workspace">Guest workspace</label>
+    <p>Accept as a coach in a separate guest Club. The host Club already has direct access to this event.</p>
+    <label htmlFor="fixture-workspace">Guest Club</label>
     <select id="fixture-workspace" value={activeWorkspace.id} onChange={(change) => selectWorkspace(change.target.value)} disabled={busy}>
       {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name} ({workspace.role})</option>)}
     </select>
-    {!canRespond && <p role="status">Select a workspace where you are a coach to respond.</p>}
+    {!canRespond && <p role="status">Select a Club where you are a coach to respond.</p>}
     {error && <p role="alert">{error}</p>}
     <div><Button onClick={() => void respond('accepted')} disabled={busy || !canRespond}>Accept fixture</Button><Button variant="secondary" onClick={() => void respond('declined')} disabled={busy || !canRespond}>Decline</Button></div>
     <label htmlFor="fixture-change-message">Request a change</label>
@@ -110,6 +110,6 @@ function InvitationAcceptance() {
   }, [navigate, refreshWorkspaces, token]);
 
   return <main className={styles.loading} aria-busy={error ? undefined : 'true'}>
-    {error ? <p role="alert">{error}</p> : <p role="status">Joining workspace...</p>}
+    {error ? <p role="alert">{error}</p> : <p role="status">Joining Club...</p>}
   </main>;
 }

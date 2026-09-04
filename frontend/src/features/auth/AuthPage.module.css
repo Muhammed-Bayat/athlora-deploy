@@ -140,6 +140,7 @@
 
 .members h2 { margin: 0; }
 .members span, .memberList small { color: var(--color-text-muted); }
+.muted { margin: 0; color: var(--color-text-muted); }
 
 .inviteForm {
   display: grid;

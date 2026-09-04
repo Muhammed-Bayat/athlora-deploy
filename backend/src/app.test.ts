@@ -278,7 +278,7 @@ describe('athletes', () => {
 });
 
 describe('auth bootstrap', () => {
-  it('synchronizes /auth/me before an application user exists', async () => {
+  it('synchronizes /auth/me without creating a workspace', async () => {
     configureAuth('auth0|new-coach');
     vi.stubGlobal(
       'fetch',
@@ -311,7 +311,7 @@ describe('auth bootstrap', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ id: USER_ID, auth0Id: 'auth0|new-coach' });
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[1]?.[0]).toContain('INSERT INTO users');
     expect(fetch).toHaveBeenCalledWith('https://example.auth0.com/userinfo', {
       headers: { Authorization: 'Bearer bootstrap-token' },

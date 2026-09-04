@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Request, RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
 import { ApiError } from './errors.js';
-import type { ApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
+import type { ApplicationUserContext, LocalApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 
 export function getVerifiedAuth0Context(req: Request): VerifiedAuth0Context {
@@ -19,6 +19,13 @@ export function getApplicationUserContext(req: Request): ApplicationUserContext 
   }
 
   return req.auth;
+}
+
+export function getLocalApplicationUserContext(req: Request): LocalApplicationUserContext {
+  if (!req.localUser) {
+    throw new ApiError(500, 'AUTH_CONTEXT_MISSING', 'Local application user context is missing');
+  }
+  return req.localUser;
 }
 
 function keyset(domain: string) {
@@ -66,6 +73,34 @@ export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
 };
 
 export const requireAuth = verifyAuth0Token;
+
+export const resolveLocalApplicationUser: RequestHandler = async (req, _res, next) => {
+  try {
+    const auth0 = getVerifiedAuth0Context(req);
+    const result = await getPool().query<{
+      user_id: string;
+      auth0_id: string;
+      role: LocalApplicationUserContext['role'];
+      deletion_status: string | null;
+    }>(
+      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status
+       FROM users u
+       LEFT JOIN account_deletions d ON d.auth0_id = u.auth0_id
+       WHERE u.auth0_id = $1`,
+      [auth0.auth0Id],
+    );
+    const user = result.rows[0];
+    if (!user) {
+      throw new ApiError(403, 'AUTH_USER_NOT_SYNCHRONIZED', 'Authenticated user is not synchronized', { syncEndpoint: '/api/v1/auth/me' });
+    }
+    if (user.deletion_status) throw new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress');
+    if (!['coach', 'assistant'].includes(user.role)) throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
+    req.localUser = { userId: user.user_id, auth0Id: user.auth0_id, role: user.role };
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const resolveApplicationUser: RequestHandler = async (req, _res, next) => {
   try {

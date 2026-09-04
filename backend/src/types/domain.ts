@@ -11,6 +11,30 @@ export interface User {
   updatedAt: string;
 }
 
+export interface Club {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+export interface ClubJoinRequest {
+  id: string;
+  clubId: string;
+  userId: string;
+  status: ClubJoinRequestStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  clubName?: string;
+  userName?: string;
+  userEmail?: string;
+}
+
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
 // The database stays permissive (discipline is TEXT) so future disciplines are added
 // by new migrations without breaking this contract.

@@ -34,6 +34,8 @@ import {
   type Squad,
   type TimelineEntry,
   type User,
+  type Club,
+  type ClubJoinRequest,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -55,6 +57,28 @@ export interface UserRow {
   role: string;
   created_at: TimestampValue;
   updated_at: TimestampValue;
+}
+
+export interface ClubRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+}
+
+export interface ClubJoinRequestRow {
+  id: string;
+  club_id: string;
+  user_id: string;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: TimestampValue | null;
+  created_at: TimestampValue;
+  updated_at: TimestampValue;
+  club_name?: string;
+  user_name?: string;
+  user_email?: string;
 }
 
 export interface ApplicationUserContextRow {
@@ -522,6 +546,32 @@ export function mapUserRow(row: UserRow): User {
     role: enumValue(row.role, USER_ROLES, 'users.role'),
     createdAt: timestamp(row.created_at, 'users.created_at'),
     updatedAt: timestamp(row.updated_at, 'users.updated_at'),
+  };
+}
+
+export function mapClubRow(row: ClubRow): Club {
+  return {
+    id: uuid(row.id, 'clubs.id'),
+    workspaceId: uuid(row.workspace_id, 'clubs.workspace_id'),
+    name: nonemptyString(row.name, 'clubs.name'),
+    createdAt: timestamp(row.created_at, 'clubs.created_at'),
+    updatedAt: timestamp(row.updated_at, 'clubs.updated_at'),
+  };
+}
+
+export function mapClubJoinRequestRow(row: ClubJoinRequestRow): ClubJoinRequest {
+  return {
+    id: uuid(row.id, 'club_join_requests.id'),
+    clubId: uuid(row.club_id, 'club_join_requests.club_id'),
+    userId: uuid(row.user_id, 'club_join_requests.user_id'),
+    status: enumValue(row.status, ['pending', 'approved', 'rejected', 'withdrawn'] as const, 'club_join_requests.status'),
+    reviewedBy: nullableUuid(row.reviewed_by, 'club_join_requests.reviewed_by'),
+    reviewedAt: nullableTimestamp(row.reviewed_at, 'club_join_requests.reviewed_at'),
+    createdAt: timestamp(row.created_at, 'club_join_requests.created_at'),
+    updatedAt: timestamp(row.updated_at, 'club_join_requests.updated_at'),
+    ...(row.club_name === undefined ? {} : { clubName: nonemptyString(row.club_name, 'club_join_requests.club_name') }),
+    ...(row.user_name === undefined ? {} : { userName: nonemptyString(row.user_name, 'club_join_requests.user_name') }),
+    ...(row.user_email === undefined ? {} : { userEmail: nonemptyString(row.user_email, 'club_join_requests.user_email') }),
   };
 }
 

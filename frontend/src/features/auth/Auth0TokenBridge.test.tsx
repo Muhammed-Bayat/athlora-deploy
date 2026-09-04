@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   setActiveWorkspaceId: vi.fn(),
   syncCurrentUser: vi.fn(),
   listWorkspaces: vi.fn(),
+  acceptWorkspaceInvitation: vi.fn(),
+  listClubs: vi.fn(),
+  listMyClubJoinRequests: vi.fn(),
+  createClub: vi.fn(),
 }));
 
 vi.mock('@auth0/auth0-react', () => ({
@@ -33,7 +37,14 @@ vi.mock('../../api/client', async (importOriginal) => {
   };
 });
 
-vi.mock('../../api/workspaces', () => ({ listWorkspaces: mocks.listWorkspaces }));
+vi.mock('../../api/workspaces', () => ({ listWorkspaces: mocks.listWorkspaces, acceptWorkspaceInvitation: mocks.acceptWorkspaceInvitation }));
+vi.mock('../../api/clubs', () => ({
+  listClubs: mocks.listClubs,
+  listMyClubJoinRequests: mocks.listMyClubJoinRequests,
+  createClub: mocks.createClub,
+  requestToJoinClub: vi.fn(),
+  withdrawClubJoinRequest: vi.fn(),
+}));
 
 const synchronizedUser: User = {
   id: 'user-1',
@@ -78,6 +89,10 @@ beforeEach(() => {
     data: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Private application', timezone: 'UTC', role: 'coach' }],
     meta: { count: 1, activeWorkspaceId: '11111111-1111-4111-8111-111111111111' },
   });
+  mocks.listClubs.mockResolvedValue({ data: [], meta: { count: 0 } });
+  mocks.listMyClubJoinRequests.mockResolvedValue({ data: [], meta: { count: 0 } });
+  mocks.createClub.mockReset();
+  mocks.acceptWorkspaceInvitation.mockReset();
 });
 
 describe('Auth0TokenBridge', () => {
@@ -143,5 +158,35 @@ describe('Auth0TokenBridge', () => {
     expect(await screen.findByText(/Error code: INTERNAL_ERROR/)).toHaveTextContent(
       'Reference: request-123',
     );
+  });
+
+  it('shows Club onboarding instead of failing when a synchronized user has no membership', async () => {
+    mocks.auth.isAuthenticated = true;
+    mocks.auth.user = { sub: 'auth0|user-1' };
+    mocks.syncCurrentUser.mockResolvedValue(synchronizedUser);
+    mocks.listWorkspaces.mockResolvedValue({ data: [], meta: { count: 0, activeWorkspaceId: '' } });
+
+    renderBridge();
+
+    expect(await screen.findByRole('heading', { name: 'Set up your Club' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Club' })).toBeDisabled();
+  });
+
+  it('accepts a direct Club invitation before onboarding a user with no membership', async () => {
+    mocks.auth.isAuthenticated = true;
+    mocks.auth.user = { sub: 'auth0|user-1' };
+    mocks.syncCurrentUser.mockResolvedValue(synchronizedUser);
+    const clubWorkspace = { id: '22222222-2222-4222-822222222222', name: 'Track Club', timezone: 'UTC', role: 'assistant' as const };
+    mocks.listWorkspaces
+      .mockResolvedValueOnce({ data: [], meta: { count: 0, activeWorkspaceId: '' } })
+      .mockResolvedValueOnce({ data: [clubWorkspace], meta: { count: 1, activeWorkspaceId: clubWorkspace.id } });
+    mocks.acceptWorkspaceInvitation.mockResolvedValue(clubWorkspace);
+    window.history.replaceState({}, '', '/invitations/token-123');
+
+    renderBridge(<CurrentUserName />);
+
+    expect(await screen.findByText('Coach One')).toBeInTheDocument();
+    expect(mocks.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
+    expect(window.location.pathname).toBe('/console');
   });
 });

@@ -13,6 +13,12 @@ const workspaceApi = vi.hoisted(() => ({
   resendWorkspaceInvitation: vi.fn(),
   updateWorkspaceMemberRole: vi.fn(),
 }));
+const clubApi = vi.hoisted(() => ({
+  listClubs: vi.fn(),
+  listClubJoinRequests: vi.fn(),
+  approveClubJoinRequest: vi.fn(),
+  rejectClubJoinRequest: vi.fn(),
+}));
 
 const auth0 = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -22,6 +28,7 @@ const auth0 = vi.hoisted(() => ({
 vi.mock('@auth0/auth0-react', () => ({ useAuth0: () => auth0 }));
 vi.mock('../../api/auth');
 vi.mock('../../api/workspaces', () => workspaceApi);
+vi.mock('../../api/clubs', () => clubApi);
 
 const currentUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -41,9 +48,23 @@ beforeEach(() => {
   vi.clearAllMocks();
   workspaceApi.listWorkspaceMembers.mockResolvedValue({ data: [], meta: { count: 0 } });
   workspaceApi.listWorkspaceInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
+  clubApi.listClubs.mockResolvedValue({ data: [], meta: { count: 0 } });
+  clubApi.listClubJoinRequests.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 describe('AuthPage', () => {
+  it('shows pending Club requests to a coach and approves an assistant', async () => {
+    const user = userEvent.setup();
+    clubApi.listClubs.mockResolvedValue({ data: [{ id: 'club-1', workspaceId: '00000000-0000-4000-8000-000000000000', name: 'Track Club', createdAt: '2026-09-04T00:00:00.000Z', updatedAt: '2026-09-04T00:00:00.000Z' }], meta: { count: 1 } });
+    clubApi.listClubJoinRequests.mockResolvedValue({ data: [{ id: 'request-1', clubId: 'club-1', userId: 'user-2', userName: 'Assistant Sam', userEmail: 'sam@example.com', status: 'pending', reviewedBy: null, reviewedAt: null, createdAt: '2026-09-04T00:00:00.000Z', updatedAt: '2026-09-04T00:00:00.000Z' }], meta: { count: 1 } });
+    clubApi.approveClubJoinRequest.mockResolvedValue({});
+    renderPage();
+
+    expect(await screen.findByText('Assistant Sam')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve assistant' }));
+    await waitFor(() => expect(clubApi.approveClubJoinRequest).toHaveBeenCalledWith('club-1', 'request-1', 'assistant'));
+  });
+
   it('creates a short-lived Auth0 password link', async () => {
     vi.mocked(authApi.createPasswordTicket).mockResolvedValue('https://example.auth0.com/ticket/abc');
     const user = userEvent.setup();

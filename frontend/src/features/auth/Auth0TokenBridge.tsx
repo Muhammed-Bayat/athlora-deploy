@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { ApiError, setAccessTokenGetter, syncCurrentUser } from '../../api/client';
-import { listWorkspaces } from '../../api/workspaces';
+import { acceptWorkspaceInvitation, listWorkspaces } from '../../api/workspaces';
 import { Button } from '../../components';
 import type { User, Workspace } from '../../types';
 import styles from './Auth0TokenBridge.module.css';
 import { CurrentUserProvider } from './CurrentUserProvider';
 import { WorkspaceProvider } from './WorkspaceProvider';
+import { ClubOnboarding } from './ClubOnboarding';
 
 interface Auth0TokenBridgeProps {
   children: ReactNode;
@@ -16,12 +17,13 @@ type SynchronizationState =
   | { status: 'idle' }
   | { status: 'synchronizing'; subject: string }
   | { status: 'ready'; subject: string; user: User; workspaces: Workspace[]; activeWorkspace: Workspace }
+  | { status: 'onboarding'; subject: string; user: User }
   | { status: 'error'; subject: string; code: string; requestId?: string };
 
 interface SynchronizationAttempt {
   subject: string;
   retry: number;
-  promise: Promise<{ user: User; workspaces: Workspace[]; activeWorkspace: Workspace }>;
+  promise: Promise<{ kind: 'ready'; user: User; workspaces: Workspace[]; activeWorkspace: Workspace } | { kind: 'onboarding'; user: User }>;
 }
 
 export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
@@ -55,13 +57,20 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
         subject,
         retry,
         promise: syncCurrentUser().then(async (synchronizedUser) => {
-          const response = await listWorkspaces();
-          const storedWorkspaceId = (() => { try { return localStorage.getItem(`athlora-active-workspace:${subject}`); } catch { return null; } })();
-          const activeWorkspace = response.data.find((workspace) => workspace.id === storedWorkspaceId)
-            ?? response.data.find((workspace) => workspace.id === response.meta.activeWorkspaceId)
-            ?? response.data[0];
-          if (!activeWorkspace) throw new Error('No workspace is available for this account');
-          return { user: synchronizedUser, workspaces: response.data, activeWorkspace };
+            let response = await listWorkspaces();
+            const storedWorkspaceId = (() => { try { return localStorage.getItem(`athlora-active-workspace:${subject}`); } catch { return null; } })();
+            let activeWorkspace = response.data.find((workspace) => workspace.id === storedWorkspaceId)
+              ?? response.data.find((workspace) => workspace.id === response.meta.activeWorkspaceId)
+              ?? response.data[0];
+            const invitationToken = /^\/invitations\/([^/]+)$/.exec(window.location.pathname)?.[1];
+            if (!activeWorkspace && invitationToken) {
+              const joinedWorkspace = await acceptWorkspaceInvitation(invitationToken);
+              response = await listWorkspaces();
+              activeWorkspace = response.data.find((workspace) => workspace.id === joinedWorkspace.id) ?? response.data[0];
+              window.history.replaceState({}, '', '/console');
+            }
+            if (!activeWorkspace) return { kind: 'onboarding' as const, user: synchronizedUser };
+            return { kind: 'ready' as const, user: synchronizedUser, workspaces: response.data, activeWorkspace };
         }),
       };
       attemptRef.current = attempt;
@@ -70,7 +79,11 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
     void attempt.promise.then(
       (session) => {
         if (active) {
-          setSynchronization({ status: 'ready', subject, ...session });
+          if (session.kind === 'onboarding') {
+            setSynchronization({ status: 'onboarding', subject, user: session.user });
+          } else {
+            setSynchronization({ status: 'ready', subject, user: session.user, workspaces: session.workspaces, activeWorkspace: session.activeWorkspace });
+          }
         }
       },
       (error: unknown) => {
@@ -109,6 +122,16 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
         </WorkspaceProvider>
       </CurrentUserProvider>
     );
+  }
+
+  if (
+    subject &&
+    synchronization.status === 'onboarding' &&
+    synchronization.subject === subject
+  ) {
+    return <CurrentUserProvider user={synchronization.user}>
+      <ClubOnboarding onMembershipAvailable={() => setRetry((currentRetry) => currentRetry + 1)} />
+    </CurrentUserProvider>;
   }
 
   if (
