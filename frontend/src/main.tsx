@@ -36,7 +36,7 @@ createRoot(rootElement).render(
       }}
       onRedirectCallback={(appState) => {
         const returnTo = appState?.returnTo;
-        const target = typeof returnTo === 'string' && (returnTo.startsWith('/console') || /^\/(?:invitations|fixture-invitations)\/[^/]+$/.test(returnTo))
+        const target = typeof returnTo === 'string' && (returnTo.startsWith('/console') || /^\/invitations\/[^/]+$/.test(returnTo))
           ? returnTo
           : '/console';
         window.history.replaceState({}, '', target);

@@ -6,6 +6,7 @@ import type {
   FixtureInvitation,
   IncomingFixtureInvitation,
   FixtureInvitationStatus,
+  FixtureNotification,
   FixtureTeamRoster,
   Result,
   ResultOverridePayload,
@@ -15,6 +16,23 @@ import type {
   TimelineEntryDeletePayload,
   TimelineEntryPatchPayload,
 } from '../types';
+
+export async function listFixtureNotifications(): Promise<ApiList<FixtureNotification>> {
+  return list<FixtureNotification>('notifications');
+}
+
+export async function getUnreadFixtureNotificationCount(): Promise<number> {
+  const result = await request<{ data: { count: number } }>('/api/v1/notifications/unread-count');
+  return result.data.count;
+}
+
+export async function markFixtureNotificationRead(notificationId: string): Promise<void> {
+  await request<void>(`/api/v1/notifications/${notificationId}/read`, { method: 'POST' });
+}
+
+export function refreshFixtureNotifications(): void {
+  window.dispatchEvent(new Event('fixture-notifications-changed'));
+}
 
 export async function createFixtureInvitation(eventId: string, payload: { email: string; expiresInDays?: number }): Promise<FixtureInvitation> {
   return create<FixtureInvitation>(`events/${eventId}/fixture-invitations`, payload);
