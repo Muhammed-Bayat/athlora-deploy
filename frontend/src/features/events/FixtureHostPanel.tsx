@@ -28,7 +28,7 @@ function formatResult(result: Result): string {
   return result.finalResult !== null ? `${result.finalResult}s` : '—';
 }
 
-export function FixtureHostPanel({ event, isCoach }: { event: AthleticsEvent; isCoach: boolean }) {
+export function FixtureHostPanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {
   const [invitations, setInvitations] = useState<FixtureInvitation[]>([]);
   const [rosters, setRosters] = useState<FixtureTeamRoster[]>([]);
   const [results, setResults] = useState<Result[]>([]);
@@ -60,7 +60,7 @@ export function FixtureHostPanel({ event, isCoach }: { event: AthleticsEvent; is
       .catch(() => { /* Fixture data is supplementary to the event detail. */ });
   }, [event.id]);
 
-  if (!isCoach) return null;
+  if (!canOperate) return null;
   const eligible = event.type === 'competition' && event.discipline === '100m' && event.status === 'scheduled';
   const submit = async (formEvent: FormEvent) => {
     formEvent.preventDefault();
@@ -113,11 +113,11 @@ export function FixtureHostPanel({ event, isCoach }: { event: AthleticsEvent; is
     {link && <p role="status">Share this email-bound invitation link: <a href={link}>{link}</a></p>}
     {error && <p role="alert">{error}</p>}
     {invitations.length > 0 && <section aria-labelledby={`fixture-invitations-${event.id}`}><h3 id={`fixture-invitations-${event.id}`}>Invitation history</h3><ul>{invitations.map((invitation) => <li key={invitation.id}><strong>{invitation.email}</strong> · {invitation.status.replace('_', ' ')} · revision {invitation.revision}{invitation.responseMessage ? `: ${invitation.responseMessage}` : ''}{invitation.status !== 'accepted' && invitation.status !== 'revoked' && event.status === 'scheduled' && <><Button variant="ghost" onClick={() => void resend(invitation)} disabled={busy}>Resend</Button><Button variant="ghost" onClick={() => void revoke(invitation)} disabled={busy}>Revoke</Button></>}</li>)}</ul></section>}
-    {rosters.length > 0 && <section aria-labelledby={`fixture-rosters-${event.id}`}><h3 id={`fixture-rosters-${event.id}`}>Team rosters</h3>{rosters.map(({ team, participants }, index) => <article key={team.workspaceId}><h4>{team.workspaceName} · {team.status.replace('_', ' ')}</h4><p>{participants.length === 0 ? 'No athletes selected.' : participants.map((participant) => participant.athlete.name).join(', ')}</p>{event.status !== 'scheduled' && index > 0 && team.status !== 'withdrawn' && <Button variant="ghost" onClick={() => void withdraw(team.workspaceId)} disabled={busy}>Record withdrawal</Button>}</article>)}</section>}
+    {rosters.length > 0 && <section aria-labelledby={`fixture-rosters-${event.id}`}><h3 id={`fixture-rosters-${event.id}`}>Team rosters</h3>{rosters.map(({ team, participants }, index) => <article key={team.workspaceId}><h4>{team.workspaceName} · {team.status.replace('_', ' ')}</h4><p>{participants.length === 0 ? 'No athletes selected.' : participants.map((participant) => participant.athlete.name).join(', ')}</p>{isCoach && event.status !== 'scheduled' && index > 0 && team.status !== 'withdrawn' && <Button variant="ghost" onClick={() => void withdraw(team.workspaceId)} disabled={busy}>Record withdrawal</Button>}</article>)}</section>}
     {results.length > 0 && <section aria-labelledby={`fixture-results-${event.id}`}><h3 id={`fixture-results-${event.id}`}>Shared results</h3><table><thead><tr><th>Athlete</th><th>Result</th><th>Placing</th><th>PB</th><th>SB</th><th aria-label="Actions" /></tr></thead><tbody>{results.map((result) => {
       const team = rosters.find(({ participants }) => participants.some((p) => p.athleteId === result.athleteId));
       const athlete = team?.participants.find((p) => p.athleteId === result.athleteId);
-      return <tr key={result.athleteId}><td>{athlete?.athlete.name ?? 'Unknown'}{team && <span> · {team.team.workspaceName}</span>}</td><td>{formatResult(result)}</td><td>{result.placing ?? '—'}</td><td>{result.isPb ? 'PB' : ''}</td><td>{result.isSb ? 'SB' : ''}</td><td>{isCoach && event.status === 'in_progress' && <Button variant="ghost" onClick={() => setCorrectTarget({ athleteId: result.athleteId, athleteName: athlete?.athlete.name ?? 'Unknown' })} disabled={busy}>Correct</Button>}</td></tr>;
+      return <tr key={result.athleteId}><td>{athlete?.athlete.name ?? 'Unknown'}{team && <span> · {team.team.workspaceName}</span>}</td><td>{formatResult(result)}</td><td>{result.placing ?? '—'}</td><td>{result.isPb ? 'PB' : ''}</td><td>{result.isSb ? 'SB' : ''}</td><td>{canOperate && event.status === 'in_progress' && <Button variant="ghost" onClick={() => setCorrectTarget({ athleteId: result.athleteId, athleteName: athlete?.athlete.name ?? 'Unknown' })} disabled={busy}>Correct</Button>}</td></tr>;
     })}</tbody></table></section>}
     {correctTarget && <section><h3>Correct {correctTarget.athleteName}</h3><form onSubmit={(formEvent) => void submitCorrection(formEvent)}><label htmlFor="correct-time">New time (seconds)</label><Input id="correct-time" type="number" step="0.01" min="0" value={correctTime} onChange={(change) => setCorrectTime(change.target.value)} required disabled={busy} /><label htmlFor="correct-reason">Reason</label><Input id="correct-reason" value={correctReason} onChange={(change) => setCorrectReason(change.target.value)} required disabled={busy} /><Button type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save correction'}</Button><Button variant="secondary" onClick={() => { setCorrectTarget(null); setCorrectTime(''); setCorrectReason(''); }} disabled={busy}>Cancel</Button></form></section>}
   </Card>;

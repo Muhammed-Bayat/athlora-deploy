@@ -36,7 +36,7 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 - **Routing**: resource routers under `src/routes` matching the database tables.
 - **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary and `src/services/venues.ts` is the Nominatim provider boundary. Business logic is never buried in route handlers.
 - **Database access**: migration `0005_workspace_tenancy.sql` adds workspaces and migration `0006_workspace_roles_and_invitations.sql` limits memberships to coach/assistant, adds hashed expiring invitations, and records membership audit events.
-- **Auth and account lifecycle**: authenticated resource context includes a validated active workspace selected with `X-Workspace-Id`. Central capability middleware enforces coach-only management/mutation actions and assistant-owned timeline corrections. The final coach cannot leave, be removed, demoted, or delete their account until another coach remains.
+- **Auth and account lifecycle**: authenticated resource context includes a validated active workspace selected with `X-Workspace-Id`. Central capability middleware grants coaches and assistants shared operational access while retaining coach-only Club membership administration, join-request review, participant-roster changes, and fixture-team withdrawals. The final coach cannot leave, be removed, demoted, or delete their account until another coach remains.
 
 ## Data flow for a live result
 

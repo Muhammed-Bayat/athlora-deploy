@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardSummary } from './types';
-import { ApiError } from './api/client';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -187,19 +186,15 @@ describe('App', () => {
     expect(workspaceApi.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
   });
 
-  it('explains that an assistant must select a coach workspace for a fixture invitation', async () => {
+  it('lets an assistant respond to a fixture invitation', async () => {
     const user = userEvent.setup();
     authState.isAuthenticated = true;
-    fixtureApi.respondToFixtureInvitation.mockRejectedValue(
-      new ApiError(403, 'WORKSPACE_CAPABILITY_DENIED', 'Coach access is required'),
-    );
+    fixtureApi.respondToFixtureInvitation.mockResolvedValue(undefined);
     window.history.replaceState({}, '', '/fixture-invitations/token-123');
 
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Accept fixture' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This workspace has assistant access. Select a separate workspace where you are a coach to accept as a guest team.',
-    );
+    expect(fixtureApi.respondToFixtureInvitation).toHaveBeenCalledWith('token-123', 'accepted', undefined);
   });
 });

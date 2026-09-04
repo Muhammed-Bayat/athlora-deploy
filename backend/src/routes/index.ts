@@ -21,7 +21,7 @@ import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
-import { requireCoach } from '../middleware/capabilities.js';
+import { requireOperationalAccess } from '../middleware/capabilities.js';
 import {
   parseAthleteCreatePayload,
   parseAthleteReplacementPayload,
@@ -36,19 +36,19 @@ const router = Router();
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
 athletesRouter.get('/injury-summaries', athletes.listAthleteInjurySummaries);
-athletesRouter.post('/', requireCoach(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
+athletesRouter.post('/', requireOperationalAccess(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);
 athletesRouter.put(
   '/:id',
-  requireCoach(), validateBody(parseAthleteReplacementPayload),
+  requireOperationalAccess(), validateBody(parseAthleteReplacementPayload),
   requireAthleteOwnership,
   athletes.updateAthlete,
 );
-athletesRouter.delete('/:id', requireCoach(), requireAthleteOwnership, athletes.deleteAthlete);
-athletesRouter.post('/:id/unarchive', requireCoach(), requireAthleteOwnership, athletes.unarchiveAthlete);
+athletesRouter.delete('/:id', requireOperationalAccess(), requireAthleteOwnership, athletes.deleteAthlete);
+athletesRouter.post('/:id/unarchive', requireOperationalAccess(), requireAthleteOwnership, athletes.unarchiveAthlete);
 athletesRouter.post(
   '/:id/status',
-  requireCoach(), validateBody(parseAthleteStatusPayload),
+  requireOperationalAccess(), validateBody(parseAthleteStatusPayload),
   requireAthleteOwnership,
   athletes.updateAthleteStatus,
 );
@@ -56,23 +56,23 @@ athletesRouter.use('/:id/injuries', injuriesRouter);
 
 const eventsRouter = Router();
 eventsRouter.get('/', events.listEvents);
-eventsRouter.post('/', requireCoach(), validateBody(parseEventCreatePayload), events.createEvent);
+eventsRouter.post('/', requireOperationalAccess(), validateBody(parseEventCreatePayload), events.createEvent);
 eventsRouter.get('/:id', requireEventOwnership(), events.getEvent);
 eventsRouter.put(
   '/:id',
-  requireCoach(), validateBody(parseEventReplacementPayload),
+  requireOperationalAccess(), validateBody(parseEventReplacementPayload),
   requireEventOwnership(),
   events.updateEvent,
 );
-eventsRouter.delete('/:id', requireCoach(), requireEventOwnership(), events.deleteEvent);
+eventsRouter.delete('/:id', requireOperationalAccess(), requireEventOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 const squadsRouter = Router();
 squadsRouter.get('/', squads.list);
-squadsRouter.post('/', requireCoach(), validateBody(parseSquadPayload), squads.create);
-squadsRouter.put('/:id', requireCoach(), validateBody(parseSquadPayload), squads.update);
-squadsRouter.delete('/:id', requireCoach(), squads.archive);
-squadsRouter.post('/:id/unarchive', requireCoach(), squads.unarchive);
+squadsRouter.post('/', requireOperationalAccess(), validateBody(parseSquadPayload), squads.create);
+squadsRouter.put('/:id', requireOperationalAccess(), validateBody(parseSquadPayload), squads.update);
+squadsRouter.delete('/:id', requireOperationalAccess(), squads.archive);
+squadsRouter.post('/:id/unarchive', requireOperationalAccess(), squads.unarchive);
 
 router.use('/auth', authRouter);
 router.use('/public/logger', publicLoggerRouter);
