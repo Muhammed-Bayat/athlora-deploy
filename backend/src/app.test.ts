@@ -388,7 +388,7 @@ describe('owned resource routes', () => {
       email: 'guest@example.com',
       status: 'pending',
     });
-    expect(response.body.data.token).toEqual(expect.any(String));
+    expect(response.body.data.token).toBeUndefined();
     expect(query.mock.calls[3]).toEqual(expect.arrayContaining([
       expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
       [EVENT_ID, USER_ID],

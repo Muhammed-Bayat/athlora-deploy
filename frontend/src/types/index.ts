@@ -211,7 +211,9 @@ export interface FixtureInvitation {
   targetWorkspaceId: string | null;
   responseMessage: string | null;
   respondedAt: string | null;
-  token?: string;
+  respondedWorkspaceId: string | null;
+  respondedWorkspaceName: string | null;
+  respondedByName: string | null;
 }
 
 export interface IncomingFixtureInvitation extends FixtureInvitation {
@@ -236,6 +238,18 @@ export interface FixtureDetail {
 export interface FixtureTeamRoster {
   team: FixtureTeam;
   participants: EventParticipantSummary[];
+}
+
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started';
+
+export interface FixtureNotification {
+  id: string;
+  eventId: string;
+  invitationId: string | null;
+  kind: FixtureNotificationKind;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';

@@ -40,6 +40,19 @@ describe('fixtures', () => {
 
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, WORKSPACE_ID]);
   });
+
+  it('includes the latest responder identity and workspace for the host', async () => {
+    query.mockResolvedValue({ rows: [{
+      id: '66666666-6666-4666-8666-666666666666', event_id: EVENT_ID, email: 'guest@example.com', revision: 1,
+      status: 'change_requested', expires_at: new Date(), created_at: new Date(), target_workspace_id: null,
+      response_message: 'Later start', responded_at: new Date(), responded_workspace_id: WORKSPACE_ID,
+      responded_workspace_name: 'Guest Club', responded_by_name: 'Guest Coach',
+    }] });
+
+    await expect(listFixtureInvitations(HOST_WORKSPACE_ID, EVENT_ID)).resolves.toEqual([expect.objectContaining({
+      respondedWorkspaceId: WORKSPACE_ID, respondedWorkspaceName: 'Guest Club', respondedByName: 'Guest Coach',
+    })]);
+  });
 });
 
 describe('assertHostWorkspace', () => {

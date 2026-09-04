@@ -16,7 +16,6 @@ import {
   overrideHostFixtureResult,
   recordFixtureWithdrawal,
   removeGuestFixtureParticipant,
-  respondToFixtureInvitation,
   respondToIncomingFixtureInvitation,
   resendFixtureInvitation,
   revokeFixtureInvitation,
@@ -76,14 +75,6 @@ export const hostWithdrawal: RequestHandler = async (req, res, next) => {
     const { workspaceId, userId } = getApplicationUserContext(req);
     await recordFixtureWithdrawal(workspaceId, userId, req.params.eventId, req.params.workspaceId);
     res.status(204).end();
-  } catch (error) { next(error); }
-};
-
-export const respond: RequestHandler = async (req, res, next) => {
-  try {
-    const { workspaceId, userId } = getApplicationUserContext(req);
-    const invitation = await respondToFixtureInvitation(workspaceId, userId, req.params.token, req.body);
-    res.json({ data: invitation });
   } catch (error) { next(error); }
 };
 

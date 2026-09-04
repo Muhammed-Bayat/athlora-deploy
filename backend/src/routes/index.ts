@@ -17,6 +17,7 @@ import comparisonRouter from './comparison.js';
 import eventHelpersRouter from './eventHelpers.js';
 import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js';
 import clubsRouter from './clubs.js';
+import fixtureNotificationsRouter from './fixtureNotifications.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
@@ -105,5 +106,6 @@ router.use(
   eventsRouter,
 );
 router.use('/fixtures', verifyAuth0Token, resolveApplicationUser, fixturesRouter);
+router.use('/notifications', verifyAuth0Token, resolveApplicationUser, fixtureNotificationsRouter);
 
 export default router;

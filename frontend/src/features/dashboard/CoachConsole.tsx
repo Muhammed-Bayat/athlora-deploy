@@ -8,6 +8,7 @@ import { AuthPage } from '../auth/AuthPage';
 import { FixturesPage } from '../fixtures/FixturesPage';
 import { ComparisonPage } from '../comparison/ComparisonPage';
 import { IncomingFixtureInvitations } from '../fixtures/IncomingFixtureInvitations';
+import { FixtureNotifications, type FixtureNotificationCounts } from '../fixtures/FixtureNotifications';
 import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { ApiError } from '../../api/client';
@@ -280,6 +281,7 @@ export function CoachConsole() {
   const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
+  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0 });
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
   const [isNight, setIsNight] = useState(false);
@@ -415,7 +417,7 @@ export function CoachConsole() {
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       </label>
-       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && <small>{eventUpcomingCount ?? '—'}</small>}</button></li>)}</ul></nav>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events > 0 && <small aria-label={`${fixtureNotificationCounts.events} unread started fixture notifications`}>{fixtureNotificationCounts.events}</small>}{item.id === 'fixtures' && fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.fixtures} unread fixture notifications`}>{fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
@@ -427,7 +429,8 @@ export function CoachConsole() {
       <header className={styles.topbar}>
          <div className={styles.title}><h1>{PAGE_COPY[destination].title}</h1><p>{PAGE_COPY[destination].subtitle}</p></div>
         <div className={styles.weatherOrigin} aria-hidden="true"><i className={styles.sun} /><i className={styles.moon} /><i className={styles.cloudOne} /><i className={styles.cloudTwo} /></div>
-        <div className={styles.topControls}>
+           <div className={styles.topControls}>
+           <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>

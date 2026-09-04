@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapEventParticipantSummaryRow, mapEventRow, mapResultRow, mapTimelineEntryRow, type EventParticipantSummaryRow, type EventRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
@@ -6,9 +6,9 @@ import { ApiError } from '../middleware/errors.js';
 import type { AthleticsEvent, EventParticipantSummary, Result, TimelineEntry } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { FixtureInvitationCreatePayload, FixtureInvitationResponsePayload } from '../validation/payloads.js';
+import { notifyFixtureInvitation, notifyFixtureReacceptanceRequired, notifyFixtureResponse } from './fixtureNotifications.js';
 
 const EVENT_COLUMNS = 'e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at';
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
 type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'withdrawn';
@@ -24,7 +24,9 @@ export interface FixtureInvitation {
   targetWorkspaceId: string | null;
   responseMessage: string | null;
   respondedAt: string | null;
-  token?: string;
+  respondedWorkspaceId: string | null;
+  respondedWorkspaceName: string | null;
+  respondedByName: string | null;
 }
 
 export interface FixtureTeam {
@@ -97,7 +99,8 @@ function invitation(row: {
   created_at: Date | string;
   target_workspace_id: string | null;
   response_message: string | null;
-  responded_at: Date | string | null;
+  responded_at: Date | string | null; responded_workspace_id: string | null;
+  responded_workspace_name: string | null; responded_by_name: string | null;
 }): FixtureInvitation {
   return {
     id: row.id,
@@ -110,6 +113,9 @@ function invitation(row: {
     targetWorkspaceId: row.target_workspace_id,
     responseMessage: row.response_message,
     respondedAt: timestamp(row.responded_at),
+    respondedWorkspaceId: row.responded_workspace_id,
+    respondedWorkspaceName: row.responded_workspace_name,
+    respondedByName: row.responded_by_name,
   };
 }
 
@@ -147,8 +153,7 @@ async function createInvitationRecord(
   actorId: string,
   expiresInDays: number,
   targetWorkspaceId: string | null = null,
-): Promise<FixtureInvitation & { token: string }> {
-  const token = randomBytes(32).toString('base64url');
+): Promise<FixtureInvitation> {
   const result = await client.query<{
     id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
     expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
@@ -159,9 +164,15 @@ async function createInvitationRecord(
      VALUES ($1, $2, lower($3), $4, $5, $6, now() + ($7 * interval '1 day'))
      RETURNING id, event_id, email, revision, status, expires_at, created_at, target_workspace_id,
                NULL::text AS response_message, NULL::timestamptz AS responded_at`,
-    [eventId, targetWorkspaceId, email, revision, hashToken(token), actorId, expiresInDays],
+     [eventId, targetWorkspaceId, email, revision, randomBytes(32).toString('hex'), actorId, expiresInDays],
   );
-  return { ...invitation(result.rows[0]), token };
+  const created = invitation({ ...result.rows[0], responded_workspace_id: null, responded_workspace_name: null, responded_by_name: null });
+  if (targetWorkspaceId === null) {
+    await notifyFixtureInvitation(client, created.id, eventId, email, null);
+  } else {
+    await notifyFixtureReacceptanceRequired(client, created.id, eventId, targetWorkspaceId);
+  }
+  return created;
 }
 
 async function createReacceptanceInvitations(
@@ -219,7 +230,7 @@ export async function createFixtureInvitation(
   actorId: string,
   eventId: unknown,
   payload: FixtureInvitationCreatePayload,
-): Promise<FixtureInvitation & { token: string }> {
+): Promise<FixtureInvitation> {
   const [, ownedEventId] = scopedIds(workspaceId, actorId, eventId);
   return withTransaction(async (client) => {
     const event = await lockHostedFixture(client, workspaceId, ownedEventId);
@@ -247,15 +258,21 @@ export async function listFixtureInvitations(
   const result = await executor.query<{
     id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
     expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
-    response_message: string | null; responded_at: Date | string | null;
+    response_message: string | null; responded_at: Date | string | null; responded_workspace_id: string | null;
+    responded_workspace_name: string | null; responded_by_name: string | null;
   }>(
     `SELECT i.id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
-            response.message AS response_message, response.created_at AS responded_at
+             response.message AS response_message, response.created_at AS responded_at,
+             response.workspace_id AS responded_workspace_id, response.workspace_name AS responded_workspace_name,
+             response.responded_by_name
      FROM fixture_invitations i
      JOIN events e ON e.id = i.event_id AND e.workspace_id = $2
      LEFT JOIN LATERAL (
-       SELECT message, created_at FROM fixture_invitation_responses
-       WHERE invitation_id = i.id ORDER BY created_at DESC, id DESC LIMIT 1
+        SELECT r.message, r.created_at, r.workspace_id, w.name AS workspace_name, u.name AS responded_by_name
+        FROM fixture_invitation_responses r
+        LEFT JOIN workspaces w ON w.id = r.workspace_id
+        JOIN users u ON u.id = r.responded_by
+        WHERE r.invitation_id = i.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1
      ) response ON true
      WHERE i.event_id = $1
      ORDER BY i.created_at DESC, i.id DESC`,
@@ -269,7 +286,7 @@ export async function resendFixtureInvitation(
   actorId: string,
   eventId: unknown,
   invitationId: unknown,
-): Promise<FixtureInvitation & { token: string }> {
+): Promise<FixtureInvitation> {
   const [, ownedEventId, ownedInvitationId] = scopedIds(workspaceId, actorId, eventId, invitationId);
   return withTransaction(async (client) => {
     const event = await lockHostedFixture(client, workspaceId, ownedEventId);
@@ -330,17 +347,18 @@ async function respondToFixtureInvitationWhere(
     const result = await client.query<{
       id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
       expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
-      type: string; discipline: string | null; event_status: string; fixture_revision: number; user_email: string;
+       type: string; discipline: string | null; event_status: string; fixture_revision: number; user_email: string; workspace_name: string;
     }>(
       `SELECT i.id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
-              e.type, e.discipline, e.status AS event_status, e.fixture_revision, u.email AS user_email
+               e.type, e.discipline, e.status AS event_status, e.fixture_revision, u.email AS user_email, w.name AS workspace_name
        FROM fixture_invitations i
        JOIN events e ON e.id = i.event_id
-       JOIN users u ON u.id = $2
+        JOIN users u ON u.id = $2
+        JOIN workspaces w ON w.id = $3
         WHERE ${invitationCondition} AND i.status IN ('pending', 'change_requested')
          AND i.expires_at > now()
        FOR UPDATE OF i, e`,
-      [invitationValue, actorId],
+       [invitationValue, actorId, workspaceId],
     );
     const current = result.rows[0];
     if (!current || current.user_email.toLowerCase() !== current.email.toLowerCase()) throw unavailable();
@@ -378,46 +396,44 @@ async function respondToFixtureInvitationWhere(
         `UPDATE fixture_invitations SET status = 'accepted', accepted_at = now(), accepted_by = $2 WHERE id = $1`,
         [current.id, actorId],
       );
-      await client.query(
+      const responseResult = await client.query<{ id: string }>(
         `INSERT INTO fixture_invitation_responses (invitation_id, revision, workspace_id, response, responded_by)
-         VALUES ($1, $2, $3, 'accepted', $4)`,
+         VALUES ($1, $2, $3, 'accepted', $4) RETURNING id`,
         [current.id, acceptedRevision, workspaceId, actorId],
       );
+      await notifyFixtureResponse(client, current.event_id, current.id, responseResult.rows[0].id, 'accepted', null, current.workspace_name);
     } else {
       await client.query(`UPDATE fixture_invitations SET status = $2 WHERE id = $1`, [current.id, payload.response]);
-      await client.query(
+      const responseResult = await client.query<{ id: string }>(
         `INSERT INTO fixture_invitation_responses (invitation_id, revision, workspace_id, response, message, responded_by)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [current.id, current.fixture_revision, workspaceId, payload.response, payload.message, actorId],
       );
+      await notifyFixtureResponse(client, current.event_id, current.id, responseResult.rows[0].id, payload.response, payload.message, current.workspace_name);
     }
     const updated = await client.query<{
       id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
       expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
-      response_message: string | null; responded_at: Date | string | null;
+       response_message: string | null; responded_at: Date | string | null; responded_workspace_id: string | null;
+       responded_workspace_name: string | null; responded_by_name: string | null;
     }>(
       `SELECT i.id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
-              response.message AS response_message, response.created_at AS responded_at
+               response.message AS response_message, response.created_at AS responded_at,
+               response.workspace_id AS responded_workspace_id, response.workspace_name AS responded_workspace_name,
+               response.responded_by_name
        FROM fixture_invitations i
        LEFT JOIN LATERAL (
-         SELECT message, created_at FROM fixture_invitation_responses
-         WHERE invitation_id = i.id ORDER BY created_at DESC, id DESC LIMIT 1
+          SELECT r.message, r.created_at, r.workspace_id, w.name AS workspace_name, u.name AS responded_by_name
+          FROM fixture_invitation_responses r
+          LEFT JOIN workspaces w ON w.id = r.workspace_id
+          JOIN users u ON u.id = r.responded_by
+          WHERE r.invitation_id = i.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1
        ) response ON true
        WHERE i.id = $1`,
       [current.id],
     );
     return invitation(updated.rows[0]);
   });
-}
-
-export async function respondToFixtureInvitation(
-  workspaceId: string,
-  actorId: string,
-  token: unknown,
-  payload: FixtureInvitationResponsePayload,
-): Promise<FixtureInvitation> {
-  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(actorId) || typeof token !== 'string' || token.length < 20) throw notFound();
-  return respondToFixtureInvitationWhere(workspaceId, actorId, hashToken(token), 'i.token_hash = $1', payload);
 }
 
 export async function respondToIncomingFixtureInvitation(
@@ -438,10 +454,12 @@ export async function listIncomingFixtureInvitations(
   const result = await executor.query<{
     invitation_id: string; event_id: string; email: string; revision: number; status: FixtureInvitationStatus;
     expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null;
-    response_message: string | null; responded_at: Date | string | null;
+    response_message: string | null; responded_at: Date | string | null; responded_workspace_id: string | null;
+    responded_workspace_name: string | null; responded_by_name: string | null;
   } & EventRow>(
     `SELECT i.id AS invitation_id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
-            NULL::text AS response_message, NULL::timestamptz AS responded_at, ${EVENT_COLUMNS}
+             NULL::text AS response_message, NULL::timestamptz AS responded_at,
+             NULL::uuid AS responded_workspace_id, NULL::text AS responded_workspace_name, NULL::text AS responded_by_name, ${EVENT_COLUMNS}
      FROM fixture_invitations i
      JOIN events e ON e.id = i.event_id
      JOIN users u ON u.id = $1

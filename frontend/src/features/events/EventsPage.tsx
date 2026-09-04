@@ -4,6 +4,7 @@ import { EventDetailPage } from './EventDetailPage';
 import { createEvent, listEvents, updateEvent } from '../../api/events';
 import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
+import { listGuestFixtures } from '../../api/fixtures';
 import {
   addEventParticipant,
   acknowledgeParticipantStatusReview,
@@ -23,6 +24,7 @@ import {
   type EventType,
   type RsvpStatus,
   type VenueSearchResult,
+  type FixtureDetail,
 } from '../../types';
 import styles from './EventsPage.module.css';
 import { useWorkspace } from '../auth/WorkspaceContext';
@@ -595,6 +597,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const location = useLocation();
   const navigate = useNavigate();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
+  const [guestFixtures, setGuestFixtures] = useState<FixtureDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -633,6 +636,16 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
       current = false;
     };
   }, [activeWorkspace.id, reloadKey]);
+
+  useEffect(() => {
+    let current = true;
+    void listGuestFixtures().then(({ data }) => {
+      if (current) setGuestFixtures(data);
+    }).catch(() => {
+      if (current) setGuestFixtures([]);
+    });
+    return () => { current = false; };
+  }, [activeWorkspace.id]);
 
   useEffect(() => {
     setSelectedId(null);
@@ -740,7 +753,8 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
-       {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
+      {!loading && !loadError && guestFixtures.length > 0 && <section className={styles.list} aria-labelledby="guest-fixtures-heading"><header><p className={styles.eyebrow}>Your club is participating</p><h2 id="guest-fixtures-heading">Guest fixtures</h2></header>{guestFixtures.map((fixture) => <Card className={styles.eventCard} key={fixture.event.id}><button type="button" className={styles.eventOpen} onClick={() => navigate('/console/fixtures')}><time className={styles.dateBlock} dateTime={fixture.event.date}><b>{new Date(`${fixture.event.date}T00:00:00`).getDate()}</b><small>{new Date(`${fixture.event.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time><span className={styles.eventBody}><strong>{fixture.event.title}</strong><span><i data-type={fixture.event.type}>{formattedType(fixture.event.type)}</i><i data-status={fixture.event.status}>{formattedStatus(fixture.event.status)}</i></span><small>{fixture.event.time ?? 'Time not set'} · {fixture.event.locationName ?? 'Location not set'}</small></span><span aria-hidden="true">›</span></button></Card>)}</section>}
+      {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
 
       {!loading && !loadError && events.length > 0 && view === 'calendar' && (
         <div className={styles.calendar}>

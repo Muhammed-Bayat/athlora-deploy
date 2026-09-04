@@ -6,6 +6,7 @@ import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { recomputeEventResults } from './timeline.js';
 import { assertFixtureReadyToStart, assertHostWorkspace, markFixtureReacceptanceRequired } from './fixtures.js';
+import { notifyFixtureStarted } from './fixtureNotifications.js';
 import type {
   EventCreatePayload,
   EventListQuery,
@@ -215,6 +216,9 @@ export async function replaceEvent(
       ],
     );
     const updated = mapEventRow(result.rows[0]);
+    if (currentEvent.status === 'scheduled' && updated.status === 'in_progress' && currentRow.fixture_revision !== undefined) {
+      await notifyFixtureStarted(client, eventId, currentRow.fixture_revision);
+    }
     if (
       currentEvent.type !== updated.type ||
       currentEvent.date !== updated.date ||

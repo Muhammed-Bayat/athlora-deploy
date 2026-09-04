@@ -20,6 +20,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  'fixture_notifications',
   'fixture_invitation_responses',
   'fixture_invitations',
   'event_fixture_workspaces',
