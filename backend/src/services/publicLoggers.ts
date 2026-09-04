@@ -164,6 +164,34 @@ export async function createPublicLoggerSession(
   return { sessionToken, snapshot: await publicLoggerSnapshot(sessionToken, row.event_id, executor) };
 }
 
+export async function createPublicLoggerSessionByEvent(
+  eventId: string,
+  loggerName: string,
+  loggerClub: string,
+  executor: DbExecutor = getPool(),
+): Promise<{ sessionToken: string; snapshot: PublicLoggerSnapshot }> {
+  assertUuid(eventId);
+  const link = await executor.query<LinkRow>(
+    `SELECT pl.id, pl.event_id, e.title, e.status, e.workspace_id
+     FROM public_logger_links pl
+     JOIN events e ON e.id = pl.event_id
+     WHERE pl.event_id = $1 AND e.status IN ('scheduled', 'in_progress')
+     ORDER BY pl.created_at DESC
+     LIMIT 1`,
+    [eventId],
+  );
+  const row = link.rows[0];
+  const targetLinkId = row?.id;
+  const sessionToken = createOpaqueToken();
+  const expiresAt = new Date(Date.now() + sessionLifetimeMs());
+  await executor.query(
+    `INSERT INTO public_logger_sessions (link_id, event_id, token_hash, logger_name, logger_club, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [targetLinkId, eventId, hashPublicLoggerToken(sessionToken), loggerName, loggerClub, expiresAt],
+  );
+  return { sessionToken, snapshot: await publicLoggerSnapshot(sessionToken, eventId, executor) };
+}
+
 async function validSession(
   sessionToken: string,
   eventId: string,
@@ -182,6 +210,7 @@ async function validSession(
   );
   const row = result.rows[0];
   if (!row) throw unavailable();
+  if (row.event_id !== eventId) throw unavailable();
   return row;
 }
 

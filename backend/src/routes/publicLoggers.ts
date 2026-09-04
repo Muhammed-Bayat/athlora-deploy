@@ -12,6 +12,7 @@ publicLoggerOwnerRouter.delete('/:eventId/public-loggers/:linkId', requireOperat
 
 const publicLoggerRouter = Router();
 publicLoggerRouter.post('/sessions', validateBody(parsePublicLoggerSessionPayload), publicLoggers.startSession);
+publicLoggerRouter.post('/sessions/event/:eventId', validateBody(parsePublicLoggerSessionPayload), publicLoggers.startSessionByEvent);
 publicLoggerRouter.get('/events/:eventId', publicLoggers.getSnapshot);
 publicLoggerRouter.post('/events/:eventId/entries', validateBody(parsePublicLoggerEntryPayload), publicLoggers.createEntry);
 
