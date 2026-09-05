@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 
+const hasIndexedDB = typeof indexedDB !== 'undefined';
+
 class TestDB extends Dexie {
   offlineActions!: Dexie.Table<{
     id: string;
@@ -19,7 +21,9 @@ class TestDB extends Dexie {
   }
 }
 
-describe('Offline Action Queue', () => {
+const describeIfIDB = hasIndexedDB ? describe : describe.skip;
+
+describeIfIDB('Offline Action Queue', () => {
   let db: TestDB;
 
   beforeEach(() => {
