@@ -125,7 +125,7 @@ node scripts/generate-coverage-report.mjs
 npm run build --prefix docs
 ```
 
-See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup.
+See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The expanded E2E suite covers 15+ spec files including workspace switching, role enforcement, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization boundaries, migration verification, accessibility deep audit, routing, and analytics.
 
 ## Services and Documentation
 

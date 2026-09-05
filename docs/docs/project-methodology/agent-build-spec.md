@@ -121,7 +121,7 @@ CREATE TABLE users (
   auth0_id      TEXT UNIQUE NOT NULL,
   name          TEXT NOT NULL,
   email         TEXT UNIQUE NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'coach',   -- 'coach' | 'assistant' | 'viewer'
+  role          TEXT NOT NULL DEFAULT 'coach',   -- 'coach' | 'assistant'
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );

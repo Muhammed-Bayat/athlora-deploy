@@ -107,7 +107,7 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 
 ### Stage 2: Full Athletics Events and Connected Coaching
 
-**Status: Planned**
+**Status: In Progress**
 
 #### 2.1 Discipline Expansion
 
@@ -118,10 +118,12 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 
 #### 2.2 Roles, Fixtures, and Shared Calendar
 
-1. Enforce coach, assistant, and viewer permissions. For example, assistants may log an event but cannot archive athletes.
-2. Extend fixtures so another coach's squad can participate without exposing unrelated workspace data.
-3. Add shared calendar views, RSVP workflows, and event reminders.
-4. Add API and Playwright permission coverage for each role.
+**Status: Implemented**
+
+1. Coach and assistant permissions enforced through `requireOperationalAccess` and `requireCoach` middleware. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals.
+2. Cross-workspace fixtures with hashed invitations, independent participating-team status, guest roster isolation, revision reacceptance, and withdrawals.
+3. In-app event reminders, fixture notifications, and RSVP audit trails.
+4. API and Playwright coverage for workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, and authorization boundaries.
 
 #### 2.3 Season Analysis
 
@@ -129,9 +131,11 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 2. Use Chart.js for PB/SB progression and comparison charts once the aggregate data is stable.
 3. Add chart tests using seeded, multi-discipline data.
 
+**Note:** Two-athlete comparison and single-athlete progression charts are implemented; full season totals and multi-discipline analysis remain planned.
+
 #### 2.4 Offline-First Logging
 
-**Status: In Progress**
+**Status: Implemented**
 
 | Work tracked | Delivered through |
 |---|---|
@@ -154,6 +158,7 @@ Key outcomes:
 - Idempotent batch sync with version conflict detection.
 - Deterministic queue drain with result recomputation.
 - Sign-out/revocation cleanup of offline data.
+- Workspace switching, coach/assistant roles, squads, athlete lifecycle, injury mapping, fixtures, RSVP, event helpers, realtime, reminders, notifications, public loggers, club onboarding, comparison, and progression charts.
 
 ### Stage 3: Collaborative Meets and Season Tools
 
