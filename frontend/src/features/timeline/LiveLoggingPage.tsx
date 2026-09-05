@@ -36,9 +36,11 @@ function mutationFeedback(message: string, reload: EventReloadResult): string {
 
 export interface LiveLoggingPageProps {
   initialEventId?: string | null;
+  onOpenEvent?: (eventId: string) => void;
+  onBackToEventList?: () => void;
 }
 
-export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps = {}) {
+export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEventList }: LiveLoggingPageProps = {}) {
   const currentUser = useCurrentUser();
   const { activeWorkspace } = useWorkspace();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
@@ -87,6 +89,22 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
   const mutationBusy = Boolean(
     submittingAthleteId || submittingIncidentKey || eventMutation || editBusy || undoBusy,
   );
+
+  const openEvent = (eventId: string) => {
+    if (onOpenEvent) {
+      onOpenEvent(eventId);
+      return;
+    }
+    setSelectedEventId(eventId);
+  };
+
+  const returnToEventList = () => {
+    if (onBackToEventList) {
+      onBackToEventList();
+      return;
+    }
+    setSelectedEventId(null);
+  };
 
   const loadEvents = async (): Promise<boolean> => {
     setEventsLoading(true);
@@ -222,7 +240,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
       });
       setEvents((current) => current.map((item) => item.id === updated.id ? updated : item));
       setActiveEvent(updated);
-      setSelectedEventId(updated.id);
+      openEvent(updated.id);
       setToast(`Started event: ${updated.title}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start event');
@@ -248,7 +266,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
       });
       setEvents((current) => current.filter((item) => item.id !== updated.id));
       setToast(`Completed event: ${updated.title}`);
-      setSelectedEventId(null);
+      returnToEventList();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to complete event');
     } finally {
@@ -262,7 +280,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
     setEditingEntry(null);
     setUndoTarget(null);
     if (closedEventId) setEvents((current) => current.filter((event) => event.id !== closedEventId));
-    setSelectedEventId(null);
+    returnToEventList();
     const refreshed = await loadEvents();
     setToast(refreshed
       ? 'This event is no longer in progress. The event list has been refreshed.'
@@ -463,7 +481,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
                       disabled={mutationBusy}
                       onClick={() => {
                         if (selectedEventId === ev.id) void loadEventData(ev.id);
-                        else setSelectedEventId(ev.id);
+                        else openEvent(ev.id);
                       }}
                       style={{ minHeight: '44px', minWidth: '44px' }}
                     >
@@ -499,7 +517,7 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
         <div className={styles.headerButtons}>
           <Button
             variant="secondary"
-            onClick={() => setSelectedEventId(null)}
+            onClick={returnToEventList}
             disabled={mutationBusy}
             style={{ minHeight: '44px', minWidth: '44px' }}
           >
