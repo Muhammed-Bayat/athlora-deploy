@@ -168,7 +168,32 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` is the authoritative base schema; `0002_contract_100m.sql` adds the current 100m contract state; `0003_aggregate_indexes.sql` adds query indexes; `0004_account_lifecycle.sql` adds durable deletion state; `0005_workspace_tenancy.sql` adds shared workspace tenancy; `0006_workspace_roles_and_invitations.sql` adds workspace roles and invitations; `0007_workspace_squads.sql` normalizes athlete squads; `0008_athlete_lifecycle.sql` adds lifecycle state and transition review records; `0009_intermediate_fixtures.sql` adds cross-workspace fixture authorization; `0010_fixture_workspace_status_index.sql` permits independent status tracking for multiple participating workspaces; `0011_athlete_injuries.sql` adds persistent athlete injury records with recovery history and audit tracking; and `0017_clubs.sql` adds Clubs and Club join requests. Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+All 20 migrations are tracked in `schema_migrations`:
+
+| Migration | Description |
+|-----------|-------------|
+| `0001_init.sql` | Base schema: users, athletes, events, participants, timeline entries, results |
+| `0002_contract_100m.sql` | 100m contract constraints and lookup indexes |
+| `0003_aggregate_indexes.sql` | Read-path indexes for statistics and dashboard queries |
+| `0004_account_lifecycle.sql` | Durable account-deletion tombstones and retry scheduling |
+| `0005_workspace_tenancy.sql` | Workspaces, memberships, and workspace-scoped foreign keys |
+| `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, hashed invitations, membership audit |
+| `0007_workspace_squads.sql` | Normalized squads and multi-squad athlete memberships |
+| `0008_athlete_lifecycle.sql` | Active/inactive/archived states, transitions, status reviews |
+| `0009_intermediate_fixtures.sql` | Cross-workspace fixture authorization and revision tracking |
+| `0010_fixture_workspace_status_index.sql` | Non-unique fixture workspace status index for multi-guest support |
+| `0011_athlete_injuries.sql` | Persistent injury records with recovery history and audit |
+| `0012_audited_rsvps.sql` | RSVP audit trail for event participant status changes |
+| `0013_in_app_event_reminders.sql` | In-app event reminders and mute preferences |
+| `0014_event_helper_invitations.sql` | Event helper invitations, grants, and audit logs |
+| `0015_optional_injury_dates.sql` | Optional injury occurrence and expected return dates |
+| `0016_public_logger_links.sql` | Public logger links and unauthenticated session support |
+| `0017_clubs.sql` | Clubs and club join requests with coach-reviewed access |
+| `0018_fixture_notifications.sql` | Fixture notification delivery and unread counts |
+| `0019_offline_logger_designation.sql` | Designated offline logger per event with transfer protocol |
+| `0020_sync_idempotency.sql` | Idempotent batch sync with action receipts and version conflict detection |
+
+Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
 
 Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 

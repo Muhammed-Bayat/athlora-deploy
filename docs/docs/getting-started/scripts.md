@@ -122,7 +122,7 @@ Projects:
 | `desktop-chromium` | `vertical-slice.spec.ts` | Full serial slice at desktop viewport |
 | `mobile-chromium` | `vertical-slice.spec.ts` | Same serial slice at Pixel 5 viewport |
 
-Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates application tables (users, athletes, events, event_participants, timeline_entries, results, account_deletions) before each run. The final serial test audits key coach views (dashboard, roster, events, live logger console, athlete detail, results) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations.
+Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates all application tables (including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) before each run. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, fixtures, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations.
 
 ## Coverage Reports
 
@@ -145,7 +145,7 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 | `frontend` | lint, typecheck, test, coverage, build | passing (291 Vitest/RTL and track-math tests) |
 | `backend` | lint, typecheck, test, coverage, build | passing (362 Vitest/Supertest tests; 40 database tests skipped when unconfigured) |
 | `docs` | build | passing |
-| `e2e` | Playwright (Chromium) + axe | configured (2 smoke + 4 desktop + 4 mobile tests, + 1 auth-setup); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
+| `e2e` | Playwright (Chromium) + axe | configured (smoke + 15 spec files covering workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization, migration, accessibility, routing, analytics + vertical slice + comparison + offline + smoke); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 
 The backend suite includes 40 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, and 1 injury-persistence test. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 

@@ -12,10 +12,10 @@ The `/e2e` package uses Playwright to test the current 100m vertical slice again
 |---|---|
 | `smoke` | Landing page and anonymous accessibility checks. |
 | `auth-setup` | Auth0 sign-in once and saves authenticated browser state. |
-| `desktop-chromium` | Complete current 100m workflow at a desktop viewport. |
-| `mobile-chromium` | The same current workflow at a Pixel 5 viewport. |
+| `desktop-chromium` | Complete 100m workflow and expanded feature tests at a desktop viewport. |
+| `mobile-chromium` | The same tests at a Pixel 5 viewport. |
 
-The vertical slice creates athletes and events, assigns participants, records and corrects results, applies and clears overrides, completes events, verifies statistics/dashboard behavior, archives an athlete, and audits core coach views with axe.
+The expanded suite covers: the full 100m vertical slice (roster, events, assignment, live logging, corrections, overrides, completion, statistics, dashboard, archive), workspace switching and membership management, role enforcement, squad management, athlete lifecycle (active/inactive/archived), injury creation and resolution, event helpers and offline designation, Socket.IO realtime, event reminders, public logger links, fixture notifications and RSVP, authorization boundaries, migration verification, accessibility deep audit, routing/navigation, and analytics/comparison.
 
 ## Requirements
 

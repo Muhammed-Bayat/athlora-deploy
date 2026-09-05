@@ -59,6 +59,8 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
 - **Lazy-loaded SVG/CSS landing track**: the mockup-exact oval is drawn once as a shared SVG component and painted differently per context; the cinematic lap is pure DOM transforms, so the landing page needs no WebGL.
 - **pdf-lib**: pure-JS PDF generation — works in Node and the browser without native deps.
+- **Three.js / React Three Fiber / Drei**: on-demand anatomical body viewer for persistent injury mapping with topology-bound surface heat maps.
+- **qrcode**: QR code generation for public logger link sharing.
 
 - `dotenv` loads server-only local configuration; browser configuration is restricted to public `VITE_*` values.
 - `tsx` provides the API's watch-mode development server without a separate build step.
@@ -83,7 +85,8 @@ These tools are in the development plan but are **not** current runtime dependen
 - **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Dexie (IndexedDB offline queue), vite-plugin-pwa (PWA shell + service worker), Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
 - **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Injury records use the dedicated workspace-scoped backend contract.
 - **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
-- **Reserved for later stages**: Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
+- **Implemented (Stage 2)**: Socket.IO, Chart.js, Dexie, vite-plugin-pwa, Three.js/React Three Fiber/Drei, qrcode.
+- **Reserved for later stages**: pdf-lib (Stage 3).
 
 | Stage | Technology | Intended Athlora use | Why it is deferred |
 |---|---|---|---|

@@ -140,7 +140,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 4. Add migration, unit, API, component, and browser coverage with each discipline; do not loosen the 100m contract as a shortcut.
 
 ### 3.2 Roles & Permissions
-1. Enforce coach, assistant, and viewer permissions. Assistants may log events but cannot archive athletes.
+1. Enforce coach and assistant permissions. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals.
 2. Express middleware: permission checks per route.
 3. React: role-aware UI (hide/disable controls the current user can't use).
 4. Tests: Supertest permission-denied cases per role; Playwright E2E for role enforcement.

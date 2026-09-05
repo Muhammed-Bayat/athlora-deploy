@@ -64,6 +64,21 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Workspace tenancy** — workspaces and memberships now form the shared authorization boundary. Existing records migrate losslessly into default UTC workspaces; the console selects an accessible workspace and scopes every request, aggregate and local view reset through `X-Workspace-Id`. Creator and result actors remain durable attribution, so an account departure removes memberships without destroying shared history.
 - **Club onboarding** — Clubs are the product-facing organization layer over the existing authorization boundary. Every existing workspace backfills to one Club; new users create a Club as coach or search all Clubs and request access. Club coaches review pending requests and choose coach or assistant access.
 - **Offline-first PWA** — the app is installable as a Progressive Web App with a service worker that caches the app shell and API responses. An offline queue (IndexedDB via Dexie) stores create/edit/undo actions when the network is unavailable, with a designated offline logger per event. On reconnect, the queue drains deterministically through a batch sync endpoint with idempotent action processing and optimistic version conflict detection.
+- **Workspace switching** — coaches can belong to multiple workspaces and switch between them via the sidebar dropdown. Every request, aggregate, and view reset scopes to the selected workspace through `X-Workspace-Id`.
+- **Club onboarding** — Clubs are the product-facing organization layer. New users create a Club or search all Clubs and request access. Club coaches review pending requests and choose coach or assistant access.
+- **Role enforcement** — coach and assistant roles are enforced through `requireOperationalAccess` and `requireCoach` middleware. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals. The final coach cannot be demoted or removed.
+- **Squad management** — workspace-scoped squad catalogue with multi-squad athlete membership, archival, and roster filtering.
+- **Athlete lifecycle** — active/inactive/archived states with transition audit, status reviews, and read-only archived profiles.
+- **Injury and fitness mapping** — persistent injury records with body region, severity, and resolution. 3D anatomy viewer using React Three Fiber with topology-bound surface heat maps.
+- **Cross-workspace fixtures** — host/guest workspace invitation flow with RSVP, roster management, revision reacceptance, and withdrawals.
+- **Event helpers** — invitation-based event helper grants with offline logger designation and transfer protocol.
+- **Realtime** — Socket.IO event subscriptions with Auth0 token verification and workspace-scoped authorization.
+- **Event reminders** — in-app event reminders with mute preferences and notification delivery.
+- **Fixture notifications** — notification bell with unread counts and mark-as-read for fixture lifecycle events.
+- **Public logger links** — shareable unauthenticated links for meet officials to record finish times and incidents.
+- **Two-athlete comparison** — side-by-side 100m metrics with interactive SVG chart and URL-persisted state.
+- **Athlete progression** — chronological 100m result history with PB milestones and interactive chart.
+- **Expanded E2E suite** — 15+ spec files covering workspace, roles, squads, lifecycle, injuries, helpers, realtime, reminders, public logger, notifications, authorization, migration, accessibility, routing, and analytics.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, production builds, an informational Vitest V8 coverage report, the Playwright E2E suite (smoke + desktop/mobile vertical slice + axe audit), and the Docusaurus build are configured in CI. The Gitea `coverage` job prints a short Markdown summary; the `e2e` job boots a Postgres service container and skips with a clear message until the Auth0/E2E credentials are configured as repository secrets.
 - **Docs deployment** — the Docusaurus site is live at `https://athlora-deploy.pages.dev`.
 
