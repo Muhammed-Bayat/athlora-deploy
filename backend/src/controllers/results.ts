@@ -9,6 +9,7 @@ import { getApplicationUserContext } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 import type { Result } from '../types/domain.js';
 import type { ResultOverridePayload } from '../validation/payloads.js';
+import { notifyEventInvalidated } from '../realtime/index.js';
 
 export async function overrideResultRecord(
   userId: string,
@@ -104,6 +105,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
     const eventId = req.params.eventId as string;
     const athleteId = req.params.athleteId as string;
     const result = await overrideResultRecord(userId, workspaceId, eventId, athleteId, req.body);
+    notifyEventInvalidated(eventId, 'results');
 
     res.json({ data: result });
   } catch (error) {

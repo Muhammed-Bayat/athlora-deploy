@@ -5,6 +5,7 @@ import { ApiError } from '../../api/client';
 import { Button, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
 import { useWorkspace } from '../auth/WorkspaceContext';
+import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { EventResultsSection } from '../results/EventResultsSection';
 import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
@@ -31,6 +32,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const [editorBusy, setEditorBusy] = useState(false);
   const [participantBusy, setParticipantBusy] = useState(false);
   const [resultReloadKey, setResultReloadKey] = useState(0);
+  const [participantReloadKey, setParticipantReloadKey] = useState(0);
   const [correctionTarget, setCorrectionTarget] = useState<ResultCorrectionTarget | null>(null);
   const [correctionBusy, setCorrectionBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<LifecycleAction | null>(null);
@@ -41,6 +43,22 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [fixtureTeams, setFixtureTeams] = useState<FixtureTeamRoster[]>([]);
   const [rosterState, setRosterState] = useState<'idle' | 'loaded' | 'failed'>('idle');
+
+  useRealtimeRoom({
+    workspaceId: activeWorkspace.id,
+    eventId,
+    onInvalidate: async () => {
+      try {
+        const next = await getEvent(eventId);
+        setEvent(next);
+        onEventUpdated?.(next);
+        setResultReloadKey((key) => key + 1);
+        setParticipantReloadKey((key) => key + 1);
+      } catch {
+        // HTTP remains the source of truth; the existing retry UI handles failures.
+      }
+    },
+  });
 
   useEffect(() => { onBusyChange?.(participantBusy || correctionBusy); }, [correctionBusy, onBusyChange, participantBusy]);
 
@@ -124,7 +142,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
        <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />
         {canOperate && <PublicLoggerPanel event={event} />}
        <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={canOperate ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
-      <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
+      <ParticipantManager key={participantReloadKey} eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />
        {canManageLifecycle && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>

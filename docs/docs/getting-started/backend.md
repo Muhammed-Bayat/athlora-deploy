@@ -40,7 +40,7 @@ NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 NOMINATIM_USER_AGENT=Athlora/0.2 (https://example.com/contact)
 ```
 
-The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy.
+The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy.
 
 The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http://localhost:5174` (see the E2E section in `getting-started/scripts.md`).
 
@@ -85,6 +85,7 @@ Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separa
 - Event CRUD for the current 100m slice, forward-only lifecycle transitions, cancellation that preserves history, participants, RSVPs, and event-day forecasts. The lifecycle model will be reused for the remaining athletics disciplines.
 - Cross-workspace 100m fixtures with hashed invitations, independent participating-team status, guest roster isolation, revision reacceptance, withdrawals, timeline logging, and result correction.
 - Timeline entries for current 100m finishes, incidents, and notes with optimistic versions, soft-delete undo, transaction locks, and automatic result recomputation. Future contracts will add measured attempts, fouls, heights, relay legs, and discipline-specific result rules.
+- Online event updates use Socket.IO after a successful HTTP mutation. Connections present an Auth0 token and explicitly subscribe to one event; server-side checks require current workspace membership, accepted fixture participation, or an active helper grant. Messages are typed invalidations (`realtime:invalidate`) with a unique ID, event ID, affected resources, and timestamp. Clients always refetch canonical HTTP state, so an unavailable, duplicate, or stale message cannot create a false write result. Helper grants lose event-room access after revocation and after the two-hour read-only window following completion or cancellation.
 - Derived results, placement, PB/SB flags, and audited manual overrides.
 - Owner-scoped dashboard aggregates and current-weather proxying for the coach console.
 - Optional OpenStreetMap venue lookup through an authenticated Nominatim boundary. It has strict `q` validation, a five-second timeout, safe provider errors, a five-minute process-memory cache, and a one-second process-local provider throttle. The public provider receives only an explicit submitted venue query, never Auth0 credentials or client requests on each keystroke.
@@ -137,6 +138,8 @@ https://athlora-deploy.onrender.com
 ```
 
 Render builds from `/backend` with `npm ci && npm run build`, starts with `npm start`, and checks `/health`. Configure `DATABASE_URL`, all Auth0 variables required by the deployed features, `CORS_ORIGINS=https://athlora-deploy.vercel.app`, and `NODE_VERSION=22` as Render environment variables.
+
+Render must permit WebSocket upgrades for the API service. The current room broadcaster is process-local, so deploy one API instance for realtime delivery. Add a shared Socket.IO adapter before increasing the instance count. Connection, denied subscription, and mutation observability belong in the API service logs; never log bearer tokens or helper credentials.
 
 Create a dedicated Auth0 Machine-to-Machine application for the Management API with only `delete:users` and `create:user_tickets`. Never expose its client secret through `VITE_*` variables.
 

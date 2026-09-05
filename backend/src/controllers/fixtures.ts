@@ -23,6 +23,7 @@ import {
   withdrawGuestFixture,
 } from '../services/fixtures.js';
 import { overrideResultRecord } from './results.js';
+import { notifyEventInvalidated } from '../realtime/index.js';
 import { createTimelineEntry, listTimelineEntries, removeTimelineEntry, updateTimelineEntry } from '../services/timeline.js';
 
 function parameter(value: string | string[] | undefined): string {
@@ -121,6 +122,7 @@ export const addGuestParticipant: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId } = getApplicationUserContext(req);
     const participant = await addGuestFixtureParticipant(workspaceId, req.params.eventId, req.body.athleteId);
+    notifyEventInvalidated(req.params.eventId, 'participants', 'results');
     res.status(201).json({ data: participant });
   } catch (error) { next(error); }
 };
@@ -129,6 +131,7 @@ export const updateGuestParticipant: RequestHandler = async (req, res, next) => 
   try {
     const { workspaceId } = getApplicationUserContext(req);
     const participant = await updateGuestFixtureParticipant(workspaceId, req.params.eventId, req.params.athleteId, req.body.rsvpStatus);
+    notifyEventInvalidated(req.params.eventId, 'participants', 'results');
     res.json({ data: participant });
   } catch (error) { next(error); }
 };
@@ -137,6 +140,7 @@ export const removeGuestParticipant: RequestHandler = async (req, res, next) => 
   try {
     const { workspaceId } = getApplicationUserContext(req);
     await removeGuestFixtureParticipant(workspaceId, req.params.eventId, req.params.athleteId);
+    notifyEventInvalidated(req.params.eventId, 'participants', 'results');
     res.status(204).end();
   } catch (error) { next(error); }
 };
@@ -145,6 +149,7 @@ export const guestWithdrawal: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId, userId } = getApplicationUserContext(req);
     await withdrawGuestFixture(workspaceId, userId, req.params.eventId);
+    notifyEventInvalidated(req.params.eventId, 'event', 'participants', 'results');
     res.status(204).end();
   } catch (error) { next(error); }
 };
@@ -161,6 +166,7 @@ export const createGuestEntry: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId, userId } = getApplicationUserContext(req);
     const entry = await createTimelineEntry(userId, req.params.eventId, req.body, undefined, workspaceId, true);
+    notifyEventInvalidated(entry.eventId, 'timeline', 'results');
     res.status(201).json({ data: entry });
   } catch (error) { next(error); }
 };
@@ -169,6 +175,7 @@ export const updateGuestEntry: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId } = getApplicationUserContext(req);
     const entry = await updateTimelineEntry(workspaceId, req.params.eventId, req.params.entryId, req.body, undefined, true);
+    notifyEventInvalidated(entry.eventId, 'timeline', 'results');
     res.json({ data: entry });
   } catch (error) { next(error); }
 };
@@ -177,6 +184,7 @@ export const removeGuestEntry: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId } = getApplicationUserContext(req);
     await removeTimelineEntry(workspaceId, req.params.eventId, req.params.entryId, req.body, undefined, true);
+    notifyEventInvalidated(req.params.eventId, 'timeline', 'results');
     res.status(204).end();
   } catch (error) { next(error); }
 };

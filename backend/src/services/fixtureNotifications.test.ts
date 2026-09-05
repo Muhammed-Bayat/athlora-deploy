@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../db/client.js', () => ({ getPool: vi.fn() }));
 
 import { getPool } from '../db/client.js';
-import { countUnreadFixtureNotifications, listFixtureNotifications, markFixtureNotificationRead } from './fixtureNotifications.js';
+import {
+  countUnreadFixtureNotifications,
+  listFixtureNotifications,
+  markFixtureNotificationRead,
+  notifyFixtureStarted,
+} from './fixtureNotifications.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -51,5 +56,17 @@ describe('fixture notifications', () => {
 
     await expect(markFixtureNotificationRead(USER_ID, WORKSPACE_ID, NOTIFICATION_ID))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps fixture-start event and revision parameters typed across notification and dedupe uses', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyFixtureStarted({ query } as never, EVENT_ID, 2);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('$1::uuid');
+    expect(sql).toContain('$1::text');
+    expect(sql).toContain('$2::integer');
+    expect(parameters).toEqual([EVENT_ID, 2]);
   });
 });

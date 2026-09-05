@@ -42,6 +42,20 @@ export function setAccessTokenGetter(getter: (() => Promise<string>) | undefined
   };
 }
 
+// Realtime connections use the same Auth0 token source as HTTP requests.
+export async function getCurrentAccessToken(): Promise<string | undefined> {
+  if (!getAccessToken) return undefined;
+  try {
+    return await getAccessToken();
+  } catch (error) {
+    throw new ApiError(
+      401,
+      'AUTH_TOKEN_ACQUISITION_FAILED',
+      error instanceof Error ? error.message : 'Failed to acquire access token',
+    );
+  }
+}
+
 export function setActiveWorkspaceId(workspaceId: string | undefined): void {
   activeWorkspaceId = workspaceId;
 }
@@ -88,17 +102,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Keep an action in the workspace in which it began while Auth0 obtains its token.
   const workspaceId = activeWorkspaceId;
   let accessToken: string | undefined;
-  if (tokenGetter) {
-    try {
-      accessToken = await tokenGetter();
-    } catch (error) {
-      throw new ApiError(
-        401,
-        'AUTH_TOKEN_ACQUISITION_FAILED',
-        error instanceof Error ? error.message : 'Failed to acquire access token',
-      );
-    }
-  }
+  if (tokenGetter) accessToken = await getCurrentAccessToken();
 
   const headers = new Headers(init?.headers);
   if (!headers.has('Content-Type')) {

@@ -32,6 +32,19 @@ function keyset(domain: string) {
   return createRemoteJWKSet(new URL(`https://${domain}/.well-known/jwks.json`));
 }
 
+export async function verifyAuth0AccessToken(token: string): Promise<VerifiedAuth0Context> {
+  const domain = process.env.AUTH0_DOMAIN;
+  const audience = process.env.AUTH0_AUDIENCE;
+  if (!domain || !audience) throw new Error('Auth0 domain and audience are not configured');
+
+  const { payload } = await jwtVerify(token, keyset(domain), {
+    issuer: `https://${domain}/`,
+    audience,
+  });
+  if (!payload.sub) throw new Error('Token subject is missing');
+  return { auth0Id: payload.sub, accessToken: token };
+}
+
 export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
   const domain = process.env.AUTH0_DOMAIN;
   const audience = process.env.AUTH0_AUDIENCE;
@@ -56,14 +69,7 @@ export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
   }
 
   try {
-    const { payload } = await jwtVerify(token, keyset(domain), {
-      issuer: `https://${domain}/`,
-      audience,
-    });
-    if (!payload.sub) {
-      throw new Error('Token subject is missing');
-    }
-    req.auth0 = { auth0Id: payload.sub, accessToken: token };
+    req.auth0 = await verifyAuth0AccessToken(token);
     next();
   } catch {
     res.status(401).json({

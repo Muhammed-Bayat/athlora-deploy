@@ -9,6 +9,7 @@ import {
 } from '../services/events.js';
 import { parseEventListQuery } from '../validation/payloads.js';
 import { getEventWeatherForecast } from '../services/weather.js';
+import { notifyEventInvalidated } from '../realtime/index.js';
 
 export const listEvents: RequestHandler = async (req, res, next) => {
   try {
@@ -35,6 +36,7 @@ export const createEvent: RequestHandler = async (req, res, next) => {
   try {
     const { userId, workspaceId } = getApplicationUserContext(req);
     const event = await createEventRecord(userId, req.body, undefined, workspaceId);
+    notifyEventInvalidated(event.id, 'event');
     res.status(201).json({ data: event });
   } catch (error) {
     next(error);
@@ -45,6 +47,7 @@ export const updateEvent: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId, userId } = getApplicationUserContext(req);
     const event = await replaceEvent(workspaceId, req.params.id, req.body, undefined, userId);
+    notifyEventInvalidated(event.id, 'event');
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -55,6 +58,7 @@ export const deleteEvent: RequestHandler = async (req, res, next) => {
   try {
     const { workspaceId } = getApplicationUserContext(req);
     const event = await cancelEventRecord(workspaceId, req.params.id);
+    notifyEventInvalidated(event.id, 'event', 'results');
     res.json({ data: event });
   } catch (error) {
     next(error);
