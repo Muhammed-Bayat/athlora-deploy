@@ -266,7 +266,7 @@ describe('CoachConsole dashboard navigation', () => {
 
   it('invokes geolocation when permission is granted and no cache exists', async () => {
     permissionsQuery.mockResolvedValue({ state: 'granted' });
-    const getCurrentPosition = vi.fn((_success: PositionCallback, _error: PositionErrorCallback, _options: PositionOptions) => {});
+    const getCurrentPosition = vi.fn();
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
 
     weatherApi.getCurrentWeather.mockResolvedValue({
