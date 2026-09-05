@@ -42,6 +42,8 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | API protection | Helmet, CORS, ownership middleware | Security headers, origin allow-listing, authenticated user resolution, and non-enumerating resource checks. | A coach must never be able to discover or modify another coach's athletes, entries, or results. |
 | Weather | Open-Meteo | Event-day venue forecasts and the coach console's current-weather readout, both proxied by the API. | Wind, rain, and conditions matter when planning or logging athletics events; Open-Meteo provides these without storing a paid-provider API key in the project. |
 | Venue search/maps | Nominatim + OpenStreetMap | Server-side native-fetch venue lookup, existing persisted coordinates, and an iframe/external-link preview. | Avoids shipping provider credentials or a heavyweight interactive map dependency while retaining attribution, keyboard use, mobile layout, and manual coordinates. |
+| Offline storage | IndexedDB via Dexie | Offline action queue for create/edit/undo actions when network is unavailable. | Promise-friendly store with typed transactions, scoped per account/workspace/event/device for offline-first live logging. |
+| PWA | vite-plugin-pwa | Service worker for app shell caching and API response caching. | Installable coach console with offline shell and deterministic queue drain on reconnect. |
 | Unit and component tests | Vitest, React Testing Library, jsdom | Result rules, API wrappers, components, forms, mutations, and accessibility interactions. | Most correctness risks are in calculations and state transitions, so fast focused tests provide feedback before a coach uses the logger. |
 | API tests | Supertest | HTTP contracts, validation, ownership, lifecycle guards, and error behavior. | The frontend relies on predictable status codes and error envelopes when handling stale corrections and closed events. |
 | End-to-end tests | Playwright, axe-core/playwright | Anonymous checks plus authenticated desktop/mobile 100m vertical-slice and accessibility tests. | The real workflow crosses Auth0, the SPA, the API, and PostgreSQL; browser tests verify that a coach can complete it at a desk or track-side. |
@@ -78,10 +80,10 @@ All authenticated dialogs (add, edit, correction, confirmation) use the shared `
 ## Planned Stack
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
-- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
+- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Dexie (IndexedDB offline queue), vite-plugin-pwa (PWA shell + service worker), Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
 - **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Injury records use the dedicated workspace-scoped backend contract.
 - **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
-- **Reserved for later stages**: Dexie/PWA/Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
+- **Reserved for later stages**: Socket.IO (Stage 2), Chart.js (Stage 2), pdf-lib (Stage 3).
 
 | Stage | Technology | Intended Athlora use | Why it is deferred |
 |---|---|---|---|
