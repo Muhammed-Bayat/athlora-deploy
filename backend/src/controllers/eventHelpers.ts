@@ -8,6 +8,7 @@ import {
   listEventInvitations,
   listEventGrants,
 } from '../services/eventHelpers.js';
+import { disconnectHelperFromEvent, notifyEventInvalidated } from '../realtime/index.js';
 
 const redemptionAttempts = new Map<string, { count: number; resetTime: number }>();
 
@@ -96,6 +97,8 @@ export async function handleRevokeGrant(req: Request, res: Response): Promise<vo
     const actorSub = req.auth?.auth0Id || req.auth?.userId || 'system';
 
     const grant = await revokeIndividualGrant(eventId, grantId, actorSub);
+    disconnectHelperFromEvent(grant.auth0Sub, eventId);
+    notifyEventInvalidated(eventId, 'event');
     res.status(200).json({ grant });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to revoke grant';

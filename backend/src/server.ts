@@ -1,5 +1,7 @@
 import 'dotenv/config';
+import { createServer } from 'node:http';
 import { createApp } from './app.js';
+import { attachRealtimeServer } from './realtime/index.js';
 import { reconcileAccountDeletions } from './services/accounts.js';
 import { reconcileEventReminders } from './services/reminders.js';
 
@@ -14,7 +16,9 @@ function reconcile(): void {
   });
 }
 
-const server = createApp().listen(port, () => {
+const server = createServer(createApp());
+await attachRealtimeServer(server);
+server.listen(port, () => {
   console.log(`Athlora API listening on port ${port}`);
   reconcile();
 });

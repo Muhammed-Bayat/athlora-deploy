@@ -27,7 +27,7 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 
 - **State & structure**: feature folders (`src/features/*`). Shared primitives in `src/components`.
 - **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; the roster consumes `src/api/athletes.ts` for list/create/full-replacement/archive/restore operations. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user, and unauthenticated console entry invokes Auth0 rather than exposing protected views.
-- **Offline (Stage 2+)**: Dexie/IndexedDB mirror for live-logging writes, PWA service worker, background sync, Socket.IO live updates.
+- **Realtime**: online Socket.IO event subscriptions use the current Auth0 token and selected workspace context. They deliver only version-aware invalidations; feature screens refetch canonical HTTP state. Offline/PWA sync remains a later stage.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
 - **Public landing experience**: semantic React/HTML content remains separate from one lazy-loaded cinematic layer. The desktop hero reveals the approved SDP-Landing track exactly — a 2D SVG oval (8 gradient lanes, start line, distance marks, lane numbers and javelin throw sector) shown in a soft-feather circular window that follows the pointer using the mockup's static alpha mask (so there is no hard lens ring) alongside a matching cursor glow; the SVG is tilted with a strong perspective for a more 3D read. From the features section downward, the lazy-loaded cinematic layer is a direct DOM/CSS port of the mockup's chase-camera rig: the same shared SVG oval is mounted in a two-layer wrapper where the track object translates by the negative runner position while an oblique drone camera (60° pitch, bend-dependent bank, fit-scaled zoom, yaw steered along the lane) completes one full lap exactly when the page is scrolled to the bottom. The shared `TrackArtwork` SVG and the per-frame camera/object transforms match the mockup exactly, and the whole scene fades per section (features `.23` → preview `.20` → how `.15` → faq `.075`). Camera easing is frame-rate independent (an 82ms exponential damping constant) so fast scrolling stays smooth and crisp, while the dark aurora background is preserved. Mobile and reduced-motion modes hide the scene entirely (matching the mockup) and hide the hero reveal. Actual scroll position enforces the hero/cinematic visibility boundary, and the scene does not change Auth0 or API behavior.
 
@@ -44,9 +44,10 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 2. The frontend sends a `timeline_entries` request to the API over authenticated HTTP.
 3. The API stores the append-only, soft-deletable, versioned entry.
 4. The API recomputes the derived `results` row for that athlete and discipline, including placing and PB/SB effects.
-5. The frontend refreshes the authoritative timeline and result state.
+5. The API broadcasts a non-authoritative invalidation to authorized online event viewers.
+6. Each viewer refetches the authoritative timeline and result state over HTTP.
 
-Stage 2 will extend this path by writing to IndexedDB before sync and broadcasting accepted changes to other event viewers through Socket.IO. Those offline and realtime paths are not yet implemented.
+Socket authorization is rechecked on every explicit event subscription. A subscriber must have current workspace membership, accepted fixture participation, or an active event-helper grant. Grant revocation removes its active event subscription immediately; completed and cancelled events permit helper reads only for two hours. Socket messages do not carry a successful mutation result and do not replace HTTP authorization or optimistic-version checks.
 
 ## Deployment
 

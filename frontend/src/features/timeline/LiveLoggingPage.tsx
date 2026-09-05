@@ -7,6 +7,8 @@ import { listResults } from '../../api/results';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
+import { useWorkspace } from '../auth/WorkspaceContext';
+import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { EventResultsView } from '../results/EventResultsView';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import type {
@@ -38,6 +40,7 @@ export interface LiveLoggingPageProps {
 
 export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps = {}) {
   const currentUser = useCurrentUser();
+  const { activeWorkspace } = useWorkspace();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
@@ -184,6 +187,14 @@ export function LiveLoggingPage({ initialEventId = null }: LiveLoggingPageProps 
   useEffect(() => {
     if (editError) window.requestAnimationFrame(() => editErrorRef.current?.focus());
   }, [editError]);
+
+  useRealtimeRoom({
+    workspaceId: activeWorkspace.id,
+    eventId: selectedEventId,
+    onInvalidate: async () => {
+      if (selectedEventId) await loadEventDataRef.current(selectedEventId);
+    },
+  });
 
   const restoreTimelineFocus = (trigger: HTMLButtonElement | null) => {
     window.requestAnimationFrame(() => {

@@ -37,6 +37,7 @@ const fixturesApi = vi.hoisted(() => ({
   listFixtureRosters: vi.fn(),
   listFixtureInvitations: vi.fn(),
   listHostedFixtureResults: vi.fn(),
+  listGuestFixtures: vi.fn(),
 }));
 
 vi.mock('../../api/events', () => eventApi);
@@ -190,6 +191,7 @@ beforeEach(() => {
   fixturesApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listGuestFixtures.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {

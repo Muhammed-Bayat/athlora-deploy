@@ -80,9 +80,11 @@ export async function notifyFixtureResponse(
 export async function notifyFixtureStarted(client: DbExecutor, eventId: string, revision: number): Promise<void> {
   await client.query(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
-     SELECT wm.user_id, wm.workspace_id, $1, 'fixture_started', jsonb_build_object('revision', $2), 'fixture:started:' || $1 || ':' || $2
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'fixture_started',
+            jsonb_build_object('revision', $2::integer),
+            'fixture:started:' || $1::text || ':' || $2::text
      FROM event_fixture_workspaces fw JOIN workspace_members wm ON wm.workspace_id = fw.workspace_id
-     WHERE fw.event_id = $1 AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = $2
+     WHERE fw.event_id = $1::uuid AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = $2::integer
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
     [eventId, revision],
   );

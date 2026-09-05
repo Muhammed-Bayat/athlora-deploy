@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DashboardSummary } from './types';
+import type { AthleticsEvent, DashboardSummary, IncomingFixtureInvitation } from './types';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -19,7 +19,41 @@ const dashboardApi = vi.hoisted(() => ({
 }));
 
 const workspaceApi = vi.hoisted(() => ({ acceptWorkspaceInvitation: vi.fn() }));
-const fixtureApi = vi.hoisted(() => ({ respondToFixtureInvitation: vi.fn() }));
+const fixtureApi = vi.hoisted(() => ({
+  listIncomingFixtureInvitations: vi.fn(),
+  respondToIncomingFixtureInvitation: vi.fn(),
+}));
+
+const incomingFixtureInvitation: IncomingFixtureInvitation = {
+  id: 'fixture-invitation-1',
+  eventId: 'event-1',
+  email: 'assistant@example.com',
+  revision: 1,
+  status: 'pending',
+  expiresAt: '2026-09-01T12:00:00.000Z',
+  createdAt: '2026-08-20T12:00:00.000Z',
+  targetWorkspaceId: '00000000-0000-4000-8000-000000000000',
+  responseMessage: null,
+  respondedAt: null,
+  respondedWorkspaceId: null,
+  respondedWorkspaceName: null,
+  respondedByName: null,
+  event: {
+    id: 'event-1',
+    createdBy: 'coach-1',
+    type: 'competition',
+    discipline: '100m',
+    title: 'Interclub Sprint',
+    date: '2026-09-05',
+    time: '09:00:00',
+    locationName: 'Central Stadium',
+    latitude: null,
+    longitude: null,
+    status: 'scheduled',
+    createdAt: '2026-08-20T12:00:00.000Z',
+    updatedAt: '2026-08-20T12:00:00.000Z',
+  } satisfies AthleticsEvent,
+};
 
 const emptyDashboard: DashboardSummary = {
   state: 'summary',
@@ -54,7 +88,8 @@ vi.mock('./api/workspaces', async (importOriginal) => ({
 }));
 vi.mock('./api/fixtures', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api/fixtures')>()),
-  respondToFixtureInvitation: fixtureApi.respondToFixtureInvitation,
+  listIncomingFixtureInvitations: fixtureApi.listIncomingFixtureInvitations,
+  respondToIncomingFixtureInvitation: fixtureApi.respondToIncomingFixtureInvitation,
 }));
 
 vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
@@ -76,7 +111,9 @@ describe('App', () => {
     dashboardApi.getDashboardSummary.mockReset();
     dashboardApi.getDashboardSummary.mockResolvedValue(emptyDashboard);
     workspaceApi.acceptWorkspaceInvitation.mockReset();
-    fixtureApi.respondToFixtureInvitation.mockReset();
+    fixtureApi.listIncomingFixtureInvitations.mockReset();
+    fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
+    fixtureApi.respondToIncomingFixtureInvitation.mockReset();
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -186,15 +223,16 @@ describe('App', () => {
     expect(workspaceApi.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
   });
 
-  it('lets an assistant respond to a fixture invitation', async () => {
+  it('lets an assistant respond to an in-app fixture invitation', async () => {
     const user = userEvent.setup();
     authState.isAuthenticated = true;
-    fixtureApi.respondToFixtureInvitation.mockResolvedValue(undefined);
-    window.history.replaceState({}, '', '/fixture-invitations/token-123');
+    fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [incomingFixtureInvitation], meta: { count: 1 } });
+    fixtureApi.respondToIncomingFixtureInvitation.mockResolvedValue(incomingFixtureInvitation);
+    window.history.replaceState({}, '', '/console/fixtures');
 
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Accept fixture' }));
+    await user.click(await screen.findByRole('button', { name: 'Accept fixture' }));
 
-    expect(fixtureApi.respondToFixtureInvitation).toHaveBeenCalledWith('token-123', 'accepted', undefined);
+    expect(fixtureApi.respondToIncomingFixtureInvitation).toHaveBeenCalledWith('fixture-invitation-1', 'accepted', undefined);
   });
 });
