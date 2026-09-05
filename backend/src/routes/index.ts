@@ -10,6 +10,7 @@ import dashboardRouter from './dashboard.js';
 import statisticsRouter from './statistics.js';
 import weatherRouter from './weather.js';
 import workspacesRouter from './workspaces.js';
+import aiRouter from './ai.js';
 import venuesRouter from './venues.js';
 import fixturesRouter, { fixtureHostRouter } from './fixtures.js';
 import injuriesRouter from './injuries.js';
@@ -84,6 +85,12 @@ router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRo
 router.use('/clubs', clubsRouter);
 router.use('/', eventHelpersRouter);
 router.use('/', syncRouter);
+router.use(
+  '/ai',
+  verifyAuth0Token,
+  resolveApplicationUser,
+  aiRouter,
+);
 router.use(
   '/athletes',
   verifyAuth0Token,
