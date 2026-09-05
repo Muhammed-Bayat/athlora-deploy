@@ -6,6 +6,7 @@ import App from './App';
 import { Auth0TokenBridge } from './features/auth/Auth0TokenBridge';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { PublicLoggerPage } from './features/publicLogger/PublicLoggerPage';
+import { auth0ProviderOptions } from './utils/auth0';
 
 const rootElement = document.getElementById('root');
 
@@ -27,13 +28,7 @@ createRoot(rootElement).render(
   <StrictMode>
     {isPublicLoggerRoute ? <BrowserRouter><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></BrowserRouter> :
     <Auth0Provider
-      domain={domain!}
-      clientId={clientId!}
-      authorizationParams={{
-          audience: audience!,
-        redirect_uri: window.location.origin,
-        scope: 'openid profile email',
-      }}
+      {...auth0ProviderOptions(domain!, clientId!, audience!, window.location.origin)}
       onRedirectCallback={(appState) => {
         const returnTo = appState?.returnTo;
         const target = typeof returnTo === 'string' && (returnTo.startsWith('/console') || /^\/invitations\/[^/]+$/.test(returnTo))
