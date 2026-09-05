@@ -37,8 +37,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,glb,json}'],
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
         runtimeCaching: [
           {
             urlPattern: /\/api\/v1\/.*/i,
@@ -75,6 +74,17 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'athlora-fontshare',
+            },
+          },
+          {
+            urlPattern: /\.glb$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'athlora-3d-models',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
             },
           },
         ],
