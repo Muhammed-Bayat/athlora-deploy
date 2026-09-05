@@ -44,6 +44,16 @@ const APP_TABLES = [
   'account_deletions',
   'event_reminders',
   'event_reminder_mutes',
+  'event_helper_invitations',
+  'event_helper_grants',
+  'event_helper_audit_logs',
+  'public_logger_links',
+  'public_logger_sessions',
+  'fixture_notifications',
+  'athlete_injuries',
+  'sync_action_receipts',
+  'clubs',
+  'club_join_requests',
 ];
 
 async function resetDatabase(): Promise<void> {
