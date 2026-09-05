@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,7 @@ import { CoachConsole } from './CoachConsole';
 import { ApiError } from '../../api/client';
 
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
+const permissionsQuery = vi.hoisted(() => vi.fn());
 
 vi.mock('../../api/weather', () => weatherApi);
 
@@ -72,11 +73,21 @@ describe('CoachConsole dashboard navigation', () => {
   });
 
   beforeEach(() => {
+    sessionStorage.clear();
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
       value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: -26.2041, longitude: 28.0473 } } as GeolocationPosition) },
     });
+    permissionsQuery.mockResolvedValue({ state: 'granted' });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: permissionsQuery },
+    });
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ latitude: -26.2041, longitude: 28.0473, timezone: 'Africa/Johannesburg' }] }),
+    } as Response);
     vi.mocked(weatherApi.getCurrentWeather).mockRejectedValue(new Error('Weather service unavailable'));
   });
 
@@ -239,5 +250,149 @@ describe('CoachConsole dashboard navigation', () => {
 
     const message = await screen.findByText('Weather unavailable');
     expect(message.parentElement).toHaveAttribute('title', 'Weather unavailable. Check location permissions or try again.');
+  });
+
+  it('does not auto-invoke geolocation when permission is prompt', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'prompt' });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
+      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+    });
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('invokes geolocation when permission is granted and no cache exists', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'granted' });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
+      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+    });
+
+    renderConsole();
+
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+  });
+
+  it('uses sessionStorage cache and skips geolocation on repeat render', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'granted' });
+    const successCoords = { latitude: -26.2041, longitude: 28.0473 };
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({ coords: successCoords } as GeolocationPosition);
+    });
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
+      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+    });
+
+    renderConsole();
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+    getCurrentPosition.mockClear();
+
+    renderConsole();
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('uses timezone fallback when permission is denied', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'denied' });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
+      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+    });
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('uses timezone fallback when navigator.permissions is unavailable', async () => {
+    Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
+      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+    });
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('shows opt-in button when weather is loaded from timezone and permission is prompt', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'prompt' });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
+      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+    });
+
+    renderConsole();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Use device location' })).toBeInTheDocument();
+    });
+  });
+
+  it('does not show opt-in button when permission is granted and source is device', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'granted' });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
+      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+    });
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Use device location' })).not.toBeInTheDocument();
+  });
+
+  it('opts in to device location on button click', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'prompt' });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: PositionCallback) => {
+          success({ coords: { latitude: -33.8688, longitude: 151.2093 } } as GeolocationPosition);
+        },
+      },
+    });
+
+    weatherApi.getCurrentWeather.mockResolvedValue({
+      timezone: 'Australia/Sydney', temperatureC: 18, apparentTemperatureC: 17,
+      humidityPercent: 70, isDay: true, precipitationMm: 0, weatherCode: 1, windSpeedKmh: 15,
+    });
+
+    renderConsole();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Use device location' })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Use device location' }));
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalledWith(-33.8688, 151.2093));
+    expect(screen.queryByRole('button', { name: 'Use device location' })).not.toBeInTheDocument();
   });
 });

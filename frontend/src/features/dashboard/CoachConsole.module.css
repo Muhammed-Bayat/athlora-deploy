@@ -807,6 +807,38 @@
 
 .weatherReadout a:hover { color: var(--cyan-300); }
 
+.geoOptIn {
+  background: none;
+  border: 1px solid rgba(138, 233, 242, 0.20);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--cyan-200);
+  font-family: var(--font-family-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.geoOptIn:hover {
+  background: rgba(138, 233, 242, 0.10);
+  border-color: rgba(138, 233, 242, 0.38);
+  color: #EAF6FA;
+}
+
+:global(html.theme-light) .geoOptIn {
+  border-color: rgba(0, 78, 105, 0.18);
+  color: #007FA7;
+}
+
+:global(html.theme-light) .geoOptIn:hover {
+  background: rgba(0, 146, 188, 0.08);
+  border-color: rgba(0, 146, 188, 0.30);
+  color: #005A7A;
+}
+
 @keyframes signalPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.72); }

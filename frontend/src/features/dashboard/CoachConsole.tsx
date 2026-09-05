@@ -50,6 +50,55 @@ const THEME_STORAGE_KEY = 'athlora-theme';
 const WEATHER_PREF_KEY = 'athlora-weather-effects';
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_GEOCODE_BASE = 'https://geocoding-api.open-meteo.com/v1/search';
+const GEO_CACHE_KEY = 'athlora-geo-coords';
+const GEO_CACHE_TS_KEY = 'athlora-geo-ts';
+const GEO_CACHE_TTL = 10 * 60 * 1000;
+
+type LocationPermission = 'prompt' | 'granted' | 'denied' | 'unavailable';
+
+function getCachedCoordinates(): Coordinates | null {
+  try {
+    const raw = sessionStorage.getItem(GEO_CACHE_KEY);
+    const tsRaw = sessionStorage.getItem(GEO_CACHE_TS_KEY);
+    if (!raw || !tsRaw) return null;
+    const ts = Number(tsRaw);
+    if (Number.isNaN(ts) || Date.now() - ts > GEO_CACHE_TTL) {
+      sessionStorage.removeItem(GEO_CACHE_KEY);
+      sessionStorage.removeItem(GEO_CACHE_TS_KEY);
+      return null;
+    }
+    const coords = JSON.parse(raw) as unknown;
+    if (!isRecord(coords) || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') return null;
+    return { latitude: coords.latitude, longitude: coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+function setCachedCoordinates(coords: Coordinates): void {
+  try {
+    sessionStorage.setItem(GEO_CACHE_KEY, JSON.stringify(coords));
+    sessionStorage.setItem(GEO_CACHE_TS_KEY, String(Date.now()));
+  } catch { /* Storage is best-effort. */ }
+}
+
+function clearGeoCache(): void {
+  try {
+    sessionStorage.removeItem(GEO_CACHE_KEY);
+    sessionStorage.removeItem(GEO_CACHE_TS_KEY);
+  } catch { /* Storage is best-effort. */ }
+}
+
+async function checkGeolocationPermission(): Promise<LocationPermission> {
+  if (!('geolocation' in navigator) || !window.isSecureContext) return 'unavailable';
+  try {
+    if (!navigator.permissions?.query) return 'unavailable';
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    return status.state as LocationPermission;
+  } catch {
+    return 'unavailable';
+  }
+}
 
 interface LiveWeather {
   label: string;
@@ -261,16 +310,26 @@ async function resolveTimezoneCoordinates(): Promise<Coordinates | null> {
   }
 }
 
-function resolveDeviceCoordinates(): Promise<Coordinates | null> {
+async function resolveDeviceCoordinates(force?: boolean): Promise<Coordinates | null> {
+  if (!('geolocation' in navigator) || !window.isSecureContext) return null;
+
+  if (!force) {
+    const cached = getCachedCoordinates();
+    if (cached) return cached;
+
+    const permission = await checkGeolocationPermission();
+    if (permission !== 'granted') return null;
+  }
+
   return new Promise((resolve) => {
-    if (!('geolocation' in navigator) || !window.isSecureContext) {
-      resolve(null);
-      return;
-    }
     navigator.geolocation.getCurrentPosition(
-      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        setCachedCoordinates(coords);
+        resolve(coords);
+      },
       () => resolve(null),
-      { enableHighAccuracy: false, timeout: 9000, maximumAge: 10 * 60 * 1000 },
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: GEO_CACHE_TTL },
     );
   });
 }
@@ -288,6 +347,7 @@ export function CoachConsole() {
   const [weatherPrecipitation, setWeatherPrecipitation] = useState(4);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
   const [liveWeatherError, setLiveWeatherError] = useState<string | null>(null);
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>('unavailable');
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
@@ -313,6 +373,32 @@ export function CoachConsole() {
   const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem(WEATHER_PREF_KEY, next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
   const toggleTheme = () => setThemeLight((light) => { const next = !light; try { localStorage.setItem(THEME_STORAGE_KEY, next ? 'light' : 'dark'); } catch { /* Preference persistence is optional. */ } return next; });
 
+  const optInDeviceLocation = async () => {
+    const coords = await resolveDeviceCoordinates(true);
+    if (coords) {
+      setLocationPermission('granted');
+      void getCurrentWeather(coords.latitude, coords.longitude)
+        .then((data) => {
+          const atmosphere = classifyWeather(data.weatherCode);
+          setLiveWeather({
+            label: weatherLabel(data.weatherCode),
+            temperature: Math.round(data.temperatureC),
+            atmosphere,
+            isDay: data.isDay,
+            source: 'device',
+          });
+          setWeather(() => {
+            const base = atmosphere === 'fog' ? 'fog' : atmosphere === 'rain' ? 'rain' : atmosphere === 'snow' ? 'snow' : atmosphere === 'storm' ? 'storm' : atmosphere === 'cloudy' ? 'cloudy' : atmosphere === 'partly' ? 'partly' : 'clear';
+            return data.isDay ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
+          });
+          setIsNight(!data.isDay);
+          setWeatherPrecipitation(data.precipitationMm);
+          setLiveWeatherError(null);
+        })
+        .catch(() => {});
+    }
+  };
+
   const changeWorkspace = (workspaceId: string) => {
     if (workspaceId === activeWorkspace.id) return;
     selectWorkspace(workspaceId);
@@ -327,7 +413,14 @@ export function CoachConsole() {
   }, [themeLight]);
 
   useEffect(() => {
+    let current = true;
+    checkGeolocationPermission().then((state) => { if (current) setLocationPermission(state); });
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
     if (!weatherEnabled) {
+      clearGeoCache();
       setLiveWeather(null);
       setLiveWeatherError(null);
       return;
@@ -436,7 +529,7 @@ export function CoachConsole() {
            <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
-          <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
+          <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{liveWeather && liveWeather.source === 'timezone' && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
           <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <div className={styles.clock}><LiveTime /></div>
         </div>
