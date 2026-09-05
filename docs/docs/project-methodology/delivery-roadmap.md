@@ -131,11 +131,29 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 
 #### 2.4 Offline-First Logging
 
-1. Add Dexie/IndexedDB so live entries are written locally before network sync.
-2. Add `vite-plugin-pwa` for an installable shell and service-worker caching.
-3. Drain queued actions in order on reconnect; Stage 2 uses last-write-wins while Stage 3 adds deterministic merge rules.
-4. Add Socket.IO event rooms for live updates when online.
-5. Add Playwright coverage for offline logging, reconnection, and synchronization.
+**Status: In Progress**
+
+| Work tracked | Delivered through |
+|---|---|
+| PWA shell + service worker caching | `vite-plugin-pwa` configuration, manifest, icons |
+| IndexedDB offline queue via Dexie | `frontend/src/offline/db.ts`, `actionQueue.ts` |
+| Designated offline logger | Migration `0019`, backend service + routes, frontend UI |
+| Idempotent batch sync endpoint | Migration `0020`, `POST /api/v1/sync/batch` |
+| Sync engine + queue drain | `frontend/src/offline/syncEngine.ts` |
+| Queue status UI | `frontend/src/features/timeline/QueueStatusBadge.tsx` |
+| Offline detection | `frontend/src/hooks/useOnlineStatus.ts` |
+| Backend tests | `backend/src/services/sync.test.ts` |
+| Frontend tests | `frontend/src/offline/actionQueue.test.ts`, `designationGuard.test.ts`, `syncEngine.test.ts` |
+| Playwright E2E | `e2e/tests/offline-logging.spec.ts` |
+
+Key outcomes:
+
+- Installable PWA with service worker caching app shell and API responses.
+- IndexedDB offline queue for create/edit/undo actions with deterministic ordering.
+- One designated offline logger per event with transfer protocol.
+- Idempotent batch sync with version conflict detection.
+- Deterministic queue drain with result recomputation.
+- Sign-out/revocation cleanup of offline data.
 
 ### Stage 3: Collaborative Meets and Season Tools
 

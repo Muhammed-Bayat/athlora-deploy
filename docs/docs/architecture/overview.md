@@ -14,19 +14,30 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 ┌────────────────────────┐         HTTP (JSON)         ┌────────────────────────┐
 │  React + Vite (Vercel) │  ────────────────────────►  │  Express API (Render)  │
 │  /frontend             │  /api/v1/*  (Bearer JWT)   │  /backend              │
+│                        │  /api/v1/sync/batch         │                        │
 └────────────────────────┘                             └────────────┬───────────┘
         │ Auth0 (login)                                              │ SQL
         │                                                           ▼
         │                                              ┌────────────────────────┐
         └──────────── Auth0 tenant ────────────────────│   PostgreSQL (Neon)    │
-                                                      │   migrations in /db    │
-                                                      └────────────────────────┘
+                                                       │   migrations in /db    │
+                                                       └────────────────────────┘
+
+┌────────────────────────┐
+│  PWA Service Worker    │
+│  - App shell cache     │
+│  - API response cache  │
+│  - IndexedDB (Dexie)   │
+│  - Offline action queue│
+└────────────────────────┘
 ```
 
 ## Frontend
 
 - **State & structure**: feature folders (`src/features/*`). Shared primitives in `src/components`.
 - **API access**: shared typed fetch client in `src/api/client.ts` preserves structured API error status/code/details; the roster consumes `src/api/athletes.ts` for list/create/full-replacement/archive/restore operations. The Auth0 bridge withholds authenticated content until `PUT /api/v1/auth/me` has synchronized the application user, and unauthenticated console entry invokes Auth0 rather than exposing protected views.
+- **Offline-first**: Dexie/IndexedDB stores create/edit/undo actions in an offline queue when the network is unavailable. The designated offline logger per event owns the queue. On reconnect, the queue drains through `POST /api/v1/sync/batch` with idempotent action processing and optimistic version conflict detection.
+- **PWA**: vite-plugin-pwa configures a service worker that caches the app shell and API responses. The app is installable with a manifest matching the Athlora branding.
 - **Realtime**: online Socket.IO event subscriptions use the current Auth0 token and selected workspace context. They deliver only version-aware invalidations; feature screens refetch canonical HTTP state. Offline/PWA sync remains a later stage.
 - **Design**: CSS variables from `src/styles/tokens.css`, CSS modules per component, Google Fonts loaded in `index.html`.
 - **Public landing experience**: semantic React/HTML content remains separate from one lazy-loaded cinematic layer. The desktop hero reveals the approved SDP-Landing track exactly — a 2D SVG oval (8 gradient lanes, start line, distance marks, lane numbers and javelin throw sector) shown in a soft-feather circular window that follows the pointer using the mockup's static alpha mask (so there is no hard lens ring) alongside a matching cursor glow; the SVG is tilted with a strong perspective for a more 3D read. From the features section downward, the lazy-loaded cinematic layer is a direct DOM/CSS port of the mockup's chase-camera rig: the same shared SVG oval is mounted in a two-layer wrapper where the track object translates by the negative runner position while an oblique drone camera (60° pitch, bend-dependent bank, fit-scaled zoom, yaw steered along the lane) completes one full lap exactly when the page is scrolled to the bottom. The shared `TrackArtwork` SVG and the per-frame camera/object transforms match the mockup exactly, and the whole scene fades per section (features `.23` → preview `.20` → how `.15` → faq `.075`). Camera easing is frame-rate independent (an 82ms exponential damping constant) so fast scrolling stays smooth and crisp, while the dark aurora background is preserved. Mobile and reduced-motion modes hide the scene entirely (matching the mockup) and hide the hero reveal. Actual scroll position enforces the hero/cinematic visibility boundary, and the scene does not change Auth0 or API behavior.
@@ -67,7 +78,11 @@ Socket authorization is rechecked on every explicit event subscription. A subscr
 
 ## Implementation status
 
-Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, Open-Meteo forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. The public landing page and premium coach console implement the approved SVG/CSS visual direction without changing service boundaries. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines. Quality gates include unit/API integration suites, cross-coach isolation tests, and a desktop/mobile Playwright vertical slice with axe checks against a scratch PostgreSQL database.
+Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, Open-Meteo forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. The public landing page and premium coach console implement the approved SVG/CSS visual direction without changing service boundaries. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines.
+
+Implemented in Stage 2 (partial): offline-first PWA with service worker caching, IndexedDB action queue via Dexie, designated offline logger per event, idempotent batch sync endpoint, and optimistic version conflict detection. The app is installable as a Progressive Web App with offline shell and deterministic queue drain on reconnect.
+
+Quality gates include unit/API integration suites, cross-coach isolation tests, and a desktop/mobile Playwright vertical slice with axe checks against a scratch PostgreSQL database.
 
 ## AI declaration
 

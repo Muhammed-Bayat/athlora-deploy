@@ -34,11 +34,17 @@ fixture_invitation_responses (id UUID PK, invitation_id, revision, workspace_id,
 event_participants   (event_id, athlete_id, participant_workspace_id, rsvp_status) — PK (event_id, athlete_id)
 event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status, flagged_at,
                                   acknowledged_at, acknowledged_by) — PK (event_id, athlete_id)
+event_helper_invitations (id UUID PK, event_id, secret_hash, human_code, max_cap, status, created_by)
+event_helper_grants  (id UUID PK, invitation_id, event_id, auth0_sub, status, redeemed_at,
+                       is_offline_logger, offline_queue_device_id)
+event_helper_audit_logs (id UUID PK, event_id, invitation_id, action, actor_sub, details)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
                        is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
                        — PK (event_id, athlete_id, discipline)
+sync_action_receipts (action_id UUID PK, event_id, actor_id, device_id, action_type, status,
+                      entry_id, server_version, error_code, processed_at)
 account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
                        requested_at, updated_at, completed_at)
 athlete_injuries     (id UUID PK, workspace_id -> workspaces, athlete_id -> athletes, body_region, area,

@@ -16,6 +16,7 @@ import injuriesRouter from './injuries.js';
 import comparisonRouter from './comparison.js';
 import eventHelpersRouter from './eventHelpers.js';
 import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js';
+import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
@@ -82,6 +83,7 @@ router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWor
 router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRouter);
 router.use('/clubs', clubsRouter);
 router.use('/', eventHelpersRouter);
+router.use('/', syncRouter);
 router.use(
   '/athletes',
   verifyAuth0Token,
