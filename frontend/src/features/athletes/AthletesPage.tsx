@@ -23,7 +23,10 @@ type Editor = 'new' | Athlete | null;
 
 export interface AthletesPageProps {
   onActiveCountChange?: (count: number) => void;
+  onOpenAthlete?: (athleteId: string, openFitness?: boolean) => void;
+  onBackToRoster?: () => void;
   initialAthleteId?: string | null;
+  initialFitnessOpen?: boolean;
 }
 
 function sorted(athletes: Athlete[]): Athlete[] {
@@ -54,7 +57,7 @@ function statusLabel(status: AthleteStatus): string {
   return status[0].toUpperCase() + status.slice(1);
 }
 
-export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: AthletesPageProps = {}) {
+export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoster, initialAthleteId = null, initialFitnessOpen = false }: AthletesPageProps = {}) {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(initialAthleteId);
-  const [openFitnessOnLoad, setOpenFitnessOnLoad] = useState(false);
+  const [openFitnessOnLoad, setOpenFitnessOnLoad] = useState(initialFitnessOpen);
   const [injurySummaries, setInjurySummaries] = useState<Map<string, AthleteActiveInjurySummary>>(new Map());
   const [injuryLoading, setInjuryLoading] = useState(true);
   const [injuryError, setInjuryError] = useState<string | null>(null);
@@ -209,12 +212,25 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
     setStatusFilter('active');
   };
 
+  const openAthlete = (athleteId: string, openFitness = false) => {
+    if (onOpenAthlete) {
+      onOpenAthlete(athleteId, openFitness);
+      return;
+    }
+    setOpenFitnessOnLoad(openFitness);
+    setSelectedAthleteId(athleteId);
+  };
+
   if (selectedAthleteId) {
     return (
       <AthleteDetailPage
         athleteId={selectedAthleteId}
         initialFitnessOpen={openFitnessOnLoad}
         onBack={() => {
+          if (onBackToRoster) {
+            onBackToRoster();
+            return;
+          }
           returnFocusAthleteId.current = selectedAthleteId;
           setOpenFitnessOnLoad(false);
           setSelectedAthleteId(null);
@@ -336,7 +352,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                   <CompactAnatomy
                     injuries={injurySummaries.get(athlete.id)?.activeInjuries ?? []}
                     highestSeverity={injurySummaries.get(athlete.id)?.highestSeverity ?? null}
-                    onOpenFitness={() => { setOpenFitnessOnLoad(true); setSelectedAthleteId(athlete.id); }}
+                    onOpenFitness={() => openAthlete(athlete.id, true)}
                     disabled={athlete.status === 'archived'}
                   />
                 )}
@@ -349,7 +365,7 @@ export function AthletesPage({ onActiveCountChange, initialAthleteId = null }: A
                     else performanceButtonRefs.current.delete(athlete.id);
                   }}
                   className={styles.performanceAction}
-                  onClick={() => { setOpenFitnessOnLoad(false); setSelectedAthleteId(athlete.id); }}
+                  onClick={() => openAthlete(athlete.id)}
                   disabled={pendingId !== null}
                 >
                   View performance

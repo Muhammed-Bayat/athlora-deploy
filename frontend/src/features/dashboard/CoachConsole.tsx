@@ -299,7 +299,10 @@ export function CoachConsole() {
       : location.pathname.includes('/live') ? 'live'
         : location.pathname.includes('/account') ? 'account' : 'dashboard';
   const navigate = (view: ConsoleView, targetId?: string) => {
-    const path = view === 'dashboard' ? '/console' : `/console/${view}${targetId ? `/${targetId}` : ''}`;
+    const rootPath = view === 'dashboard' ? '/console' : `/console/${view}`;
+    const search = !targetId && destination === view ? location.search : '';
+    const path = `${targetId ? `${rootPath}/${targetId}` : rootPath}${search}`;
+    if (`${location.pathname}${location.search}` === path) return;
     routerNavigate(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -441,14 +444,14 @@ export function CoachConsole() {
       <main className={styles.content}>
         {location.pathname === '/console' && <><IncomingFixtureInvitations compact /><DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} /></>}
         {location.pathname === '/console/stats' && <DashboardPage key={`stats:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
-        {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} />}
-        {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}`} initialAthleteId={location.pathname.split('/').pop()} onActiveCountChange={setRosterCount} />}
+        {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} onOpenAthlete={(id, openFitness) => routerNavigate(`/console/athletes/${id}${openFitness ? '?fitness=1' : ''}`)} />}
+        {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}${location.search}`} initialAthleteId={location.pathname.split('/').pop()} initialFitnessOpen={new URLSearchParams(location.search).get('fitness') === '1'} onActiveCountChange={setRosterCount} onBackToRoster={() => routerNavigate('/console/athletes')} />}
         {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
         {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
           {location.pathname === '/console/fixtures' && <><IncomingFixtureInvitations /><FixturesPage key={`fixtures:${activeWorkspace.id}`} /></>}
-        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
-        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} onOpenEvent={(id) => navigate('live', id)} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} onBackToEventList={() => routerNavigate('/console/live')} />}
         {location.pathname === '/console/account' && <AuthPage />}
       </main>
     </div>
