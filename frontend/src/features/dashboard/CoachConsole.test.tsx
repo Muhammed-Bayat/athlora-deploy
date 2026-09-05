@@ -84,6 +84,10 @@ describe('CoachConsole dashboard navigation', () => {
       configurable: true,
       value: { query: permissionsQuery },
     });
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ latitude: -26.2041, longitude: 28.0473, timezone: 'Africa/Johannesburg' }] }),
+    } as Response);
     vi.mocked(weatherApi.getCurrentWeather).mockRejectedValue(new Error('Weather service unavailable'));
   });
 
