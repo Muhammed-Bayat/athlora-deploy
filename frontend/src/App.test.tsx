@@ -153,6 +153,15 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: 'Add athlete' })).toBeInTheDocument();
   });
 
+  it('renders the current nested console route after authenticated initialization', async () => {
+    authState.isAuthenticated = true;
+    window.history.replaceState({}, '', '/console/athletes');
+
+    render(<App />);
+
+    expect((await screen.findAllByRole('heading', { name: 'Athletes' })).length).toBeGreaterThan(1);
+  });
+
   it('applies and clears the night weather theme state', async () => {
     const user = userEvent.setup();
     authState.isAuthenticated = true;
