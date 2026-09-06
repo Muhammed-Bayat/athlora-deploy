@@ -379,7 +379,7 @@ describe('owned resource routes', () => {
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ type: 'competition', discipline: '100m', status: 'scheduled', fixture_revision: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ type: 'training', discipline: null, status: 'scheduled', fixture_revision: 1 }] })
       .mockResolvedValueOnce({ rows: [{ workspace_id: TARGET_WORKSPACE_ID, workspace_name: 'Guest Club' }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({

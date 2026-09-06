@@ -140,9 +140,6 @@ async function lockHostedFixture(
 }
 
 function assertFixtureCanBeScheduled(event: { type: string; discipline: string | null; status: string }): void {
-  if (event.type !== 'competition' || event.discipline !== '100m') {
-    throw new ApiError(409, 'FIXTURE_EVENT_INELIGIBLE', 'Only 100m competition events can host fixtures');
-  }
   if (event.status !== 'scheduled') {
     throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture teams can only change before the event starts');
   }

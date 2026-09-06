@@ -61,7 +61,7 @@ export function IncomingFixtureInvitations({ compact = false }: { compact?: bool
   if (loading || invitations.length === 0) return null;
   const invitationCard = (invitation: IncomingFixtureInvitation, detailed = false) => <Card key={invitation.id}>
     <h3>{invitation.event.title}</h3>
-    <p>{invitation.event.type === 'competition' ? 'Competition' : 'Training'} · 100m</p>
+    <p>{invitation.event.type === 'competition' ? 'Competition' : 'Training'}{invitation.event.discipline ? ` · ${invitation.event.discipline}` : ''}</p>
     <p><strong>Date</strong> {invitation.event.date} · <strong>Time</strong> {invitation.event.time ?? 'Time not set'}</p>
     <p><strong>Location</strong> {invitation.event.locationName ?? 'Venue not set'}</p>
     <p><strong>Respond by</strong> {new Date(invitation.expiresAt).toLocaleString()}</p>
