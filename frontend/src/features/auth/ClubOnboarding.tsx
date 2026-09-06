@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button, Card, Input } from '../../components';
 import { ApiError } from '../../api/client';
 import { createClub, listClubs, listMyClubJoinRequests, requestToJoinClub, withdrawClubJoinRequest } from '../../api/clubs';
@@ -16,6 +16,7 @@ export function ClubOnboarding({ onMembershipAvailable }: { onMembershipAvailabl
   const [clubName, setClubName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const membershipRefreshRequested = useRef(false);
 
   const load = async (query = search) => {
     const [clubResponse, requestResponse] = await Promise.all([listClubs(query), listMyClubJoinRequests()]);
@@ -29,6 +30,38 @@ export function ClubOnboarding({ onMembershipAvailable }: { onMembershipAvailabl
       setRequests(requestResponse.data);
     }).catch((loadError: unknown) => setError(errorMessage(loadError)));
   }, []);
+
+  useEffect(() => {
+    if (requests.some((request) => request.status === 'approved')) {
+      if (!membershipRefreshRequested.current) {
+        membershipRefreshRequested.current = true;
+        onMembershipAvailable();
+      }
+      return;
+    }
+    if (!requests.some((request) => request.status === 'pending')) return;
+
+    let active = true;
+    const refreshRequests = async () => {
+      try {
+        const response = await listMyClubJoinRequests();
+        if (!active) return;
+        setRequests(response.data);
+        if (response.data.some((request) => request.status === 'approved') && !membershipRefreshRequested.current) {
+          membershipRefreshRequested.current = true;
+          onMembershipAvailable();
+        }
+      } catch (refreshError: unknown) {
+        if (active) setError(errorMessage(refreshError));
+      }
+    };
+    const interval = window.setInterval(() => void refreshRequests(), 10_000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [onMembershipAvailable, requests]);
 
   const create = async (event: FormEvent) => {
     event.preventDefault();

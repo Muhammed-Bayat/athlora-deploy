@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { getApplicationUserContext } from '../middleware/auth.js';
+import { getApplicationUserContext, getLocalApplicationUserContext } from '../middleware/auth.js';
 import { acceptInvitation, changeMemberRole, createInvitation, listInvitations, listMembers, listWorkspaces, removeMember, resendInvitation, revokeInvitation } from '../services/workspaces.js';
 import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
@@ -11,9 +11,13 @@ function parameter(value: string | string[] | undefined): string {
 
 export const listAccessibleWorkspaces: RequestHandler = async (req, res, next) => {
   try {
-    const { userId, workspaceId } = getApplicationUserContext(req);
+    const { userId } = getLocalApplicationUserContext(req);
     const workspaces = await listWorkspaces(userId);
-    res.json({ data: workspaces, meta: { count: workspaces.length, activeWorkspaceId: workspaceId } });
+    const requestedWorkspaceId = req.header('X-Workspace-Id');
+    const activeWorkspaceId = workspaces.find((workspace) => workspace.id === requestedWorkspaceId)?.id
+      ?? workspaces[0]?.id
+      ?? '';
+    res.json({ data: workspaces, meta: { count: workspaces.length, activeWorkspaceId } });
   } catch (error) {
     next(error);
   }
