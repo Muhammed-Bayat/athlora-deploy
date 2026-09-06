@@ -39,9 +39,9 @@ body {
 
 html.theme-light body {
   background:
-    radial-gradient(980px 660px at 86% -5%, rgba(73, 195, 216, 0.27), transparent 58%),
-    radial-gradient(760px 560px at 3% 72%, rgba(0, 125, 164, 0.16), transparent 67%),
-    linear-gradient(180deg, #C3DEE5 0%, #D0E6EB 48%, #BBD6DE 100%);
+    radial-gradient(800px 480px at 88% -8%, rgba(24, 43, 51, 0.055), transparent 60%),
+    radial-gradient(680px 480px at 3% 72%, rgba(24, 43, 51, 0.035), transparent 68%),
+    #F4F6F7;
 }
 
 h1,

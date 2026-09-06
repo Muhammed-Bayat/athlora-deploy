@@ -38,17 +38,32 @@
 }
 
 .loading {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: repeat(3, 12px);
   align-content: center;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 143, 181, 0.25), transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0, 58, 83, 0.22), transparent 70%), #000307;
+}
+
+.loading::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: 0.42;
+  background-image: radial-gradient(circle, rgba(138, 233, 242, 0.82) 0 1px, transparent 1.8px);
+  background-size: 32px 32px;
+  content: '';
+  animation: loadingField 12s linear infinite;
 }
 
 .loading span {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--cyan-400);
-  box-shadow: 0 0 14px rgba(69, 190, 215, 0.5);
+  background: #91f7ff;
+  box-shadow: 0 0 18px 2px rgba(105, 237, 248, 0.72);
   animation: dashboardPulse 0.9s ease-in-out infinite alternate;
 }
 
@@ -61,6 +76,8 @@
 @keyframes dashboardPulse {
   to { opacity: 0.3; transform: translateY(-4px); }
 }
+
+@keyframes loadingField { to { background-position: 32px -32px; } }
 
 /* ---------- Shared hero ---------- */
 
@@ -76,8 +93,8 @@
     radial-gradient(620px 440px at 82% 20%, rgba(69, 190, 215, 0.17), transparent 66%),
     radial-gradient(620px 440px at 12% 115%, rgba(0, 94, 131, 0.24), transparent 68%),
     linear-gradient(120deg, #00070D 0%, #001225 55%, #001D3C 100%);
-  border: 1px solid rgba(138, 233, 242, 0.13);
-  box-shadow: 0 36px 90px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(138, 233, 242, 0.07);
+  box-shadow: 0 36px 90px rgba(0, 0, 0, 0.40), 0 0 0 1px rgba(69, 190, 215, 0.035), 0 0 74px rgba(0, 118, 151, 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .summaryHero::before,
@@ -109,6 +126,9 @@
   mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.32) 30%, #000 100%);
   pointer-events: none;
 }
+
+.revealed .summaryHero::after { animation: heroFieldDrift 26s linear infinite alternate; }
+@keyframes heroFieldDrift { to { background-position: 18px -14px, -18px 14px, center; } }
 
 .summaryHero {
   grid-template-columns: 1.12fr 0.88fr;
@@ -145,6 +165,8 @@
   color: var(--cyan-200);
 }
 
+.revealed .summaryKicker { animation: dashboardReveal 0.55s 0.04s both; }
+
 .summaryKicker span {
   width: 7px;
   height: 7px;
@@ -161,6 +183,7 @@
 
 .summaryHero h2,
 .liveHero h2 {
+  display: grid;
   max-width: 8.5ch;
   margin: 22px 0 15px;
   font: 700 clamp(50px, 5.2vw, 68px)/0.92 var(--font-display);
@@ -168,13 +191,19 @@
   color: #F7FDFF;
 }
 
-.summaryHero h2 span {
+.summaryHero h2 .heroAccent {
   background: linear-gradient(95deg, #D6FBFF 0%, var(--cyan-200) 42%, var(--cyan-400) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   filter: drop-shadow(0 0 18px rgba(69, 190, 215, 0.12));
 }
+
+.heroLine { display: block; }
+.revealed .heroLine { animation: dashboardReveal 0.72s both; }
+.revealed .heroLine:nth-child(1) { animation-delay: 0.12s; }
+.revealed .heroLine:nth-child(2) { animation-delay: 0.22s; }
+.revealed .heroLine:nth-child(3) { animation-delay: 0.32s; }
 
 .summaryLead {
   max-width: 52ch;
@@ -183,6 +212,8 @@
   font-size: 14.5px;
   line-height: 1.65;
 }
+
+.revealed .summaryLead { animation: dashboardReveal 0.64s 0.42s both; }
 
 .summaryLead strong {
   color: #F0FAFD;
@@ -193,6 +224,8 @@
   align-items: flex-end;
   gap: 30px;
 }
+
+.revealed .summaryMeta { animation: dashboardReveal 0.64s 0.52s both; }
 
 .summaryMeta div {
   display: flex;
@@ -291,6 +324,7 @@
 }
 
 .summaryOrbit > p {
+  position: relative;
   margin: 10px 0 0;
   padding: 7px 12px;
   border: 1px solid rgba(138, 233, 242, 0.11);
@@ -301,6 +335,12 @@
   text-align: center;
   backdrop-filter: blur(6px);
 }
+
+.summaryOrbit > p::before { position: absolute; top: -1.6rem; left: 50%; width: 1px; height: 1.35rem; background: linear-gradient(var(--cyan-200), transparent); box-shadow: 0 0 9px rgba(138, 233, 242, 0.5); content: ''; }
+.summaryOrbit > p::after { position: absolute; top: -1.82rem; left: calc(50% - 3px); width: 6px; height: 6px; border: 1px solid var(--cyan-200); border-radius: 50%; background: #001426; box-shadow: 0 0 12px rgba(138, 233, 242, 0.55); content: ''; }
+.revealed .summaryOrbit { animation: dashboardReveal 0.75s 0.36s both; }
+
+@keyframes dashboardReveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
 .summaryOrbit > p strong {
   color: var(--cyan-200);
@@ -328,6 +368,12 @@
   box-shadow: var(--inner-highlight), var(--shadow-premium);
   transition: transform 0.26s var(--ease), border-color 0.26s var(--ease), box-shadow 0.26s var(--ease);
 }
+
+.revealed .statCard { animation: dashboardReveal 0.68s both; }
+.revealed .statCard:nth-child(1) { animation-delay: 0.5s; }
+.revealed .statCard:nth-child(2) { animation-delay: 0.58s; }
+.revealed .statCard:nth-child(3) { animation-delay: 0.66s; }
+.revealed .statCard:nth-child(4) { animation-delay: 0.74s; }
 
 .statCard::before {
   content: '';
@@ -1372,7 +1418,15 @@ button.resultRow:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading span { animation: none; }
+  .loading span,
+  .loading::before,
+  .revealed .summaryHero::after,
+  .revealed .summaryKicker,
+  .revealed .heroLine,
+  .revealed .summaryLead,
+  .revealed .summaryMeta,
+  .revealed .summaryOrbit,
+  .revealed .statCard { animation: none; }
   .orbitTrack i { animation: none; }
   .orbitTrack i:nth-of-type(1) { offset-distance: 0%; }
   .orbitTrack i:nth-of-type(2) { offset-distance: 34%; }
@@ -1402,3 +1456,34 @@ button.resultRow:hover {
   color: var(--cyan-200);
   font-family: var(--font-family-mono);
 }
+
+/* Neutral light surfaces keep dashboard data readable and reserve teal for signals. */
+:global(html.theme-light) .statCard,
+:global(html.theme-light) .statCard.featured,
+:global(html.theme-light) .panel,
+:global(html.theme-light) .apiPanel,
+:global(html.theme-light) .metricGrid article {
+  background: #FFFFFF;
+  border-color: rgba(18, 35, 43, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 14px 34px rgba(20, 33, 40, 0.07);
+}
+
+:global(html.theme-light) .statCard:hover { border-color: rgba(0, 146, 188, 0.22); box-shadow: 0 19px 42px rgba(20, 33, 40, 0.12); }
+:global(html.theme-light) .statCard::before { background: linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.3), transparent); }
+:global(html.theme-light) .statCard::after { background: radial-gradient(circle, rgba(0, 146, 188, 0.06), transparent 70%); }
+:global(html.theme-light) .statIcon { background: #F1F7F7; border-color: transparent; color: #007796; }
+:global(html.theme-light) .statDelta { color: #00637D; background: #E3F4F5; border-color: transparent; }
+:global(html.theme-light) .statNum, :global(html.theme-light) .panelHead h3, :global(html.theme-light) .panelHeader h2, :global(html.theme-light) .rowBody > strong, :global(html.theme-light) .eventDateBadge strong, :global(html.theme-light) .metricGrid strong { color: #152B34; }
+:global(html.theme-light) .statCard.featured .statNum, :global(html.theme-light) .resultValue > strong { color: #007796; }
+:global(html.theme-light) .statLabel, :global(html.theme-light) .statContext, :global(html.theme-light) .rowBody small, :global(html.theme-light) .resultValue small, :global(html.theme-light) .eventDateBadge span { color: #627279; }
+:global(html.theme-light) .statTrack { background: #E8EFF0; }
+:global(html.theme-light) .panel::before { background: linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.24), transparent); }
+:global(html.theme-light) button.apiRosterRow:hover, :global(html.theme-light) button.eventButton:hover, :global(html.theme-light) button.resultRow:hover { background: #F0F7F7; }
+:global(html.theme-light) .eventDateBadge { background: #F1F7F7; border-color: transparent; }
+:global(html.theme-light) .typeBadge, :global(html.theme-light) .archivedBadge { color: #00637D; background: #E3F4F5; border-color: transparent; }
+:global(html.theme-light) .trendPanel { background: #FFFFFF; border-color: rgba(18, 35, 43, 0.1); box-shadow: 0 14px 34px rgba(20, 33, 40, 0.07); }
+:global(html.theme-light) .trendPanel .panelHead h3 { color: #152B34; }
+:global(html.theme-light) .trendPanel .panelEyebrow, :global(html.theme-light) .trendRange { color: #63737A; }
+:global(html.theme-light) .trendInsight { background: #F5F8F8; border-color: rgba(18, 35, 43, 0.08); box-shadow: none; }
+:global(html.theme-light) .trendInsight small, :global(html.theme-light) .trendInsight strong { color: #007796; }
+:global(html.theme-light) .trendInsight p { color: #53636A; }

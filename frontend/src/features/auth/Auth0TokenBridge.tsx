@@ -159,9 +159,11 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
 
   return (
     <main className={styles.gate} aria-busy="true" aria-label="Synchronizing your account">
-      <p className={styles.status} role="status">
-        Preparing your account...
-      </p>
+      <div className={styles.loadingScene}>
+        <div className={styles.loadingBrand}><img src="/logo-removebg.png" alt="" /><span><strong>Athlora</strong><small>Athletics coaching</small></span></div>
+        <div className={styles.loadingSignal} aria-hidden="true"><i /><i /><i /></div>
+        <p className={styles.status} role="status">Preparing your account...</p>
+      </div>
     </main>
   );
 }

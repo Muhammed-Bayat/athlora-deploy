@@ -468,7 +468,7 @@
 
 .weatherOrigin {
   position: absolute;
-  right: 0;
+  right: 190px;
   top: 0;
   width: min(420px, 48vw);
   height: 100%;
@@ -590,7 +590,7 @@
 .console[data-weather=storm] .weatherOrigin .cloudOne,
 .console[data-weather=night] .weatherOrigin .cloudOne,
 .console[data-weather=night-rain] .weatherOrigin .cloudOne {
-  opacity: 1;
+  opacity: 0.78;
   transform: translateX(0) scale(1);
   animation: panelCloudDrift1 11s ease-in-out -2s infinite alternate;
 }
@@ -650,6 +650,7 @@
   background: rgba(138, 233, 242, 0.075);
   border-color: rgba(138, 233, 242, 0.22);
   color: #EAF6FA;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(138, 233, 242, 0.08), 0 0 24px rgba(69, 190, 215, 0.16);
 }
 
 .weatherToggleLabel {
@@ -785,6 +786,8 @@
   animation: signalPulse 2.2s ease-in-out infinite;
 }
 
+.console[data-weather-enabled=true] .weatherReadout { border-color: rgba(138, 233, 242, 0.18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 0 22px rgba(69, 190, 215, 0.11); }
+
 .weatherReadout span {
   white-space: nowrap;
 }
@@ -879,6 +882,9 @@
   text-shadow: 0 0 20px rgba(69, 190, 215, 0.16);
 }
 
+.clockTick { animation: clockTick 0.24s var(--ease); }
+@keyframes clockTick { from { opacity: 0.35; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
 .clock span {
   color: #617B88;
   font-size: 10px;
@@ -905,9 +911,10 @@
   .topbar::before,
   .weatherOrigin .sun::after,
   .weatherOrigin .cloudOne,
-  .weatherOrigin .cloudTwo,
-  .lightning,
-  .weatherReadout > i {
+    .weatherOrigin .cloudTwo,
+    .lightning,
+    .weatherReadout > i,
+    .clockTick {
     animation: none !important;
   }
 }
@@ -1045,11 +1052,40 @@
 :global(html.theme-light) .clock time { color: #006F94; text-shadow: none; }
 :global(html.theme-light) .clock span { color: #718B96; }
 
+/* Light mode uses neutral surfaces so cyan retains its role as an intentional accent. */
+:global(html.theme-light) .console { --console-edge: rgba(18, 35, 43, 0.11); --console-soft: #F2F6F6; --console-row-surface: #F7F9F9; --console-selected-surface: rgba(0, 146, 188, 0.11); --console-selected-text: #006C87; --console-shadow: 0 16px 40px rgba(20, 33, 40, 0.08); }
+:global(html.theme-light) .console::before { opacity: 0.2; mix-blend-mode: normal; filter: blur(52px); background: radial-gradient(720px 410px at 76% 13%, rgba(33, 53, 62, 0.075), transparent 70%); }
+:global(html.theme-light) .console::after { opacity: 0.1; }
+:global(html.theme-light) .sidebar { background: linear-gradient(180deg, #FFFFFF, #F7F9F9); border-right-color: rgba(18, 35, 43, 0.1); box-shadow: 14px 0 38px -30px rgba(20, 33, 40, 0.18), 1px 0 0 rgba(255, 255, 255, 0.8); }
+:global(html.theme-light) .sidebar::after { display: none; }
+:global(html.theme-light) .brand { border-bottom-color: rgba(18, 35, 43, 0.09); }
+:global(html.theme-light) .brand img { filter: drop-shadow(0 6px 12px rgba(20, 33, 40, 0.12)); }
+:global(html.theme-light) .sidebar nav button { color: #52636A; }
+:global(html.theme-light) .sidebar nav button > i { background: #F5F7F7; border-color: rgba(18, 35, 43, 0.07); color: #697A81; }
+:global(html.theme-light) .sidebar nav button:hover { background: #F1F6F6; border-color: transparent; color: #1C3038; }
+:global(html.theme-light) .sidebar nav button[aria-current=page] { background: #DFF3F5; border-color: transparent; color: #075A72; box-shadow: none; }
+:global(html.theme-light) .sidebar nav button[aria-current=page]::before { display: none; }
+:global(html.theme-light) .sidebar nav button[aria-current=page] > i { background: rgba(0, 146, 188, 0.12); border-color: transparent; color: #006C87; box-shadow: none; }
+:global(html.theme-light) .sidebar nav button > small { background: #EEF2F3; border-color: transparent; color: #40545C; }
+:global(html.theme-light) .readiness { background: #FFFFFF; border-color: rgba(18, 35, 43, 0.1); box-shadow: 0 12px 28px rgba(20, 33, 40, 0.06); }
+:global(html.theme-light) .readiness header span, :global(html.theme-light) .readiness p, :global(html.theme-light) .sidebar > footer small { color: #66777E; }
+:global(html.theme-light) .readiness p b, :global(html.theme-light) .sidebar > footer b { color: #1C3038; }
+:global(html.theme-light) .topbar { background: rgba(255, 255, 255, 0.9); border-bottom-color: rgba(18, 35, 43, 0.09); box-shadow: 0 12px 34px -28px rgba(20, 33, 40, 0.26); }
+:global(html.theme-light) .topbar::after { background: linear-gradient(90deg, transparent, rgba(18, 35, 43, 0.09), transparent); }
+:global(html.theme-light) .title h1 { color: #14272F; }
+:global(html.theme-light) .title p { color: #64747B; }
+:global(html.theme-light) .weatherReadout, :global(html.theme-light) .weatherToggle, :global(html.theme-light) .themeToggle, :global(html.theme-light) .weatherMenu summary { color: #41545C; background: #FFFFFF; border-color: rgba(18, 35, 43, 0.1); box-shadow: 0 6px 16px -14px rgba(20, 33, 40, 0.3); }
+:global(html.theme-light) .weatherToggle:hover, :global(html.theme-light) .themeToggle:hover { background: #FFFFFF; border-color: rgba(0, 146, 188, 0.28); color: #143F50; box-shadow: 0 0 0 3px rgba(0, 146, 188, 0.08), 0 8px 18px -14px rgba(20, 33, 40, 0.28); }
+:global(html.theme-light) .weatherReadout a, :global(html.theme-light) .clock span { color: #718087; }
+:global(html.theme-light) .clock { border-left-color: rgba(18, 35, 43, 0.1); }
+:global(html.theme-light) .clock time { color: #006C87; }
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1180px) {
   .content { padding: 28px 22px; }
   .weatherReadout { padding-inline: 10px; }
+  .weatherOrigin { right: 120px; }
   .themeToggle .weatherToggleLabel { display: none; }
   .themeToggle { padding-inline: 8px; }
 }
@@ -1062,6 +1098,7 @@
   .sidebar { display: none; }
   .main { margin-left: 0; padding-bottom: 92px; }
   .topbar { min-height: 64px; padding: 10px 16px; gap: 10px; }
+  .weatherOrigin { right: 0; opacity: 0.56; }
   .content { padding: 22px 16px; }
 
   .mobileNav {
