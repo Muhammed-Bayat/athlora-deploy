@@ -209,7 +209,7 @@ export interface FixtureInvitation {
   expiresAt: string;
   createdAt: string;
   targetWorkspaceId: string | null;
-  targetWorkspaceName: string | null;
+  targetWorkspaceName?: string | null;
   responseMessage: string | null;
   respondedAt: string | null;
   respondedWorkspaceId: string | null;
