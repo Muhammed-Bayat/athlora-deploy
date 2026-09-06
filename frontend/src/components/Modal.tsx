@@ -8,9 +8,10 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   closeDisabled?: boolean;
+  className?: string;
 }
 
-export function Modal({ open, title, onClose, children, closeDisabled = false }: ModalProps) {
+export function Modal({ open, title, onClose, children, closeDisabled = false, className }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const closeDisabledRef = useRef(closeDisabled);
@@ -83,7 +84,7 @@ export function Modal({ open, title, onClose, children, closeDisabled = false }:
     >
       <div
         ref={dialogRef}
-        className={styles.dialog}
+        className={[styles.dialog, className].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

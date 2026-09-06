@@ -782,6 +782,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
       <Modal
         open={geminiDialogOpen}
         title="Athlora AI"
+        className={styles.aiModal}
         onClose={() => {
           setGeminiDialogOpen(false);
           setActionError(null);
