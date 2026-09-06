@@ -132,7 +132,11 @@ A fixture connects one hosted, scheduled 100m competition to one or more guest w
 | `DELETE /events/:eventId/fixture-invitations/:invitationId` | Host coach | Revoke an unused invitation |
 | `GET /events/:eventId/fixture-rosters` | Host workspace | Read participating-team rosters using the fixture-safe athlete summary |
 | `POST /events/:eventId/fixture-workspaces/:workspaceId/withdrawal` | Host coach | Record a guest withdrawal after start while preserving history |
-| `POST /fixtures/invitations/:token/respond` | Invited coach | Accept, decline, or request a change; body `{ response, message? }` |
+| `GET /events/:eventId/fixture-entries` | Host workspace | Read all fixture timeline entries (host read-only) |
+| `GET /events/:eventId/fixture-results` | Host workspace | Read all fixture results (host read-only) |
+| `PUT /events/:eventId/fixture-results/:athleteId` | Host coach | Override a fixture result from the host side |
+| `GET /fixtures/incoming` | Invited guest workspace | List incoming fixture invitations |
+| `POST /fixtures/incoming/:invitationId/respond` | Invited coach | Accept, decline, or request a change; body `{ response, message? }` |
 | `GET /fixtures` / `GET /fixtures/:eventId` | Accepted guest workspace | List/read fixture-safe details |
 | `GET|POST|PUT|DELETE /fixtures/:eventId/participants` | Accepted guest coach | Read/manage only the active guest workspace's roster and RSVP state |
 | `POST /fixtures/:eventId/withdrawal` | Guest coach | Withdraw before start |
@@ -145,6 +149,120 @@ The invitation state machine is `pending -> accepted|declined|change_requested|r
 Changing a fixture's date, time, venue (including coordinates), or accepted participating-team set increments `fixtureRevision`, retains selected rosters, replaces outstanding reacceptance links, and marks guest teams `reacceptance_required`. The host cannot move a fixture out of `scheduled` until all non-withdrawn guests have accepted the current revision. Material changes and roster changes are unavailable after the fixture begins. Before start, a guest coach may withdraw its team; after start, only the host records a withdrawal. Neither withdrawal deletes participant, timeline, or result history.
 
 Guest responses and fixture reads reveal only the fixture metadata, participating-team display names, and the caller's own athlete summaries/results. They never expose another workspace's roster, athlete notes, date of birth, injury/private profile data, or unrelated workspace resources. Host fixture-roster reads use the same safe participant summary and never expose guest private athlete fields.
+
+### 3.3 Injury tracking
+
+Athletes carry persistent injury records with body-region mapping. Each injury has a body region, area, side, severity, and optional onset/resolution dates. Injuries are soft-deleted and can be resolved or reopened.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes/:id/injuries` | List injuries for an athlete; optional `status` query filter |
+| `POST /athletes/:id/injuries` | Create an injury record |
+| `PUT /athletes/:id/injuries/:injuryId` | Update an injury record |
+| `POST /athletes/:id/injuries/:injuryId/resolve` | Resolve (close) an injury |
+| `POST /athletes/:id/injuries/:injuryId/reopen` | Reopen a resolved injury |
+| `DELETE /athletes/:id/injuries/:injuryId` | Soft-delete an injury record |
+
+Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `onsetDate`, `resolutionDate`, `notes`. Severity is one of `minor`, `moderate`, `severe`. Side is one of `left`, `right`, `bilateral`.
+
+### 3.4 Two-athlete comparison
+
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes/comparison?athlete1Id=&athlete2Id=` | Compare two athletes side by side |
+
+Returns both athletes' PB, latest result, valid result count, average time, consistency (standard deviation), and improvement metrics. Used by the Comparison page for head-to-head analysis.
+
+### 3.5 Public logger links
+
+Coaches create shareable, token-authenticated links that let external guests log results for an event without an Auth0 account. Tokens are verified server-side; the public guest never authenticates through Auth0.
+
+**Owner endpoints (authenticated):**
+
+| Method & path | Purpose |
+|---|---|
+| `POST /events/:eventId/public-loggers` | Create a shareable public logger link; body `{ label? }` |
+| `GET /events/:eventId/public-loggers` | List all public logger links for the event |
+| `DELETE /events/:eventId/public-loggers/:linkId` | Revoke a public logger link |
+
+**Public endpoints (token-based, no Auth0):**
+
+| Method & path | Purpose |
+|---|---|
+| `POST /public/logger/sessions` | Start a public logging session; body `{ token, name, club? }` |
+| `POST /public/logger/sessions/event/:eventId` | Start session by event ID (token in body) |
+| `GET /public/logger/events/:eventId` | Get a read-only event snapshot (participants, timeline, standings) |
+| `POST /public/logger/events/:eventId/entries` | Create a timeline entry through the public logger |
+
+The public endpoints accept a bearer token derived from the public logger link. Session state is tracked server-side and returned to the guest on reconnection.
+
+### 3.6 Event helpers and offline designation
+
+Event helpers are external users granted read or read/write access to a specific event without workspace membership. Helpers are invited by coaches, redeem invitations with a secret or human-readable code, and receive event-scoped grants.
+
+**Invitation and grant endpoints (authenticated):**
+
+| Method & path | Purpose |
+|---|---|
+| `POST /events/:eventId/helpers/invitations` | Create a helper invitation; body `{ email, role, expiresInDays? }` |
+| `GET /events/:eventId/helpers/invitations` | List helper invitations for the event |
+| `POST /events/:eventId/helpers/invitations/:invitationId/rotate` | Rotate (replace) an invitation token |
+| `PATCH /events/:eventId/helpers/invitations/:invitationId` | Update an invitation's status |
+| `DELETE /events/:eventId/helpers/grants/:grantId` | Revoke a helper grant |
+
+**Redemption endpoint (public, rate-limited):**
+
+| Method & path | Purpose |
+|---|---|
+| `POST /events/helpers/redeem` | Redeem an invitation; body `{ code }` |
+
+**Offline designation endpoints (authenticated):**
+
+| Method & path | Purpose |
+|---|---|
+| `POST /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Designate a grant as the offline logger |
+| `DELETE /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Revoke offline logger designation |
+| `POST /events/:eventId/helpers/transfer-offline-logger` | Transfer offline logger designation between grants |
+
+Only one grant per event may be designated as the offline logger. The designated logger may queue actions in IndexedDB when offline and drain them through `POST /sync/batch` on reconnect.
+
+### 3.7 Notifications
+
+Fixture-related notifications (invitations, reacceptance, responses) are delivered to coaches through an in-app notification system.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /notifications` | List fixture notifications for the user |
+| `GET /notifications/unread-count` | Get the count of unread notifications |
+| `POST /notifications/:notificationId/read` | Mark a notification as read |
+
+Notifications include `fixture_started`, `fixture_invited`, `fixture_reacceptance_required`, and invitation-response kinds. The notification bell in the console topbar polls unread count and renders a dropdown.
+
+### 3.8 AI integration
+
+The Gemini voice assistant provides real-time, voice-driven athlete management. The frontend captures microphone audio, streams it to Google Gemini through a WebSocket, and receives audio responses and tool-call results (e.g. creating an athlete).
+
+| Method & path | Purpose |
+|---|---|
+| `POST /ai/gemini-token` | Create a short-lived Gemini API access token |
+
+The token is exchanged by the frontend SDK (`@google/genai`) to establish a `BidiGenerateContentConstrained` WebSocket session. The backend does not relay audio; the browser streams directly to Gemini's endpoint. Tool calls are intercepted by the frontend and sent to the existing Athlora API.
+
+### 3.9 Athlete progression
+
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes/:id/progression` | Cursor-paginated all-time 100m progression with running PB |
+
+Query parameters: `cursor` (pagination token), `limit` (page size, default 50, max 200), `type` (`competition` or `training` filter). Returns chronological entries with effective result/outcome (incorporating manual overrides), a running PB indicator, and a summary of all-time PB and total result counts.
+
+### 3.10 Offline sync
+
+| Method & path | Purpose |
+|---|---|
+| `POST /sync/batch` | Process a batch of offline queue actions |
+
+The batch endpoint accepts an array of actions (`create_entry`, `edit_entry`, `undo_entry`) with per-action expected versions and client timestamps. Each action is processed idempotently; duplicate action IDs are detected and returned as `duplicate`. Rejected actions include the rejection code. A `recomputedResults` flag indicates whether the server recomputed results after the batch. The server stores a receipt per action for conflict resolution on subsequent drains.
 
 ## 4. DTOs
 

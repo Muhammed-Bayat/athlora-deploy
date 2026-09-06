@@ -123,7 +123,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 - Tech stack table in `/docs` with one-line motivation per tool
 - Docusaurus site live with architecture overview, setup guide
 - Sign up/login/roster/events/live logging/dashboard/weather all working end-to-end
-- 217 frontend tests, 308 backend tests (38 database tests conditionally skipped without `TEST_DATABASE_URL`), interactive Vitest V8 coverage artifacts, and a Playwright E2E vertical slice with axe accessibility
+- Frontend and backend tests passing, interactive Vitest V8 coverage artifacts, and a Playwright E2E vertical slice with axe accessibility
 
 ---
 
@@ -131,7 +131,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 **New stack:** IndexedDB + Dexie, vite-plugin-pwa, Socket.IO, Chart.js, Playwright.
 
-**Status: Planned**
+**Status: In Progress**
 
 ### 3.1 Discipline Expansion
 1. Add timed contracts for 200m/400m, middle and long distance, hurdles, relays, and race walks.
@@ -145,16 +145,22 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 3. React: role-aware UI (hide/disable controls the current user can't use).
 4. Tests: Supertest permission-denied cases per role; Playwright E2E for role enforcement.
 
+**Status: Implemented** — coach/assistant roles enforced through `requireOperationalAccess` and `requireCoach` middleware.
+
 ### 3.3 Fixtures, RSVPs, Shared Calendar
 1. Extend fixtures so another coach's squad can participate without exposing unrelated workspace data.
 2. Backend: endpoints to invite another coach's squad to a fixture, endpoints for RSVP.
 3. React: shared calendar view, RSVP widget on event detail.
 4. Notifications/reminders: simple scheduled job (or Socket.IO push when connected) reminding users of upcoming events.
 
+**Status: Implemented** — cross-workspace fixtures with hashed invitations, RSVP, revision reacceptance, withdrawals, fixture notifications, event helper invitations, and offline designation.
+
 ### 3.4 Season Stats, Comparisons, Charts
 1. Backend: aggregate queries/views for season totals, per-event breakdowns, athlete-vs-athlete and squad-vs-opponent comparisons (PB/SB progression over the season).
 2. React + Chart.js: line charts for PB/SB progression, bar charts for comparisons.
 3. Tests: Vitest for aggregation logic; RTL/Playwright for chart rendering with seeded data.
+
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented; full season totals and multi-discipline analysis remain planned.
 
 ### 3.5 Offline-First Logging
 1. Frontend: Dexie/IndexedDB store mirroring `timeline_entries` shape; all live-logging writes go to IndexedDB first.
@@ -162,6 +168,8 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 3. Background sync: on reconnect, queue drains and POSTs to the backend in order; conflicts at this stage are simply "last write wins" (true merge logic is Stage 3).
 4. Socket.IO: when online, broadcast new/edited entries to other connected clients viewing the same event (live updates).
 5. Tests: Playwright test that simulates offline (toggle network), logs entries, restores network, and asserts entries synced.
+
+**Status: Implemented** — PWA shell, IndexedDB action queue, designated offline logger, idempotent batch sync, sync engine, queue status UI, and offline detection.
 
 ### 3.6 Stage 2 Definition of Done
 - Core features (discipline expansion, roles, fixtures/RSVP, stats/charts, offline logging) implemented with automated UI+API tests.

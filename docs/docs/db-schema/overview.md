@@ -168,7 +168,7 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-All 20 migrations are tracked in `schema_migrations`:
+All 21 migrations are tracked in `schema_migrations` (note: two files share the number `0019`):
 
 | Migration | Description |
 |-----------|-------------|
@@ -190,6 +190,7 @@ All 20 migrations are tracked in `schema_migrations`:
 | `0016_public_logger_links.sql` | Public logger links and unauthenticated session support |
 | `0017_clubs.sql` | Clubs and club join requests with coach-reviewed access |
 | `0018_fixture_notifications.sql` | Fixture notification delivery and unread counts |
+| `0019_targeted_fixture_invitations_and_single_membership.sql` | Targeted fixture invitations and single-membership enforcement |
 | `0019_offline_logger_designation.sql` | Designated offline logger per event with transfer protocol |
 | `0020_sync_idempotency.sql` | Idempotent batch sync with action receipts and version conflict detection |
 

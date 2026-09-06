@@ -142,10 +142,10 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 
 | Package | Checks | Result |
 |---------|--------|--------|
-| `frontend` | lint, typecheck, test, coverage, build | passing (291 Vitest/RTL and track-math tests) |
-| `backend` | lint, typecheck, test, coverage, build | passing (362 Vitest/Supertest tests; 40 database tests skipped when unconfigured) |
+| `frontend` | lint, typecheck, test, coverage, build | passing |
+| `backend` | lint, typecheck, test, coverage, build | passing |
 | `docs` | build | passing |
-| `e2e` | Playwright (Chromium) + axe | configured (smoke + 15 spec files covering workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization, migration, accessibility, routing, analytics + vertical slice + comparison + offline + smoke); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
+| `e2e` | Playwright (Chromium) + axe | configured (smoke + spec files covering workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization, migration, accessibility, routing, analytics, comparison, offline, fixtures + vertical slice); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 
 The backend suite includes 40 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, and 1 injury-persistence test. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 

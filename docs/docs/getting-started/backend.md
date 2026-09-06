@@ -38,9 +38,10 @@ CORS_ORIGINS=http://localhost:5173
 PORT=4000
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 NOMINATIM_USER_AGENT=Athlora/0.2 (https://example.com/contact)
+GEMINI_API_KEY=
 ```
 
-The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy.
+The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint.
 
 The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http://localhost:5174` (see the E2E section in `getting-started/scripts.md`).
 
@@ -60,12 +61,14 @@ The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http
 ## Layout
 
 ```text
-src/routes        API route declarations
+src/routes        API route declarations (auth, ai, athletes, clubs, comparison, dashboard,
+                  eventHelpers, fixtures, fixtureNotifications, injuries, participants,
+                  publicLoggers, results, statistics, sync, timeline, venues, weather, workspaces)
 src/controllers   HTTP request and response handling
-src/services      coach-scoped persistence and business logic
-src/middleware    authentication, ownership, validation, and errors
+src/services      coach-scoped persistence and business logic (28 modules)
+src/middleware    authentication, ownership, capabilities, validation, errors, notImplemented
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations, row mappers, and transactions
+src/db            pg client, migrations (21 files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 
@@ -89,6 +92,15 @@ Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separa
 - Derived results, placement, PB/SB flags, and audited manual overrides.
 - Owner-scoped dashboard aggregates and current-weather proxying for the coach console.
 - Optional OpenStreetMap venue lookup through an authenticated Nominatim boundary. It has strict `q` validation, a five-second timeout, safe provider errors, a five-minute process-memory cache, and a one-second process-local provider throttle. The public provider receives only an explicit submitted venue query, never Auth0 credentials or client requests on each keystroke.
+- Injury CRUD with body-region/area/side/severity mapping, resolution/reopening, and soft-delete. Active summaries are workspace-scoped and grouped for roster display.
+- Two-athlete 100m comparison with PB, latest result, valid count, average, consistency, and improvement metrics.
+- Athlete progression endpoint with cursor-based pagination, running PB indicator, effective result/outcome, and type filtering.
+- Event helper invitations with secret/human-code redemption, grant lifecycle, and offline-logger designation/transfer. Only one grant per event may be the offline logger.
+- Public logger links: coaches create shareable token-authenticated links; external guests start sessions, view event snapshots, and record entries without Auth0.
+- Fixture notifications: in-app notification system for fixture invitations, reacceptance, and response events with unread counts.
+- Gemini AI token endpoint: creates short-lived Gemini API tokens for the frontend voice assistant. The backend does not relay audio; the browser streams directly to Gemini's BidiGenerateContentConstrained WebSocket.
+- Offline sync batch endpoint: processes arrays of `create_entry`/`edit_entry`/`undo_entry` actions with per-action idempotent receipt processing, duplicate detection, and optimistic version conflict handling.
+- Capability middleware for feature-flag gating, validation middleware for strict payload checking, and not-implemented stubs for legacy routes.
 
 All failures use `{ error: { code, message, details } }`. Missing, malformed, wrong-parent, and cross-coach resources intentionally share a generic `404 NOT_FOUND` response.
 
@@ -127,7 +139,7 @@ The runner records names and SHA-256 checksums in `schema_migrations`, serialize
 - `src/validation` provides strict shared payload parsers (camelCase create/replacement/PATCH DTOs that return ordered issue lists), `src/db/row-mappers.ts` owns snake-case PostgreSQL row mapping with deliberate numeric/timestamp conversion, and `src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `src/db/client.ts` creates a `pg` pool from `DATABASE_URL`; migrations are checksum-tracked and applied before production startup. `0002_contract_100m.sql` adds the MVP contract state, `0003_aggregate_indexes.sql` adds aggregate read indexes, and `0004_account_lifecycle.sql` adds durable account-deletion state and retry scheduling.
 - The 100m data/API contract is encoded in `src/types/domain.ts` (`DISCIPLINE_100M`, `RESULT_UNIT_SECONDS`, `ResultOutcome`, aligned `Athlete`/`TimelineEntry`/`Result` DTOs plus `EventParticipant`, `AthleteStatistics` and `DashboardSummary`) and mirrored in the frontend `src/types`. `src/services/resultDerivation.ts` derives `{ value, incident, outcome }` so the API/service boundary can distinguish no result, a valid finish, DQ, DNF and DNS — including competition/training timing rules, manual override, placings and PB/SB.
-- Tests: Vitest + Supertest cover app/resource/aggregate/account-lifecycle/weather routes, application-user resolution, ownership/non-disclosure, lifecycle transitions/reviews, deletion state/reconciliation, Auth0 Management and Open-Meteo boundaries, athlete/event/participant/timeline/statistics/dashboard/fixture services, validation, row mapping, result derivation/recomputation and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test` (361 passing; 40 database integration tests skip when `TEST_DATABASE_URL` is unset).
+- Tests: Vitest + Supertest cover app/resource/aggregate/account-lifecycle/weather routes, application-user resolution, ownership/non-disclosure, lifecycle transitions/reviews, deletion state/reconciliation, Auth0 Management and Open-Meteo boundaries, athlete/event/participant/timeline/statistics/dashboard/fixture/services, validation, row mapping, result derivation/recomputation, injury CRUD, comparison, progression, public logger, event helper, sync batch, and migrations. Real-DB suites are gated behind `TEST_DATABASE_URL`. Runs with `npm run test`.
 
 ## Deployment
 

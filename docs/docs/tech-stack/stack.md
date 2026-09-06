@@ -18,10 +18,10 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
 | Weather | Open-Meteo | Keyless REST forecast for event venues |
 | Venue search/maps | Nominatim + OpenStreetMap | Explicit server-proxied venue lookup and read-only attributed map previews; no tile/map library |
-| Offline storage (Stage 2+) | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
-| PWA (Stage 2+) | vite-plugin-pwa | Service worker + manifest for offline shell |
-| Realtime (Stage 2+) | Socket.IO | Live broadcast of new/edited entries to event viewers |
-| Charts (Stage 2+) | Chart.js | PB/SB progression and comparison charts |
+| Offline storage | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
+| PWA | vite-plugin-pwa | Service worker + manifest for offline shell |
+| Realtime | Socket.IO | Live broadcast of new/edited entries to event viewers |
+| Charts | Chart.js | PB/SB progression and comparison charts |
 | PDF export (Stage 3) | pdf-lib | Athlete/event results reports |
 | Unit/component tests | Vitest, React Testing Library | Fast component + pure-logic tests |
 | API tests | Supertest | Endpoint happy paths + validation/error paths |
@@ -58,8 +58,8 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - **Open-Meteo**: no API key, free rate limits — ideal for a university project with no billing.
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
 - **Lazy-loaded SVG/CSS landing track**: the mockup-exact oval is drawn once as a shared SVG component and painted differently per context; the cinematic lap is pure DOM transforms, so the landing page needs no WebGL.
-- **pdf-lib**: pure-JS PDF generation — works in Node and the browser without native deps.
 - **Three.js / React Three Fiber / Drei**: on-demand anatomical body viewer for persistent injury mapping with topology-bound surface heat maps.
+- **@google/genai**: Google Gemini SDK for the Live voice assistant, providing the `BidiGenerateContentConstrained` WebSocket API and tool-call interception.
 - **qrcode**: QR code generation for public logger link sharing.
 
 - `dotenv` loads server-only local configuration; browser configuration is restricted to public `VITE_*` values.
@@ -82,21 +82,12 @@ All authenticated dialogs (add, edit, correction, confirmation) use the shared `
 ## Planned Stack
 
 These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
-- **In the code and verified by tests/builds**: React + Vite + TypeScript, plain CSS (tokens + modules), lazy-loaded SVG/CSS landing visuals, the API-backed roster/dashboard and shared accessible UI primitives, Express, `pg`, `jose` (Auth0 JWT verification), Open-Meteo event forecasts, Dexie (IndexedDB offline queue), vite-plugin-pwa (PWA shell + service worker), Vitest, React Testing Library, Supertest, Playwright, Docusaurus, and the Gitea Actions workflow file.
-- **Fitness viewer**: Three.js, React Three Fiber and Drei are current frontend dependencies. They are lazy-loaded with the Fitness sub-view so regular roster/performance navigation does not download the static anatomical viewer. Injury records use the dedicated workspace-scoped backend contract.
-- **Configured and exercised**: Auth0 Universal Login/JWT verification, application-user synchronization and owner-scoped resource authorization, plus PostgreSQL on Neon with checksum-tracked migrations.
-- **Implemented (Stage 2)**: Socket.IO, Chart.js, Dexie, vite-plugin-pwa, Three.js/React Three Fiber/Drei, qrcode.
-- **Reserved for later stages**: pdf-lib (Stage 3).
 
 | Stage | Technology | Intended Athlora use | Why it is deferred |
 |---|---|---|---|
-| Stage 2 | Dexie over IndexedDB | Queue live timeline writes locally when a track has poor or no signal. | The online, versioned logging path must be stable before adding offline conflict states. |
-| Stage 2 | `vite-plugin-pwa` | Installable shell and service-worker caching for the coach console. | A PWA is useful only once the logger has defined offline behavior and recovery rules. |
-| Stage 2 | Socket.IO | Broadcast new or corrected event entries to other coaches viewing the same event. | The current API provides an authoritative source of truth first; realtime transport comes after the mutation contract is settled. |
-| Stage 2 | Chart.js | PB/SB progression and athlete or squad comparisons. | Existing dashboard counts and athlete statistics establish the correct data before visualising trends. |
 | Stage 3 | `pdf-lib` | Downloadable athlete or event reports. | Exports depend on stable results, public/reporting requirements, and agreed layout. |
 
-Planned work also includes role-based authorization, shared fixtures, offline merge rules, public result pages, scheduling, and rule-based coaching summaries. These are product capabilities rather than currently selected packages; their implementation will be documented when their contracts are agreed.
+Planned work also includes discipline expansion, role-based authorization refinements, shared fixtures enhancement, offline merge rules, public result pages, scheduling, and rule-based coaching summaries. These are product capabilities rather than currently selected packages; their implementation will be documented when their contracts are agreed.
 
 ## Deliberate Constraints
 
