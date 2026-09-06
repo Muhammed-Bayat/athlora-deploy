@@ -15,6 +15,7 @@ import { ApiError } from '../../api/client';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
+import { Select } from '../../components';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -507,12 +508,10 @@ export function CoachConsole() {
     </div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
-      <label className={styles.workspaceSwitcher}>
+      <div className={styles.workspaceSwitcher}>
         <span>Club</span>
-         <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
-          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-        </select>
-      </label>
+        <Select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club" options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))} />
+      </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events > 0 && <small aria-label={`${fixtureNotificationCounts.events} unread started fixture notifications`}>{fixtureNotificationCounts.events}</small>}{item.id === 'fixtures' && fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.fixtures} unread fixture notifications`}>{fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>

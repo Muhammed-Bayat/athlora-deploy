@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoachConsole } from './CoachConsole';
 import { ApiError } from '../../api/client';
+import { WorkspaceContext } from '../auth/WorkspaceContext';
 
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
 const permissionsQuery = vi.hoisted(() => vi.fn());
@@ -125,6 +126,27 @@ describe('CoachConsole dashboard navigation', () => {
 
     await user.click(screen.getAllByRole('button', { name: /athletes/i })[0]);
     expect(screen.getByText('Athlete target: none')).toBeInTheDocument();
+  });
+
+  it('uses the themed Club menu to switch workspaces', async () => {
+    const user = userEvent.setup();
+    const selectWorkspace = vi.fn();
+    const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
+    const relayClub = { id: 'workspace-2', name: 'Relay Club', timezone: 'Africa/Johannesburg', role: 'coach' as const };
+    render(
+      <WorkspaceContext.Provider value={{ activeWorkspace: personalWorkspace, workspaces: [personalWorkspace, relayClub], selectWorkspace, refreshWorkspaces: async () => undefined }}>
+        <MemoryRouter initialEntries={['/console/athletes']}><CoachConsole /><RouteLocation /></MemoryRouter>
+      </WorkspaceContext.Provider>,
+    );
+
+    const clubTrigger = screen.getByRole('button', { name: 'Active Club' });
+    await user.click(clubTrigger);
+    const clubMenu = clubTrigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(clubMenu).toBeInTheDocument();
+    await user.click(within(clubMenu!).getByRole('option', { name: 'Relay Club' }));
+
+    expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
+    expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
   });
 
   it('routes roster and live logger selections before returning through their tabs', async () => {
