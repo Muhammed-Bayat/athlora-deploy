@@ -22,6 +22,18 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
         └──────────── Auth0 tenant ────────────────────│   PostgreSQL (Neon)    │
                                                        │   migrations in /db    │
                                                        └────────────────────────┘
+┌────────────────────────┐
+│  Socket.IO (realtime)  │
+│  - Event subscriptions │
+│  - Invalidation msgs   │
+│  - Auth0 token auth    │
+└────────────────────────┘
+
+┌────────────────────────┐         WebSocket            ┌────────────────────────┐
+│  Gemini Voice (AI)     │  ────────────────────────►  │  Google Gemini Live    │
+│  Microphone capture    │  BidiGenerateContent        │  BidiGenerateContent   │
+│  Audio playback        │  PCM 16kHz/24kHz            │  Tool calls            │
+└────────────────────────┘                             └────────────────────────┘
 
 ┌────────────────────────┐
 │  PWA Service Worker    │
@@ -29,6 +41,7 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 │  - API response cache  │
 │  - IndexedDB (Dexie)   │
 │  - Offline action queue│
+│  - Sync on reconnect   │
 └────────────────────────┘
 ```
 
@@ -80,7 +93,7 @@ Socket authorization is rechecked on every explicit event subscription. A subscr
 
 Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, Open-Meteo forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. The public landing page and premium coach console implement the approved SVG/CSS visual direction without changing service boundaries. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines.
 
-Implemented in Stage 2 (partial): offline-first PWA with service worker caching, IndexedDB action queue via Dexie, designated offline logger per event, idempotent batch sync endpoint, and optimistic version conflict detection. The app is installable as a Progressive Web App with offline shell and deterministic queue drain on reconnect. Additional Stage 2 features implemented: workspace switching, coach/assistant role enforcement, squad management, athlete lifecycle (active/inactive/archived), persistent injury records with 3D anatomy mapping, cross-workspace fixtures with RSVP, event helper invitations and offline designation, Socket.IO realtime invalidation, in-app event reminders, fixture notifications, public logger links, club onboarding with join requests, two-athlete comparison, single-athlete progression charts, and athlete statistics.
+Implemented in Stage 2 (partial): offline-first PWA with service worker caching, IndexedDB action queue via Dexie, designated offline logger per event, idempotent batch sync endpoint, and optimistic version conflict detection. The app is installable as a Progressive Web App with offline shell and deterministic queue drain on reconnect. Additional Stage 2 features implemented: workspace switching, coach/assistant role enforcement, squad management, athlete lifecycle (active/inactive/archived), persistent injury records with 3D anatomy mapping, cross-workspace fixtures with RSVP, event helper invitations and offline designation, Socket.IO realtime invalidation, in-app event reminders, fixture notifications, public logger links, club onboarding with join requests, two-athlete comparison, single-athlete progression charts, athlete statistics, and Gemini voice assistant for voice-driven athlete creation.
 
 Quality gates include unit/API integration suites, cross-coach isolation tests, and an expanded desktop/mobile Playwright suite (workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization boundaries, migration verification, accessibility deep audit, routing, and analytics) with axe checks against a scratch PostgreSQL database.
 
