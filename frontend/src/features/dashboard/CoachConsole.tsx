@@ -350,6 +350,7 @@ export function CoachConsole() {
   const [liveWeatherError, setLiveWeatherError] = useState<string | null>(null);
   const [locationPermission, setLocationPermission] = useState<LocationPermission>('unavailable');
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
+  const weatherMenuRef = useRef<HTMLDetailsElement | null>(null);
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
@@ -373,6 +374,14 @@ export function CoachConsole() {
   };
   const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem(WEATHER_PREF_KEY, next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
   const toggleTheme = () => setThemeLight((light) => { const next = !light; try { localStorage.setItem(THEME_STORAGE_KEY, next ? 'light' : 'dark'); } catch { /* Preference persistence is optional. */ } return next; });
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (weatherMenuRef.current?.open && !weatherMenuRef.current.contains(event.target as Node)) weatherMenuRef.current.removeAttribute('open');
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, []);
 
   const optInDeviceLocation = async () => {
     const coords = await resolveDeviceCoordinates(true);
@@ -527,7 +536,7 @@ export function CoachConsole() {
            <div className={styles.topControls}>
            <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
-          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
+           <details ref={weatherMenuRef} className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{liveWeather && liveWeather.source === 'timezone' && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
           <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <div className={styles.clock}><LiveTime /></div>

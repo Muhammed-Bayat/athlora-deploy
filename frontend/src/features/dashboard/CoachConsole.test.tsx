@@ -149,6 +149,18 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
   });
 
+  it('closes the weather preview when the page is clicked', async () => {
+    const user = userEvent.setup();
+    renderConsole();
+
+    const trigger = screen.getByLabelText('Preview weather presets');
+    const menu = trigger.closest('details');
+    await user.click(trigger);
+    expect(menu).toHaveAttribute('open');
+    await user.click(screen.getByRole('heading', { name: 'Dashboard' }));
+    expect(menu).not.toHaveAttribute('open');
+  });
+
   it('routes roster and live logger selections before returning through their tabs', async () => {
     const user = userEvent.setup();
     renderConsole('/console/athletes');

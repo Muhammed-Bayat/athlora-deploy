@@ -36,4 +36,16 @@ describe('FixtureNotifications', () => {
     expect(trigger).toHaveAttribute('aria-label', 'Fixture notifications, 0 unread');
     expect(onCountsChange).toHaveBeenLastCalledWith({ events: 0, fixtures: 0 });
   });
+
+  it('closes when a pointer lands outside the menu', async () => {
+    const user = userEvent.setup();
+    render(<FixtureNotifications onCountsChange={vi.fn()} />);
+
+    const trigger = await screen.findByLabelText('Fixture notifications, 1 unread');
+    const menu = trigger.closest('details');
+    await user.click(trigger);
+    expect(menu).toHaveAttribute('open');
+    await user.click(document.body);
+    expect(menu).not.toHaveAttribute('open');
+  });
 });

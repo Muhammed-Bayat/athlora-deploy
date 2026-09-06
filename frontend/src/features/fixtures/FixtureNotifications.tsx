@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getUnreadFixtureNotificationCount, listFixtureNotifications, markFixtureNotificationRead } from '../../api/fixtures';
 import type { FixtureNotification } from '../../types';
 import { useWorkspace } from '../auth/WorkspaceContext';
@@ -24,6 +24,7 @@ function notificationDate(notification: FixtureNotification): string {
 
 export function FixtureNotifications({ onCountsChange }: { onCountsChange: (counts: FixtureNotificationCounts) => void }) {
   const { activeWorkspace } = useWorkspace();
+  const notificationsRef = useRef<HTMLDetailsElement | null>(null);
   const [notifications, setNotifications] = useState<FixtureNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -47,6 +48,14 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     return () => { current = false; window.removeEventListener('fixture-notifications-changed', load); };
   }, [activeWorkspace.id, onCountsChange]);
 
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (notificationsRef.current?.open && !notificationsRef.current.contains(event.target as Node)) notificationsRef.current.removeAttribute('open');
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, []);
+
   const markRead = async (notification: FixtureNotification) => {
     if (notification.readAt) return;
     await markFixtureNotificationRead(notification.id);
@@ -58,7 +67,7 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     });
   };
 
-  return <details className={styles.notifications}>
+  return <details ref={notificationsRef} className={styles.notifications}>
     <summary aria-label={`Fixture notifications, ${unreadCount} unread`}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
       {unreadCount > 0 && <span className={styles.badge} aria-hidden="true">{unreadCount > 9 ? '9+' : unreadCount}</span>}
