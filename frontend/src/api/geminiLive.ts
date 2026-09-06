@@ -11,10 +11,24 @@ interface GeminiFunctionCall {
   args?: Record<string, unknown>;
 }
 
+interface GeminiInlineData {
+  data?: string;
+  mimeType?: string;
+}
+
+interface GeminiPart {
+  inlineData?: GeminiInlineData;
+}
+
 interface GeminiServerContent {
+  modelTurn?: {
+    parts?: GeminiPart[];
+  };
+
   outputTranscription?: {
     text?: string;
   };
+
   turnComplete?: boolean;
 }
 
@@ -33,6 +47,10 @@ interface GeminiServerMessage {
 export type GeminiToolHandler = (
   call: GeminiFunctionCall,
 ) => Promise<unknown>;
+
+export type GeminiAudioHandler = (
+  base64Audio: string,
+) => void;
 
 async function readWebSocketMessage(
   data: string | Blob | ArrayBuffer,
@@ -73,24 +91,26 @@ export function connectGeminiLive(
     socket.onopen = () => {
       const setupMessage = {
         setup: {
-          model: `models/${GEMINI_LIVE_MODEL}`,
+  model: `models/${GEMINI_LIVE_MODEL}`,
 
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-          },
+  generationConfig: {
+    responseModalities: ['AUDIO'],
+  },
 
-          outputAudioTranscription: {},
+  outputAudioTranscription: {},
 
           systemInstruction: {
             parts: [
               {
                 text:
-                  'You are the Athlora voice assistant. ' +
+                  'You are Athlora, the Athlora voice assistant. ' +
                   'Your current job is to help authorised users add athletes. ' +
                   'Never invent missing information. ' +
                   'Before creating an athlete, clearly confirm the details with the user. ' +
                   'Only use create_athlete after the user explicitly confirms. ' +
-                  'Keep responses short and conversational.',
+                  'Keep responses short and conversational. ' +
+                  'When you are told to start the assistant, greet the user by saying exactly: ' +
+                  '"Hi, I\'m Athlora. Who are we adding today?"',
               },
             ],
           },
@@ -142,7 +162,9 @@ export function connectGeminiLive(
         },
       };
 
-      socket.send(JSON.stringify(setupMessage));
+      socket.send(
+        JSON.stringify(setupMessage),
+      );
     };
 
     socket.onmessage = (event) => {
@@ -193,7 +215,9 @@ export function connectGeminiLive(
       window.clearTimeout(timeout);
 
       reject(
-        new Error('Failed to connect to Gemini Live'),
+        new Error(
+          'Failed to connect to Gemini Live',
+        ),
       );
     };
 
@@ -221,12 +245,19 @@ export function sendGeminiText(
   socket: WebSocket,
   text: string,
   handleToolCall?: GeminiToolHandler,
+  handleAudio?: GeminiAudioHandler,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (socket.readyState !== WebSocket.OPEN) {
+    if (
+      socket.readyState !==
+      WebSocket.OPEN
+    ) {
       reject(
-        new Error('Gemini Live connection is not open'),
+        new Error(
+          'Gemini Live connection is not open',
+        ),
       );
+
       return;
     }
 
@@ -236,7 +267,9 @@ export function sendGeminiText(
       cleanup();
 
       reject(
-        new Error('Gemini response timed out'),
+        new Error(
+          'Gemini response timed out',
+        ),
       );
     }, 20_000);
 
@@ -254,19 +287,82 @@ export function sendGeminiText(
       );
     };
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (
+      event: MessageEvent,
+    ) => {
       void (async () => {
         try {
           const raw =
-            await readWebSocketMessage(event.data);
+            await readWebSocketMessage(
+              event.data,
+            );
 
           const message =
             JSON.parse(raw) as GeminiServerMessage;
 
           /*
-           * Gemini wants Athlora to execute a function.
+           * TEMPORARY DEBUGGING
+           *
+           * Keep these logs while we confirm
+           * that Gemini is sending PCM audio.
            */
-          if (message.toolCall?.functionCalls) {
+          console.log(
+            'Gemini server content:',
+            {
+              keys: message.serverContent
+                ? Object.keys(
+                    message.serverContent,
+                  )
+                : [],
+
+              modelTurn:
+                message.serverContent
+                  ?.modelTurn,
+
+              transcription:
+                message.serverContent
+                  ?.outputTranscription,
+
+              turnComplete:
+                message.serverContent
+                  ?.turnComplete,
+            },
+          );
+
+          const debugParts =
+            message.serverContent
+              ?.modelTurn?.parts ?? [];
+
+          for (
+            const part of debugParts
+          ) {
+            console.log(
+              'Gemini part:',
+              {
+                hasInlineData:
+                  Boolean(
+                    part.inlineData,
+                  ),
+
+                mimeType:
+                  part.inlineData
+                    ?.mimeType,
+
+                dataLength:
+                  part.inlineData
+                    ?.data?.length ??
+                  0,
+              },
+            );
+          }
+
+          /*
+           * Gemini requested an Athlora tool.
+           */
+          if (
+            message.toolCall
+              ?.functionCalls
+          ) {
             if (!handleToolCall) {
               throw new Error(
                 'Gemini requested a tool but no tool handler is configured',
@@ -276,16 +372,21 @@ export function sendGeminiText(
             const functionResponses = [];
 
             for (
-              const call
-              of message.toolCall.functionCalls
+              const call of
+              message.toolCall
+                .functionCalls
             ) {
               try {
                 const result =
-                  await handleToolCall(call);
+                  await handleToolCall(
+                    call,
+                  );
 
                 functionResponses.push({
                   id: call.id,
+
                   name: call.name,
+
                   response: {
                     result,
                   },
@@ -293,7 +394,9 @@ export function sendGeminiText(
               } catch (error) {
                 functionResponses.push({
                   id: call.id,
+
                   name: call.name,
+
                   response: {
                     error:
                       error instanceof Error
@@ -322,14 +425,60 @@ export function sendGeminiText(
             return;
           }
 
-          const transcription =
-            serverContent.outputTranscription?.text;
+          /*
+           * Receive Gemini's generated
+           * PCM audio.
+           */
+          const parts =
+            serverContent.modelTurn
+              ?.parts ?? [];
 
-          if (transcription) {
-            transcript += transcription;
+          for (const part of parts) {
+            const inlineData =
+              part.inlineData;
+
+            if (
+              inlineData?.data &&
+              (
+                !inlineData.mimeType ||
+                inlineData.mimeType.startsWith(
+                  'audio/',
+                )
+              )
+            ) {
+              console.log(
+                'Gemini audio chunk received:',
+                inlineData.mimeType,
+                inlineData.data.length,
+              );
+
+              handleAudio?.(
+                inlineData.data,
+              );
+            }
           }
 
-          if (serverContent.turnComplete) {
+          /*
+           * Keep a text transcription
+           * of Gemini's spoken response.
+           */
+          const transcription =
+            serverContent
+              .outputTranscription
+              ?.text;
+
+          if (transcription) {
+            transcript +=
+              transcription;
+          }
+
+          /*
+           * Gemini has finished this
+           * conversational turn.
+           */
+          if (
+            serverContent.turnComplete
+          ) {
             cleanup();
 
             resolve(

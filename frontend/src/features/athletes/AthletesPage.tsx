@@ -8,7 +8,12 @@ import {
   updateAthleteStatus,
 } from '../../api/athletes';
 import { createGeminiToken } from '../../api/ai';
-import { connectGeminiLive,sendGeminiText, type GeminiToolHandler } from '../../api/geminiLive';
+import {
+  AthloraGeminiSession,
+  type GeminiToolHandler,
+} from '../../api/geminiLiveSdk';
+import { GeminiAudioPlayer } from '../../api/geminiAudio';
+import { GeminiMicrophone } from '../../api/geminiMicrophone';
 import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
 import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
@@ -83,12 +88,24 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const [injuryReload, setInjuryReload] = useState(0);
   const [geminiTesting, setGeminiTesting] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState('');
-const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
-const [geminiConnected, setGeminiConnected] = useState(false);
+  const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
+  const [geminiConnected, setGeminiConnected] = useState(false);
+  const [geminiListening, setGeminiListening] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const returnFocusAthleteId = useRef<string | null>(null);
-  const geminiSocketRef = useRef<WebSocket | null>(null);
+  const geminiSessionRef = useRef<AthloraGeminiSession | null>(null);
+  const geminiAudioPlayerRef = useRef<GeminiAudioPlayer | null>(null);
+  const geminiMicrophoneRef = useRef<GeminiMicrophone | null>(null);
+  const sleepPendingRef = useRef(false);
+
+  if (!geminiAudioPlayerRef.current) {
+    geminiAudioPlayerRef.current = new GeminiAudioPlayer();
+  }
+
+  if (!geminiMicrophoneRef.current) {
+    geminiMicrophoneRef.current = new GeminiMicrophone();
+  }
 
   useEffect(() => {
     let current = true;
@@ -125,15 +142,13 @@ const [geminiConnected, setGeminiConnected] = useState(false);
   useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
 
   useEffect(() => {
-  return () => {
-    geminiSocketRef.current?.close(
-      1000,
-      'Athletes page closed',
-    );
-
-    geminiSocketRef.current = null;
-  };
-}, []);
+    return () => {
+      void geminiMicrophoneRef.current?.stop();
+      geminiSessionRef.current?.close();
+      geminiSessionRef.current = null;
+      geminiAudioPlayerRef.current?.close();
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && !loadError) {
@@ -239,220 +254,318 @@ const [geminiConnected, setGeminiConnected] = useState(false);
     setSelectedAthleteId(athleteId);
   };
 
-  const testGeminiConnection = async () => {
-  setGeminiTesting(true);
-  setActionError(null);
+  const handleGeminiToolCall: GeminiToolHandler = async (call) => {
+    if (call.name !== 'create_athlete') {
+      throw new Error(`Unknown Gemini tool: ${call.name}`);
+    }
 
-  let socket: WebSocket | null = null;
+    const args = call.args ?? {};
 
-  try {
+    const name =
+      typeof args.name === 'string'
+        ? args.name.trim()
+        : '';
+
+    if (!name) {
+      throw new Error('Athlete name is required');
+    }
+
+    const dob =
+      typeof args.dob === 'string'
+        ? args.dob
+        : null;
+
+    const gender =
+      typeof args.gender === 'string'
+        ? args.gender
+        : null;
+
+    const notes =
+      typeof args.notes === 'string'
+        ? args.notes
+        : null;
+
+    const athlete = await createAthlete({
+      name,
+      dob,
+      gender,
+      squadIds: [],
+      notes,
+    });
+
+    storeAthlete(athlete);
+
+    return {
+      success: true,
+      athleteId: athlete.id,
+      athleteName: athlete.name,
+    };
+  };
+
+  const sleepAthlora = async () => {
+    setActionError(null);
+
+    try {
+      sleepPendingRef.current = false;
+
+      /*
+       * Stop capturing and forwarding microphone audio.
+       */
+      await geminiMicrophoneRef.current?.stop();
+
+      /*
+       * The spoken "Going to sleep." response has already
+       * finished by the time this function is called.
+       *
+       * Fully close the playback AudioContext instead of only
+       * clearing queued audio. The next wake/start interaction
+       * will create and unlock a brand-new AudioContext from
+       * that new user gesture, which makes the greeting reliable
+       * after repeated sleep/wake cycles.
+       */
+      geminiAudioPlayerRef.current?.close();
+
+      /*
+       * Close the active Gemini Live session.
+       */
+      geminiSessionRef.current?.close();
+      geminiSessionRef.current = null;
+
+      setGeminiListening(false);
+      setGeminiConnected(false);
+      setGeminiTesting(false);
+      setGeminiResponse('Athlora is sleeping.');
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to put Athlora to sleep.',
+      );
+    }
+  };
+
+  const startGeminiSession = async (): Promise<AthloraGeminiSession> => {
+    const existingSession = geminiSessionRef.current;
+
+    if (existingSession) {
+      return existingSession;
+    }
+
     const token = await createGeminiToken();
 
     if (!token) {
-      throw new Error(
-        'Gemini did not return a token',
-      );
+      throw new Error('Gemini did not return a token');
     }
 
-    socket = await connectGeminiLive(token);
+    const session = new AthloraGeminiSession({
+      token,
 
-    const response = await sendGeminiText(
-      socket,
+      onTurnStart: () => {
+        const microphone = geminiMicrophoneRef.current;
 
-      'Create an athlete named Gemini Test Athlete. ' +
-        'The date of birth is unknown, gender is unknown, ' +
-        'there are no notes and no squad. ' +
-        'I explicitly confirm that you should create this athlete.',
+        // Keep the physical microphone open, but stop forwarding
+        // audio before Athlora's voice reaches the speakers.
+        if (microphone?.isActive()) {
+          microphone.pause();
 
-      async (call) => {
-        if (call.name !== 'create_athlete') {
-          throw new Error(
-            `Unknown Gemini tool: ${call.name}`,
-          );
+          // Flush Gemini's cached input/VAD state while the mic is
+          // paused. Sending the next PCM chunk reopens the stream.
+          geminiSessionRef.current?.endAudioStream();
         }
 
-        const args = call.args ?? {};
-
-        const name =
-          typeof args.name === 'string'
-            ? args.name.trim()
-            : '';
-
-        if (!name) {
-          throw new Error(
-            'Athlete name is required',
-          );
-        }
-
-        const dob =
-          typeof args.dob === 'string'
-            ? args.dob
-            : null;
-
-        const gender =
-          typeof args.gender === 'string'
-            ? args.gender
-            : null;
-
-        const notes =
-          typeof args.notes === 'string'
-            ? args.notes
-            : null;
-
-        const athlete = await createAthlete({
-          name,
-          dob,
-          gender,
-
-          // Gemini never controls database UUIDs.
-          squadIds: [],
-
-          notes,
-        });
-
-        storeAthlete(athlete);
-
-        return {
-          success: true,
-          athleteId: athlete.id,
-          athleteName: athlete.name,
-        };
+        setGeminiResponse('');
       },
-    );
 
-    setNotice(`Gemini: ${response}`);
-  } catch (error) {
-    setActionError(
-      error instanceof Error
-        ? error.message
-        : 'Failed to communicate with Gemini Live.',
-    );
-  } finally {
-    socket?.close(
-      1000,
-      'Test complete',
-    );
+      onAudio: (audio) => {
+        geminiAudioPlayerRef.current?.playPcm16(audio);
+      },
 
-    setGeminiTesting(false);
-  }
-};
+      onTranscript: (text) => {
+        setGeminiResponse((current) => `${current ?? ''}${text}`);
+      },
 
-const handleGeminiToolCall: GeminiToolHandler = async (call) => {
-  if (call.name !== 'create_athlete') {
-    throw new Error(`Unknown Gemini tool: ${call.name}`);
-  }
+      onInterrupted: () => {
+        // Gemini cancelled the current response. Any PCM already
+        // scheduled in the browser is stale and must not keep playing.
+        geminiAudioPlayerRef.current?.clear();
 
-  const args = call.args ?? {};
+        // If the short sleep acknowledgement was interrupted, still
+        // complete the requested shutdown rather than returning to
+        // hands-free listening.
+        if (sleepPendingRef.current) {
+          void sleepAthlora();
+          return;
+        }
 
-  const name =
-    typeof args.name === 'string'
-      ? args.name.trim()
-      : '';
+        // The cancelled playback is now silent, so hands-free input
+        // can safely resume immediately.
+        geminiMicrophoneRef.current?.resume();
+      },
 
-  if (!name) {
-    throw new Error('Athlete name is required');
-  }
+      onSleepRequested: () => {
+        /*
+         * Do not close Gemini here. The model still needs to say the
+         * short acknowledgement: "Going to sleep."
+         *
+         * onTurnComplete will wait for that audio to finish and then
+         * shut the assistant down.
+         */
+        sleepPendingRef.current = true;
+      },
 
-  const dob =
-    typeof args.dob === 'string'
-      ? args.dob
-      : null;
+      onTurnComplete: () => {
+        void (async () => {
+          // Gemini can finish generating before the final queued
+          // PCM chunk has finished playing in the browser.
+          await geminiAudioPlayerRef.current?.waitUntilIdle();
 
-  const gender =
-    typeof args.gender === 'string'
-      ? args.gender
-      : null;
+          if (sleepPendingRef.current) {
+            await sleepAthlora();
+            return;
+          }
 
-  const notes =
-    typeof args.notes === 'string'
-      ? args.notes
-      : null;
+          // Resume hands-free input only after Athlora is actually silent.
+          geminiMicrophoneRef.current?.resume();
+        })();
+      },
 
-  const athlete = await createAthlete({
-    name,
-    dob,
-    gender,
-    squadIds: [],
-    notes,
-  });
+      onConnected: () => {
+        setGeminiConnected(true);
+      },
 
-  storeAthlete(athlete);
+      onDisconnected: () => {
+        /*
+         * Ignore a late close event from an older Gemini session.
+         * Without this guard, an old session can finish closing
+         * after a new session has already started and incorrectly
+         * stop the new microphone / mark Athlora disconnected.
+         */
+        if (geminiSessionRef.current !== session) {
+          return;
+        }
 
-  return {
-    success: true,
-    athleteId: athlete.id,
-    athleteName: athlete.name,
-  };
-};
+        geminiSessionRef.current = null;
+        sleepPendingRef.current = false;
 
-const startGeminiSession = async (): Promise<WebSocket> => {
-  const existingSocket = geminiSocketRef.current;
-
-  if (
-    existingSocket &&
-    existingSocket.readyState === WebSocket.OPEN
-  ) {
-    return existingSocket;
-  }
-
-  const token = await createGeminiToken();
-
-  if (!token) {
-    throw new Error('Gemini did not return a token');
-  }
-
-  const socket = await connectGeminiLive(token);
-
-  geminiSocketRef.current = socket;
-  setGeminiConnected(true);
-
-  socket.addEventListener(
-    'close',
-    () => {
-      if (geminiSocketRef.current === socket) {
-        geminiSocketRef.current = null;
+        void geminiMicrophoneRef.current?.stop();
+        setGeminiListening(false);
         setGeminiConnected(false);
-      }
-    },
-    { once: true },
-  );
+      },
 
-  return socket;
-};
+      onError: (error) => {
+        setActionError(error.message);
+      },
 
-const sendGeminiMessage = async () => {
-  const message = geminiMessage.trim();
+      onToolCall: handleGeminiToolCall,
+    });
 
-  if (!message || geminiTesting) {
-    return;
-  }
+    await session.connect();
 
-  setGeminiTesting(true);
-  setActionError(null);
+    geminiSessionRef.current = session;
 
-  try {
-    const socket = await startGeminiSession();
+    return session;
+  };
 
-    setGeminiMessage('');
+  const sendGeminiMessage = async () => {
+    const message = geminiMessage.trim();
 
-    const response = await sendGeminiText(
-      socket,
-      message,
-      handleGeminiToolCall,
-    );
+    if (!message || geminiTesting) {
+      return;
+    }
 
-    setGeminiResponse(response);
-  } catch (error) {
-    setActionError(
-      error instanceof Error
-        ? error.message
-        : 'Failed to communicate with Gemini.',
-    );
-  } finally {
-    setGeminiTesting(false);
-  }
-};
+    setGeminiTesting(true);
+    setActionError(null);
 
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      setGeminiMessage('');
+      geminiMicrophoneRef.current?.pause();
+
+      const response = await session.sendText(message);
+
+      setGeminiResponse(response);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to communicate with Athlora.',
+      );
+    } finally {
+      setGeminiTesting(false);
+    }
+  };
+
+  const startAthloraAssistant = async () => {
+    if (geminiTesting) {
+      return;
+    }
+
+    sleepPendingRef.current = false;
+
+    setGeminiTesting(true);
+    setActionError(null);
+
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      // Re-check the AudioContext immediately before the first reply.
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const greeting = await session.sendText(
+        'Start the assistant now.',
+      );
+
+      setGeminiResponse(greeting);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to start Athlora.',
+      );
+    } finally {
+      setGeminiTesting(false);
+    }
+  };
+
+  const startGeminiListening = async () => {
+    if (geminiListening) {
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      await geminiMicrophoneRef.current?.start((audio) => {
+        try {
+          session.sendAudio(audio);
+        } catch (error) {
+          console.error(
+            'Failed to send microphone audio to Athlora:',
+            error,
+          );
+        }
+      });
+
+      setGeminiListening(true);
+    } catch (error) {
+      setGeminiListening(false);
+
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to start the microphone.',
+      );
+    }
+  };
 
   if (selectedAthleteId) {
     return (
@@ -478,7 +591,7 @@ const sendGeminiMessage = async () => {
     <section aria-labelledby="athletes-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
         <div>
-        <p className={styles.eyebrow}>Coach-owned roster</p>
+          <p className={styles.eyebrow}>Coach-owned roster</p>
           <h1 id="athletes-heading">Athletes</h1>
           <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
         </div>
@@ -512,13 +625,6 @@ const sendGeminiMessage = async () => {
           />
 
           <Button
-  variant="secondary"
-  onClick={() => void testGeminiConnection()}
-  disabled={geminiTesting}
->
-  {geminiTesting ? 'Testing Gemini...' : 'Test Gemini'}
-</Button>
-          <Button
             ref={addButtonRef}
             onClick={() => setEditor('new')}
             disabled={loading || Boolean(loadError) || pendingId !== null}
@@ -529,37 +635,59 @@ const sendGeminiMessage = async () => {
       </header>
 
       <div>
-  <h2>Athlora AI</h2>
+        <h2>Athlora AI</h2>
 
-  <p>
-    {geminiConnected
-      ? 'Connected to Gemini'
-      : 'Not connected'}
-  </p>
+        <p>
+          {geminiConnected
+            ? 'Connected to Gemini'
+            : 'Not connected'}
+        </p>
 
-  {geminiResponse && (
-    <p>
-      Gemini: {geminiResponse}
-    </p>
-  )}
+        {!geminiConnected && (
+          <Button
+            onClick={() => void startAthloraAssistant()}
+            disabled={geminiTesting}
+          >
+            {geminiTesting ? 'Starting...' : 'Start Athlora'}
+          </Button>
+        )}
 
-  <div>
-    <input
-      type="text"
-      value={geminiMessage}
-      onChange={(event) => setGeminiMessage(event.target.value)}
-      placeholder="e.g. Add John Smith"
-      disabled={geminiTesting}
-    />
+        {geminiConnected && !geminiListening && (
+          <Button
+            variant="secondary"
+            onClick={() => void startGeminiListening()}
+          >
+            Enable hands-free
+          </Button>
+        )}
 
-    <Button
-      onClick={() => void sendGeminiMessage()}
-      disabled={geminiTesting || !geminiMessage.trim()}
-    >
-      {geminiTesting ? 'Sending...' : 'Send'}
-    </Button>
-  </div>
-</div>
+        {geminiConnected && geminiListening && (
+          <p role="status">Listening hands-free…</p>
+        )}
+
+        {geminiResponse && (
+          <p>
+            Athlora: {geminiResponse}
+          </p>
+        )}
+
+        <div>
+          <input
+            type="text"
+            value={geminiMessage}
+            onChange={(event) => setGeminiMessage(event.target.value)}
+            placeholder="e.g. Add John Smith"
+            disabled={geminiTesting}
+          />
+
+          <Button
+            onClick={() => void sendGeminiMessage()}
+            disabled={geminiTesting || !geminiMessage.trim()}
+          >
+            {geminiTesting ? 'Sending...' : 'Send'}
+          </Button>
+        </div>
+      </div>
 
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
       {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
