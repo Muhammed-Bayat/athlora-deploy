@@ -70,7 +70,7 @@ export function FixtureHostPanel({ event, canOperate, isCoach }: { event: Athlet
   };
 
   if (!canOperate) return null;
-  const eligible = event.type === 'competition' && event.discipline === '100m' && event.status === 'scheduled';
+  const eligible = event.status === 'scheduled';
   const inviteClub = async (club: Club) => {
     setBusy(true); setError(null);
     try {

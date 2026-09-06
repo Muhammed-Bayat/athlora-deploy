@@ -172,9 +172,6 @@ export async function replaceEvent(
       );
     if (activeGuestTeams.rows.length > 0) {
       await assertHostWorkspace(client, eventId as string, workspaceId);
-      if (payload.type !== 'competition' || payload.discipline !== '100m') {
-        throw new ApiError(409, 'FIXTURE_EVENT_INELIGIBLE', 'Fixtures must remain 100m competition events');
-      }
       if (materialChange && (currentEvent.status !== 'scheduled' || payload.status !== 'scheduled')) {
         throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture details can only change before the event starts');
       }
