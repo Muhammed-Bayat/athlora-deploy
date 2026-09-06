@@ -21,6 +21,8 @@ const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
   'fixture_notifications',
+  'club_join_requests',
+  'clubs',
   'fixture_invitation_responses',
   'fixture_invitations',
   'event_fixture_workspaces',
@@ -97,6 +99,15 @@ describeDB('migrations against a real database', () => {
       '0008_athlete_lifecycle.sql',
       '0009_intermediate_fixtures.sql',
       '0010_fixture_workspace_status_index.sql',
+      '0011_athlete_injuries.sql',
+      '0012_audited_rsvps.sql',
+      '0013_in_app_event_reminders.sql',
+      '0014_event_helper_invitations.sql',
+      '0015_optional_injury_dates.sql',
+      '0016_public_logger_links.sql',
+      '0017_clubs.sql',
+      '0018_fixture_notifications.sql',
+      '0019_targeted_fixture_invitations_and_single_membership.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -147,6 +158,15 @@ describeDB('migrations against a real database', () => {
       '0008_athlete_lifecycle.sql',
       '0009_intermediate_fixtures.sql',
       '0010_fixture_workspace_status_index.sql',
+      '0011_athlete_injuries.sql',
+      '0012_audited_rsvps.sql',
+      '0013_in_app_event_reminders.sql',
+      '0014_event_helper_invitations.sql',
+      '0015_optional_injury_dates.sql',
+      '0016_public_logger_links.sql',
+      '0017_clubs.sql',
+      '0018_fixture_notifications.sql',
+      '0019_targeted_fixture_invitations_and_single_membership.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -156,7 +176,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(10);
+    expect(rows).toHaveLength(19);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

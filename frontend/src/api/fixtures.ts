@@ -34,7 +34,7 @@ export function refreshFixtureNotifications(): void {
   window.dispatchEvent(new Event('fixture-notifications-changed'));
 }
 
-export async function createFixtureInvitation(eventId: string, payload: { email: string; expiresInDays?: number }): Promise<FixtureInvitation> {
+export async function createFixtureInvitation(eventId: string, payload: { targetClubId: string; expiresInDays?: number }): Promise<FixtureInvitation> {
   return create<FixtureInvitation>(`events/${eventId}/fixture-invitations`, payload);
 }
 

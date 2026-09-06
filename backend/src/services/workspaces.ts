@@ -93,18 +93,27 @@ export async function resendInvitation(workspaceId: string, invitationId: string
 }
 
 export async function acceptInvitation(token: string, auth0Id: string): Promise<Workspace> {
-  return withTransaction(async (client) => {
+  try {
+    return await withTransaction(async (client) => {
     const invitation = await client.query<{ id: string; workspace_id: string; email: string; role: 'coach' | 'assistant'; name: string; timezone: string }>(`SELECT i.id, i.workspace_id, i.email, i.role, w.name, w.timezone FROM workspace_invitations i JOIN workspaces w ON w.id = i.workspace_id WHERE i.token_hash = $1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > now() FOR UPDATE`, [hashToken(token)]);
     const row = invitation.rows[0];
     if (!row) throw new ApiError(410, 'INVITATION_UNAVAILABLE', 'Invitation is expired, revoked, or already accepted');
     const user = await client.query<{ id: string; email: string }>('SELECT id, email FROM users WHERE auth0_id = $1 FOR UPDATE', [auth0Id]);
     if (!user.rows[0]) throw new ApiError(403, 'AUTH_USER_NOT_SYNCHRONIZED', 'Authenticated user is not synchronized');
     if (user.rows[0].email.toLowerCase() !== row.email.toLowerCase()) throw new ApiError(403, 'INVITATION_EMAIL_MISMATCH', 'Invitation is for a different email address');
-    await client.query(`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now()`, [row.workspace_id, user.rows[0].id, row.role]);
+    const membership = await client.query('SELECT 1 FROM workspace_members WHERE user_id = $1 FOR UPDATE', [user.rows[0].id]);
+    if (membership.rows[0]) throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
+    await client.query(`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)`, [row.workspace_id, user.rows[0].id, row.role]);
     await client.query(`UPDATE workspace_invitations SET accepted_at = now(), accepted_by = $1 WHERE id = $2`, [user.rows[0].id, row.id]);
     await client.query(`INSERT INTO workspace_membership_audit (workspace_id, user_id, actor_id, invitation_id, action, role) VALUES ($1, $2, $2, $3, 'accepted', $4)`, [row.workspace_id, user.rows[0].id, row.id, row.role]);
-    return { id: row.workspace_id, name: row.name, timezone: row.timezone, role: row.role };
-  });
+      return { id: row.workspace_id, name: row.name, timezone: row.timezone, role: row.role };
+    });
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+      throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
+    }
+    throw error;
+  }
 }
 
 export async function revokeInvitation(workspaceId: string, invitationId: string, actorId: string): Promise<void> {

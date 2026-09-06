@@ -21,7 +21,10 @@ export async function listClubs(search: string | null): Promise<Club[]> {
 }
 
 export async function createClub(userId: string, name: string): Promise<Club> {
-  return withTransaction(async (client) => {
+  try {
+    return await withTransaction(async (client) => {
+      const existing = await client.query('SELECT 1 FROM workspace_members WHERE user_id = $1', [userId]);
+      if (existing.rows[0]) throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
     const workspace = await client.query<{ id: string }>(
       'INSERT INTO workspaces (name) VALUES ($1) RETURNING id',
       [name],
@@ -38,12 +41,20 @@ export async function createClub(userId: string, name: string): Promise<Club> {
       "INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'coach')",
       [workspaceId, userId],
     );
-    return mapClubRow(club.rows[0]!);
-  });
+      return mapClubRow(club.rows[0]!);
+    });
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+      throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
+    }
+    throw error;
+  }
 }
 
 export async function createJoinRequest(clubId: string, userId: string): Promise<ClubJoinRequest> {
   try {
+    const membership = await getPool().query('SELECT 1 FROM workspace_members WHERE user_id = $1', [userId]);
+    if (membership.rows[0]) throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
     const result = await getPool().query<ClubJoinRequestRow>(
       `INSERT INTO club_join_requests (club_id, user_id)
        SELECT $1, $2
@@ -105,7 +116,8 @@ export async function reviewJoinRequest(
   decision: 'approved' | 'rejected',
   role?: 'coach' | 'assistant',
 ): Promise<ClubJoinRequest> {
-  return withTransaction(async (client) => {
+  try {
+    return await withTransaction(async (client) => {
     const request = await client.query<ClubJoinRequestRow & { workspace_id: string }>(
       `SELECT r.id, r.club_id, r.user_id, r.status, r.reviewed_by, r.reviewed_at, r.created_at, r.updated_at, c.workspace_id
        FROM club_join_requests r
@@ -117,10 +129,11 @@ export async function reviewJoinRequest(
     const row = request.rows[0];
     if (!row) throw new ApiError(404, 'CLUB_JOIN_REQUEST_NOT_FOUND', 'Join request not found');
     if (decision === 'approved') {
+      const membership = await client.query('SELECT 1 FROM workspace_members WHERE user_id = $1 FOR UPDATE', [row.user_id]);
+      if (membership.rows[0]) throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
       await client.query(
         `INSERT INTO workspace_members (workspace_id, user_id, role)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now()`,
+          VALUES ($1, $2, $3)`,
         [row.workspace_id, row.user_id, role],
       );
     }
@@ -131,8 +144,14 @@ export async function reviewJoinRequest(
        RETURNING id, club_id, user_id, status, reviewed_by, reviewed_at, created_at, updated_at`,
       [requestId, decision, actorId],
     );
-    return mapClubJoinRequestRow(reviewed.rows[0]!);
-  });
+      return mapClubJoinRequestRow(reviewed.rows[0]!);
+    });
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+      throw new ApiError(409, 'USER_ALREADY_IN_WORKSPACE', 'A user can belong to only one club');
+    }
+    throw error;
+  }
 }
 
 export async function assertActiveClubWorkspace(clubId: string, workspaceId: string): Promise<void> {

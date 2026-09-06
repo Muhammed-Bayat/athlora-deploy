@@ -53,7 +53,20 @@ describe('workspaces', () => {
     expect(query.mock.calls[0][0]).toContain('revoked_at IS NULL');
     expect(query.mock.calls[0][0]).toContain('expires_at > now()');
     expect(query.mock.calls[2][0]).toContain('workspace_members');
-    expect(query.mock.calls[3][0]).toContain('accepted_at = now()');
+    expect(query.mock.calls[3][0]).toContain('workspace_members');
+    expect(query.mock.calls[4][0]).toContain('accepted_at = now()');
+  });
+
+  it('rejects accepting an invitation when the user already belongs to a club', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'invite', workspace_id: WORKSPACE_ID, email: 'assistant@example.test', role: 'assistant', name: 'Sprinters', timezone: 'UTC' }] })
+      .mockResolvedValueOnce({ rows: [{ id: USER_ID, email: 'assistant@example.test' }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] });
+
+    await expect(acceptInvitation('raw-token', 'auth0|assistant')).rejects.toMatchObject({
+      status: 409,
+      code: 'USER_ALREADY_IN_WORKSPACE',
+    });
   });
 
   it('replaces an active invitation token when it is resent', async () => {

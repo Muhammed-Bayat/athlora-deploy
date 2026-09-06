@@ -670,9 +670,9 @@ describe('result override payloads', () => {
 });
 
 describe('fixture invitation payloads', () => {
-  it('normalizes invitation email and accepts valid response states', () => {
-    expect(parseFixtureInvitationCreatePayload({ email: ' Guest@Example.com ' })).toEqual({
-      email: 'guest@example.com', expiresInDays: 7,
+  it('validates a target club and accepts valid response states', () => {
+    expect(parseFixtureInvitationCreatePayload({ targetClubId: '11111111-1111-4111-8111-111111111111' })).toEqual({
+      targetClubId: '11111111-1111-4111-8111-111111111111', expiresInDays: 7,
     });
     expect(parseFixtureInvitationResponsePayload({ response: 'change_requested', message: ' Move the start time ' })).toEqual({
       response: 'change_requested', message: 'Move the start time',
@@ -681,7 +681,7 @@ describe('fixture invitation payloads', () => {
 
   it('requires a bounded expiry and a message only for change requests', () => {
     expectValidationError(
-      () => parseFixtureInvitationCreatePayload({ email: 'guest@example.com', expiresInDays: 31 }),
+      () => parseFixtureInvitationCreatePayload({ targetClubId: '11111111-1111-4111-8111-111111111111', expiresInDays: 31 }),
       [{ path: 'expiresInDays', code: 'invalid_value', message: 'Expected an integer from 1 to 30' }],
     );
     expectValidationError(

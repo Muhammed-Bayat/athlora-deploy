@@ -27,7 +27,7 @@ fixtureHostRouter.put('/:eventId/fixture-results/:athleteId', requireOperational
 
 const fixtureGuestRouter = Router();
 fixtureGuestRouter.get('/incoming', fixtures.listIncoming);
-fixtureGuestRouter.post('/incoming/:invitationId/respond', requireOperationalAccess(), validateBody(parseFixtureInvitationResponsePayload), fixtures.respondIncoming);
+fixtureGuestRouter.post('/incoming/:invitationId/respond', requireCoach(), validateBody(parseFixtureInvitationResponsePayload), fixtures.respondIncoming);
 fixtureGuestRouter.get('/', fixtures.listGuest);
 fixtureGuestRouter.get('/:eventId', fixtures.getGuest);
 fixtureGuestRouter.get('/:eventId/participants', fixtures.listGuestParticipants);
