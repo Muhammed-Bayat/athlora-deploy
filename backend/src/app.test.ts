@@ -317,6 +317,25 @@ describe('auth bootstrap', () => {
       headers: { Authorization: 'Bearer bootstrap-token' },
     });
   });
+
+  it('lists no workspaces for a synchronized user awaiting Club onboarding', async () => {
+    configureAuth('auth0|new-coach');
+    query
+      .mockResolvedValueOnce({ rows: [{
+        user_id: USER_ID,
+        auth0_id: 'auth0|new-coach',
+        role: 'coach',
+        deletion_status: null,
+      }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .get('/api/v1/workspaces')
+      .set('Authorization', 'Bearer bootstrap-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0, activeWorkspaceId: '' } });
+  });
 });
 
 describe('owned resource routes', () => {

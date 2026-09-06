@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   listClubs: vi.fn(),
   listMyClubJoinRequests: vi.fn(),
   createClub: vi.fn(),
+  requestToJoinClub: vi.fn(),
+  withdrawClubJoinRequest: vi.fn(),
 }));
 
 vi.mock('@auth0/auth0-react', () => ({
@@ -42,8 +44,8 @@ vi.mock('../../api/clubs', () => ({
   listClubs: mocks.listClubs,
   listMyClubJoinRequests: mocks.listMyClubJoinRequests,
   createClub: mocks.createClub,
-  requestToJoinClub: vi.fn(),
-  withdrawClubJoinRequest: vi.fn(),
+  requestToJoinClub: mocks.requestToJoinClub,
+  withdrawClubJoinRequest: mocks.withdrawClubJoinRequest,
 }));
 
 const synchronizedUser: User = {
@@ -92,6 +94,8 @@ beforeEach(() => {
   mocks.listClubs.mockResolvedValue({ data: [], meta: { count: 0 } });
   mocks.listMyClubJoinRequests.mockResolvedValue({ data: [], meta: { count: 0 } });
   mocks.createClub.mockReset();
+  mocks.requestToJoinClub.mockReset();
+  mocks.withdrawClubJoinRequest.mockReset();
   mocks.acceptWorkspaceInvitation.mockReset();
 });
 
@@ -170,6 +174,34 @@ describe('Auth0TokenBridge', () => {
 
     expect(await screen.findByRole('heading', { name: 'Set up your Club' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Club' })).toBeDisabled();
+  });
+
+  it('refreshes into the dashboard when a pending Club request is approved', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.auth.isAuthenticated = true;
+      mocks.auth.user = { sub: 'auth0|user-1' };
+      mocks.syncCurrentUser.mockResolvedValue(synchronizedUser);
+      const clubWorkspace = { id: '22222222-2222-4222-822222222222', name: 'Track Club', timezone: 'UTC', role: 'assistant' as const };
+      mocks.listWorkspaces
+        .mockResolvedValueOnce({ data: [], meta: { count: 0, activeWorkspaceId: '' } })
+        .mockResolvedValueOnce({ data: [clubWorkspace], meta: { count: 1, activeWorkspaceId: clubWorkspace.id } });
+      mocks.listMyClubJoinRequests
+        .mockResolvedValueOnce({ data: [{ id: 'request-1', clubId: 'club-1', userId: synchronizedUser.id, status: 'pending', reviewedBy: null, reviewedAt: null, createdAt: '2026-09-06T10:00:00.000Z', updatedAt: '2026-09-06T10:00:00.000Z' }], meta: { count: 1 } })
+        .mockResolvedValueOnce({ data: [{ id: 'request-1', clubId: 'club-1', userId: synchronizedUser.id, status: 'approved', reviewedBy: 'coach-1', reviewedAt: '2026-09-06T10:01:00.000Z', createdAt: '2026-09-06T10:00:00.000Z', updatedAt: '2026-09-06T10:01:00.000Z' }], meta: { count: 1 } });
+
+      renderBridge(<CurrentUserName />);
+      await act(async () => {});
+
+      expect(screen.getByRole('heading', { name: 'Set up your Club' })).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+
+      expect(screen.getByText('Coach One')).toBeInTheDocument();
+      expect(mocks.listMyClubJoinRequests.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(mocks.listWorkspaces.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('accepts a direct Club invitation before onboarding a user with no membership', async () => {
