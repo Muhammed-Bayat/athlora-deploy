@@ -45,6 +45,9 @@ interface EventDraft {
 
 type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
+const TIME_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+const TIME_MINUTES = Array.from({ length: 12 }, (_, minute) => String(minute * 5).padStart(2, '0'));
+
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
   onOpenEvent?: (eventId: string) => void;
@@ -107,6 +110,48 @@ function toPayload(
     },
     errors,
   };
+}
+
+function timeParts(value: string): { hour: string; minute: string } | null {
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (!match || !TIME_HOURS.includes(match[1])) return null;
+  return { hour: match[1], minute: match[2] };
+}
+
+function EventTimePicker({ value, disabled, invalid, describedBy, onChange }: {
+  value: string;
+  disabled: boolean;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (value: string) => void;
+}) {
+  const current = timeParts(value);
+  const minutes = current && !TIME_MINUTES.includes(current.minute)
+    ? [current.minute, ...TIME_MINUTES]
+    : TIME_MINUTES;
+
+  const selectHour = (hour: string) => {
+    if (!hour) {
+      onChange('');
+      return;
+    }
+    onChange(`${hour}:${current?.minute ?? '00'}:00`);
+  };
+
+  const selectMinute = (minute: string) => {
+    if (!current?.hour || !minute) return;
+    onChange(`${current.hour}:${minute}:00`);
+  };
+
+  return <div className={styles.timePicker} aria-describedby={describedBy}>
+    <span className={styles.timeLabel}>Time <span>Optional</span></span>
+    <div className={styles.timeWheels}>
+      <label>Hour<select aria-label="Event hour" value={current?.hour ?? ''} onChange={(event) => selectHour(event.target.value)} disabled={disabled} aria-invalid={invalid}><option value="">HH</option>{TIME_HOURS.map((hour) => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+      <span aria-hidden="true">:</span>
+      <label>Minute<select aria-label="Event minute" value={current?.minute ?? ''} onChange={(event) => selectMinute(event.target.value)} disabled={disabled || !current?.hour} aria-invalid={invalid}><option value="">MM</option>{minutes.map((minute) => <option key={minute} value={minute}>{minute}</option>)}</select></label>
+    </div>
+    {value && <Button type="button" variant="ghost" onClick={() => onChange('')} disabled={disabled}>Clear time</Button>}
+  </div>;
 }
 
 export function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
@@ -353,8 +398,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
 
        <div className={styles.formRow}>
         <div>
-          <label htmlFor="event-time">Time <span>Optional</span></label>
-          <Input id="event-time" type="time" step="1" value={draft.time} onChange={(input) => setField('time', input.target.value)} invalid={Boolean(errors.time)} aria-invalid={Boolean(errors.time)} aria-describedby={errors.time ? 'event-time-error' : undefined} disabled={submitting} />
+          <EventTimePicker value={draft.time} onChange={(value) => setField('time', value)} invalid={Boolean(errors.time)} describedBy={errors.time ? 'event-time-error' : undefined} disabled={submitting} />
           {errors.time && <span id="event-time-error" className={styles.fieldError}>{errors.time}</span>}
         </div>
         <div>

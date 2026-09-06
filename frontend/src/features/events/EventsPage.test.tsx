@@ -316,7 +316,8 @@ describe('EventsPage', () => {
 
     await user.type(within(dialog).getByLabelText('Event title'), '  County 100m  ');
     await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
-    await user.type(within(dialog).getByLabelText(/Time/), '10:15');
+    await user.selectOptions(within(dialog).getByLabelText('Event hour'), '10');
+    await user.selectOptions(within(dialog).getByLabelText('Event minute'), '15');
     await user.type(within(dialog).getByLabelText(/Location/), '  North Track  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 
@@ -325,13 +326,34 @@ describe('EventsPage', () => {
       discipline: '100m',
       title: 'County 100m',
       date: '2026-09-05',
-      time: '10:15',
+      time: '10:15:00',
       locationName: 'North Track',
       latitude: null,
       longitude: null,
       status: 'scheduled',
     }));
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
+  });
+
+  it('uses 24-hour five-minute time wheels and clears an optional event time', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+    const hour = within(dialog).getByLabelText('Event hour');
+    const minute = within(dialog).getByLabelText('Event minute');
+
+    expect(minute).toBeDisabled();
+    expect(within(hour).getByRole('option', { name: '23' })).toBeInTheDocument();
+    expect(within(minute).queryByRole('option', { name: '01' })).not.toBeInTheDocument();
+    await user.selectOptions(hour, '18');
+    await user.selectOptions(minute, '35');
+    expect(hour).toHaveValue('18');
+    expect(minute).toHaveValue('35');
+    await user.click(within(dialog).getByRole('button', { name: 'Clear time' }));
+    expect(hour).toHaveValue('');
+    expect(minute).toBeDisabled();
   });
 
   it('shows a selected venue and keeps the cleared search ready for a replacement', async () => {
