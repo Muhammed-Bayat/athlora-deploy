@@ -86,4 +86,27 @@ describe('FitnessView', () => {
       severity: 'Severe',
     }));
   });
+
+  it('marks the selected injury-history filter and shows its matching records', async () => {
+    const user = userEvent.setup();
+    injuryApi.listInjuries.mockResolvedValue([
+      {
+        id: 'inj-active', workspaceId: 'ws-1', athleteId: 'ath-1', bodyRegion: 'Leg', region: 'Leg', area: 'Knee', side: 'Left', severity: 'Minor', notes: null, occurrenceDate: '2026-08-30', expectedReturnDate: null, resolvedDate: null, resolutionNotes: null, createdBy: 'user-1', updatedBy: null, createdAt: '2026-08-30T10:00:00.000Z', updatedAt: '2026-08-30T10:00:00.000Z', deletedAt: null, deletedBy: null,
+      },
+      {
+        id: 'inj-resolved', workspaceId: 'ws-1', athleteId: 'ath-1', bodyRegion: 'Arm', region: 'Arm', area: 'Shoulder', side: 'Right', severity: 'Moderate', notes: null, occurrenceDate: '2026-08-20', expectedReturnDate: null, resolvedDate: '2026-08-25T10:00:00.000Z', resolutionNotes: null, createdBy: 'user-1', updatedBy: null, createdAt: '2026-08-20T10:00:00.000Z', updatedAt: '2026-08-25T10:00:00.000Z', deletedAt: null, deletedBy: null,
+      },
+    ] satisfies Injury[]);
+
+    render(<FitnessView athleteId="ath-1" athleteName="Ari Runner" athleteSquad="Sprint A" athleteStatus="active" canOperate onBack={vi.fn()} onSetInactive={vi.fn()} />);
+
+    await screen.findByText('Left Knee');
+    expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Right Shoulder')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Resolved' }));
+    expect(screen.getByRole('button', { name: 'Resolved' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Right Shoulder')).toBeInTheDocument();
+    expect(screen.queryByText('Left Knee')).not.toBeInTheDocument();
+  });
 });
