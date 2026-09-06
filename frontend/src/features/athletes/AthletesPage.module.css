@@ -105,7 +105,10 @@
   border-color: var(--console-edge);
   background: var(--console-surface);
   box-shadow: var(--console-shadow);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
+
+.card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--console-cyan) 35%, var(--console-edge)); box-shadow: 0 20px 44px rgba(0, 0, 0, 0.17); }
 
 .card::before {
   content: '';
@@ -251,16 +254,28 @@
 }
 
 .loading {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: grid;
   grid-template-columns: repeat(3, 12px);
   align-content: center;
+  color: #d5f6f8;
+  border-color: rgba(138, 233, 242, 0.28);
+  background: radial-gradient(ellipse at 50% 44%, rgba(88, 210, 223, 0.2), transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0, 102, 132, 0.16), transparent 70%), linear-gradient(135deg, #0d2730, #183d47);
+  box-shadow: 0 20px 52px rgba(0, 32, 43, 0.22), inset 0 1px rgba(224, 254, 255, 0.12);
 }
 
+.loading::before { position: absolute; inset: 0; z-index: 0; opacity: 0.3; background-image: radial-gradient(circle, rgba(207, 252, 255, 0.76) 0 1px, transparent 1.8px); background-size: 32px 32px; content: ''; animation: loadingField 14s linear infinite; }
+
 .loading span {
+  position: relative;
+  z-index: 1;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--console-cyan);
+  background: #a7f8fc;
+  box-shadow: 0 0 16px rgba(125, 237, 245, 0.68);
   animation: pulse 0.9s var(--ease) infinite alternate;
 }
 
@@ -273,8 +288,12 @@
 }
 
 .loading p {
+  position: relative;
+  z-index: 1;
   grid-column: 1 / -1;
 }
+
+@keyframes loadingField { to { background-position: 32px -32px; } }
 
 .loadError h2 {
   margin: 0;
@@ -405,11 +424,26 @@
   color: #173E50;
 }
 
+:global(html.theme-light) .card { background: #FFFFFF; border-color: rgba(18, 35, 43, 0.1); box-shadow: 0 14px 34px rgba(20, 33, 40, 0.07); }
+:global(html.theme-light) .card::before { background: linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.32), transparent); }
+:global(html.theme-light) .card:hover { border-color: rgba(0, 146, 188, 0.25); box-shadow: 0 20px 42px rgba(20, 33, 40, 0.12); }
+:global(html.theme-light) .card h2, :global(html.theme-light) .details dd { color: #152B34; }
+:global(html.theme-light) .squad, :global(html.theme-light) .notes, :global(html.theme-light) .injurySummary { color: #53636A; }
+:global(html.theme-light) .details dt { color: #697980; }
+:global(html.theme-light) .activeBadge { color: #05657E; background: #E3F4F5; }
+:global(html.theme-light) .inactiveBadge { color: #7A5700; background: #FFF1D6; }
+:global(html.theme-light) .archivedBadge { color: #9A3324; background: #FCE5E1; }
+:global(html.theme-light) .loading { color: #285b66; border-color: rgba(0, 130, 158, 0.2); background: radial-gradient(ellipse at 50% 44%, rgba(116, 223, 233, 0.34), transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0, 125, 159, 0.14), transparent 70%), linear-gradient(135deg, #f4fcfd, #d9f0f2); box-shadow: 0 20px 52px rgba(0, 78, 102, 0.12), inset 0 1px rgba(255, 255, 255, 0.86); }
+:global(html.theme-light) .loading::before { opacity: 0.24; }
+
 @media (prefers-reduced-motion: reduce) {
   .loading span,
   .aiTrigger[data-connected] {
     animation: none;
   }
+
+  .card { transition: none; }
+  .card:hover { transform: none; }
 }
 
 @media (max-width: 480px) {

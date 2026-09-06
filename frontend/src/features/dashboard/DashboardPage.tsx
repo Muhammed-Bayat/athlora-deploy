@@ -118,7 +118,7 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
   return (
     <div className={styles.summaryHeroCopy}>
       <p className={styles.summaryKicker}><span aria-hidden="true" />{greetingForHour(now.getHours())}</p>
-      <h2 id="dashboard-summary-title">Performance.<br /><span>In<br />motion.</span></h2>
+      <h2 id="dashboard-summary-title"><span className={styles.heroLine}>Performance.</span><span className={`${styles.heroLine} ${styles.heroAccent}`}>In</span><span className={`${styles.heroLine} ${styles.heroAccent}`}>motion.</span></h2>
       <p className={styles.summaryLead}>
         <strong>{summary.activeAthletesCount} of {summary.athletesCount} athlete{summary.athletesCount === 1 ? '' : 's'}</strong> {summary.activeAthletesCount === 1 ? 'is' : 'are'} active,
         with <strong>{summary.upcomingEventCount} upcoming event{summary.upcomingEventCount === 1 ? '' : 's'}</strong> and
@@ -440,6 +440,7 @@ export function DashboardPage(props: DashboardPageProps) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [revealed, setRevealed] = useState(false);
   const onSummaryLoadedRef = useRef(props.onSummaryLoaded);
   onSummaryLoadedRef.current = props.onSummaryLoaded;
 
@@ -447,11 +448,15 @@ export function DashboardPage(props: DashboardPageProps) {
     let current = true;
     setSummary(null);
     setLoadError(null);
+    setRevealed(false);
 
     void getDashboardSummary().then((nextSummary) => {
       if (!current) return;
       setSummary(nextSummary);
       onSummaryLoadedRef.current?.(nextSummary);
+      window.requestAnimationFrame(() => {
+        if (current) setRevealed(true);
+      });
     }).catch((error: unknown) => {
       if (current) setLoadError(errorMessage(error));
     });
@@ -469,7 +474,7 @@ export function DashboardPage(props: DashboardPageProps) {
 
   const isLive = summary!.state === 'live' && summary!.activeEvent !== null;
   return (
-    <section className={styles.dashboard} aria-label="Dashboard overview">
+    <section className={`${styles.dashboard} ${revealed ? styles.revealed : ''}`} aria-label="Dashboard overview">
       {isLive
         ? <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
         : <SummaryDashboard summary={summary!} onOpenRoster={props.onOpenRoster} onOpenAthlete={props.onOpenAthlete} onOpenEvents={props.onOpenEvents} onOpenEvent={props.onOpenEvent} />}

@@ -173,7 +173,7 @@ describe('Auth0TokenBridge', () => {
     renderBridge();
 
     expect(await screen.findByRole('heading', { name: 'Set up your Club' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Club' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Start a Club/ })).toBeEnabled();
   });
 
   it('refreshes into the dashboard when a pending Club request is approved', async () => {

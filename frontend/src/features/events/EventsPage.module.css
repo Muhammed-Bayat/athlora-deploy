@@ -94,22 +94,36 @@
 }
 
 .loading {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: grid;
   grid-template-columns: repeat(3, 12px);
   align-content: center;
+  color: #d5f6f8;
+  border-color: rgba(138, 233, 242, 0.28);
+  background: radial-gradient(ellipse at 50% 44%, rgba(88, 210, 223, 0.2), transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0, 102, 132, 0.16), transparent 70%), linear-gradient(135deg, #0d2730, #183d47);
+  box-shadow: 0 20px 52px rgba(0, 32, 43, 0.22), inset 0 1px rgba(224, 254, 255, 0.12);
 }
 
+.loading::before { position: absolute; inset: 0; z-index: 0; opacity: 0.3; background-image: radial-gradient(circle, rgba(207, 252, 255, 0.76) 0 1px, transparent 1.8px); background-size: 32px 32px; content: ''; animation: loadingField 14s linear infinite; }
+
 .loading span {
+  position: relative;
+  z-index: 1;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--console-cyan);
+  background: #a7f8fc;
+  box-shadow: 0 0 16px rgba(125, 237, 245, 0.68);
   animation: pulse 0.9s var(--ease) infinite alternate;
 }
 
 .loading span:nth-child(2) { animation-delay: 0.15s; }
 .loading span:nth-child(3) { animation-delay: 0.3s; }
-.loading p { grid-column: 1 / -1; }
+.loading p { position: relative; z-index: 1; grid-column: 1 / -1; }
+
+@keyframes loadingField { to { background-position: 32px -32px; } }
 
 .loadError h2 {
   margin: 0;
@@ -897,6 +911,9 @@
   background: #F7FCFD;
   color: #173E50;
 }
+
+:global(html.theme-light) .loading { color: #285b66; border-color: rgba(0, 130, 158, 0.2); background: radial-gradient(ellipse at 50% 44%, rgba(116, 223, 233, 0.34), transparent 62%), radial-gradient(ellipse at 50% 110%, rgba(0, 125, 159, 0.14), transparent 70%), linear-gradient(135deg, #f4fcfd, #d9f0f2); box-shadow: 0 20px 52px rgba(0, 78, 102, 0.12), inset 0 1px rgba(255, 255, 255, 0.86); }
+:global(html.theme-light) .loading::before { opacity: 0.24; }
 
 @media (max-width: 980px) {
   .viewHeader {

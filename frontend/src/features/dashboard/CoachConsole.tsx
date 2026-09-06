@@ -277,7 +277,7 @@ function ConsoleIcon({ name }: { name: IconName }) {
 function LiveTime({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
-  return compact ? <>{now.toLocaleTimeString('en-GB')}</> : <><time>{now.toLocaleTimeString('en-GB')}</time><span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span></>;
+  return compact ? <>{now.toLocaleTimeString('en-GB')}</> : <><time className={styles.clockTick} key={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time><span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span></>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

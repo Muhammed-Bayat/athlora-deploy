@@ -32,7 +32,7 @@ export function CompactAnatomy({
       <div className={styles.body} role="img" aria-label={summary}><Suspense fallback={null}><StaticAnatomy injuries={injuries} /></Suspense></div>
       <div className={styles.copy}>
         <strong>{injuries.length === 0 ? 'Healthy' : `${injuries.length} active ${injuries.length === 1 ? 'injury' : 'injuries'}`}</strong>
-        <span data-severity={highestSeverity ?? 'none'}>{status}</span>
+        <span className={styles.status} data-severity={highestSeverity ?? 'none'}>{status}</span>
         <span className={styles.srOnly}>{summary}</span>
         {onOpenFitness && <button type="button" className={styles.link} onClick={onOpenFitness} disabled={disabled}>Open Fitness & injury map</button>}
       </div>
