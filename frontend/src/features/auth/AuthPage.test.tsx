@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
@@ -131,6 +131,24 @@ describe('AuthPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Members and invitations' })).toBeInTheDocument();
     expect(workspaceApi.listWorkspaceMembers).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000');
+  });
+
+  it('uses the themed role menu when changing a Club member role', async () => {
+    workspaceApi.listWorkspaceMembers.mockResolvedValue({
+      data: [{ userId: 'user-2', name: 'Assistant Sam', email: 'sam@example.com', role: 'assistant' }],
+      meta: { count: 1 },
+    });
+    workspaceApi.updateWorkspaceMemberRole.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+
+    const roleTrigger = await screen.findByRole('button', { name: 'Role for Assistant Sam' });
+    await user.click(roleTrigger);
+    const roleMenu = roleTrigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(roleMenu).toBeInTheDocument();
+    await user.click(within(roleMenu!).getByRole('option', { name: 'Coach' }));
+
+    await waitFor(() => expect(workspaceApi.updateWorkspaceMemberRole).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000', 'user-2', 'coach'));
   });
 
   it('replaces a pending invitation link when the coach resends it', async () => {

@@ -118,7 +118,7 @@ export function Select({
   };
 
   return (
-    <div ref={wrapperRef} className={[styles.filter, open ? styles.filterOpen : ''].filter(Boolean).join(' ')}>
+    <div ref={wrapperRef} className={[styles.filter, className, open ? styles.filterOpen : ''].filter(Boolean).join(' ')}>
       <select
         id={selectId}
         ref={selectRef}
