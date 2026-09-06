@@ -16,11 +16,41 @@ const athleteApi = vi.hoisted(() => ({
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
+const geminiApi = vi.hoisted(() => ({ createGeminiToken: vi.fn(), sendText: vi.fn() }));
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
 vi.mock('../../api/squads', () => squadsApi);
 vi.mock('../../api/injuries', () => injuriesApi);
+vi.mock('../../api/ai', () => ({ createGeminiToken: geminiApi.createGeminiToken }));
+vi.mock('../../api/geminiLiveSdk', () => ({
+  AthloraGeminiSession: class {
+    constructor(private readonly options: { onConnected?: () => void }) {}
+    async connect() { this.options.onConnected?.(); }
+    async sendText(message: string) { return geminiApi.sendText(message); }
+    sendAudio() {}
+    endAudioStream() {}
+    close() {}
+  },
+}));
+vi.mock('../../api/geminiAudio', () => ({
+  GeminiAudioPlayer: class {
+    async prepare() {}
+    playPcm16() {}
+    clear() {}
+    async waitUntilIdle() {}
+    close() {}
+  },
+}));
+vi.mock('../../api/geminiMicrophone', () => ({
+  GeminiMicrophone: class {
+    async start() {}
+    async stop() {}
+    pause() {}
+    resume() {}
+    isActive() { return false; }
+  },
+}));
 
 const ARI_ID = '11111111-1111-4111-8111-111111111111';
 const BEA_ID = '22222222-2222-4222-8222-222222222222';
@@ -71,6 +101,8 @@ beforeEach(() => {
   athleteApi.getAthlete.mockResolvedValue(ari);
   injuriesApi.listAthleteInjurySummaries.mockResolvedValue([]);
   injuriesApi.listInjuries.mockResolvedValue([]);
+  geminiApi.createGeminiToken.mockResolvedValue('gemini-token');
+  geminiApi.sendText.mockImplementation(async (message: string) => message === 'Start the assistant now.' ? 'Good Day Coach, who are we adding today?' : `Athlora received: ${message}`);
   statisticsApi.getAthleteStatistics.mockResolvedValue({
     athleteId: ARI_ID, discipline: '100m', unit: 'seconds', pb: null, sb: null,
     resultsCount: 0, latestResult: null, latestOutcome: 'no_result', updatedAt: '2026-08-17T10:00:00.000Z',
@@ -82,6 +114,26 @@ beforeEach(() => {
 });
 
 describe('AthletesPage', () => {
+  it('opens Athlora AI from the search controls and sends typed messages in its dialog', async () => {
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+
+    const search = screen.getByRole('textbox', { name: 'Search athletes by name' }).closest('label')!;
+    const trigger = screen.getByRole('button', { name: 'Start Athlora AI' });
+    expect(search.nextElementSibling).toBe(trigger);
+    expect(screen.queryByRole('dialog', { name: 'Athlora AI' })).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
+    expect(await within(dialog).findByText('Good Day Coach, who are we adding today?')).toBeInTheDocument();
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Message Athlora' }), 'Add John Smith');
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+    expect(await within(dialog).findByText('Athlora received: Add John Smith')).toBeInTheDocument();
+    expect(geminiApi.sendText).toHaveBeenNthCalledWith(2, 'Add John Smith');
+  });
+
   it('renders active injury counts and highest severity without loading Fitness', async () => {
     injuriesApi.listAthleteInjurySummaries.mockResolvedValueOnce([{
       athleteId: ARI_ID,

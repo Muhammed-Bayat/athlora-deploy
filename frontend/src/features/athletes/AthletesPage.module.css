@@ -79,6 +79,16 @@
   box-shadow: 0 0 0 4px var(--console-focus-ring);
 }
 
+.aiTrigger { position: relative; isolation: isolate; display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; padding: 3px; overflow: hidden; border: 0; border-radius: 50%; background: conic-gradient(from 225deg, #2fe4ff, #2599ff 25%, #8074ff 48%, #e965f5 71%, #ff9cbb 84%, #2fe4ff); box-shadow: 0 0 0 1px rgba(205, 246, 255, .76), 0 0 12px rgba(47, 228, 255, .6), 0 0 22px rgba(195, 105, 255, .48); cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s var(--ease), filter .2s var(--ease); }
+.aiTrigger::before { position: absolute; z-index: -1; inset: 3px; border-radius: inherit; background: radial-gradient(circle at 36% 27%, #1b477e, #09182e 46%, #090619 100%); content: ''; }
+.aiTrigger svg { width: 75%; height: 75%; filter: drop-shadow(0 0 5px rgba(155, 222, 255, .7)); }
+.aiTrigger:hover:not(:disabled) { filter: saturate(1.18) brightness(1.08); transform: translateY(-1px) scale(1.05); box-shadow: 0 0 0 1px rgba(230, 250, 255, .9), 0 0 16px rgba(47, 228, 255, .76), 0 0 30px rgba(218, 104, 255, .6); }
+.aiTrigger:focus-visible { outline: 3px solid var(--console-focus); outline-offset: 3px; }
+.aiTrigger:disabled { cursor: wait; opacity: .72; }
+.aiTrigger[data-connected] { animation: aiPulse 2.6s ease-in-out infinite; }
+
+.aiDialog { display: grid; gap: var(--space-4); }.aiResponse { min-height: 132px; display: grid; align-content: start; gap: var(--space-2); padding: var(--space-5); border: 1px solid color-mix(in srgb, var(--cyan-300) 35%, var(--console-line)); border-radius: var(--radius-md); background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--cyan-400) 24%, transparent), transparent 42%), linear-gradient(145deg, color-mix(in srgb, var(--console-surface) 80%, #07152b), color-mix(in srgb, var(--console-soft) 88%, #100a29)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }.aiResponse p { margin: 0; color: var(--console-component-text, var(--console-ink)); line-height: 1.55; }.aiResponseLabel { color: var(--cyan-200) !important; font: var(--font-weight-bold) .7rem var(--font-family-mono); letter-spacing: .13em; text-transform: uppercase; }.aiActions { min-height: 32px; display: flex; align-items: center; gap: var(--space-3); color: var(--console-teal); font: var(--font-weight-bold) .75rem var(--font-family-mono); }.aiComposer { display: flex; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--console-control-border); border-radius: var(--radius-md); background: var(--console-component-surface, var(--console-soft)); }.aiComposer input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--console-component-text, var(--console-ink)); font: var(--font-weight-medium) var(--font-size-sm) var(--font-family-base); }.aiComposer input::placeholder { color: var(--console-placeholder); }.aiComposer:focus-within { border-color: var(--console-focus); box-shadow: 0 0 0 3px var(--console-focus-ring); }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -323,6 +333,10 @@
   to { opacity: 1; transform: translateY(-2px); }
 }
 
+@keyframes aiPulse {
+  50% { box-shadow: 0 0 0 1px rgba(230, 250, 255, .92), 0 0 17px rgba(47, 228, 255, .8), 0 0 34px rgba(218, 104, 255, .72); }
+}
+
 @media (max-width: 980px) {
   .viewHeader {
     display: block;
@@ -335,6 +349,10 @@
 
   .search {
     flex: 1 1 100%;
+  }
+
+  .aiTrigger {
+    flex: 0 0 46px !important;
   }
 
   .controls select {
@@ -362,6 +380,8 @@
   color: #315D6E;
 }
 
+:global(html.theme-light) .aiResponse { border-color: rgba(0, 146, 188, .22); background: radial-gradient(circle at 12% 0%, rgba(69, 190, 215, .24), transparent 42%), linear-gradient(145deg, #f9feff, #e4f4f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92); }.aiResponse p { color: #173e50; }.aiResponseLabel { color: #0086ac !important; }.aiComposer { border-color: rgba(0, 94, 131, .15); background: rgba(237, 248, 250, .9); }.aiComposer input { color: #173e50; }
+
 :global(html.theme-light) .controls select:hover {
   border-color: rgba(0, 146, 188, 0.21);
   background:
@@ -385,7 +405,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading span {
+  .loading span,
+  .aiTrigger[data-connected] {
     animation: none;
   }
+}
+
+@media (max-width: 480px) {
+  .aiComposer { align-items: stretch; flex-direction: column; }.aiComposer input { min-height: 40px; padding-inline: var(--space-2); }.aiComposer button { width: 100%; }
 }
