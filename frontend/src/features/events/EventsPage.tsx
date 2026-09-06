@@ -213,7 +213,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [venueResults, setVenueResults] = useState<VenueSearchResult[]>([]);
   const [venueSearching, setVenueSearching] = useState(false);
   const [venueError, setVenueError] = useState<string | null>(null);
-  const [selectedVenueKey, setSelectedVenueKey] = useState<string | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<VenueSearchResult | null>(null);
   const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
@@ -277,8 +277,11 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   }, [venueQuery]);
 
   const selectVenue = (venue: VenueSearchResult) => {
+    venueRequestRef.current += 1;
     setDraft((current) => ({ ...current, locationName: venue.displayName, latitude: String(venue.latitude), longitude: String(venue.longitude) }));
-    setSelectedVenueKey(`${venue.latitude}-${venue.longitude}-${venue.displayName}`);
+    setVenueQuery('');
+    setVenueResults([]);
+    setSelectedVenue(venue);
     setVenueError(null);
   };
 
@@ -340,9 +343,10 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
          <legend>Find a venue <span>Optional</span></legend>
           <p>Start typing to search. Selecting a venue saves its map location for forecasts and directions.</p>
           <label htmlFor="venue-search" className={styles.srOnly}>Venue or address</label>
-          <div><Input id="venue-search" value={venueQuery} onChange={(input) => { setVenueQuery(input.target.value); setSelectedVenueKey(null); }} placeholder="Venue or address" /><span className={styles.venueSearchState} role="status">{venueSearching ? 'Searching...' : 'Type at least 2 letters'}</span></div>
+          <div><Input id="venue-search" value={venueQuery} onChange={(input) => setVenueQuery(input.target.value)} placeholder="Venue or address" /><span className={styles.venueSearchState} role="status">{venueSearching ? 'Searching...' : 'Type at least 2 letters'}</span></div>
+          {selectedVenue && <p className={styles.selectedVenue} role="status" aria-label="Selected venue"><strong>Selected venue</strong><span>{selectedVenue.displayName}</span></p>}
           {venueError && <p className={styles.formError} role="alert">{venueError}</p>}
-          {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => { const key = `${venue.latitude}-${venue.longitude}-${venue.displayName}`; return <li key={key}><button type="button" aria-pressed={selectedVenueKey === key} className={selectedVenueKey === key ? styles.venueSelected : undefined} onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>{selectedVenueKey === key ? 'Selected venue' : 'Select venue'}</small></button></li>; })}</ul>}
+          {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => { const key = `${venue.latitude}-${venue.longitude}-${venue.displayName}`; return <li key={key}><button type="button" onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>Select venue</small></button></li>; })}</ul>}
           {!venueSearching && !venueError && venueQuery.length >= 2 && venueResults.length === 0 && <p className={styles.venueHint}>No matching venues found.</p>}
          <p className={styles.attribution}>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>, via Nominatim.</p>
        </fieldset>

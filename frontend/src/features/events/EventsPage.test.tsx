@@ -334,7 +334,10 @@ describe('EventsPage', () => {
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
-  it('searches while typing, then selects and retains the highlighted venue', async () => {
+  it('shows a selected venue and keeps the cleared search ready for a replacement', async () => {
+    venueApi.searchVenues
+      .mockResolvedValueOnce({ data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 } })
+      .mockResolvedValueOnce({ data: [{ displayName: 'North Track, Pretoria', latitude: -25.7461, longitude: 28.1881 }], meta: { count: 1 } });
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('button', { name: /City Sprint Meet/ });
@@ -345,9 +348,18 @@ describe('EventsPage', () => {
     await waitFor(() => expect(venueApi.searchVenues).toHaveBeenCalledWith('Central Stadium'));
     const result = await within(dialog).findByRole('button', { name: /Central Stadium, Johannesburg/ });
     await user.click(result);
+    expect(lookup).toHaveValue('');
     expect(within(dialog).getByLabelText(/Location/)).toHaveValue('Central Stadium, Johannesburg');
     expect(within(dialog).getByText(/Search data/)).toHaveTextContent('OpenStreetMap contributors');
-    expect(result).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).queryByRole('button', { name: /Central Stadium, Johannesburg/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('No matching venues found.')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('status', { name: /selected venue/i })).toHaveTextContent('Central Stadium, Johannesburg');
+
+    await user.type(lookup, 'North Track');
+    await waitFor(() => expect(venueApi.searchVenues).toHaveBeenLastCalledWith('North Track'));
+    await user.click(await within(dialog).findByRole('button', { name: /North Track, Pretoria/ }));
+    expect(within(dialog).getByRole('status', { name: /selected venue/i })).toHaveTextContent('North Track, Pretoria');
+    expect(within(dialog).getByLabelText(/Location/)).toHaveValue('North Track, Pretoria');
   });
 
   it('preserves backend-invalid drafts', async () => {
