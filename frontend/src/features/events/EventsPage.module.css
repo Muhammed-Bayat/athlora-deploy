@@ -716,6 +716,62 @@
   gap: var(--space-2);
 }
 
+.timePicker {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.timeLabel {
+  margin-top: var(--space-2);
+  color: var(--console-teal);
+  font-size: 0.78rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.timeLabel span {
+  color: var(--console-faint);
+  font-weight: var(--font-weight-normal);
+}
+
+.timeWheels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.timeWheels label {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--console-faint);
+  font: var(--font-weight-bold) 0.68rem var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.timeWheels select {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--console-control-surface);
+  color: var(--console-ink);
+  font: var(--font-weight-bold) 1rem var(--font-family-mono);
+}
+
+.timeWheels > span {
+  padding-bottom: 0.6rem;
+  color: var(--console-teal);
+  font: var(--font-weight-bold) 1.2rem var(--font-family-mono);
+}
+
+.timePicker > button {
+  justify-self: start;
+  min-height: 36px;
+}
+
 .fieldError {
   color: var(--console-danger-surface);
   font-size: 0.75rem;
