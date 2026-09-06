@@ -545,7 +545,7 @@ export function ParticipantManager({
     <section ref={sectionRef} className={styles.participants} aria-labelledby="event-participants-heading" aria-busy={participantsLoading || athletesLoading || Boolean(busy)} tabIndex={-1}>
       <header>
         <div><p>Event roster</p><h3 id="event-participants-heading">Assigned athletes <span>{participantsLoading ? '...' : participantsError ? 'Unavailable' : participants.length}</span></h3></div>
-        {!participantsLoading && !participantsError && <label className={styles.rosterFilter}>Roster filter<Select variant="field" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, { value: 'yes', label: 'Attending' }, { value: 'maybe', label: 'Maybe attending' }, { value: 'pending', label: 'Pending' }, { value: 'no', label: 'Not attending' }]} /></label>}
+        {!participantsLoading && !participantsError && <div className={styles.rosterFilter}><span>Roster filter</span><Select aria-label="Roster filter" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, { value: 'yes', label: 'Attending' }, { value: 'maybe', label: 'Maybe attending' }, { value: 'pending', label: 'Pending' }, { value: 'no', label: 'Not attending' }]} /></div>}
       </header>
 
       {participantsLoading && <p className={styles.inlineStatus} role="status">Loading assigned athletes...</p>}
@@ -557,8 +557,8 @@ export function ParticipantManager({
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
-                {isCoach && <><label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
-               <Select id={`participant-rsvp-${participant.athleteId}`} variant="field" value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+                {isCoach && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
+                <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
@@ -576,10 +576,10 @@ export function ParticipantManager({
       {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 
        {isCoach && <div className={styles.assignment}>
-        <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
+         <span>Assign an active athlete</span>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
-        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" variant="field" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
+         {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" aria-label="Assign an active athlete" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
            ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squads?.length ? ` · ${athlete.squads.map((squad) => squad.name).join(', ')}` : ''}` })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}

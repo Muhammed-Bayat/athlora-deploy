@@ -50,7 +50,7 @@ export function Select({
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  if (variant === 'field' || disabled) {
+  if (variant === 'field') {
     return (
       <select
         id={selectId}
@@ -118,7 +118,7 @@ export function Select({
   };
 
   return (
-    <div ref={wrapperRef} className={[styles.filter, open ? styles.filterOpen : ''].filter(Boolean).join(' ')}>
+    <div ref={wrapperRef} className={[styles.filter, className, open ? styles.filterOpen : '', disabled ? styles.disabled : ''].filter(Boolean).join(' ')}>
       <select
         id={selectId}
         ref={selectRef}
@@ -126,8 +126,8 @@ export function Select({
         tabIndex={-1}
         value={value ?? ''}
         onChange={onChange}
-        aria-label={ariaLabel}
         {...props}
+        aria-hidden="true"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -160,6 +160,7 @@ export function Select({
         aria-label={ariaLabel}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={handleTriggerKeyDown}
+        disabled={disabled}
       >
         <span className={styles.triggerLabel}>{selectedLabel}</span>
       </button>

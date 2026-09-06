@@ -91,6 +91,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
   const [geminiConnected, setGeminiConnected] = useState(false);
   const [geminiListening, setGeminiListening] = useState(false);
+  const [geminiDialogOpen, setGeminiDialogOpen] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const returnFocusAthleteId = useRef<string | null>(null);
@@ -532,6 +533,11 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     }
   };
 
+  const openAthloraAssistant = () => {
+    setGeminiDialogOpen(true);
+    if (!geminiConnected) void startAthloraAssistant();
+  };
+
   const startGeminiListening = async () => {
     if (geminiListening) {
       return;
@@ -596,6 +602,27 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
         </div>
         <div className={styles.controls}>
+          <button
+            type="button"
+            className={styles.aiTrigger}
+            data-connected={geminiConnected || undefined}
+            aria-label={geminiConnected ? 'Open Athlora AI' : 'Start Athlora AI'}
+            title={geminiConnected ? 'Open Athlora AI' : 'Start Athlora AI'}
+            onClick={openAthloraAssistant}
+            disabled={geminiTesting}
+          >
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs>
+                <linearGradient id="athlora-ai-spark" x1="18" y1="20" x2="82" y2="80" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#4BE9FF" />
+                  <stop offset=".42" stopColor="#4E8DFF" />
+                  <stop offset=".68" stopColor="#C178FF" />
+                  <stop offset="1" stopColor="#FFD0A7" />
+                </linearGradient>
+              </defs>
+              <path d="M50 16C55 38 62 45 84 50 62 55 55 62 50 84 45 62 38 55 16 50 38 45 45 38 50 16Z" fill="url(#athlora-ai-spark)" />
+            </svg>
+          </button>
           <label className={styles.search}>
             <span aria-hidden="true">⌕</span>
             <span className={styles.srOnly}>Search athletes by name</span>
@@ -634,63 +661,8 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
         </div>
       </header>
 
-      <div>
-        <h2>Athlora AI</h2>
-
-        <p>
-          {geminiConnected
-            ? 'Connected to Gemini'
-            : 'Not connected'}
-        </p>
-
-        {!geminiConnected && (
-          <Button
-            onClick={() => void startAthloraAssistant()}
-            disabled={geminiTesting}
-          >
-            {geminiTesting ? 'Starting...' : 'Start Athlora'}
-          </Button>
-        )}
-
-        {geminiConnected && !geminiListening && (
-          <Button
-            variant="secondary"
-            onClick={() => void startGeminiListening()}
-          >
-            Enable hands-free
-          </Button>
-        )}
-
-        {geminiConnected && geminiListening && (
-          <p role="status">Listening hands-free…</p>
-        )}
-
-        {geminiResponse && (
-          <p>
-            Athlora: {geminiResponse}
-          </p>
-        )}
-
-        <div>
-          <input
-            type="text"
-            value={geminiMessage}
-            onChange={(event) => setGeminiMessage(event.target.value)}
-            placeholder="e.g. Add John Smith"
-            disabled={geminiTesting}
-          />
-
-          <Button
-            onClick={() => void sendGeminiMessage()}
-            disabled={geminiTesting || !geminiMessage.trim()}
-          >
-            {geminiTesting ? 'Sending...' : 'Send'}
-          </Button>
-        </div>
-      </div>
-
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
-      {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
+      {actionError && !archiveTarget && !geminiDialogOpen && <div className={styles.actionError} role="alert">{actionError}</div>}
       {!loading && injuryError && <div className={styles.injuryError} role="alert">Injury summaries are unavailable. <Button variant="ghost" onClick={() => setInjuryReload((value) => value + 1)}>Retry injury summaries</Button></div>}
 
       {loading && (
@@ -806,6 +778,43 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           ))}
         </div>
       )}
+
+      <Modal
+        open={geminiDialogOpen}
+        title="Athlora AI"
+        className={styles.aiModal}
+        onClose={() => {
+          setGeminiDialogOpen(false);
+          setActionError(null);
+        }}
+      >
+        <div className={styles.aiDialog}>
+          <section className={styles.aiResponse} aria-live="polite" aria-busy={geminiTesting}>
+            <p className={styles.aiResponseLabel}>{geminiListening ? 'Listening hands-free' : geminiTesting ? 'Athlora is responding' : 'Athlora'}</p>
+            <p>{geminiResponse || (geminiTesting ? 'Starting Athlora...' : 'Ask Athlora to add an athlete or help with the roster.')}</p>
+          </section>
+
+          <div className={styles.aiActions}>
+            {geminiConnected && !geminiListening && <Button variant="secondary" onClick={() => void startGeminiListening()}>Enable hands-free</Button>}
+            {geminiListening && <span role="status">Listening hands-free</span>}
+          </div>
+
+          {actionError && <p className={styles.formError} role="alert">{actionError}</p>}
+
+          <form className={styles.aiComposer} onSubmit={(event) => { event.preventDefault(); void sendGeminiMessage(); }}>
+            <label className={styles.srOnly} htmlFor="athlora-ai-message">Message Athlora</label>
+            <input
+              id="athlora-ai-message"
+              type="text"
+              value={geminiMessage}
+              onChange={(event) => setGeminiMessage(event.target.value)}
+              placeholder="e.g. Add John Smith"
+              disabled={geminiTesting}
+            />
+            <Button type="submit" disabled={geminiTesting || !geminiMessage.trim()}>{geminiTesting ? 'Sending...' : 'Send'}</Button>
+          </form>
+        </div>
+      </Modal>
 
       <Modal
         open={editor !== null}
