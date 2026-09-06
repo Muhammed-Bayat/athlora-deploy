@@ -121,7 +121,7 @@ describe('AthletesPage', () => {
 
     const search = screen.getByRole('textbox', { name: 'Search athletes by name' }).closest('label')!;
     const trigger = screen.getByRole('button', { name: 'Start Athlora AI' });
-    expect(search.nextElementSibling).toBe(trigger);
+    expect(search.previousElementSibling).toBe(trigger);
     expect(screen.queryByRole('dialog', { name: 'Athlora AI' })).not.toBeInTheDocument();
 
     await user.click(trigger);

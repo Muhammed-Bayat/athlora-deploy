@@ -602,11 +602,6 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
         </div>
         <div className={styles.controls}>
-          <label className={styles.search}>
-            <span aria-hidden="true">⌕</span>
-            <span className={styles.srOnly}>Search athletes by name</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
-          </label>
           <button
             type="button"
             className={styles.aiTrigger}
@@ -628,6 +623,11 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
               <path d="M50 16C55 38 62 45 84 50 62 55 55 62 50 84 45 62 38 55 16 50 38 45 45 38 50 16Z" fill="url(#athlora-ai-spark)" />
             </svg>
           </button>
+          <label className={styles.search}>
+            <span aria-hidden="true">⌕</span>
+            <span className={styles.srOnly}>Search athletes by name</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
+          </label>
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
           <Select
             id="squad-filter"
