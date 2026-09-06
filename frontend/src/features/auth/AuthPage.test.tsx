@@ -38,6 +38,8 @@ const currentUser: User = {
   role: 'coach',
   createdAt: '2026-08-01T10:00:00.000Z',
   updatedAt: '2026-08-01T10:00:00.000Z',
+  consentAcceptedAt: null,
+  consentVersion: null,
 };
 
 function renderPage() {

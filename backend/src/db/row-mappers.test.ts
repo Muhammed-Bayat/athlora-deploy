@@ -47,6 +47,8 @@ const userRow: UserRow = {
   name: 'Taylor Coach',
   email: 'taylor@example.com',
   role: 'coach',
+  consent_accepted_at: null,
+  consent_version: null,
   created_at: INPUT_TIMESTAMP,
   updated_at: new Date('2026-08-14T08:20:30.123Z'),
 };
@@ -233,6 +235,8 @@ describe('PostgreSQL row mapping', () => {
       name: 'Taylor Coach',
       email: 'taylor@example.com',
       role: 'coach',
+      consentAcceptedAt: null,
+      consentVersion: null,
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
     });

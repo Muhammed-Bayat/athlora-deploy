@@ -69,6 +69,8 @@ export const syncCurrentUser: RequestHandler = async (req, res, next) => {
                   name,
                   email,
                   role,
+                  consent_accepted_at,
+                  consent_version,
                   created_at,
                   updated_at`,
       [subject, name, email],
@@ -97,6 +99,27 @@ export const createPasswordTicket: RequestHandler = async (req, res, next) => {
     const { auth0Id } = getVerifiedAuth0Context(req);
     const url = await createAuth0PasswordTicket(auth0Id);
     res.status(201).json({ data: { url } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const acceptConsent: RequestHandler = async (req, res, next) => {
+  try {
+    const { auth0Id } = getVerifiedAuth0Context(req);
+    const version = normalizeRequiredString((req.body as Record<string, unknown>)?.version);
+    if (version === null) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'consent version is required');
+    }
+    await getPool().query(
+      `UPDATE users
+       SET consent_accepted_at = now(),
+           consent_version = $2,
+           updated_at = now()
+       WHERE auth0_id = $1`,
+      [auth0Id, version],
+    );
+    res.status(204).end();
   } catch (error) {
     next(error);
   }

@@ -8,6 +8,7 @@ import styles from './Auth0TokenBridge.module.css';
 import { CurrentUserProvider } from './CurrentUserProvider';
 import { WorkspaceProvider } from './WorkspaceProvider';
 import { ClubOnboarding } from './ClubOnboarding';
+import { ConsentGate } from './ConsentGate';
 
 interface Auth0TokenBridgeProps {
   children: ReactNode;
@@ -17,13 +18,18 @@ type SynchronizationState =
   | { status: 'idle' }
   | { status: 'synchronizing'; subject: string }
   | { status: 'ready'; subject: string; user: User; workspaces: Workspace[]; activeWorkspace: Workspace }
+  | { status: 'consent_required'; subject: string; user: User }
   | { status: 'onboarding'; subject: string; user: User }
   | { status: 'error'; subject: string; code: string; requestId?: string };
 
 interface SynchronizationAttempt {
   subject: string;
   retry: number;
-  promise: Promise<{ kind: 'ready'; user: User; workspaces: Workspace[]; activeWorkspace: Workspace } | { kind: 'onboarding'; user: User }>;
+  promise: Promise<
+    | { kind: 'ready'; user: User; workspaces: Workspace[]; activeWorkspace: Workspace }
+    | { kind: 'consent_required'; user: User }
+    | { kind: 'onboarding'; user: User }
+  >;
 }
 
 export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
@@ -57,6 +63,9 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
         subject,
         retry,
         promise: syncCurrentUser().then(async (synchronizedUser) => {
+            if (!synchronizedUser.consentAcceptedAt) {
+              return { kind: 'consent_required' as const, user: synchronizedUser };
+            }
             let response = await listWorkspaces();
             const storedWorkspaceId = (() => { try { return localStorage.getItem(`athlora-active-workspace:${subject}`); } catch { return null; } })();
             let activeWorkspace = response.data.find((workspace) => workspace.id === storedWorkspaceId)
@@ -79,7 +88,9 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
     void attempt.promise.then(
       (session) => {
         if (active) {
-          if (session.kind === 'onboarding') {
+          if (session.kind === 'consent_required') {
+            setSynchronization({ status: 'consent_required', subject, user: session.user });
+          } else if (session.kind === 'onboarding') {
             setSynchronization({ status: 'onboarding', subject, user: session.user });
           } else {
             setSynchronization({ status: 'ready', subject, user: session.user, workspaces: session.workspaces, activeWorkspace: session.activeWorkspace });
@@ -131,6 +142,16 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
   ) {
     return <CurrentUserProvider user={synchronization.user}>
       <ClubOnboarding onMembershipAvailable={() => setRetry((currentRetry) => currentRetry + 1)} />
+    </CurrentUserProvider>;
+  }
+
+  if (
+    subject &&
+    synchronization.status === 'consent_required' &&
+    synchronization.subject === subject
+  ) {
+    return <CurrentUserProvider user={synchronization.user}>
+      <ConsentGate onConsented={() => setRetry((currentRetry) => currentRetry + 1)} />
     </CurrentUserProvider>;
   }
 

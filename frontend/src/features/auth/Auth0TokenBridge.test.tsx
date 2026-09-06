@@ -54,6 +54,8 @@ const synchronizedUser: User = {
   name: 'Coach One',
   email: 'coach@example.com',
   role: 'coach',
+  consentAcceptedAt: '2026-08-13T10:00:00.000Z',
+  consentVersion: '1.0',
   createdAt: '2026-08-13T10:00:00.000Z',
   updatedAt: '2026-08-13T10:00:00.000Z',
 };
