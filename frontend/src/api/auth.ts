@@ -10,3 +10,10 @@ export async function createPasswordTicket(): Promise<string> {
 export async function deleteCurrentAccount(): Promise<void> {
   await request<void>('/api/v1/auth/me', { method: 'DELETE' });
 }
+
+export async function acceptConsent(version: string): Promise<void> {
+  await request<void>('/api/v1/auth/me/consent', {
+    method: 'POST',
+    body: JSON.stringify({ version }),
+  });
+}

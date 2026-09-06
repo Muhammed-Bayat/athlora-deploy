@@ -17,7 +17,9 @@ const synchronizedUser: User = {
   email: 'coach@example.com',
   role: 'coach',
   createdAt: '2026-08-13T10:00:00.000Z',
-  updatedAt: '2026-08-13T10:00:00.000Z',
+    updatedAt: '2026-08-13T10:00:00.000Z',
+    consentAcceptedAt: null,
+    consentVersion: null,
 };
 
 afterEach(() => {

@@ -7,6 +7,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  consentAcceptedAt: string | null;
+  consentVersion: string | null;
   createdAt: string;
   updatedAt: string;
 }

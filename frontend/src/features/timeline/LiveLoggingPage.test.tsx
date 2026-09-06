@@ -27,6 +27,8 @@ describe('LiveLoggingPage', () => {
     role: 'coach',
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
+    consentAcceptedAt: null,
+    consentVersion: null,
   };
 
   const mockEvent = {

@@ -56,6 +56,11 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
+    {
+      type: 'category',
+      label: 'Legal',
+      items: ['legal/privacy-policy', 'legal/terms'],
+    },
   ],
 };
 

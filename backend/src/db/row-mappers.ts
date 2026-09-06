@@ -55,6 +55,8 @@ export interface UserRow {
   name: string;
   email: string;
   role: string;
+  consent_accepted_at: TimestampValue | null;
+  consent_version: string | null;
   created_at: TimestampValue;
   updated_at: TimestampValue;
 }
@@ -544,6 +546,8 @@ export function mapUserRow(row: UserRow): User {
     name: nonemptyString(row.name, 'users.name'),
     email: nonemptyString(row.email, 'users.email'),
     role: enumValue(row.role, USER_ROLES, 'users.role'),
+    consentAcceptedAt: row.consent_accepted_at != null ? timestamp(row.consent_accepted_at, 'users.consent_accepted_at') : null,
+    consentVersion: row.consent_version ?? null,
     createdAt: timestamp(row.created_at, 'users.created_at'),
     updatedAt: timestamp(row.updated_at, 'users.updated_at'),
   };
