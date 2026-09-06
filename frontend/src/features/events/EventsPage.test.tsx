@@ -207,6 +207,15 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
   return screen.getByRole('dialog', { name: title });
 }
 
+async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement, label: string, option: string | RegExp) {
+  const trigger = await within(scope).findByRole('button', { name: label });
+  await user.click(trigger);
+  const menu = trigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+  expect(menu).toBeInTheDocument();
+  await user.click(within(menu!).getByRole('option', { name: option }));
+  return trigger;
+}
+
 describe('EventsPage', () => {
   it('hands an event id to routed detail navigation', async () => {
     const onOpenEvent = vi.fn();
@@ -392,14 +401,25 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Central Stadium');
     expect(await within(detail).findByText('Partly cloudy')).toBeInTheDocument();
     expect(eventApi.getEventWeather).toHaveBeenCalledWith(CITY_ID, expect.any(AbortSignal));
-    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
     expect(detail).toHaveTextContent('Assigned athletes 1');
-    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
+    expect(within(detail).getByRole('button', { name: 'RSVP for Ari Runner' })).toHaveTextContent('Pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ status: 'active' });
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
     expect(within(detail).getByTitle(/OpenStreetMap preview/)).toHaveAttribute('src', expect.stringContaining('openstreetmap.org/export/embed.html'));
     expect(within(detail).getByRole('link', { name: /Open in OpenStreetMap/ })).toHaveAttribute('href', expect.stringContaining('mlat=-26.2041'));
+  });
+
+  it('uses the themed roster filter menu', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    const filter = await selectThemedOption(user, detail, 'Roster filter', 'Attending');
+    expect(filter).toHaveTextContent('Attending');
+    await selectThemedOption(user, detail, 'Roster filter', 'Pending');
+    expect(filter).toHaveTextContent('Pending');
   });
 
   it('loads event results and opens the correction modal body', async () => {
@@ -458,14 +478,13 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const candidate = await within(detail).findByLabelText('Assign an active athlete');
-    await user.selectOptions(candidate, BEA_ID);
+    const candidate = await selectThemedOption(user, detail, 'Assign an active athlete', /Bea Sprinter/);
     await user.click(within(detail).getByRole('button', { name: 'Assign athlete' }));
 
     await waitFor(() => expect(participantApi.addEventParticipant).toHaveBeenCalledWith(CITY_ID, BEA_ID));
-    expect(await within(detail).findByLabelText('RSVP for Bea Sprinter')).toHaveValue('pending');
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Bea Sprinter' })).toHaveTextContent('Pending');
     expect(detail).toHaveTextContent('Bea Sprinter assigned with a pending RSVP.');
-    expect(candidate).toHaveValue('');
+    expect(candidate).toHaveTextContent('No active athletes available');
     await waitFor(() => expect(within(detail).getByRole('region', { name: /Assigned athletes/ })).toHaveFocus());
   });
 
@@ -475,13 +494,16 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const candidate = await within(detail).findByLabelText('Assign an active athlete');
+    const candidate = await within(detail).findByRole('button', { name: 'Assign an active athlete' });
 
     expect(candidate).toBeDisabled();
     expect(within(detail).getByRole('button', { name: 'Assign athlete' })).toBeDisabled();
     resolveParticipants({ data: [ariParticipant], meta: { count: 1 } });
     await waitFor(() => expect(candidate).toBeEnabled());
-    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    await user.click(candidate);
+    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
 
   it('replaces RSVP status with the exact participant request', async () => {
@@ -489,11 +511,10 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
-    await user.selectOptions(rsvp, 'yes');
+    const rsvp = await selectThemedOption(user, detail, 'RSVP for Ari Runner', 'Attending');
 
     await waitFor(() => expect(participantApi.updateEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID, 'yes'));
-    expect(rsvp).toHaveValue('yes');
+    expect(rsvp).toHaveTextContent('Attending');
     expect(detail).toHaveTextContent("Ari Runner's RSVP updated to attending.");
     await waitFor(() => expect(rsvp).toHaveFocus());
   });
@@ -503,14 +524,14 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
 
     expect(detail).toHaveTextContent('Existing timeline entries and results will be preserved.');
     expect(within(detail).getByRole('button', { name: 'Keep athlete' })).toHaveFocus();
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
     await waitFor(() => expect(participantApi.removeEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID));
-    expect(within(detail).queryByLabelText('RSVP for Ari Runner')).not.toBeInTheDocument();
+    expect(within(detail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
     expect(detail).toHaveTextContent('Existing timeline entries and results were preserved.');
   });
 
@@ -519,11 +540,10 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
-    await user.selectOptions(rsvp, 'yes');
+    const rsvp = await selectThemedOption(user, detail, 'RSVP for Ari Runner', 'Attending');
 
     expect(await within(detail).findByRole('alert')).toHaveTextContent('RSVP changed elsewhere');
-    expect(rsvp).toHaveValue('pending');
+    expect(rsvp).toHaveTextContent('Pending');
   });
 
   it('keeps an assignment when removal fails', async () => {
@@ -531,12 +551,12 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
 
     expect(await within(detail).findByText(/Could not reach Athlora/i)).toBeInTheDocument();
-    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
     expect(within(detail).getByRole('region', { name: /Remove Ari Runner/ })).toBeInTheDocument();
     await waitFor(() => expect(within(detail).getByRole('button', { name: 'Remove athlete' })).toHaveFocus());
   });
@@ -547,7 +567,7 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
 
@@ -574,8 +594,8 @@ describe('EventsPage', () => {
     expect(await within(detail).findByText('Unavailable')).toBeInTheDocument();
     await user.click(await within(detail).findByRole('button', { name: 'Retry assignments' }));
     await user.click(within(detail).getByRole('button', { name: 'Retry roster' }));
-    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
-    expect(await within(detail).findByLabelText('Assign an active athlete')).toBeInTheDocument();
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
+    expect(await within(detail).findByRole('button', { name: 'Assign an active athlete' })).toBeInTheDocument();
     expect(participantApi.listEventParticipants.mock.calls.filter(([eventId]) => eventId === CITY_ID)).toHaveLength(3);
     expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => filters.includeArchived)).toHaveLength(1);
     expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => !filters.includeArchived)).toHaveLength(2);
@@ -592,9 +612,11 @@ describe('EventsPage', () => {
     const detail = await openDetail(user);
 
     expect(await within(detail).findAllByText('Archived')).toHaveLength(2);
-    const candidate = within(detail).getByLabelText('Assign an active athlete');
-    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
-    expect(within(candidate).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
+    const candidate = within(detail).getByRole('button', { name: 'Assign an active athlete' });
+    await user.click(candidate);
+    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
 
   it('starts and completes events using full replacement payloads', async () => {

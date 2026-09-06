@@ -608,7 +608,7 @@
   border-top: 1px solid var(--console-line);
 }
 
-.assignment > label {
+.assignment > span {
   color: var(--console-teal);
   font-size: 0.78rem;
   font-weight: var(--font-weight-bold);
