@@ -43,7 +43,7 @@ export async function notifyFixtureInvitation(
 ): Promise<void> {
   await client.query(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
-     SELECT u.id, wm.workspace_id, $2, $1, 'fixture_invited', jsonb_build_object('invitationId', $1), 'fixture:invited:' || $1
+     SELECT u.id, wm.workspace_id, $2::uuid, $1::uuid, 'fixture_invited', jsonb_build_object('invitationId', $1::uuid), 'fixture:invited:' || ($1::uuid)::text
      FROM users u JOIN workspace_members wm ON wm.user_id = u.id
       WHERE ($4::uuid IS NULL AND lower(u.email) = lower($3))
          OR ($4::uuid IS NOT NULL AND wm.workspace_id = $4 AND wm.role = 'coach')
@@ -57,7 +57,7 @@ export async function notifyFixtureReacceptanceRequired(
 ): Promise<void> {
   await client.query(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
-     SELECT wm.user_id, wm.workspace_id, $2, $1, 'fixture_reacceptance_required', jsonb_build_object('invitationId', $1), 'fixture:reacceptance:' || $1
+     SELECT wm.user_id, wm.workspace_id, $2::uuid, $1::uuid, 'fixture_reacceptance_required', jsonb_build_object('invitationId', $1::uuid), 'fixture:reacceptance:' || ($1::uuid)::text
       FROM workspace_members wm WHERE wm.workspace_id = $3 AND wm.role = 'coach'
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
     [invitationId, eventId, workspaceId],
@@ -69,8 +69,8 @@ export async function notifyFixtureResponse(
 ): Promise<void> {
   await client.query(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
-     SELECT wm.user_id, wm.workspace_id, $1, $2, 'fixture_responded',
-            jsonb_build_object('response', $4, 'message', $5, 'guestWorkspaceName', $6), 'fixture:responded:' || $3
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, $2::uuid, 'fixture_responded',
+            jsonb_build_object('response', $4::text, 'message', $5::text, 'guestWorkspaceName', $6::text), 'fixture:responded:' || ($3::uuid)::text
      FROM event_fixture_workspaces fw JOIN workspace_members wm ON wm.workspace_id = fw.workspace_id
      WHERE fw.event_id = $1 AND fw.role = 'host'
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,

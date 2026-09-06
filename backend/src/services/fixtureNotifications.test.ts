@@ -7,6 +7,9 @@ import {
   countUnreadFixtureNotifications,
   listFixtureNotifications,
   markFixtureNotificationRead,
+  notifyFixtureInvitation,
+  notifyFixtureReacceptanceRequired,
+  notifyFixtureResponse,
   notifyFixtureStarted,
 } from './fixtureNotifications.js';
 
@@ -68,5 +71,58 @@ describe('fixture notifications', () => {
     expect(sql).toContain('$1::text');
     expect(sql).toContain('$2::integer');
     expect(parameters).toEqual([EVENT_ID, 2]);
+  });
+
+  it('keeps invitation IDs typed as UUIDs before deriving their dedupe keys', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyFixtureInvitation({ query } as never, NOTIFICATION_ID, EVENT_ID, '', WORKSPACE_ID);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('$2::uuid');
+    expect(sql).toContain("$1::uuid, 'fixture_invited'");
+    expect(sql).toContain("jsonb_build_object('invitationId', $1::uuid)");
+    expect(sql).toContain("'fixture:invited:' || ($1::uuid)::text");
+    expect(parameters).toEqual([NOTIFICATION_ID, EVENT_ID, '', WORKSPACE_ID]);
+  });
+
+  it('keeps reacceptance invitation IDs typed as UUIDs before deriving their dedupe keys', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyFixtureReacceptanceRequired({ query } as never, NOTIFICATION_ID, EVENT_ID, WORKSPACE_ID);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('$2::uuid');
+    expect(sql).toContain("$1::uuid, 'fixture_reacceptance_required'");
+    expect(sql).toContain("jsonb_build_object('invitationId', $1::uuid)");
+    expect(sql).toContain("'fixture:reacceptance:' || ($1::uuid)::text");
+    expect(parameters).toEqual([NOTIFICATION_ID, EVENT_ID, WORKSPACE_ID]);
+  });
+
+  it('types fixture response IDs and JSON values explicitly', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyFixtureResponse(
+      { query } as never,
+      EVENT_ID,
+      NOTIFICATION_ID,
+      '55555555-5555-4555-8555-555555555555',
+      'accepted',
+      null,
+      'Guest Club',
+    );
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("$1::uuid, $2::uuid, 'fixture_responded'");
+    expect(sql).toContain("'response', $4::text, 'message', $5::text, 'guestWorkspaceName', $6::text");
+    expect(sql).toContain("'fixture:responded:' || ($3::uuid)::text");
+    expect(parameters).toEqual([
+      EVENT_ID,
+      NOTIFICATION_ID,
+      '55555555-5555-4555-8555-555555555555',
+      'accepted',
+      null,
+      'Guest Club',
+    ]);
   });
 });
