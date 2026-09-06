@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { GoogleGenAI, Modality } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 
 export const createGeminiToken: RequestHandler = async (_req, res, next) => {
   try {
@@ -14,24 +14,13 @@ export const createGeminiToken: RequestHandler = async (_req, res, next) => {
     });
 
     const expireTime = new Date(
-      Date.now() + 30 * 60 * 1000
+      Date.now() + 30 * 60 * 1000,
     ).toISOString();
 
     const token = await client.authTokens.create({
       config: {
         uses: 1,
-
         expireTime,
-
-        liveConnectConstraints: {
-          model: 'gemini-3.1-flash-live-preview',
-
-          config: {
-            sessionResumption: {},
-
-            responseModalities: [Modality.AUDIO],
-          },
-        },
       },
     });
 

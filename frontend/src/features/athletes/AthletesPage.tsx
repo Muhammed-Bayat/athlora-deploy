@@ -7,6 +7,8 @@ import {
   updateAthlete,
   updateAthleteStatus,
 } from '../../api/athletes';
+import { createGeminiToken } from '../../api/ai';
+import { connectGeminiLive,sendGeminiText, type GeminiToolHandler } from '../../api/geminiLive';
 import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
 import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
@@ -79,9 +81,14 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const [injuryLoading, setInjuryLoading] = useState(true);
   const [injuryError, setInjuryError] = useState<string | null>(null);
   const [injuryReload, setInjuryReload] = useState(0);
+  const [geminiTesting, setGeminiTesting] = useState(false);
+  const [geminiMessage, setGeminiMessage] = useState('');
+const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
+const [geminiConnected, setGeminiConnected] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const returnFocusAthleteId = useRef<string | null>(null);
+  const geminiSocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -116,6 +123,17 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     return () => { current = false; };
   }, [injuryReload, reloadKey]);
   useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
+
+  useEffect(() => {
+  return () => {
+    geminiSocketRef.current?.close(
+      1000,
+      'Athletes page closed',
+    );
+
+    geminiSocketRef.current = null;
+  };
+}, []);
 
   useEffect(() => {
     if (!loading && !loadError) {
@@ -221,6 +239,221 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     setSelectedAthleteId(athleteId);
   };
 
+  const testGeminiConnection = async () => {
+  setGeminiTesting(true);
+  setActionError(null);
+
+  let socket: WebSocket | null = null;
+
+  try {
+    const token = await createGeminiToken();
+
+    if (!token) {
+      throw new Error(
+        'Gemini did not return a token',
+      );
+    }
+
+    socket = await connectGeminiLive(token);
+
+    const response = await sendGeminiText(
+      socket,
+
+      'Create an athlete named Gemini Test Athlete. ' +
+        'The date of birth is unknown, gender is unknown, ' +
+        'there are no notes and no squad. ' +
+        'I explicitly confirm that you should create this athlete.',
+
+      async (call) => {
+        if (call.name !== 'create_athlete') {
+          throw new Error(
+            `Unknown Gemini tool: ${call.name}`,
+          );
+        }
+
+        const args = call.args ?? {};
+
+        const name =
+          typeof args.name === 'string'
+            ? args.name.trim()
+            : '';
+
+        if (!name) {
+          throw new Error(
+            'Athlete name is required',
+          );
+        }
+
+        const dob =
+          typeof args.dob === 'string'
+            ? args.dob
+            : null;
+
+        const gender =
+          typeof args.gender === 'string'
+            ? args.gender
+            : null;
+
+        const notes =
+          typeof args.notes === 'string'
+            ? args.notes
+            : null;
+
+        const athlete = await createAthlete({
+          name,
+          dob,
+          gender,
+
+          // Gemini never controls database UUIDs.
+          squadIds: [],
+
+          notes,
+        });
+
+        storeAthlete(athlete);
+
+        return {
+          success: true,
+          athleteId: athlete.id,
+          athleteName: athlete.name,
+        };
+      },
+    );
+
+    setNotice(`Gemini: ${response}`);
+  } catch (error) {
+    setActionError(
+      error instanceof Error
+        ? error.message
+        : 'Failed to communicate with Gemini Live.',
+    );
+  } finally {
+    socket?.close(
+      1000,
+      'Test complete',
+    );
+
+    setGeminiTesting(false);
+  }
+};
+
+const handleGeminiToolCall: GeminiToolHandler = async (call) => {
+  if (call.name !== 'create_athlete') {
+    throw new Error(`Unknown Gemini tool: ${call.name}`);
+  }
+
+  const args = call.args ?? {};
+
+  const name =
+    typeof args.name === 'string'
+      ? args.name.trim()
+      : '';
+
+  if (!name) {
+    throw new Error('Athlete name is required');
+  }
+
+  const dob =
+    typeof args.dob === 'string'
+      ? args.dob
+      : null;
+
+  const gender =
+    typeof args.gender === 'string'
+      ? args.gender
+      : null;
+
+  const notes =
+    typeof args.notes === 'string'
+      ? args.notes
+      : null;
+
+  const athlete = await createAthlete({
+    name,
+    dob,
+    gender,
+    squadIds: [],
+    notes,
+  });
+
+  storeAthlete(athlete);
+
+  return {
+    success: true,
+    athleteId: athlete.id,
+    athleteName: athlete.name,
+  };
+};
+
+const startGeminiSession = async (): Promise<WebSocket> => {
+  const existingSocket = geminiSocketRef.current;
+
+  if (
+    existingSocket &&
+    existingSocket.readyState === WebSocket.OPEN
+  ) {
+    return existingSocket;
+  }
+
+  const token = await createGeminiToken();
+
+  if (!token) {
+    throw new Error('Gemini did not return a token');
+  }
+
+  const socket = await connectGeminiLive(token);
+
+  geminiSocketRef.current = socket;
+  setGeminiConnected(true);
+
+  socket.addEventListener(
+    'close',
+    () => {
+      if (geminiSocketRef.current === socket) {
+        geminiSocketRef.current = null;
+        setGeminiConnected(false);
+      }
+    },
+    { once: true },
+  );
+
+  return socket;
+};
+
+const sendGeminiMessage = async () => {
+  const message = geminiMessage.trim();
+
+  if (!message || geminiTesting) {
+    return;
+  }
+
+  setGeminiTesting(true);
+  setActionError(null);
+
+  try {
+    const socket = await startGeminiSession();
+
+    setGeminiMessage('');
+
+    const response = await sendGeminiText(
+      socket,
+      message,
+      handleGeminiToolCall,
+    );
+
+    setGeminiResponse(response);
+  } catch (error) {
+    setActionError(
+      error instanceof Error
+        ? error.message
+        : 'Failed to communicate with Gemini.',
+    );
+  } finally {
+    setGeminiTesting(false);
+  }
+};
+
+
   if (selectedAthleteId) {
     return (
       <AthleteDetailPage
@@ -245,7 +478,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     <section aria-labelledby="athletes-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
         <div>
-          <p className={styles.eyebrow}>Coach-owned roster</p>
+        <p className={styles.eyebrow}>Coach-owned roster</p>
           <h1 id="athletes-heading">Athletes</h1>
           <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
         </div>
@@ -277,6 +510,14 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
               { value: 'all', label: `All athletes (${athletes.length})` },
             ]}
           />
+
+          <Button
+  variant="secondary"
+  onClick={() => void testGeminiConnection()}
+  disabled={geminiTesting}
+>
+  {geminiTesting ? 'Testing Gemini...' : 'Test Gemini'}
+</Button>
           <Button
             ref={addButtonRef}
             onClick={() => setEditor('new')}
@@ -286,6 +527,39 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           </Button>
         </div>
       </header>
+
+      <div>
+  <h2>Athlora AI</h2>
+
+  <p>
+    {geminiConnected
+      ? 'Connected to Gemini'
+      : 'Not connected'}
+  </p>
+
+  {geminiResponse && (
+    <p>
+      Gemini: {geminiResponse}
+    </p>
+  )}
+
+  <div>
+    <input
+      type="text"
+      value={geminiMessage}
+      onChange={(event) => setGeminiMessage(event.target.value)}
+      placeholder="e.g. Add John Smith"
+      disabled={geminiTesting}
+    />
+
+    <Button
+      onClick={() => void sendGeminiMessage()}
+      disabled={geminiTesting || !geminiMessage.trim()}
+    >
+      {geminiTesting ? 'Sending...' : 'Send'}
+    </Button>
+  </div>
+</div>
 
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
       {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
