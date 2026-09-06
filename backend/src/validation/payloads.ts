@@ -164,7 +164,7 @@ export interface ResultOverridePayload {
 }
 
 export interface FixtureInvitationCreatePayload {
-  email: string;
+  targetClubId: string;
   expiresInDays: number;
 }
 
@@ -214,7 +214,7 @@ const TIMELINE_PATCH_FIELDS = [
 ] as const;
 const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
-const FIXTURE_INVITATION_CREATE_FIELDS = ['email', 'expiresInDays'] as const;
+const FIXTURE_INVITATION_CREATE_FIELDS = ['targetClubId', 'expiresInDays'] as const;
 const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
 
 type PayloadObject = Record<string, unknown>;
@@ -1024,10 +1024,8 @@ export function parseFixtureInvitationCreatePayload(input: unknown): FixtureInvi
   const payload = payloadObject(input);
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, FIXTURE_INVITATION_CREATE_FIELDS, issues);
-  const email = typeof payload.email === 'string' && /^\S+@\S+\.\S+$/.test(payload.email.trim())
-    ? payload.email.trim().toLowerCase()
-    : '';
-  if (!email) issues.push(issue('email', 'invalid_format', 'Expected an email address'));
+  const targetClubId = isCanonicalUuid(payload.targetClubId) ? payload.targetClubId : '';
+  if (!targetClubId) issues.push(issue('targetClubId', 'invalid_format', 'Expected a canonical UUID'));
   let expiresInDays = 7;
   if (payload.expiresInDays !== undefined) {
     if (typeof payload.expiresInDays !== 'number' || !Number.isSafeInteger(payload.expiresInDays) || payload.expiresInDays < 1 || payload.expiresInDays > 30) {
@@ -1037,7 +1035,7 @@ export function parseFixtureInvitationCreatePayload(input: unknown): FixtureInvi
     }
   }
   if (issues.length > 0) throwValidation(issues);
-  return { email, expiresInDays };
+  return { targetClubId, expiresInDays };
 }
 
 export function parseFixtureInvitationResponsePayload(input: unknown): FixtureInvitationResponsePayload {

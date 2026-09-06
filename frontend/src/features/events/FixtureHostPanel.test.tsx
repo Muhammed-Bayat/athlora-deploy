@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
+import { listClubs } from '../../api/clubs';
 import {
   createFixtureInvitation,
   listFixtureInvitations,
@@ -21,6 +22,8 @@ vi.mock('../../api/fixtures', () => ({
   revokeFixtureInvitation: vi.fn(),
   overrideHostFixtureResult: vi.fn(),
 }));
+vi.mock('../../api/clubs', () => ({ listClubs: vi.fn() }));
+vi.mock('../auth/WorkspaceContext', () => ({ useWorkspace: () => ({ activeWorkspace: { id: 'host-workspace' } }) }));
 
 const event: AthleticsEvent = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -43,6 +46,7 @@ beforeEach(() => {
   vi.mocked(listFixtureInvitations).mockResolvedValue({ data: [], meta: { count: 0 } });
   vi.mocked(listFixtureRosters).mockResolvedValue({ data: [], meta: { count: 0 } });
   vi.mocked(listHostedFixtureResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+  vi.mocked(listClubs).mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 describe('FixtureHostPanel', () => {
@@ -53,8 +57,9 @@ describe('FixtureHostPanel', () => {
     const user = userEvent.setup();
 
     render(<FixtureHostPanel event={event} canOperate isCoach />);
-    await user.type(screen.getByLabelText('Guest team coach email'), 'guest@example.com');
-    await user.click(screen.getByRole('button', { name: 'Create fixture invitation' }));
+    vi.mocked(listClubs).mockResolvedValue({ data: [{ id: 'club-1', workspaceId: 'workspace-1', name: 'Guest Club', createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' }], meta: { count: 1 } });
+    await user.type(screen.getByLabelText('Search registered clubs'), 'Guest');
+    await user.click(await screen.findByRole('button', { name: 'Invite' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This event is unavailable in the selected workspace. Select its host workspace and reopen the event.',

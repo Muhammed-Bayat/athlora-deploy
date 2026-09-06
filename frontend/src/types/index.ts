@@ -203,12 +203,13 @@ export type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'wit
 export interface FixtureInvitation {
   id: string;
   eventId: string;
-  email: string;
+  email: string | null;
   revision: number;
   status: FixtureInvitationStatus;
   expiresAt: string;
   createdAt: string;
   targetWorkspaceId: string | null;
+  targetWorkspaceName: string | null;
   responseMessage: string | null;
   respondedAt: string | null;
   respondedWorkspaceId: string | null;

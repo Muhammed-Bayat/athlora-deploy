@@ -45,7 +45,8 @@ export async function notifyFixtureInvitation(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
      SELECT u.id, wm.workspace_id, $2, $1, 'fixture_invited', jsonb_build_object('invitationId', $1), 'fixture:invited:' || $1
      FROM users u JOIN workspace_members wm ON wm.user_id = u.id
-     WHERE lower(u.email) = lower($3) AND ($4::uuid IS NULL OR wm.workspace_id = $4)
+      WHERE ($4::uuid IS NULL AND lower(u.email) = lower($3))
+         OR ($4::uuid IS NOT NULL AND wm.workspace_id = $4 AND wm.role = 'coach')
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
     [invitationId, eventId, email, targetWorkspaceId],
   );
@@ -57,7 +58,7 @@ export async function notifyFixtureReacceptanceRequired(
   await client.query(
     `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
      SELECT wm.user_id, wm.workspace_id, $2, $1, 'fixture_reacceptance_required', jsonb_build_object('invitationId', $1), 'fixture:reacceptance:' || $1
-     FROM workspace_members wm WHERE wm.workspace_id = $3
+      FROM workspace_members wm WHERE wm.workspace_id = $3 AND wm.role = 'coach'
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
     [invitationId, eventId, workspaceId],
   );

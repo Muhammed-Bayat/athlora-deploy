@@ -11,8 +11,10 @@ import {
   refreshFixtureNotifications,
 } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
+import { listClubs } from '../../api/clubs';
 import { Button, Card, Input } from '../../components';
-import type { AthleticsEvent, FixtureInvitation, FixtureTeamRoster, Result } from '../../types';
+import type { AthleticsEvent, Club, FixtureInvitation, FixtureTeamRoster, Result } from '../../types';
+import { useWorkspace } from '../auth/WorkspaceContext';
 
 function message(error: unknown): string {
   if (error instanceof ApiError && error.status === 404 && error.code === 'NOT_FOUND') {
@@ -30,10 +32,12 @@ function formatResult(result: Result): string {
 }
 
 export function FixtureHostPanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {
+  const { activeWorkspace } = useWorkspace();
   const [invitations, setInvitations] = useState<FixtureInvitation[]>([]);
   const [rosters, setRosters] = useState<FixtureTeamRoster[]>([]);
   const [results, setResults] = useState<Result[]>([]);
-  const [email, setEmail] = useState('');
+  const [clubs, setClubs] = useState<Club[]>([]);
+  const [clubSearch, setClubSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [correctTarget, setCorrectTarget] = useState<{ athleteId: string; athleteName: string } | null>(null);
@@ -60,15 +64,19 @@ export function FixtureHostPanel({ event, canOperate, isCoach }: { event: Athlet
       .catch(() => { /* Fixture data is supplementary to the event detail. */ });
   }, [event.id]);
 
+  const searchClubs = (query: string) => {
+    setClubSearch(query);
+    void listClubs(query).then(({ data }) => setClubs(data)).catch(() => setClubs([]));
+  };
+
   if (!canOperate) return null;
   const eligible = event.type === 'competition' && event.discipline === '100m' && event.status === 'scheduled';
-  const submit = async (formEvent: FormEvent) => {
-    formEvent.preventDefault();
+  const inviteClub = async (club: Club) => {
     setBusy(true); setError(null);
     try {
-      const invitation = await createFixtureInvitation(event.id, { email: email.trim() });
-      setEmail('');
+      const invitation = await createFixtureInvitation(event.id, { targetClubId: club.id });
       setInvitations((current) => [invitation, ...current]);
+      setClubs((current) => current.filter((item) => item.id !== club.id));
       refreshFixtureNotifications();
     } catch (requestError) { setError(message(requestError)); } finally { setBusy(false); }
   };
@@ -102,17 +110,11 @@ export function FixtureHostPanel({ event, canOperate, isCoach }: { event: Athlet
   };
 
   return <Card>
-    <header><p>Cross-workspace fixture</p><h2>Participating teams</h2><span>Each guest team controls only its own roster. Changes to date, time, venue, or teams require reacceptance.</span></header>
-    {eligible && <form onSubmit={(formEvent) => void submit(formEvent)}>
-      <label htmlFor={`fixture-email-${event.id}`}>Guest team coach email</label>
-      <Input id={`fixture-email-${event.id}`} type="email" value={email} onChange={(change) => setEmail(change.target.value)} required disabled={busy} />
-      <p>Workspace members, including assistants, already have event access. Fixture guests accept from a separate workspace.</p>
-      <Button type="submit" disabled={busy}>{busy ? 'Creating...' : 'Create fixture invitation'}</Button>
-    </form>}
-    {!eligible && <p>Fixtures can only be invited to scheduled 100m competitions.</p>}
+    <header><h2>Participating clubs</h2></header>
+    {rosters.length > 0 && <section aria-labelledby={`fixture-rosters-${event.id}`}><h3 id={`fixture-rosters-${event.id}`}>Accepted</h3>{rosters.map(({ team, participants }, index) => <article key={team.workspaceId}><h4>{team.workspaceName}</h4><p>{participants.length === 0 ? 'No athletes selected.' : participants.map((participant) => participant.athlete.name).join(', ')}</p>{isCoach && event.status !== 'scheduled' && index > 0 && team.status !== 'withdrawn' && <Button variant="ghost" onClick={() => void withdraw(team.workspaceId)} disabled={busy}>Record withdrawal</Button>}</article>)}</section>}
+    {invitations.filter((invitation) => invitation.status === 'pending' || invitation.status === 'change_requested').length > 0 && <section aria-labelledby={`fixture-pending-${event.id}`}><h3 id={`fixture-pending-${event.id}`}>Pending</h3><ul>{invitations.filter((invitation) => invitation.status === 'pending' || invitation.status === 'change_requested').map((invitation) => <li key={invitation.id}><strong>{invitation.targetWorkspaceName ?? invitation.email}</strong> · {invitation.status === 'pending' ? 'Invited' : 'Changes requested'}<Button variant="ghost" onClick={() => void resend(invitation)} disabled={busy}>Resend</Button><Button variant="ghost" onClick={() => void revoke(invitation)} disabled={busy}>Revoke</Button></li>)}</ul></section>}
+    {eligible && <section aria-labelledby={`fixture-search-${event.id}`}><h3 id={`fixture-search-${event.id}`}>Invite a club</h3><label htmlFor={`fixture-club-search-${event.id}`}>Search registered clubs</label><Input id={`fixture-club-search-${event.id}`} value={clubSearch} onChange={(change) => searchClubs(change.target.value)} disabled={busy} />{clubs.length > 0 && <ul>{clubs.filter((club) => club.workspaceId !== activeWorkspace.id && !invitations.some((invitation) => invitation.targetWorkspaceId === club.workspaceId && (invitation.status === 'pending' || invitation.status === 'accepted' || invitation.status === 'change_requested'))).map((club) => <li key={club.id}><strong>{club.name}</strong><Button variant="ghost" onClick={() => void inviteClub(club)} disabled={busy}>Invite</Button></li>)}</ul>}</section>}
     {error && <p role="alert">{error}</p>}
-    {invitations.length > 0 && <section aria-labelledby={`fixture-invitations-${event.id}`}><h3 id={`fixture-invitations-${event.id}`}>Invitation history</h3><ul>{invitations.map((invitation) => <li key={invitation.id}><strong>{invitation.email}</strong> · {invitation.status.replace('_', ' ')} · revision {invitation.revision}{invitation.respondedWorkspaceName && ` · ${invitation.respondedWorkspaceName}`}{invitation.respondedByName && ` (${invitation.respondedByName})`}{invitation.responseMessage ? `: ${invitation.responseMessage}` : ''}{invitation.status === 'accepted' && invitation.revision > 1 && <strong> · reaccepted</strong>}{invitation.status !== 'accepted' && invitation.status !== 'revoked' && event.status === 'scheduled' && <><Button variant="ghost" onClick={() => void resend(invitation)} disabled={busy}>Resend</Button><Button variant="ghost" onClick={() => void revoke(invitation)} disabled={busy}>Revoke</Button></>}</li>)}</ul></section>}
-    {rosters.length > 0 && <section aria-labelledby={`fixture-rosters-${event.id}`}><h3 id={`fixture-rosters-${event.id}`}>Team rosters</h3>{rosters.map(({ team, participants }, index) => <article key={team.workspaceId}><h4>{team.workspaceName} · {team.status.replace('_', ' ')}</h4><p>{participants.length === 0 ? 'No athletes selected.' : participants.map((participant) => participant.athlete.name).join(', ')}</p>{isCoach && event.status !== 'scheduled' && index > 0 && team.status !== 'withdrawn' && <Button variant="ghost" onClick={() => void withdraw(team.workspaceId)} disabled={busy}>Record withdrawal</Button>}</article>)}</section>}
     {results.length > 0 && <section aria-labelledby={`fixture-results-${event.id}`}><h3 id={`fixture-results-${event.id}`}>Shared results</h3><table><thead><tr><th>Athlete</th><th>Result</th><th>Placing</th><th>PB</th><th>SB</th><th aria-label="Actions" /></tr></thead><tbody>{results.map((result) => {
       const team = rosters.find(({ participants }) => participants.some((p) => p.athleteId === result.athleteId));
       const athlete = team?.participants.find((p) => p.athleteId === result.athleteId);

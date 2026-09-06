@@ -6,7 +6,7 @@ const mockOverrideResultRecord = vi.fn();
 vi.mock('../controllers/results.js', () => ({ overrideResultRecord: mockOverrideResultRecord }));
 
 import { getPool } from '../db/client.js';
-import { listFixtureInvitations, listGuestFixtures, assertHostWorkspace, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult } from './fixtures.js';
+import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertHostWorkspace, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult } from './fixtures.js';
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const HOST_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -52,6 +52,16 @@ describe('fixtures', () => {
     await expect(listFixtureInvitations(HOST_WORKSPACE_ID, EVENT_ID)).resolves.toEqual([expect.objectContaining({
       respondedWorkspaceId: WORKSPACE_ID, respondedWorkspaceName: 'Guest Club', respondedByName: 'Guest Coach',
     })]);
+  });
+
+  it('limits targeted incoming invitations to coaches in the target workspace', async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(listIncomingFixtureInvitations(ACTOR_ID)).resolves.toEqual([]);
+
+    const sql = query.mock.calls[0][0] as string;
+    expect(sql).toContain("wm.role = 'coach'");
+    expect(sql).toContain('target.name AS target_workspace_name');
   });
 });
 
