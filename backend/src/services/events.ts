@@ -287,8 +287,14 @@ export async function assertEventLoggingOpen(
 
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
-     FROM events
-      WHERE id = $1 AND workspace_id = $2`,
+      FROM events e
+       WHERE e.id = $1 AND (
+         e.workspace_id = $2 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         )
+       )`,
     [eventId, workspaceId],
   );
   const row = result.rows[0];

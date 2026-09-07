@@ -35,7 +35,10 @@ beforeEach(() => {
     if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
       return { rows: [] };
     }
-    if (sql.includes('SELECT 1')) {
+    if (sql.includes('FROM users u') && sql.includes('workspace_members')) {
+      return synchronizedUser();
+    }
+    if (sql.trimStart().startsWith('SELECT 1')) {
       return { rows: [{ owned: 1 }] };
     }
     if (sql.includes('SELECT athlete_id, discipline')) {
@@ -44,7 +47,7 @@ beforeEach(() => {
     if (sql.includes('SELECT discipline FROM results')) {
       return { rows: [{ discipline: '100m' }] };
     }
-    if (sql.toLowerCase().includes('from events') && !sql.includes('SELECT 1')) {
+    if (sql.toLowerCase().includes('from events')) {
       return { rows: [eventRow()] };
     }
     if (sql.toLowerCase().includes('from athletes') && !sql.includes('SELECT 1')) {
@@ -359,7 +362,6 @@ describe('owned resource routes', () => {
     const statuses: number[] = [];
 
     for (const [method, path, body, expectedStatus, loggingGuard] of cases) {
-      query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
       if (loggingGuard) {
         query.mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
       }
@@ -367,7 +369,7 @@ describe('owned resource routes', () => {
       if (body !== undefined) testRequest = testRequest.send(body);
       const response = await testRequest;
       statuses.push(response.status);
-      expect(response.status).toBe(expectedStatus);
+      expect(response.status, `${path}: ${JSON.stringify(response.body)}`).toBe(expectedStatus);
     }
 
     expect(statuses).toHaveLength(cases.length);

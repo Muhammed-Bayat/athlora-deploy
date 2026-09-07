@@ -333,6 +333,7 @@ describe('assertEventLoggingOpen', () => {
     query.mockResolvedValue({ rows: [eventRow({ status: 'in_progress' })] });
 
     await expect(assertEventLoggingOpen(USER_ID, EVENT_ID)).resolves.toBeUndefined();
+    expect(String(query.mock.calls[0]?.[0])).toContain('event_fixture_workspaces');
   });
 
   it('rejects any non-in-progress status with the status detail', async () => {

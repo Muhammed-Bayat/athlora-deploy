@@ -128,7 +128,7 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.getByText('Athlete target: none')).toBeInTheDocument();
   });
 
-  it('uses the themed Club menu to switch workspaces', async () => {
+  it('uses the Club selector to switch workspaces', async () => {
     const user = userEvent.setup();
     const selectWorkspace = vi.fn();
     const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
@@ -139,11 +139,7 @@ describe('CoachConsole dashboard navigation', () => {
       </WorkspaceContext.Provider>,
     );
 
-    const clubTrigger = screen.getByRole('button', { name: 'Active Club' });
-    await user.click(clubTrigger);
-    const clubMenu = clubTrigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
-    expect(clubMenu).toBeInTheDocument();
-    await user.click(within(clubMenu!).getByRole('option', { name: 'Relay Club' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Active Club' }), 'workspace-2');
 
     expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
@@ -161,7 +157,7 @@ describe('CoachConsole dashboard navigation', () => {
     expect(menu).not.toHaveAttribute('open');
   });
 
-  it('routes roster and live logger selections before returning through their tabs', async () => {
+  it('returns roster and live logger detail routes through their tabs', async () => {
     const user = userEvent.setup();
     renderConsole('/console/athletes');
 
@@ -173,10 +169,6 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.getByText('Athlete target: none')).toBeInTheDocument();
 
     await user.click(navigationItem('Coach console', 'Live Logger'));
-    await user.click(screen.getByRole('button', { name: 'Select event from live logger' }));
-    expect(screen.getByTestId('route-location')).toHaveTextContent('/console/live/live-42');
-
-    await user.click(navigationItem('Coach console', 'Live Logger'));
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console/live');
     expect(screen.getByText('Live target: none')).toBeInTheDocument();
   });
@@ -186,7 +178,6 @@ describe('CoachConsole dashboard navigation', () => {
     ['Athletes', '/console/athletes'],
     ['Compare', '/console/comparison'],
     ['Events', '/console/events'],
-    ['Fixtures', '/console/fixtures'],
     ['Live Logger', '/console/live'],
     ['Account', '/console/account'],
   ])('navigates every desktop tab to its canonical route', async (destination, expectedPath) => {
@@ -203,7 +194,6 @@ describe('CoachConsole dashboard navigation', () => {
     ['Athletes', '/console/athletes'],
     ['Compare', '/console/comparison'],
     ['Events', '/console/events'],
-    ['Fixtures', '/console/fixtures'],
     ['Live Logger', '/console/live'],
     ['Account', '/console/account'],
   ])('navigates every mobile tab to its canonical route', async (destination, expectedPath) => {

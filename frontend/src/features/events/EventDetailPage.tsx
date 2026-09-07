@@ -80,6 +80,16 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     return () => { current = false; };
   }, [event?.id, event?.type, activeWorkspace.id]);
 
+  useRealtimeRoom({
+    workspaceId: activeWorkspace.id,
+    eventId: event?.id ?? null,
+    onInvalidate: () => {
+      setReloadKey((key) => key + 1);
+      setResultReloadKey((key) => key + 1);
+      setParticipantReloadKey((key) => key + 1);
+    },
+  });
+
   const saveEditor = async (payload: EventMutationPayload) => {
     if (!event) return;
     const updated = await updateEvent(event.id, payload);
@@ -135,7 +145,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
         {!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
          {canOperate && !isGuest && <PublicLoggerPanel event={event} />}
         <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={canOperate ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
-       {isGuest ? <GuestRosterPanel eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}
+        {isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}
        {canManageLifecycle && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>

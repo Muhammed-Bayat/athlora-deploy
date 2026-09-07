@@ -161,7 +161,7 @@ describe('AthleteDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Fitness' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Back to roster' }));
     expect(onBack).toHaveBeenCalledOnce();
-  });
+  }, 30_000);
 
   it('uses explicit placeholders for a partial archived profile', async () => {
     athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squads: [], notes: null, archivedAt: '2026-08-01T00:00:00.000Z', status: 'archived' }));

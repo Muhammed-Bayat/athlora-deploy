@@ -30,6 +30,9 @@ beforeEach(() => {
     if (sql.includes('UNION')) {
       return { rows: [{ athlete_id: ATHLETE_ID }] };
     }
+    if (sql.includes('SELECT e.id FROM events e')) {
+      return { rows: [{ id: EVENT_ID }] };
+    }
     if (sql.includes('SELECT * FROM results')) {
       return {
         rows: [{

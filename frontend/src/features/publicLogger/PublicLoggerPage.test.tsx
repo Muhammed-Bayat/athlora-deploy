@@ -13,8 +13,8 @@ const snapshot = {
   timeline: [],
 };
 
-function renderPage() {
-  return render(<MemoryRouter initialEntries={['/log/opaque-link-token']}><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></MemoryRouter>);
+function renderPage(token = 'opaque-link-token') {
+  return render(<MemoryRouter initialEntries={[`/log/${token}`]}><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></MemoryRouter>);
 }
 
 describe('PublicLoggerPage', () => {
@@ -42,13 +42,31 @@ describe('PublicLoggerPage', () => {
 
     await screen.findByRole('heading', { name: 'City Sprint Meet' });
     expect(publicLoggerApi.startPublicLoggerSession).toHaveBeenCalledWith('opaque-link-token', 'Timekeeper Sam', 'North Club');
-    expect(sessionStorage.getItem('athlora_public_logger_session')).toBe('opaque-session-token');
-    expect(sessionStorage.getItem('athlora_public_logger_session')).not.toContain('opaque-link-token');
+    expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.key(index)).filter((key): key is string => key !== null)).toHaveLength(2);
+    expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).toContain('opaque-session-token');
+    expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).not.toContain('opaque-link-token');
 
     await user.type(screen.getByLabelText('100m time in seconds'), '11.42');
     await user.click(screen.getByRole('button', { name: 'Record attempt' }));
     await waitFor(() => expect(publicLoggerApi.createPublicLoggerEntry).toHaveBeenCalledWith(
       'opaque-session-token', snapshot.event.id, expect.objectContaining({ athleteId: snapshot.participants[0].athleteId, entryType: 'attempt', value: 11.42 }),
     ));
+  });
+
+  it('does not reuse a session opened from a different QR link', async () => {
+    const user = userEvent.setup();
+    const first = renderPage('first-link-token');
+
+    await user.type(screen.getByLabelText('Name'), 'Timekeeper Sam');
+    await user.click(screen.getByRole('button', { name: 'Open logger' }));
+    await screen.findByRole('heading', { name: 'City Sprint Meet' });
+    first.unmount();
+
+    renderPage('second-link-token');
+
+    expect(screen.getByRole('heading', { name: 'Join event logging' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Name'), 'Timekeeper Lee');
+    await user.click(screen.getByRole('button', { name: 'Open logger' }));
+    expect(publicLoggerApi.startPublicLoggerSession).toHaveBeenLastCalledWith('second-link-token', 'Timekeeper Lee', 'Independent');
   });
 });
