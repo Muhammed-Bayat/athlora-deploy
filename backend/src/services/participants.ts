@@ -168,15 +168,16 @@ export async function replaceEventParticipant(
   const result = await executor.query<EventParticipantSummaryRow>(
     `UPDATE event_participants ep
       SET rsvp_status = $1, rsvp_updated_at = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN now() ELSE ep.rsvp_updated_at END, rsvp_updated_by = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN $5 ELSE ep.rsvp_updated_by END
-     FROM events e, athletes a
+      FROM events e, athletes a, workspaces w
      WHERE ep.event_id = $2
        AND ep.athlete_id = $3
-       AND e.id = ep.event_id
-       AND a.id = ep.athlete_id
-        AND e.workspace_id = $4
-        AND a.workspace_id = $4
-     RETURNING ${PARTICIPANT_COLUMNS}`,
-    actorId ? [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId, actorId] : [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId],
+        AND e.id = ep.event_id
+        AND a.id = ep.athlete_id
+        AND w.id = ep.participant_workspace_id
+         AND e.workspace_id = $4
+         AND a.workspace_id = $4
+      RETURNING ${PARTICIPANT_COLUMNS}`,
+    [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId, actorId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();

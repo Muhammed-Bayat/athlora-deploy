@@ -119,7 +119,9 @@ describe('event participant service', () => {
     ).resolves.toEqual({ ...participant, rsvpStatus: 'yes' });
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('SET rsvp_status = $1');
-    expect(parameters).toEqual(['yes', EVENT_ID, ATHLETE_ID, USER_ID]);
+    expect(sql).toContain('FROM events e, athletes a, workspaces w');
+    expect(sql).toContain('w.id = ep.participant_workspace_id');
+    expect(parameters).toEqual(['yes', EVENT_ID, ATHLETE_ID, USER_ID, null]);
   });
 
   it('removes only the assignment row', async () => {
