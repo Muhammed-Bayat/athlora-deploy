@@ -578,10 +578,10 @@ export async function listHostedFixtureRosters(workspaceId: string, eventId: unk
   const teams = await fixtureTeams(getPool(), ownedEventId);
   const rows = await getPool().query<EventParticipantSummaryRow & { participant_workspace_id: string }>(
     `SELECT ${PARTICIPANT_COLUMNS}, ep.participant_workspace_id
-     FROM event_participants ep JOIN athletes a ON a.id = ep.athlete_id
-     WHERE ep.event_id = $1
-     ORDER BY lower(a.name), a.id`,
-    [ownedEventId],
+      FROM event_participants ep JOIN athletes a ON a.id = ep.athlete_id
+      WHERE ep.event_id = $1 AND ep.participant_workspace_id = $2
+      ORDER BY lower(a.name), a.id`,
+    [ownedEventId, workspaceId],
   );
   const byWorkspace = new Map<string, EventParticipantSummary[]>();
   for (const row of rows.rows) {
@@ -696,16 +696,43 @@ export async function addGuestFixtureParticipant(workspaceId: string, eventId: u
   });
 }
 
-export async function updateGuestFixtureParticipant(workspaceId: string, eventId: unknown, athleteId: unknown, rsvpStatus: string): Promise<EventParticipantSummary> {
-  const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
+export async function updateGuestFixtureParticipant(
+  workspaceId: string,
+  actorId: string,
+  eventId: unknown,
+  athleteId: unknown,
+  rsvpStatus: string,
+): Promise<EventParticipantSummary> {
+  const [ownedEventId, ownedAthleteId, ownedActorId] = scopedIds(workspaceId, eventId, athleteId, actorId);
   return withTransaction(async (client) => {
     await assertGuestRosterOpen(client, workspaceId, ownedEventId);
+    const current = await client.query<{ rsvp_status: string }>(
+      `SELECT rsvp_status FROM event_participants
+       WHERE event_id = $1 AND athlete_id = $2 AND participant_workspace_id = $3
+       FOR UPDATE`,
+      [ownedEventId, ownedAthleteId, workspaceId],
+    );
+    const existing = current.rows[0];
+    if (!existing) throw notFound();
+    if (existing.rsvp_status !== rsvpStatus) {
+      await client.query(
+        `INSERT INTO event_participant_rsvp_audit (event_id, athlete_id, previous_status, next_status, changed_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [ownedEventId, ownedAthleteId, existing.rsvp_status, rsvpStatus, ownedActorId],
+      );
+    }
+    await client.query(
+      `UPDATE event_participants
+       SET rsvp_status = $1,
+           rsvp_updated_at = CASE WHEN rsvp_status IS DISTINCT FROM $1 THEN now() ELSE rsvp_updated_at END,
+           rsvp_updated_by = CASE WHEN rsvp_status IS DISTINCT FROM $1 THEN $4 ELSE rsvp_updated_by END
+       WHERE event_id = $2 AND athlete_id = $3 AND participant_workspace_id = $5`,
+      [rsvpStatus, ownedEventId, ownedAthleteId, ownedActorId, workspaceId],
+    );
     const result = await client.query<EventParticipantSummaryRow>(
-      `UPDATE event_participants ep SET rsvp_status = $1
-       FROM athletes a WHERE ep.event_id = $2 AND ep.athlete_id = $3
-         AND ep.participant_workspace_id = $4 AND a.id = ep.athlete_id
-       RETURNING ${PARTICIPANT_COLUMNS}`,
-      [rsvpStatus, ownedEventId, ownedAthleteId, workspaceId],
+      `SELECT ${PARTICIPANT_COLUMNS} FROM event_participants ep JOIN athletes a ON a.id = ep.athlete_id
+       WHERE ep.event_id = $1 AND ep.athlete_id = $2 AND ep.participant_workspace_id = $3`,
+      [ownedEventId, ownedAthleteId, workspaceId],
     );
     if (!result.rows[0]) throw notFound();
     return mapEventParticipantSummaryRow(result.rows[0]);

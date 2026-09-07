@@ -142,6 +142,7 @@ describe('CoachConsole dashboard navigation', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Active Club' }), 'workspace-2');
 
     expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
+    expect(screen.getByRole('combobox', { name: 'Active Club' })).toHaveClass(/workspaceSelect/);
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
   });
 

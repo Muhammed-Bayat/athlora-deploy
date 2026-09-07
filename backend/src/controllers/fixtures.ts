@@ -129,8 +129,8 @@ export const addGuestParticipant: RequestHandler = async (req, res, next) => {
 
 export const updateGuestParticipant: RequestHandler = async (req, res, next) => {
   try {
-    const { workspaceId } = getApplicationUserContext(req);
-    const participant = await updateGuestFixtureParticipant(workspaceId, req.params.eventId, req.params.athleteId, req.body.rsvpStatus);
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const participant = await updateGuestFixtureParticipant(workspaceId, userId, req.params.eventId, req.params.athleteId, req.body.rsvpStatus);
     notifyEventInvalidated(req.params.eventId, 'participants', 'results');
     res.json({ data: participant });
   } catch (error) { next(error); }
