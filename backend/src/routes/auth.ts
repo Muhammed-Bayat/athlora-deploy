@@ -10,7 +10,7 @@ router.get('/callback', notImplemented);
 router.get('/logout', notImplemented);
 router.put('/me', verifyAuth0Token, syncCurrentUser);
 router.post('/me/password-ticket', verifyAuth0Token, resolveApplicationUser, createPasswordTicket);
-router.post('/me/consent', verifyAuth0Token, resolveApplicationUser, acceptConsent);
+router.post('/me/consent', verifyAuth0Token, acceptConsent);
 router.delete('/me', verifyAuth0Token, deleteCurrentAccount);
 
 export default router;
