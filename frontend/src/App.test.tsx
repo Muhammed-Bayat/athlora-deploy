@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AthleticsEvent, DashboardSummary, IncomingFixtureInvitation } from './types';
+import type { DashboardSummary } from './types';
 import App from './App';
 
 const authState = vi.hoisted(() => ({
@@ -20,39 +20,8 @@ const dashboardApi = vi.hoisted(() => ({
 
 const workspaceApi = vi.hoisted(() => ({ acceptWorkspaceInvitation: vi.fn() }));
 const fixtureApi = vi.hoisted(() => ({ listIncomingFixtureInvitations: vi.fn(),
-  respondToIncomingIncomingFixtureInvitation: vi.fn(),
+  respondToIncomingFixtureInvitation: vi.fn(),
 }));
-
-const incomingFixtureInvitation: IncomingFixtureInvitation = {
-  id: 'fixture-invitation-1',
-  eventId: 'event-1',
-  email: 'assistant@example.com',
-  revision: 1,
-  status: 'pending',
-  expiresAt: '2026-09-01T12:00:00.000Z',
-  createdAt: '2026-08-20T12:00:00.000Z',
-  targetWorkspaceId: '00000000-0000-4000-8000-000000000000',
-  responseMessage: null,
-  respondedAt: null,
-  respondedWorkspaceId: null,
-  respondedWorkspaceName: null,
-  respondedByName: null,
-  event: {
-    id: 'event-1',
-    createdBy: 'coach-1',
-    type: 'competition',
-    discipline: '100m',
-    title: 'Interclub Sprint',
-    date: '2026-09-05',
-    time: '09:00:00',
-    locationName: 'Central Stadium',
-    latitude: null,
-    longitude: null,
-    status: 'scheduled',
-    createdAt: '2026-08-20T12:00:00.000Z',
-    updatedAt: '2026-08-20T12:00:00.000Z',
-  } satisfies AthleticsEvent,
-};
 
 const emptyDashboard: DashboardSummary = {
   state: 'summary',
@@ -88,7 +57,7 @@ vi.mock('./api/workspaces', async (importOriginal) => ({
 vi.mock('./api/fixtures', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api/fixtures')>()),
   listIncomingFixtureInvitations: fixtureApi.listIncomingFixtureInvitations,
-  respondToIncomingFixtureInvitation: fixtureApi.respondToIncomingIncomingFixtureInvitation,
+  respondToIncomingFixtureInvitation: fixtureApi.respondToIncomingFixtureInvitation,
 }));
 
 vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
@@ -112,7 +81,7 @@ describe('App', () => {
     workspaceApi.acceptWorkspaceInvitation.mockReset();
 
     fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
-    fixtureApi.respondToIncomingIncomingFixtureInvitation.mockReset();
+    fixtureApi.respondToIncomingFixtureInvitation.mockReset();
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -238,12 +207,12 @@ describe('App', () => {
       id: 'fixture-1', eventId: 'event-1', email: null, revision: 1, status: 'pending', expiresAt: '2026-12-01T00:00:00.000Z', createdAt: '2026-09-01T00:00:00.000Z', targetWorkspaceId: null, responseMessage: null, respondedAt: null, respondedWorkspaceId: null, respondedWorkspaceName: null, respondedByName: null,
       event: { id: 'event-1', createdBy: 'host', type: 'competition', discipline: '100m', title: 'City Relay', date: '2026-09-12', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
     }], meta: { count: 1 } });
-    fixtureApi.respondToIncomingIncomingFixtureInvitation.mockResolvedValue(undefined);
+    fixtureApi.respondToIncomingFixtureInvitation.mockResolvedValue(undefined);
     window.history.replaceState({}, '', '/console/events');
 
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'Accept fixture' }));
 
-    expect(fixtureApi.respondToIncomingIncomingFixtureInvitation).toHaveBeenCalledWith('fixture-1', 'accepted', undefined);
+    expect(fixtureApi.respondToIncomingFixtureInvitation).toHaveBeenCalledWith('fixture-1', 'accepted', undefined);
   });
 });

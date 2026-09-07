@@ -107,7 +107,10 @@ describeDB('migrations against a real database', () => {
       '0016_public_logger_links.sql',
       '0017_clubs.sql',
       '0018_fixture_notifications.sql',
+      '0019_offline_logger_designation.sql',
       '0019_targeted_fixture_invitations_and_single_membership.sql',
+      '0020_sync_idempotency.sql',
+      '0021_user_consent.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -166,7 +169,10 @@ describeDB('migrations against a real database', () => {
       '0016_public_logger_links.sql',
       '0017_clubs.sql',
       '0018_fixture_notifications.sql',
+      '0019_offline_logger_designation.sql',
       '0019_targeted_fixture_invitations_and_single_membership.sql',
+      '0020_sync_idempotency.sql',
+      '0021_user_consent.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -176,7 +182,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(19);
+    expect(rows).toHaveLength(22);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

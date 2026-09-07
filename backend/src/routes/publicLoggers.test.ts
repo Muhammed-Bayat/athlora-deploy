@@ -57,4 +57,13 @@ describe('public logger routes', () => {
       entryType: 'attempt', value: 11.42, discipline: '100m', unit: 'seconds',
     }));
   });
+
+  it('does not offer an event-id session route that could bypass an active link token', async () => {
+    const response = await request(app).post(`/api/v1/public/logger/sessions/event/${EVENT_ID}`).send({
+      name: 'Timekeeper Sam', club: 'North Club',
+    });
+
+    expect(response.status).toBe(404);
+    expect(service.createPublicLoggerSession).not.toHaveBeenCalled();
+  });
 });

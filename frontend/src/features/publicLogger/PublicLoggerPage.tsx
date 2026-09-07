@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { createPublicLoggerEntry, getPublicLoggerSnapshot, startPublicLoggerSession } from '../../api/publicLoggers';
@@ -6,10 +6,24 @@ import type { IncidentType, PublicLoggerSnapshot } from '../../types';
 import { Button, Input } from '../../components';
 import styles from './PublicLoggerPage.module.css';
 
-const SESSION_KEY = 'athlora_public_logger_session';
-const EVENT_KEY = 'athlora_public_logger_event';
+function storageKeys(linkToken: string | undefined): { session: string; event: string } | null {
+  if (!linkToken) return null;
+  let hash = 2166136261;
+  for (let index = 0; index < linkToken.length; index += 1) {
+    hash = Math.imul(hash ^ linkToken.charCodeAt(index), 16777619);
+  }
+  const scope = (hash >>> 0).toString(36);
+  return {
+    session: `athlora_public_logger_session_${scope}`,
+    event: `athlora_public_logger_event_${scope}`,
+  };
+}
 
-function clearSession(): void { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(EVENT_KEY); }
+function clearSession(keys: { session: string; event: string } | null): void {
+  if (!keys) return;
+  sessionStorage.removeItem(keys.session);
+  sessionStorage.removeItem(keys.event);
+}
 function entryText(entry: PublicLoggerSnapshot['timeline'][number]): string {
   if (entry.entryType === 'attempt' && entry.value !== null) return `${entry.value.toFixed(2)} seconds`;
   return entry.incidentType?.replace('_', ' ') ?? entry.entryType;
@@ -26,6 +40,7 @@ export function PublicLoggerPage() {
   const [incident, setIncident] = useState<Exclude<IncidentType, null>>('false_start');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const keys = useMemo(() => storageKeys(token), [token]);
 
   const load = async (sessionToken: string, eventId: string) => {
     const next = await getPublicLoggerSnapshot(sessionToken, eventId);
@@ -33,24 +48,28 @@ export function PublicLoggerPage() {
     setSelectedAthlete((current) => current || next.participants[0]?.athleteId || '');
   };
   useEffect(() => {
-    const storedSession = sessionStorage.getItem(SESSION_KEY);
-    const eventId = sessionStorage.getItem(EVENT_KEY);
+    if (!keys) return;
+    const storedSession = sessionStorage.getItem(keys.session);
+    const eventId = sessionStorage.getItem(keys.event);
     if (!storedSession || !eventId) return;
-    void load(storedSession, eventId).then(() => setSession(storedSession)).catch(clearSession);
-  }, []);
+    void load(storedSession, eventId).then(() => setSession(storedSession)).catch(() => clearSession(keys));
+  }, [keys]);
   const open = async (event: React.FormEvent) => {
     event.preventDefault(); if (!token) return;
     setBusy(true); setError(null);
     try {
       const next = await startPublicLoggerSession(token, name, club);
-      sessionStorage.setItem(SESSION_KEY, next.sessionToken); sessionStorage.setItem(EVENT_KEY, next.snapshot.event.id);
+      if (keys) {
+        sessionStorage.setItem(keys.session, next.sessionToken);
+        sessionStorage.setItem(keys.event, next.snapshot.event.id);
+      }
       setSession(next.sessionToken); setSnapshot(next.snapshot); setSelectedAthlete(next.snapshot.participants[0]?.athleteId ?? '');
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to open this logger.'); } finally { setBusy(false); }
   };
   const refresh = async () => {
     if (!session || !snapshot) return;
     setBusy(true); setError(null);
-    try { await load(session, snapshot.event.id); } catch (requestError) { clearSession(); setSession(null); setSnapshot(null); setError(requestError instanceof Error ? requestError.message : 'This logger is no longer available.'); } finally { setBusy(false); }
+    try { await load(session, snapshot.event.id); } catch (requestError) { clearSession(keys); setSession(null); setSnapshot(null); setError(requestError instanceof Error ? requestError.message : 'This logger is no longer available.'); } finally { setBusy(false); }
   };
   const record = async (entryType: 'attempt' | 'penalty') => {
     if (!session || !snapshot || !selectedAthlete) return;
@@ -60,7 +79,7 @@ export function PublicLoggerPage() {
         ? { athleteId: selectedAthlete, entryType, value: Number(time), unit: 'seconds', isFoul: false, incidentType: null, noteText: null }
         : { athleteId: selectedAthlete, entryType, value: null, unit: null, isFoul: false, incidentType: incident, noteText: null });
       setTime(''); await refresh();
-    } catch (requestError) { if (requestError instanceof ApiError && requestError.code === 'PUBLIC_LOGGER_SESSION_INVALID') clearSession(); setError(requestError instanceof Error ? requestError.message : 'Could not record this entry.'); } finally { setBusy(false); }
+    } catch (requestError) { if (requestError instanceof ApiError && requestError.code === 'PUBLIC_LOGGER_SESSION_INVALID') clearSession(keys); setError(requestError instanceof Error ? requestError.message : 'Could not record this entry.'); } finally { setBusy(false); }
   };
 
   if (!snapshot) return <main className={styles.page}><section className={styles.join}><p className={styles.kicker}>Athlora public logger</p><h1>Join event logging</h1><p>Identify this track-side logging session before recording.</p><form onSubmit={(event) => void open(event)}><label htmlFor="logger-name">Name</label><Input id="logger-name" value={name} onChange={(event) => setName(event.target.value)} required disabled={busy} /><label htmlFor="logger-club">Club or organization</label><Input id="logger-club" value={club} onChange={(event) => setClub(event.target.value)} required disabled={busy} />{error && <p role="alert">{error}</p>}<Button type="submit" disabled={busy || !token}>{busy ? 'Opening...' : 'Open logger'}</Button></form></section></main>;

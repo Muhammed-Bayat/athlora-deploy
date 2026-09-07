@@ -20,10 +20,9 @@ test.describe('migration verification', () => {
     await pool.end();
   });
 
-  test('all 20 migrations are tracked in schema_migrations', async () => {
-    const result = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-    const versions = result.rows.map((r) => r.version);
-    expect(versions.length).toBeGreaterThanOrEqual(20);
+  test('all migrations are tracked in schema_migrations', async () => {
+    const result = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
+    expect(result.rows).toHaveLength(22);
   });
 
   test('core tables exist', async () => {

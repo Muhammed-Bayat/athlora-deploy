@@ -40,6 +40,7 @@ function AppRoutes() {
   return <Routes>
     <Route path="/" element={<Navigate to="/console" replace />} />
     <Route path="/invitations/:token" element={<InvitationAcceptance />} />
+    <Route path="/console/fixtures" element={<Navigate to="/console/events" replace />} />
     <Route path="/console/*" element={<CoachConsole />} />
     <Route path="*" element={<Navigate to="/console" replace />} />
   </Routes>;

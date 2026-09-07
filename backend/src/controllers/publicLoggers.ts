@@ -5,7 +5,6 @@ import {
   createPublicLoggerEntry,
   createPublicLoggerLink,
   createPublicLoggerSession,
-  createPublicLoggerSessionByEvent,
   listPublicLoggerLinks,
   publicLoggerSnapshot,
   revokePublicLoggerLink,
@@ -66,18 +65,6 @@ export const startSession: RequestHandler = async (req, res, next) => {
   try {
     assertSessionRateLimit(req);
     const result = await createPublicLoggerSession(req.body.linkToken, req.body.name, req.body.club);
-    res.status(201).json({ data: result });
-  } catch (error) { next(error); }
-};
-
-export const startSessionByEvent: RequestHandler = async (req, res, next) => {
-  try {
-    assertSessionRateLimit(req);
-    const result = await createPublicLoggerSessionByEvent(
-      parameter(req.params.eventId),
-      req.body.name,
-      req.body.club,
-    );
     res.status(201).json({ data: result });
   } catch (error) { next(error); }
 };

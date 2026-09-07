@@ -14,7 +14,6 @@ import { ApiError } from '../../api/client';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
-import { Select } from '../../components';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -519,7 +518,7 @@ export function CoachConsole() {
          <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
-      </label>
+      </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures} unread event notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>

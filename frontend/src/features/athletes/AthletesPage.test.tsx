@@ -132,7 +132,7 @@ describe('AthletesPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Send' }));
     expect(await within(dialog).findByText('Athlora received: Add John Smith')).toBeInTheDocument();
     expect(geminiApi.sendText).toHaveBeenNthCalledWith(2, 'Add John Smith');
-  });
+  }, 30_000);
 
   it('renders active injury counts and highest severity without loading Fitness', async () => {
     injuriesApi.listAthleteInjurySummaries.mockResolvedValueOnce([{

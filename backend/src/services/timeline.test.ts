@@ -273,7 +273,7 @@ describe('timeline service', () => {
     expect(entries[0]).toMatchObject({ id: ENTRY_ID, version: 1, deletedAt: null });
     expect(String(query.mock.calls[0]?.[0])).toContain('te.deleted_at IS NULL');
     expect(String(query.mock.calls[0]?.[0])).toContain('ORDER BY te.created_at ASC, te.id ASC');
-    expect(query.mock.calls[0]?.[1]).toEqual([EVENT_ID, USER_ID]);
+    expect(query.mock.calls[0]?.[1]).toEqual([EVENT_ID, USER_ID, true]);
   });
 
   it('locks affected athletes before event-wide result recomputation', async () => {
