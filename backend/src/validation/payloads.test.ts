@@ -4,19 +4,30 @@ import {
   applyTimelineEntryPatch,
   parseAthleteCreatePayload,
   parseAthleteListQuery,
+  parseAthleteProgressionQuery,
   parseAthleteReplacementPayload,
   parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventListQuery,
+  parseEventParticipantBulkRsvpPayload,
   parseEventParticipantCreatePayload,
   parseEventParticipantReplacementPayload,
   parseEventReplacementPayload,
   parseFixtureInvitationCreatePayload,
   parseFixtureInvitationResponsePayload,
+  parseInjuryCreatePayload,
+  parseInjuryListQuery,
+  parseInjuryResolvePayload,
+  parseInjuryUpdatePayload,
+  parsePublicLoggerEntryPayload,
+  parsePublicLoggerSessionPayload,
   parseResultOverridePayload,
+  parseSquadPayload,
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
+  parseVenueSearchQuery,
+  parseWeatherCurrentQuery,
   validateTimelineEntryState,
   type ValidationIssue,
 } from './payloads.js';
@@ -692,5 +703,299 @@ describe('fixture invitation payloads', () => {
       () => parseFixtureInvitationResponsePayload({ response: 'accepted', message: 'Thanks' }),
       [{ path: 'message', code: 'not_allowed', message: 'Only change requests may include a message' }],
     );
+  });
+});
+
+describe('squad payloads', () => {
+  it('parses a valid squad name', () => {
+    expect(parseSquadPayload({ name: ' Sprinters ' })).toEqual({ name: 'Sprinters' });
+  });
+
+  it('rejects blank or missing name', () => {
+    expectValidationError(() => parseSquadPayload({ name: '   ' }), [
+      { path: 'name', code: 'blank', message: 'Must not be blank' },
+    ]);
+    expectValidationError(() => parseSquadPayload({}), [
+      { path: 'name', code: 'required', message: 'Field is required' },
+    ]);
+  });
+
+  it('rejects non-string and unknown fields', () => {
+    expectValidationError(() => parseSquadPayload({ name: 123, extra: true }), [
+      { path: 'extra', code: 'unknown_field', message: 'Field is not allowed' },
+      { path: 'name', code: 'invalid_type', message: 'Expected a string' },
+    ]);
+  });
+});
+
+describe('weather current query', () => {
+  it('parses valid coordinates', () => {
+    expect(parseWeatherCurrentQuery({ latitude: '51.5', longitude: '-0.12' })).toEqual({
+      latitude: 51.5,
+      longitude: -0.12,
+    });
+  });
+
+  it('rejects non-numeric and out-of-range values', () => {
+    expectValidationError(
+      () => parseWeatherCurrentQuery({ latitude: 'abc', longitude: '200' }),
+      [
+        { path: 'latitude', code: 'invalid_format', message: 'Expected a decimal number' },
+        { path: 'longitude', code: 'out_of_range', message: 'Expected a number from -180 to 180' },
+      ],
+    );
+  });
+});
+
+describe('venue search query', () => {
+  it('parses a valid search term', () => {
+    expect(parseVenueSearchQuery({ q: '  Arena ' })).toEqual({ q: 'Arena' });
+  });
+
+  it('rejects missing, blank, or too-long query', () => {
+    expectValidationError(() => parseVenueSearchQuery({}), [
+      { path: 'q', code: 'required', message: 'Query is required' },
+    ]);
+    expectValidationError(() => parseVenueSearchQuery({ q: '   ' }), [
+      { path: 'q', code: 'blank', message: 'Must not be blank' },
+    ]);
+    expectValidationError(() => parseVenueSearchQuery({ q: 'a'.repeat(201) }), [
+      { path: 'q', code: 'too_long', message: 'Query must be 200 characters or fewer' },
+    ]);
+  });
+});
+
+describe('athlete progression query', () => {
+  it('defaults to empty query', () => {
+    expect(parseAthleteProgressionQuery({})).toEqual({});
+  });
+
+  it('parses cursor, limit, and type', () => {
+    expect(parseAthleteProgressionQuery({ cursor: 'abc', limit: '50', type: 'competition' })).toEqual({
+      cursor: 'abc',
+      limit: 50,
+      type: 'competition',
+    });
+  });
+
+  it('rejects invalid limit and type', () => {
+    expectValidationError(
+      () => parseAthleteProgressionQuery({ limit: '0', type: 'race' }),
+      [
+        { path: 'limit', code: 'invalid_value', message: 'Expected an integer from 1 to 200' },
+        { path: 'type', code: 'invalid_value', message: 'Expected one of: competition, training' },
+      ],
+    );
+  });
+});
+
+describe('bulk RSVP payload', () => {
+  it('parses a valid batch of updates', () => {
+    expect(parseEventParticipantBulkRsvpPayload({
+      updates: [
+        { athleteId: ATHLETE_ID, rsvpStatus: 'yes' },
+      ],
+    })).toEqual({ updates: [{ athleteId: ATHLETE_ID, rsvpStatus: 'yes' }] });
+  });
+
+  it('rejects empty arrays, duplicates, and invalid entries', () => {
+    expectValidationError(
+      () => parseEventParticipantBulkRsvpPayload({ updates: [] }),
+      [{ path: 'updates', code: 'invalid_value', message: 'Provide 1 to 100 RSVP updates' }],
+    );
+    expectValidationError(
+      () => parseEventParticipantBulkRsvpPayload({ updates: [
+        { athleteId: 'not-a-uuid', rsvpStatus: 'yes' },
+      ]}),
+      [{ path: 'updates.0.athleteId', code: 'invalid_value', message: 'Athlete ID must be unique and valid' }],
+    );
+  });
+});
+
+describe('public logger session payload', () => {
+  it('parses valid session fields', () => {
+    expect(parsePublicLoggerSessionPayload({ linkToken: ' token123 ', name: ' Coach A ', club: ' Sprinters ' })).toEqual({
+      linkToken: 'token123',
+      name: 'Coach A',
+      club: 'Sprinters',
+    });
+  });
+
+  it('rejects missing, blank, and too-long values', () => {
+    expectValidationError(() => parsePublicLoggerSessionPayload({ linkToken: '', name: 'A', club: 'C' }), [
+      { path: 'linkToken', code: 'blank', message: 'Must not be blank' },
+    ]);
+    expectValidationError(() => parsePublicLoggerSessionPayload({ linkToken: 'x'.repeat(201), name: 'A', club: 'C' }), [
+      { path: 'linkToken', code: 'too_long', message: 'Value is too long' },
+    ]);
+    expectValidationError(() => parsePublicLoggerSessionPayload({ linkToken: 'tok', name: 'x'.repeat(121), club: 'C' }), [
+      { path: 'name', code: 'too_long', message: 'Value is too long' },
+    ]);
+    expectValidationError(() => parsePublicLoggerSessionPayload({ linkToken: 'tok', name: 'A', club: 'x'.repeat(121) }), [
+      { path: 'club', code: 'too_long', message: 'Value is too long' },
+    ]);
+  });
+
+  it('rejects non-string values and unknown fields', () => {
+    expectValidationError(() => parsePublicLoggerSessionPayload({ linkToken: 123, name: true, club: 'C', extra: 1 }), [
+      { path: 'extra', code: 'unknown_field', message: 'Field is not allowed' },
+      { path: 'linkToken', code: 'required', message: 'Field is required' },
+      { path: 'name', code: 'required', message: 'Field is required' },
+    ]);
+  });
+});
+
+describe('public logger entry payload', () => {
+  it('accepts a valid attempt', () => {
+    expect(parsePublicLoggerEntryPayload({
+      athleteId: ATHLETE_ID, entryType: 'attempt', value: 10.5,
+    })).toMatchObject({ entryType: 'attempt', value: 10.5 });
+  });
+
+  it('accepts a valid penalty', () => {
+    expect(parsePublicLoggerEntryPayload({
+      athleteId: ATHLETE_ID, entryType: 'penalty', incidentType: 'false_start',
+    })).toMatchObject({ entryType: 'penalty', incidentType: 'false_start' });
+  });
+
+  it('rejects note entries', () => {
+    expectValidationError(
+      () => parsePublicLoggerEntryPayload({ athleteId: ATHLETE_ID, entryType: 'note', noteText: 'hello' }),
+      [{ path: 'entryType', code: 'invalid_value', message: 'Public loggers can create attempts or incidents only' }],
+    );
+  });
+
+  it('rejects attempt without value', () => {
+    expectValidationError(
+      () => parsePublicLoggerEntryPayload({ athleteId: ATHLETE_ID, entryType: 'attempt' }),
+      [{ path: 'value', code: 'required', message: 'An attempt requires a race time' }],
+    );
+  });
+
+  it('rejects penalty without incidentType', () => {
+    expectValidationError(
+      () => parsePublicLoggerEntryPayload({ athleteId: ATHLETE_ID, entryType: 'penalty' }),
+      [{ path: 'incidentType', code: 'required', message: 'An incident requires an incident type' }],
+    );
+  });
+});
+
+describe('injury create payload', () => {
+  it('parses a valid injury', () => {
+    expect(parseInjuryCreatePayload({
+      bodyRegion: 'Arm', area: 'Shoulder', side: 'Left', severity: 'Moderate',
+      notes: 'Sore after training', occurrenceDate: '2026-08-01', expectedReturnDate: '2026-08-15',
+    })).toEqual({
+      bodyRegion: 'Arm', area: 'Shoulder', side: 'Left', severity: 'Moderate',
+      notes: 'Sore after training', occurrenceDate: '2026-08-01', expectedReturnDate: '2026-08-15',
+    });
+  });
+
+  it('rejects invalid region, side, severity, and area', () => {
+    expectValidationError(
+      () => parseInjuryCreatePayload({
+        bodyRegion: 'Invalid', area: 'Shoulder', side: 'Top', severity: 'Critical',
+      }),
+      [
+        { path: 'area', code: 'invalid_value', message: expect.stringContaining('is not valid for body region') },
+        { path: 'bodyRegion', code: 'invalid_value', message: expect.stringContaining('Expected one of') },
+        { path: 'severity', code: 'invalid_value', message: expect.stringContaining('Expected one of') },
+        { path: 'side', code: 'invalid_value', message: expect.stringContaining('Expected one of') },
+      ],
+    );
+  });
+
+  it('rejects invalid area for the chosen body region', () => {
+    expectValidationError(
+      () => parseInjuryCreatePayload({
+        bodyRegion: 'Leg', area: 'Head', side: 'Left', severity: 'Minor',
+      }),
+      [{ path: 'area', code: 'invalid_value', message: expect.stringContaining('is not valid for body region') }],
+    );
+  });
+
+  it('rejects expected return date before occurrence date', () => {
+    expectValidationError(
+      () => parseInjuryCreatePayload({
+        bodyRegion: 'Leg', area: 'Knee', side: 'Left', severity: 'Minor',
+        occurrenceDate: '2026-08-20', expectedReturnDate: '2026-08-10',
+      }),
+      [{ path: 'expectedReturnDate', code: 'invalid_value', message: 'Expected return date must be on or after occurrence date' }],
+    );
+  });
+
+  it('rejects invalid date formats', () => {
+    expectValidationError(
+      () => parseInjuryCreatePayload({
+        bodyRegion: 'Arm', area: 'Elbow', side: 'Right', severity: 'Severe',
+        occurrenceDate: 'not-a-date', expectedReturnDate: '2026-13-01',
+      }),
+      [
+        { path: 'expectedReturnDate', code: 'invalid_format', message: expect.stringContaining('Gregorian date') },
+        { path: 'occurrenceDate', code: 'invalid_format', message: expect.stringContaining('Gregorian date') },
+      ],
+    );
+  });
+});
+
+describe('injury update payload', () => {
+  it('parses partial updates', () => {
+    expect(parseInjuryUpdatePayload({ severity: 'Severe' })).toEqual({ severity: 'Severe' });
+    expect(parseInjuryUpdatePayload({ notes: null })).toEqual({ notes: null });
+    expect(parseInjuryUpdatePayload({ occurrenceDate: '2026-09-01', expectedReturnDate: null })).toEqual({
+      occurrenceDate: '2026-09-01', expectedReturnDate: null,
+    });
+  });
+
+  it('rejects blank area and invalid enums', () => {
+    expectValidationError(
+      () => parseInjuryUpdatePayload({ area: '   ', side: 'Up', severity: 'Critical' }),
+      [
+        { path: 'area', code: 'blank', message: 'Must not be blank' },
+        { path: 'severity', code: 'invalid_value', message: 'Expected a valid severity' },
+        { path: 'side', code: 'invalid_value', message: 'Expected a valid side' },
+      ],
+    );
+  });
+
+  it('rejects invalid date formats in update', () => {
+    expectValidationError(
+      () => parseInjuryUpdatePayload({ occurrenceDate: 'bad-date', expectedReturnDate: 'also-bad' }),
+      [
+        { path: 'expectedReturnDate', code: 'invalid_format', message: expect.stringContaining('Gregorian date') },
+        { path: 'occurrenceDate', code: 'invalid_format', message: expect.stringContaining('Gregorian date') },
+      ],
+    );
+  });
+});
+
+describe('injury resolve payload', () => {
+  it('parses valid resolve fields', () => {
+    expect(parseInjuryResolvePayload({ resolvedDate: '2026-09-01T12:00:00Z', resolutionNotes: 'Fully recovered' })).toEqual({
+      resolvedDate: '2026-09-01T12:00:00Z', resolutionNotes: 'Fully recovered',
+    });
+    expect(parseInjuryResolvePayload({ resolvedDate: null, resolutionNotes: null })).toEqual({
+      resolvedDate: null, resolutionNotes: null,
+    });
+  });
+
+  it('rejects non-string resolvedDate', () => {
+    expectValidationError(
+      () => parseInjuryResolvePayload({ resolvedDate: 12345 }),
+      [{ path: 'resolvedDate', code: 'invalid_type', message: 'Expected a timestamp string or null' }],
+    );
+  });
+});
+
+describe('injury list query', () => {
+  it('parses valid filter values', () => {
+    expect(parseInjuryListQuery({ includeDeleted: 'true', status: 'active', severity: 'Severe' })).toEqual({
+      includeDeleted: true, status: 'active', severity: 'Severe',
+    });
+  });
+
+  it('ignores invalid or missing values gracefully', () => {
+    expect(parseInjuryListQuery({})).toEqual({});
+    expect(parseInjuryListQuery({ includeDeleted: false, status: 'unknown', severity: 'Critical' })).toEqual({});
   });
 });
