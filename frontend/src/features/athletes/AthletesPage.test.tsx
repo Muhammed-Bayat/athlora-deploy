@@ -265,7 +265,11 @@ describe('AthletesPage', () => {
     expect(athleteApi.createAthlete).not.toHaveBeenCalled();
 
     await user.type(within(dialog).getByLabelText('Athlete name'), '  Casey Quick  ');
-    await user.type(within(dialog).getByLabelText(/gender category/i), 'Open');
+    const gender = within(dialog).getByRole('button', { name: 'Gender category' });
+    await user.click(gender);
+    const genderMenu = gender.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(genderMenu!).getAllByRole('option')).toHaveLength(2);
+    await user.click(within(genderMenu!).getByRole('option', { name: 'Female' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
     await user.type(within(dialog).getByLabelText(/coach notes/i), '  Acceleration block  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add athlete' }));
@@ -273,7 +277,7 @@ describe('AthletesPage', () => {
     await waitFor(() => expect(athleteApi.createAthlete).toHaveBeenCalledWith({
       name: 'Casey Quick',
       dob: null,
-      gender: 'Open',
+      gender: 'Female',
       squadIds: [SPRINT_ID],
       notes: 'Acceleration block',
     }));

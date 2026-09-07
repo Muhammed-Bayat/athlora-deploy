@@ -12,7 +12,7 @@ import {
   updateEventParticipant,
 } from '../../api/participants';
 import { ApiError } from '../../api/client';
-import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import { Button, Card, DatePicker, EmptyState, Input, Modal, Select, Toast } from '../../components';
 import {
   DISCIPLINE_100M,
   type Athlete,
@@ -144,9 +144,9 @@ function EventTimePicker({ value, disabled, invalid, describedBy, onChange }: {
   return <div className={styles.timePicker} aria-describedby={describedBy}>
     <span className={styles.timeLabel}>Time <span>Optional</span></span>
     <div className={styles.timeWheels}>
-      <label>Hour<select aria-label="Event hour" value={current?.hour ?? ''} onChange={(event) => selectHour(event.target.value)} disabled={disabled} aria-invalid={invalid}><option value="">HH</option>{TIME_HOURS.map((hour) => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+      <div className={styles.timeWheel}><span>Hour</span><Select className={styles.timeControl} compact menuPlacement="up" aria-label="Event hour" value={current?.hour ?? ''} onChange={(event) => selectHour(event.target.value)} disabled={disabled} aria-invalid={invalid} options={[{ value: '', label: 'HH' }, ...TIME_HOURS.map((hour) => ({ value: hour, label: hour }))]} /></div>
       <span aria-hidden="true">:</span>
-      <label>Minute<select aria-label="Event minute" value={current?.minute ?? ''} onChange={(event) => selectMinute(event.target.value)} disabled={disabled || !current?.hour} aria-invalid={invalid}><option value="">MM</option>{minutes.map((minute) => <option key={minute} value={minute}>{minute}</option>)}</select></label>
+      <div className={styles.timeWheel}><span>Minute</span><Select className={styles.timeControl} compact menuPlacement="up" aria-label="Event minute" value={current?.minute ?? ''} onChange={(event) => selectMinute(event.target.value)} disabled={disabled || !current?.hour} aria-invalid={invalid} options={[{ value: '', label: 'MM' }, ...minutes.map((minute) => ({ value: minute, label: minute }))]} /></div>
     </div>
     {value && <Button type="button" variant="ghost" onClick={() => onChange('')} disabled={disabled}>Clear time</Button>}
   </div>;
@@ -259,7 +259,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [selectedVenue, setSelectedVenue] = useState<VenueSearchResult | null>(null);
   const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLButtonElement>(null);
 
   const setField = <K extends keyof EventDraft>(field: K, value: EventDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -365,17 +365,15 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
         </div>
         <div>
           <label htmlFor="event-date">Date</label>
-          <Input
+          <DatePicker
             ref={dateRef}
             id="event-date"
-            type="date"
             value={draft.date}
-            onChange={(input) => setField('date', input.target.value)}
+            onChange={(value) => setField('date', value)}
             invalid={Boolean(errors.date)}
-            aria-invalid={Boolean(errors.date)}
             aria-describedby={errors.date ? 'event-date-error' : undefined}
             required
-            aria-required="true"
+            aria-label="Date"
             disabled={submitting}
           />
           {errors.date && <span id="event-date-error" className={styles.fieldError}>{errors.date}</span>}

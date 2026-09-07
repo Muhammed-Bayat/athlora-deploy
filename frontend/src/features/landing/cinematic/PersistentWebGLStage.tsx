@@ -13,6 +13,7 @@ import {
   Vector3,
 } from 'three';
 import styles from './PersistentWebGLStage.module.css';
+import { anatomyModelUrl } from '../../fitness/anatomyAssets';
 
 interface PersistentWebGLStageProps {
   progressRef: MutableRefObject<number>;
@@ -232,7 +233,7 @@ function FitnessTeaserGate({ progressRef }: PersistentWebGLStageProps) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const loadTeaser = () => {
-      useGLTF.preload('/models/athlora-anatomy.glb');
+      useGLTF.preload(anatomyModelUrl);
       setReady(true);
     };
     // Parsing the 5 MB anatomy model during the intro competes with its animation.

@@ -10,6 +10,7 @@ import {
   Vector3,
 } from 'three';
 import { attachAnatomyAttributes, parseAnatomyMap, updateInjuryAttributes } from '../../fitness/anatomySurfaceMap';
+import { anatomyMapUrl, anatomyModelUrl } from '../../fitness/anatomyAssets';
 import type { Injury } from '../../fitness/injuryRegions';
 
 interface LandingFitnessTeaserProps {
@@ -79,8 +80,8 @@ totalEmissiveRadiance += vInjuryColor * injuryMix * (baseAlpha / 0.64) * 0.9;`);
 
 export function LandingFitnessTeaser({ progressRef }: LandingFitnessTeaserProps) {
   const groupRef = useRef<import('three').Group>(null);
-  const { scene } = useGLTF('/models/athlora-anatomy.glb');
-  const mapSource = useLoader(FileLoader, '/models/athlora-anatomy-map-v2.json') as string;
+  const { scene } = useGLTF(anatomyModelUrl);
+  const mapSource = useLoader(FileLoader, anatomyMapUrl) as string;
   const map = useMemo(() => parseAnatomyMap(mapSource), [mapSource]);
   const model = useMemo(() => {
     const next = scene.clone(true);

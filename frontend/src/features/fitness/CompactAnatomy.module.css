@@ -1,6 +1,8 @@
 .compact { display: flex; align-items: center; gap: var(--space-3); min-width: 0; color: var(--console-ink); }
 .body { flex: 0 0 auto; width: 58px; height: 100px; overflow: hidden; pointer-events: none; }
 .body canvas { display: block; width: 100%; height: 100%; }
+.loading { display: grid; width: 100%; height: 100%; place-items: center; padding: var(--space-2); border: 1px solid color-mix(in srgb, var(--console-teal) 20%, var(--console-line)); border-radius: var(--radius-sm); background: radial-gradient(ellipse at 50% 34%, color-mix(in srgb, var(--console-teal) 17%, transparent), transparent 58%), var(--console-soft); color: var(--console-muted); font: var(--font-weight-bold) .58rem/1.25 var(--font-family-mono); text-align: center; }
+.fallback { display: grid; width: 100%; height: 100%; place-items: center; padding: var(--space-2); border: 1px dashed color-mix(in srgb, var(--console-teal) 48%, var(--console-line)); border-radius: var(--radius-sm); background: radial-gradient(ellipse at 50% 34%, color-mix(in srgb, var(--console-teal) 17%, transparent), transparent 58%), var(--console-soft); color: var(--console-teal); font: var(--font-weight-bold) .63rem/1.25 var(--font-family-mono); text-align: center; cursor: pointer; }.fallback:focus-visible { outline: 3px solid var(--console-focus); outline-offset: 2px; }
 .large .body { width: 92px; height: 158px; }
 .copy { display: grid; gap: var(--space-1); min-width: 0; font-size: 0.75rem; }
 .copy strong { color: var(--console-ink); }
