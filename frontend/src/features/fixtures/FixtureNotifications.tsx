@@ -15,7 +15,8 @@ function notificationCopy(notification: FixtureNotification): string {
   if (notification.kind === 'fixture_started') return 'A fixture you are participating in has started.';
   if (notification.kind === 'fixture_invited') return 'You have a new fixture invitation.';
   if (notification.kind === 'fixture_reacceptance_required') return 'A fixture changed and needs your club to reaccept.';
-  return `${club} ${response ?? 'responded'} to your fixture invitation.`;
+  const message = typeof notification.payload.message === 'string' ? notification.payload.message : null;
+  return `${club} ${response ?? 'responded'} to your fixture invitation.${message ? ` ${message}` : ''}`;
 }
 
 function notificationDate(notification: FixtureNotification): string {

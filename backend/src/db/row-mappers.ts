@@ -139,6 +139,8 @@ export interface EventParticipantRow {
 }
 
 export interface EventParticipantSummaryRow extends EventParticipantRow {
+  participant_workspace_id?: string | null;
+  participant_workspace_name?: string | null;
   athlete_name: string;
   athlete_squad_names?: unknown;
   athlete_squad?: string | null;
@@ -673,6 +675,10 @@ export function mapEventParticipantSummaryRow(
   const participant = mapEventParticipantRow(row);
   return {
     ...participant,
+    ...(row.participant_workspace_id === undefined ? {} : {
+      participantWorkspaceId: row.participant_workspace_id,
+      participantWorkspaceName: row.participant_workspace_name ?? null,
+    }),
     athlete: {
       id: participant.athleteId,
       name: nonemptyString(row.athlete_name, 'athletes.name'),

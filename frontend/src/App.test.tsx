@@ -19,9 +19,8 @@ const dashboardApi = vi.hoisted(() => ({
 }));
 
 const workspaceApi = vi.hoisted(() => ({ acceptWorkspaceInvitation: vi.fn() }));
-const fixtureApi = vi.hoisted(() => ({
-  listIncomingFixtureInvitations: vi.fn(),
-  respondToIncomingFixtureInvitation: vi.fn(),
+const fixtureApi = vi.hoisted(() => ({ listIncomingFixtureInvitations: vi.fn(),
+  respondToIncomingIncomingFixtureInvitation: vi.fn(),
 }));
 
 const incomingFixtureInvitation: IncomingFixtureInvitation = {
@@ -89,7 +88,7 @@ vi.mock('./api/workspaces', async (importOriginal) => ({
 vi.mock('./api/fixtures', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api/fixtures')>()),
   listIncomingFixtureInvitations: fixtureApi.listIncomingFixtureInvitations,
-  respondToIncomingFixtureInvitation: fixtureApi.respondToIncomingFixtureInvitation,
+  respondToIncomingFixtureInvitation: fixtureApi.respondToIncomingIncomingFixtureInvitation,
 }));
 
 vi.mock('./features/landing/cinematic/PersistentWebGLStage', () => ({
@@ -111,9 +110,9 @@ describe('App', () => {
     dashboardApi.getDashboardSummary.mockReset();
     dashboardApi.getDashboardSummary.mockResolvedValue(emptyDashboard);
     workspaceApi.acceptWorkspaceInvitation.mockReset();
-    fixtureApi.listIncomingFixtureInvitations.mockReset();
+
     fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
-    fixtureApi.respondToIncomingFixtureInvitation.mockReset();
+    fixtureApi.respondToIncomingIncomingFixtureInvitation.mockReset();
   });
 
   it('renders the public landing page and its interactive preview', async () => {
@@ -232,16 +231,19 @@ describe('App', () => {
     expect(workspaceApi.acceptWorkspaceInvitation).toHaveBeenCalledWith('token-123');
   });
 
-  it('lets an assistant respond to an in-app fixture invitation', async () => {
+  it('lets an assistant respond to an event invitation from Events', async () => {
     const user = userEvent.setup();
     authState.isAuthenticated = true;
-    fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [incomingFixtureInvitation], meta: { count: 1 } });
-    fixtureApi.respondToIncomingFixtureInvitation.mockResolvedValue(incomingFixtureInvitation);
-    window.history.replaceState({}, '', '/console/fixtures');
+    fixtureApi.listIncomingFixtureInvitations.mockResolvedValue({ data: [{
+      id: 'fixture-1', eventId: 'event-1', email: null, revision: 1, status: 'pending', expiresAt: '2026-12-01T00:00:00.000Z', createdAt: '2026-09-01T00:00:00.000Z', targetWorkspaceId: null, responseMessage: null, respondedAt: null, respondedWorkspaceId: null, respondedWorkspaceName: null, respondedByName: null,
+      event: { id: 'event-1', createdBy: 'host', type: 'competition', discipline: '100m', title: 'City Relay', date: '2026-09-12', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+    }], meta: { count: 1 } });
+    fixtureApi.respondToIncomingIncomingFixtureInvitation.mockResolvedValue(undefined);
+    window.history.replaceState({}, '', '/console/events');
 
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'Accept fixture' }));
 
-    expect(fixtureApi.respondToIncomingFixtureInvitation).toHaveBeenCalledWith('fixture-invitation-1', 'accepted', undefined);
+    expect(fixtureApi.respondToIncomingIncomingFixtureInvitation).toHaveBeenCalledWith('fixture-1', 'accepted', undefined);
   });
 });

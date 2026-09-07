@@ -1,16 +1,13 @@
-.page { min-height: 100vh; padding: clamp(1.25rem, 5vw, 4rem); display: grid; place-items: start center; }
-.card { width: min(100%, 760px); padding: clamp(1.25rem, 4vw, 2.5rem); border: 1px solid var(--console-line); border-radius: var(--radius-lg); background: var(--console-surface); color: var(--console-ink); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24); }
-.header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; margin-bottom: 2rem; }
-.kicker { margin: 0 0 .35rem; color: var(--console-cyan); font: var(--font-weight-bold) .7rem/1.2 var(--font-family-mono); letter-spacing: .12em; text-transform: uppercase; }
-.status, .readOnly { color: var(--console-muted); }
-.form, .logForm { display: grid; gap: .7rem; margin-top: 1.5rem; }
-.actions { display: flex; gap: .7rem; flex-wrap: wrap; }
-.actions input { flex: 1 1 12rem; }
-.participants { display: flex; flex-wrap: wrap; gap: .5rem; }
-.participants button { min-height: 42px; padding: .5rem .8rem; border: 1px solid var(--console-control-border); border-radius: 999px; background: var(--console-control-surface); color: var(--console-ink); cursor: pointer; }
-.participants button.selected { background: var(--console-selected-surface); color: var(--console-selected-text); }
-.timeline { display: grid; gap: .65rem; padding-left: 1.25rem; }
-.timeline li { display: grid; grid-template-columns: 1fr auto; gap: .15rem 1rem; }
-.timeline li span { color: var(--console-muted); }
-.timeline time { grid-column: 2; grid-row: 1 / span 2; color: var(--console-muted); font-size: .8rem; }
-@media (max-width: 520px) { .page { padding: 1rem; } .header { flex-direction: column; } .timeline li { grid-template-columns: 1fr; } .timeline time { grid-column: 1; grid-row: auto; } }
+.page { min-height: 100vh; padding: clamp(1rem, 4vw, 3rem); background: var(--console-bg); color: var(--console-ink); }
+.join { width: min(100%, 520px); margin: 8vh auto; padding: clamp(1.25rem, 4vw, 2.5rem); border: 1px solid var(--console-line); border-radius: var(--radius-lg); background: var(--console-surface); box-shadow: var(--console-shadow); }
+.join form, .logger { display: grid; gap: .8rem; }
+.header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; max-width: 1280px; margin: 0 auto 1.5rem; }
+.header h1 { margin: 0; font: 700 clamp(1.5rem, 4vw, 2.3rem)/1.1 var(--font-display); }
+.header p, .logger p, .timeline p { color: var(--console-muted); }
+.kicker { margin: 0 0 .4rem; color: var(--console-cyan); font: 700 .7rem/1.2 var(--font-family-mono); letter-spacing: .14em; text-transform: uppercase; }
+.workspace { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.3fr) minmax(240px, .9fr); gap: 1rem; max-width: 1280px; margin: auto; }
+.roster, .logger, .timeline { padding: 1rem; border: 1px solid var(--console-line); border-radius: var(--radius-lg); background: var(--console-surface); box-shadow: var(--console-shadow); }
+.roster h2, .logger h2, .timeline h2 { margin-top: 0; font-size: 1rem; }.roster h2 span { color: var(--console-cyan); }
+.roster button { width: 100%; display: grid; gap: .2rem; padding: .8rem; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: inherit; text-align: left; cursor: pointer; }.roster button:hover, .roster button.selected { border-color: var(--console-focus); background: var(--console-selected-surface); color: var(--console-selected-text); }.roster small, .timeline small { color: var(--console-muted); }.roster button.selected small { color: inherit; opacity: .75; }
+.actionRow { display: flex; gap: .6rem; }.actionRow input, .actionRow select { flex: 1; min-width: 0; }.timeline ul { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }.timeline li { display: grid; grid-template-columns: 1fr auto; gap: .15rem 1rem; border-bottom: 1px solid var(--console-line); padding-bottom: .6rem; }.timeline li small { grid-column: 1; }.timeline li span { grid-column: 2; grid-row: 1 / span 2; color: var(--console-cyan); }.error { max-width: 1280px; margin: 0 auto 1rem; color: var(--console-danger); }
+@media (max-width: 900px) { .workspace { grid-template-columns: 1fr; }.timeline li span { grid-column: 1; grid-row: auto; }.header { flex-direction: column; } }

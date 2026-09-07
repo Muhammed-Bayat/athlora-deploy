@@ -140,6 +140,8 @@ export interface EventParticipantAthleteSummary {
 }
 
 export interface EventParticipantSummary extends EventParticipant {
+  participantWorkspaceId?: string | null;
+  participantWorkspaceName?: string | null;
   athlete: EventParticipantAthleteSummary;
   statusReviewRequired: boolean;
 }

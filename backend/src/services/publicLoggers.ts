@@ -22,7 +22,7 @@ export interface PublicLoggerLink {
 
 export interface PublicLoggerSnapshot {
   event: { id: string; title: string; status: EventStatus };
-  participants: Array<{ athleteId: string; name: string }>;
+  participants: Array<{ athleteId: string; name: string; teamName: string | null }>;
   timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt'>>;
 }
 
@@ -221,10 +221,11 @@ export async function publicLoggerSnapshot(
 ): Promise<PublicLoggerSnapshot> {
   const session = await validSession(sessionToken, eventId, executor);
   const [participants, entries] = await Promise.all([
-    executor.query<{ athlete_id: string; name: string }>(
-      `SELECT ep.athlete_id, a.name
-       FROM event_participants ep
-       JOIN athletes a ON a.id = ep.athlete_id
+    executor.query<{ athlete_id: string; name: string; team_name: string | null }>(
+       `SELECT ep.athlete_id, a.name, w.name AS team_name
+        FROM event_participants ep
+        JOIN athletes a ON a.id = ep.athlete_id
+        LEFT JOIN workspaces w ON w.id = ep.participant_workspace_id
        WHERE ep.event_id = $1
        ORDER BY a.name ASC, a.id ASC`,
       [session.event_id],
@@ -239,7 +240,7 @@ export async function publicLoggerSnapshot(
   ]);
   return {
     event: { id: session.event_id, title: session.title, status: session.status },
-    participants: participants.rows.map((participant) => ({ athleteId: participant.athlete_id, name: participant.name })),
+    participants: participants.rows.map((participant) => ({ athleteId: participant.athlete_id, name: participant.name, teamName: participant.team_name })),
     timeline: entries.rows.map((entry) => {
       const {
         recordedBy: _recordedBy,

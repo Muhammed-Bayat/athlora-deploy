@@ -17,7 +17,7 @@ export async function overrideResultRecord(
   eventId: string,
   athleteId: string,
   payload: ResultOverridePayload,
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<Result> {
   const { manualOverride, overrideReason } = payload;
   return withTransaction(async (client) => {
@@ -88,7 +88,11 @@ export const getEventResults: RequestHandler = async (req, res, next) => {
       `SELECT r.*
        FROM results r
        JOIN events e ON e.id = r.event_id
-       WHERE r.event_id = $1 AND r.discipline = $2 AND e.workspace_id = $3`,
+        WHERE r.event_id = $1 AND r.discipline = $2 AND (e.workspace_id = $3 OR EXISTS (
+          SELECT 1 FROM event_fixture_workspaces fw
+          WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
+            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+        ))`,
        [eventId, DISCIPLINE_100M, workspaceId],
     );
 
@@ -104,7 +108,7 @@ export const overrideResult: RequestHandler = async (req, res, next) => {
     const { userId, workspaceId } = getApplicationUserContext(req);
     const eventId = req.params.eventId as string;
     const athleteId = req.params.athleteId as string;
-    const result = await overrideResultRecord(userId, workspaceId, eventId, athleteId, req.body);
+    const result = await overrideResultRecord(userId, workspaceId, eventId, athleteId, req.body, true);
     notifyEventInvalidated(eventId, 'results');
 
     res.json({ data: result });

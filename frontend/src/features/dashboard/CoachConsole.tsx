@@ -5,7 +5,6 @@ import { EventsPage } from '../events/EventsPage';
 import { EventDetailPage } from '../events/EventDetailPage';
 import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
 import { AuthPage } from '../auth/AuthPage';
-import { FixturesPage } from '../fixtures/FixturesPage';
 import { ComparisonPage } from '../comparison/ComparisonPage';
 import { IncomingFixtureInvitations } from '../fixtures/IncomingFixtureInvitations';
 import { FixtureNotifications, type FixtureNotificationCounts } from '../fixtures/FixtureNotifications';
@@ -26,7 +25,6 @@ const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; i
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
   { id: 'comparison', label: 'Compare', shortLabel: 'Compare', icon: 'activity' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
-  { id: 'fixtures', label: 'Fixtures', shortLabel: 'Fixtures', icon: 'calendar' },
   { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
   { id: 'account', label: 'Account', shortLabel: 'Account', icon: 'athletes' },
 ];
@@ -43,7 +41,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   comparison: { title: 'Compare Athletes', subtitle: 'Compare all-time 100m progression for two athletes' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
-  fixtures: { title: 'Fixtures', subtitle: 'Manage your team in hosted fixtures' },
+  fixtures: { title: 'Events', subtitle: 'Manage shared club events' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
   account: { title: 'Account', subtitle: 'Manage security, sign-out, and account deletion' },
 };
@@ -357,7 +355,6 @@ export function CoachConsole() {
     : location.pathname.includes('/stats') ? 'stats'
     : location.pathname.includes('/comparison') ? 'comparison'
     : location.pathname.includes('/events') ? 'events'
-      : location.pathname.includes('/fixtures') ? 'fixtures'
       : location.pathname.includes('/live') ? 'live'
         : location.pathname.includes('/account') ? 'account' : 'dashboard';
   const navigate = (view: ConsoleView, targetId?: string) => {
@@ -519,9 +516,11 @@ export function CoachConsole() {
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
       <div className={styles.workspaceSwitcher}>
         <span>Club</span>
-        <Select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club" options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))} />
-      </div>
-       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events > 0 && <small aria-label={`${fixtureNotificationCounts.events} unread started fixture notifications`}>{fixtureNotificationCounts.events}</small>}{item.id === 'fixtures' && fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.fixtures} unread fixture notifications`}>{fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
+         <select value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
+          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+        </select>
+      </label>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures} unread event notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
@@ -543,16 +542,15 @@ export function CoachConsole() {
         </div>
       </header>
       <main className={styles.content}>
-        {location.pathname === '/console' && <><IncomingFixtureInvitations compact /><DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} /></>}
+        {location.pathname === '/console' && <><IncomingFixtureInvitations /><DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} /></>}
         {location.pathname === '/console/stats' && <DashboardPage key={`stats:${activeWorkspace.id}`} onOpenRoster={() => navigate('athletes')} onOpenAthlete={(id) => navigate('athletes', id)} onOpenEvents={() => navigate('events')} onOpenEvent={(id) => navigate('events', id)} onResumeLogging={(id) => navigate('live', id)} onSummaryLoaded={updateDashboardCounts} />}
         {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} onOpenAthlete={(id, openFitness) => routerNavigate(`/console/athletes/${id}${openFitness ? '?fitness=1' : ''}`)} />}
         {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}${location.search}`} initialAthleteId={location.pathname.split('/').pop()} initialFitnessOpen={new URLSearchParams(location.search).get('fitness') === '1'} onActiveCountChange={setRosterCount} onBackToRoster={() => routerNavigate('/console/athletes')} />}
         {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
-        {location.pathname === '/console/events' && <EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} />}
+        {location.pathname === '/console/events' && <><IncomingFixtureInvitations /><EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} /></>}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
-          {location.pathname === '/console/fixtures' && <><IncomingFixtureInvitations /><FixturesPage key={`fixtures:${activeWorkspace.id}`} /></>}
-        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} onOpenEvent={(id) => navigate('live', id)} />}
-        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} onBackToEventList={() => routerNavigate('/console/live')} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
         {location.pathname === '/console/account' && <AuthPage />}
       </main>
     </div>

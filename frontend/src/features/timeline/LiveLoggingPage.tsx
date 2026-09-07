@@ -558,7 +558,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                   <div key={athleteId} className={styles.athleteRow}>
                     <div className={styles.athleteInfo}>
                       <b>{p.athlete.name}</b>
-                      <small>{p.athlete.squadNames?.join(', ') || 'Sprint'} · RSVP: {p.rsvpStatus}</small>
+                       <small>{p.participantWorkspaceName ?? (p.athlete.squadNames?.join(', ') || 'Sprint')} · RSVP: {p.rsvpStatus}</small>
                     </div>
 
                     <div className={styles.controlsGroup}>
