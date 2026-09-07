@@ -286,10 +286,11 @@ async function lockOwnedEntry(
           (e.workspace_id = $3 AND a.workspace_id = $3)
            OR ($4::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
-            JOIN event_participants ep ON ep.event_id = fw.event_id
-              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
-            WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
-              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
           ))
         )
       FOR UPDATE OF e, a, te`,
@@ -314,10 +315,11 @@ export async function listTimelineEntries(
   const fixtureCondition = allowFixtureAccess
     ? `OR ($3::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
-            JOIN event_participants ep ON ep.event_id = fw.event_id
-              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
-            WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
-              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $2
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
           ))`
     : '';
   const result = await executor.query<TimelineEntryRow>(
@@ -355,10 +357,11 @@ export async function createTimelineEntry(
           (e.workspace_id = $3 AND a.workspace_id = $3)
            OR ($4::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
-            JOIN event_participants ep ON ep.event_id = fw.event_id
-              AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
-            WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
-              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
           ))
         )
         FOR UPDATE OF e, a`,

@@ -75,7 +75,8 @@ describe('ownership checks', () => {
     const sql = query.mock.calls[0]?.[0] as string;
     expect(sql).toMatch(/e\.workspace_id = \$3/);
     expect(sql).toMatch(/a\.workspace_id = \$3/);
-    expect(sql).toMatch(/ep\.participant_workspace_id = fw\.workspace_id/);
+    expect(sql).toContain("fw.role = 'host'");
+    expect(sql).not.toMatch(/ep\.participant_workspace_id = fw\.workspace_id/);
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, ATHLETE_ID, USER_ID]);
   });
 
@@ -90,7 +91,8 @@ describe('ownership checks', () => {
     expect(sql).toMatch(/te\.event_id = \$2/);
     expect(sql).toMatch(/e\.workspace_id = \$3/);
     expect(sql).toMatch(/a\.workspace_id = \$3/);
-    expect(sql).toMatch(/ep\.participant_workspace_id = fw\.workspace_id/);
+    expect(sql).toContain("fw.role = 'host'");
+    expect(sql).not.toMatch(/ep\.participant_workspace_id = fw\.workspace_id/);
     expect(sql).not.toContain('recorded_by');
     expect(query).toHaveBeenCalledWith(expect.any(String), [ENTRY_ID, EVENT_ID, USER_ID]);
   });
