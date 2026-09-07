@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueueStatusBadge } from './QueueStatusBadge';
 import * as actionQueue from '../../offline/actionQueue';
 

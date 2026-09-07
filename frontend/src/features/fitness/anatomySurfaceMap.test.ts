@@ -9,6 +9,7 @@ import {
   updateInjuryAttributes,
   type AnatomyMap,
 } from './anatomySurfaceMap';
+import type { InjuryRegion, InjuryArea } from '../../types';
 
 function makeValidMap(overrides: Partial<AnatomyMap> = {}): AnatomyMap {
   return {
@@ -53,8 +54,8 @@ describe('resolveInjuryRegionIds', () => {
   });
 
   it('returns empty array for unmapped regions or areas', () => {
-    expect(resolveInjuryRegionIds(map, { region: 'Unknown', area: 'X', side: 'Left', severity: 'Minor' })).toEqual([]);
-    expect(resolveInjuryRegionIds(map, { region: 'Arm', area: 'Unknown Area', side: 'Left', severity: 'Minor' })).toEqual([]);
+    expect(resolveInjuryRegionIds(map, { region: 'Unknown' as InjuryRegion, area: 'X' as InjuryArea, side: 'Left', severity: 'Minor' })).toEqual([]);
+    expect(resolveInjuryRegionIds(map, { region: 'Arm', area: 'Unknown Area' as InjuryArea, side: 'Left', severity: 'Minor' })).toEqual([]);
   });
 });
 

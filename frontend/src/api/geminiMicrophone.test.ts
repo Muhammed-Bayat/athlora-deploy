@@ -262,7 +262,7 @@ describe('GeminiMicrophone', () => {
       await mic.start(vi.fn());
       await mic.stop();
 
-      const track = mockStream.getTracks()[0] as ReturnType<typeof createMockTrack>;
+      const track = mockStream.getTracks()[0] as unknown as ReturnType<typeof createMockTrack>;
       expect(track.stop).toHaveBeenCalled();
     });
 
