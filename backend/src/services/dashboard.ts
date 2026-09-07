@@ -154,42 +154,39 @@ export async function getDashboardSummary(
               e.status AS event_status,
               (SELECT COUNT(*)
                FROM event_participants ep
-               JOIN athletes a ON a.id = ep.athlete_id
-                WHERE ep.event_id = e.id AND a.workspace_id = $1) AS participant_count,
-              (SELECT COUNT(DISTINCT te.athlete_id)
-               FROM event_participants ep
-               JOIN athletes a ON a.id = ep.athlete_id
-               JOIN timeline_entries te
-                 ON te.event_id = ep.event_id AND te.athlete_id = ep.athlete_id
-               WHERE ep.event_id = e.id
-                 AND te.deleted_at IS NULL
-                 AND te.discipline = $2
-                  AND a.workspace_id = $1) AS athletes_with_entries_count,
-              (SELECT COUNT(*)
-               FROM event_participants ep
-               JOIN athletes a ON a.id = ep.athlete_id
-               JOIN results r
-                 ON r.event_id = ep.event_id AND r.athlete_id = ep.athlete_id
-               WHERE ep.event_id = e.id
-                 AND r.discipline = $2
-                  AND a.workspace_id = $1
-                 AND CASE
+                WHERE ep.event_id = e.id) AS participant_count,
+               (SELECT COUNT(DISTINCT te.athlete_id)
+                FROM event_participants ep
+                JOIN timeline_entries te
+                  ON te.event_id = ep.event_id AND te.athlete_id = ep.athlete_id
+                WHERE ep.event_id = e.id
+                  AND te.deleted_at IS NULL
+                  AND te.discipline = $2) AS athletes_with_entries_count,
+               (SELECT COUNT(*)
+                FROM event_participants ep
+                JOIN results r
+                  ON r.event_id = ep.event_id AND r.athlete_id = ep.athlete_id
+                WHERE ep.event_id = e.id
+                  AND r.discipline = $2
+                  AND CASE
                        WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                        WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                        ELSE r.outcome
                      END <> 'no_result') AS resolved_results_count,
-              (SELECT COUNT(*)
-               FROM event_participants ep
-               JOIN athletes a ON a.id = ep.athlete_id
-               JOIN timeline_entries te
-                 ON te.event_id = ep.event_id AND te.athlete_id = ep.athlete_id
-               WHERE ep.event_id = e.id
-                 AND te.deleted_at IS NULL
-                 AND te.discipline = $2
-                  AND a.workspace_id = $1) AS entry_count
-       FROM events e
-        WHERE e.workspace_id = $1
-         AND e.status = 'in_progress'
+               (SELECT COUNT(*)
+                FROM event_participants ep
+                JOIN timeline_entries te
+                  ON te.event_id = ep.event_id AND te.athlete_id = ep.athlete_id
+                WHERE ep.event_id = e.id
+                  AND te.deleted_at IS NULL
+                  AND te.discipline = $2) AS entry_count
+        FROM events e
+         WHERE (e.workspace_id = $1 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
+          AND e.status = 'in_progress'
          AND e.discipline = $2
        ORDER BY e.date ASC,
                 e.time ASC NULLS LAST,
@@ -206,17 +203,14 @@ export async function getDashboardSummary(
                 a.name AS athlete_name,
                  COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
                 a.archived_at AS athlete_archived_at
-         FROM timeline_entries te
-         JOIN events e ON e.id = te.event_id
-         JOIN athletes a ON a.id = te.athlete_id
-         WHERE te.event_id = $1
-            AND e.workspace_id = $2
-            AND a.workspace_id = $2
-           AND te.deleted_at IS NULL
-           AND te.discipline = $3
+          FROM timeline_entries te
+          JOIN athletes a ON a.id = te.athlete_id
+          WHERE te.event_id = $1
+            AND te.deleted_at IS NULL
+            AND te.discipline = $3
          ORDER BY te.created_at DESC, te.id DESC
          LIMIT $4`,
-         [activeBase.event.id, workspaceId, DISCIPLINE_100M, LATEST_ENTRIES_LIMIT],
+          [activeBase.event.id, DISCIPLINE_100M, LATEST_ENTRIES_LIMIT],
       )
       : { rows: [] as DashboardTimelineEntryRow[] };
 
