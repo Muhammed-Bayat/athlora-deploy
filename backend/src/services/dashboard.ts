@@ -205,11 +205,11 @@ export async function getDashboardSummary(
                 a.archived_at AS athlete_archived_at
           FROM timeline_entries te
           JOIN athletes a ON a.id = te.athlete_id
-          WHERE te.event_id = $1
-            AND te.deleted_at IS NULL
-            AND te.discipline = $3
-         ORDER BY te.created_at DESC, te.id DESC
-         LIMIT $4`,
+           WHERE te.event_id = $1
+             AND te.deleted_at IS NULL
+             AND te.discipline = $2
+          ORDER BY te.created_at DESC, te.id DESC
+          LIMIT $3`,
           [activeBase.event.id, DISCIPLINE_100M, LATEST_ENTRIES_LIMIT],
       )
       : { rows: [] as DashboardTimelineEntryRow[] };
