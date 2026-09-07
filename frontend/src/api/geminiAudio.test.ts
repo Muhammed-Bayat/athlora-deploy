@@ -4,6 +4,7 @@ function createMockAudioContext(state: AudioContextState = 'running') {
   const sources: Array<{
     buffer: unknown;
     connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     onended: (() => void) | null;

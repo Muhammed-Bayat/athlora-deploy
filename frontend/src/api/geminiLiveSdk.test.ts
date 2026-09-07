@@ -9,6 +9,10 @@ const mockSession = {
 
 let capturedCallbacks: Record<string, unknown> = {};
 
+function fireCallback(name: string, msg: Record<string, unknown>) {
+  (capturedCallbacks[name] as (msg: Record<string, unknown>) => void)(msg);
+}
+
 const liveConnect = vi.fn().mockImplementation(async (config: Record<string, unknown>) => {
   capturedCallbacks = (config.callbacks as Record<string, unknown>) ?? {};
   return mockSession;
@@ -137,8 +141,7 @@ describe('AthloraGeminiSession', () => {
       await expect(session.sendText('second')).rejects.toThrow('Gemini is already responding');
 
       // Resolve the first turn so tests clean up
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({ serverContent: { turnComplete: true } });
+      fireCallback('onmessage',{ serverContent: { turnComplete: true } });
       await first;
     });
 
@@ -153,8 +156,7 @@ describe('AthloraGeminiSession', () => {
         turnComplete: true,
       });
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({ serverContent: { outputTranscription: { text: 'Sure' }, turnComplete: true } });
+      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'Sure' }, turnComplete: true } });
 
       expect(await responsePromise).toBe('Sure');
     });
@@ -164,8 +166,7 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       const promise = session.sendText('hi');
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({ serverContent: { turnComplete: true } });
+      fireCallback('onmessage',{ serverContent: { turnComplete: true } });
 
       expect(await promise).toBe('Gemini completed the request.');
     });
@@ -229,8 +230,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onToolCall });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete', args: { name: 'Bob' } }] },
       });
 
@@ -247,8 +247,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onSleepRequested });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         toolCall: { functionCalls: [{ id: 'c1', name: 'sleep_assistant' }] },
       });
 
@@ -263,8 +262,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onToolCall });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete' }] },
       });
 
@@ -277,8 +275,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession();
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete' }] },
       });
 
@@ -294,8 +291,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onAudio, onTranscript, onTurnStart });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         serverContent: {
           modelTurn: { parts: [{ inlineData: { data: 'audio1', mimeType: 'audio/pcm' } }] },
           outputTranscription: { text: 'Hello' },
@@ -312,8 +308,7 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onAudio });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         serverContent: {
           modelTurn: { parts: [{ inlineData: { data: 'text', mimeType: 'text/plain' } }] },
         },
@@ -328,8 +323,7 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       const promise = session.sendText('hi');
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         serverContent: { outputTranscription: { text: 'Sure' }, turnComplete: true },
       });
 
@@ -343,13 +337,12 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       const promise = session.sendText('hi');
-      const callbacks = capturedCallbacks;
 
       // Start a turn, then interrupt
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         serverContent: { outputTranscription: { text: 'Partial' } },
       });
-      callbacks.onmessage({
+      fireCallback('onmessage',{
         serverContent: { interrupted: true },
       });
 
@@ -362,8 +355,7 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       const promise = session.sendText('hi');
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({ serverContent: { interrupted: true } });
+      fireCallback('onmessage',{ serverContent: { interrupted: true } });
 
       expect(await promise).toBe('Gemini response interrupted.');
     });
@@ -373,9 +365,8 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onTurnStart });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({ serverContent: { outputTranscription: { text: 'a' } } });
-      callbacks.onmessage({ serverContent: { outputTranscription: { text: 'b' } } });
+      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'a' } } });
+      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'b' } } });
 
       expect(onTurnStart).toHaveBeenCalledOnce();
     });
@@ -384,9 +375,8 @@ describe('AthloraGeminiSession', () => {
       const session = createSession();
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-      callbacks.onmessage({});
-      callbacks.onmessage({ somethingElse: true });
+      fireCallback('onmessage',{});
+      fireCallback('onmessage',{ somethingElse: true });
       // No throw
     });
 
@@ -395,12 +385,10 @@ describe('AthloraGeminiSession', () => {
       const session = createSession({ onTurnStart });
       await session.connect();
 
-      const callbacks = capturedCallbacks;
-
       // First turn
-      callbacks.onmessage({ serverContent: { outputTranscription: { text: 'a' }, turnComplete: true } });
+      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'a' }, turnComplete: true } });
       // Second turn should fire onTurnStart again
-      callbacks.onmessage({ serverContent: { outputTranscription: { text: 'b' } } });
+      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'b' } } });
 
       expect(onTurnStart).toHaveBeenCalledTimes(2);
     });
