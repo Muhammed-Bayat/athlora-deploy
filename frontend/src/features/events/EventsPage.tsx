@@ -601,9 +601,10 @@ export function ParticipantManager({
         <ul className={styles.participantList}>
           {participants.filter((participant) => rsvpFilter === 'all' || participant.rsvpStatus === rsvpFilter).map((participant) => {
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
+            const ownsParticipant = participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id;
             return <li key={participant.athleteId}>
-              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
-                {isCoach && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
+              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.participantWorkspaceName && <span> · {participant.participantWorkspaceName}</span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
+                {isCoach && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
                 <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },

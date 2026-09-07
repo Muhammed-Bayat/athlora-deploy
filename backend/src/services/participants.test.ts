@@ -61,7 +61,7 @@ describe('event participant service', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('JOIN events e');
     expect(sql).toContain('JOIN athletes a');
-    expect(sql).toContain('ep.participant_workspace_id = $2');
+    expect(sql).not.toContain('ep.participant_workspace_id = $2');
     expect(sql).toContain('ORDER BY lower(a.name) ASC, a.id ASC');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
   });

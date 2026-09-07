@@ -111,8 +111,8 @@ describe('shared fixture results', () => {
   });
 });
 
-describe('fixture roster privacy', () => {
-  it('returns only the host workspace participants while retaining fixture team status', async () => {
+describe('fixture rosters', () => {
+  it('returns participants for every participating workspace grouped by team', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
       .mockResolvedValueOnce({ rows: [
@@ -122,15 +122,18 @@ describe('fixture roster privacy', () => {
       .mockResolvedValueOnce({ rows: [{
         event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', participant_workspace_id: HOST_WORKSPACE_ID,
         athlete_name: 'Host Runner', athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
+      }, {
+        event_id: EVENT_ID, athlete_id: '66666666-6666-4666-8666-666666666666', rsvp_status: 'pending', participant_workspace_id: WORKSPACE_ID,
+        athlete_name: 'Guest Runner', athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
       }] });
 
     const rosters = await listHostedFixtureRosters(HOST_WORKSPACE_ID, EVENT_ID);
 
     expect(rosters).toEqual([
       expect.objectContaining({ team: expect.objectContaining({ workspaceId: HOST_WORKSPACE_ID }), participants: [expect.objectContaining({ athleteId: ATHLETE_ID })] }),
-      expect.objectContaining({ team: expect.objectContaining({ workspaceId: WORKSPACE_ID }), participants: [] }),
+      expect.objectContaining({ team: expect.objectContaining({ workspaceId: WORKSPACE_ID }), participants: [expect.objectContaining({ athlete: expect.objectContaining({ name: 'Guest Runner' }) })] }),
     ]);
-    expect(query).toHaveBeenLastCalledWith(expect.stringContaining('ep.participant_workspace_id = $2'), [EVENT_ID, HOST_WORKSPACE_ID]);
+    expect(query).toHaveBeenLastCalledWith(expect.not.stringContaining('ep.participant_workspace_id = $2'), [EVENT_ID]);
   });
 });
 

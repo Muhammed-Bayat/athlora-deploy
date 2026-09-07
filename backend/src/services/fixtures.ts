@@ -579,9 +579,9 @@ export async function listHostedFixtureRosters(workspaceId: string, eventId: unk
   const rows = await getPool().query<EventParticipantSummaryRow & { participant_workspace_id: string }>(
     `SELECT ${PARTICIPANT_COLUMNS}, ep.participant_workspace_id
       FROM event_participants ep JOIN athletes a ON a.id = ep.athlete_id
-      WHERE ep.event_id = $1 AND ep.participant_workspace_id = $2
+      WHERE ep.event_id = $1
       ORDER BY lower(a.name), a.id`,
-    [ownedEventId, workspaceId],
+    [ownedEventId],
   );
   const byWorkspace = new Map<string, EventParticipantSummary[]>();
   for (const row of rows.rows) {

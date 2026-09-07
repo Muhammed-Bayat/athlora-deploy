@@ -76,10 +76,9 @@ export async function listEventParticipants(
       WHERE ep.event_id = $1
           AND (e.workspace_id = $2 OR EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
-            WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
-              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-          ))
-          AND ep.participant_workspace_id = $2
+           WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+           ))
      ORDER BY lower(a.name) ASC, a.id ASC`,
     [ownedEventId, workspaceId],
   );

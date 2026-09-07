@@ -220,6 +220,8 @@ describe('getDashboardSummary', () => {
       /ORDER BY e\.date ASC,[\s\S]*e\.time ASC NULLS LAST,[\s\S]*e\.created_at ASC,[\s\S]*e\.id ASC/,
     );
     expect(activeCall?.[0]).toContain('FROM event_participants ep');
+    expect(activeCall?.[0]).toContain("fw.role = 'guest'");
+    expect(activeCall?.[0]).toContain('fw.accepted_revision = e.fixture_revision');
     expect(activeCall?.[0]).toContain('AND e.discipline = $2');
     expect(activeCall?.[0]).toContain('AND te.discipline = $2');
     const upcomingCall = query.mock.calls.find(([sql]) =>
