@@ -6,7 +6,7 @@ const mockOverrideResultRecord = vi.fn();
 vi.mock('../controllers/results.js', () => ({ overrideResultRecord: mockOverrideResultRecord }));
 
 import { getPool } from '../db/client.js';
-import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertHostWorkspace, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult } from './fixtures.js';
+import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant } from './fixtures.js';
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const HOST_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -17,7 +17,10 @@ const query = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getPool).mockReturnValue({ query } as unknown as ReturnType<typeof getPool>);
+  vi.mocked(getPool).mockReturnValue({
+    query,
+    connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+  } as unknown as ReturnType<typeof getPool>);
 });
 
 describe('fixtures', () => {
@@ -105,6 +108,57 @@ describe('shared fixture results', () => {
 
     await expect(listHostedFixtureResults(WORKSPACE_ID, EVENT_ID))
       .rejects.toMatchObject({ code: 'FIXTURE_HOST_ONLY' });
+  });
+});
+
+describe('fixture roster privacy', () => {
+  it('returns only the host workspace participants while retaining fixture team status', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [
+        { workspace_id: HOST_WORKSPACE_ID, workspace_name: 'Host Team', status: 'accepted', accepted_revision: 1, withdrawn_at: null },
+        { workspace_id: WORKSPACE_ID, workspace_name: 'Guest Team', status: 'accepted', accepted_revision: 1, withdrawn_at: null },
+      ] })
+      .mockResolvedValueOnce({ rows: [{
+        event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', participant_workspace_id: HOST_WORKSPACE_ID,
+        athlete_name: 'Host Runner', athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
+      }] });
+
+    const rosters = await listHostedFixtureRosters(HOST_WORKSPACE_ID, EVENT_ID);
+
+    expect(rosters).toEqual([
+      expect.objectContaining({ team: expect.objectContaining({ workspaceId: HOST_WORKSPACE_ID }), participants: [expect.objectContaining({ athleteId: ATHLETE_ID })] }),
+      expect.objectContaining({ team: expect.objectContaining({ workspaceId: WORKSPACE_ID }), participants: [] }),
+    ]);
+    expect(query).toHaveBeenLastCalledWith(expect.stringContaining('ep.participant_workspace_id = $2'), [EVENT_ID, HOST_WORKSPACE_ID]);
+  });
+});
+
+describe('updateGuestFixtureParticipant', () => {
+  it('updates attendance through the guest roster, records its audit entry, and returns the participant', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ status: 'scheduled', fixture_revision: 1, accepted_revision: 1, fixture_status: 'accepted' }] })
+      .mockResolvedValueOnce({ rows: [{ rsvp_status: 'pending' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{
+        event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', athlete_name: 'Guest Runner',
+        athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
+      }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(updateGuestFixtureParticipant(WORKSPACE_ID, ACTOR_ID, EVENT_ID, ATHLETE_ID, 'yes'))
+      .resolves.toMatchObject({ athleteId: ATHLETE_ID, rsvpStatus: 'yes', athlete: { name: 'Guest Runner' } });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO event_participant_rsvp_audit'),
+      [EVENT_ID, ATHLETE_ID, 'pending', 'yes', ACTOR_ID],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('rsvp_updated_at'),
+      ['yes', EVENT_ID, ATHLETE_ID, ACTOR_ID, WORKSPACE_ID],
+    );
   });
 });
 
