@@ -1,4 +1,4 @@
-import type { ApiList, PublicLoggerLink, PublicLoggerSnapshot, PublicTimelineEntry, TimelineEntryCreatePayload } from '../types';
+import type { ApiList, PublicLoggerLink, PublicLoggerSnapshot, PublicTimelineEntry, TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../types';
 import { ApiError, request } from './client';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -53,4 +53,17 @@ export async function createPublicLoggerEntry(sessionToken: string, eventId: str
     method: 'POST', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload),
   });
   return response.data;
+}
+
+export async function updatePublicLoggerEntry(sessionToken: string, eventId: string, entryId: string, payload: TimelineEntryPatchPayload): Promise<PublicTimelineEntry> {
+  const response = await publicRequest<{ data: PublicTimelineEntry }>(`/events/${eventId}/entries/${entryId}`, {
+    method: 'PATCH', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload),
+  });
+  return response.data;
+}
+
+export function removePublicLoggerEntry(sessionToken: string, eventId: string, entryId: string, payload: TimelineEntryDeletePayload): Promise<void> {
+  return publicRequest<void>(`/events/${eventId}/entries/${entryId}`, {
+    method: 'DELETE', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload),
+  });
 }

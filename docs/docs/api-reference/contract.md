@@ -116,7 +116,7 @@ Workspace membership is server-derived and is the authorization boundary: athlet
 
 Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
-Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, timeline entries, result corrections, public logger links, and fixture logging/invitation workflows. Coaches exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, and withdraw a fixture team. Timeline edits and undo remain scoped to the active workspace and event, but are not restricted to the original recorder. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
+Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, and withdraw a fixture team. Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -189,12 +189,11 @@ Coaches create shareable, token-authenticated links that let external guests log
 
 | Method & path | Purpose |
 |---|---|
-| `POST /public/logger/sessions` | Start a public logging session; body `{ token, name, club? }` |
-| `POST /public/logger/sessions/event/:eventId` | Start session by event ID (token in body) |
+| `POST /public/logger/sessions` | Start a public logging session; body `{ linkToken, name, club }` |
 | `GET /public/logger/events/:eventId` | Get a read-only event snapshot (participants, timeline, standings) |
 | `POST /public/logger/events/:eventId/entries` | Create a timeline entry through the public logger |
 
-The public endpoints accept a bearer token derived from the public logger link. Session state is tracked server-side and returned to the guest on reconnection.
+The public session token is sent in the `X-Public-Logger-Session` header. Session state is tracked server-side and returned to the guest on reconnection.
 
 ### 3.6 Event helpers and offline designation
 
