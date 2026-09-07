@@ -182,7 +182,7 @@ export function EventResultsView({
 
               <div className={styles.identity}>
                 <strong>{row.athleteName}</strong>
-                 <span>{row.athlete.squadNames?.join(', ') || 'No squad assigned'}</span>
+                  <span>{participantByAthlete.get(row.athleteId)?.participantWorkspaceName ?? (row.athlete.squadNames?.join(', ') || 'No team assigned')}</span>
                 <div className={styles.identityBadges}>
                   {row.athlete.archivedAt && <Badge variant="neutral">Archived</Badge>}
                   {!row.isAssigned && <Badge variant="neutral">Historical result</Badge>}

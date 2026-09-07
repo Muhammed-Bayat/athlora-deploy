@@ -193,6 +193,8 @@ export interface EventParticipantAthleteSummary {
 }
 
 export interface EventParticipantSummary extends EventParticipant {
+  participantWorkspaceId?: string | null;
+  participantWorkspaceName?: string | null;
   athlete: EventParticipantAthleteSummary;
   statusReviewRequired: boolean;
 }
@@ -312,7 +314,7 @@ export interface PublicLoggerLink {
 
 export interface PublicLoggerSnapshot {
   event: Pick<AthleticsEvent, 'id' | 'title' | 'status'>;
-  participants: Array<{ athleteId: string; name: string }>;
+  participants: Array<{ athleteId: string; name: string; teamName?: string | null }>;
   timeline: PublicTimelineEntry[];
 }
 

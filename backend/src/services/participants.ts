@@ -16,6 +16,8 @@ import type {
 const PARTICIPANT_COLUMNS = `ep.event_id,
        ep.athlete_id,
        ep.rsvp_status,
+       ep.participant_workspace_id,
+       w.name AS participant_workspace_name,
        a.name AS athlete_name,
        COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
         a.archived_at AS athlete_archived_at,
@@ -46,7 +48,8 @@ async function getParticipant(
     `SELECT ${PARTICIPANT_COLUMNS}
      FROM event_participants ep
      JOIN events e ON e.id = ep.event_id
-     JOIN athletes a ON a.id = ep.athlete_id
+      JOIN athletes a ON a.id = ep.athlete_id
+      LEFT JOIN workspaces w ON w.id = ep.participant_workspace_id
      WHERE ep.event_id = $1
        AND ep.athlete_id = $2
         AND e.workspace_id = $3
@@ -68,10 +71,14 @@ export async function listEventParticipants(
     `SELECT ${PARTICIPANT_COLUMNS}
      FROM event_participants ep
      JOIN events e ON e.id = ep.event_id
-     JOIN athletes a ON a.id = ep.athlete_id
+      JOIN athletes a ON a.id = ep.athlete_id
+      LEFT JOIN workspaces w ON w.id = ep.participant_workspace_id
      WHERE ep.event_id = $1
-        AND e.workspace_id = $2
-        AND a.workspace_id = $2
+         AND (e.workspace_id = $2 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
      ORDER BY lower(a.name) ASC, a.id ASC`,
     [ownedEventId, workspaceId],
   );

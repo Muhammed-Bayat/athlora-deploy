@@ -55,7 +55,11 @@ export async function listEvents(
     throw notFound();
   }
 
-  const conditions = ['workspace_id = $1'];
+  const conditions = [`(workspace_id = $1 OR EXISTS (
+    SELECT 1 FROM event_fixture_workspaces fw
+    WHERE fw.event_id = events.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+      AND fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision
+  ))`];
   const parameters: string[] = [workspaceId];
   if (query.type !== undefined) {
     parameters.push(query.type);
@@ -94,7 +98,11 @@ export async function getEvent(
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
      FROM events
-      WHERE id = $1 AND workspace_id = $2`,
+       WHERE id = $1 AND workspace_id = $2 OR (id = $1 AND EXISTS (
+         SELECT 1 FROM event_fixture_workspaces fw
+         WHERE fw.event_id = events.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+           AND fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision
+       ))`,
     [eventId, workspaceId],
   );
   const row = result.rows[0];

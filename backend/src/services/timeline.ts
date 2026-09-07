@@ -271,7 +271,7 @@ async function lockOwnedEntry(
   workspaceId: string,
   eventId: string,
   entryId: string,
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<{ entry: TimelineEntry; eventType: EventType; eventStatus: EventStatus }> {
   const result = await client.query<LockedEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS},
@@ -284,7 +284,7 @@ async function lockOwnedEntry(
         AND te.event_id = $2
         AND (
           (e.workspace_id = $3 AND a.workspace_id = $3)
-          OR ($4::boolean AND a.workspace_id = $3 AND EXISTS (
+           OR ($4::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
             JOIN event_participants ep ON ep.event_id = fw.event_id
               AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
@@ -308,11 +308,11 @@ export async function listTimelineEntries(
   workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry[]> {
   const [ownedEventId] = scopedIds(workspaceId, eventId);
   const fixtureCondition = allowFixtureAccess
-    ? `OR ($3::boolean AND a.workspace_id = $2 AND EXISTS (
+    ? `OR ($3::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
             JOIN event_participants ep ON ep.event_id = fw.event_id
               AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
@@ -343,7 +343,7 @@ export async function createTimelineEntry(
   payload: TimelineEntryCreatePayload,
   runTransaction: TransactionRunner = withTransaction,
   workspaceId = userId,
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry> {
   const [ownedEventId] = scopedIds(workspaceId, eventId, payload.athleteId);
   return runTransaction(async (client) => {
@@ -353,7 +353,7 @@ export async function createTimelineEntry(
         JOIN athletes a ON a.id = $2
         WHERE e.id = $1 AND (
           (e.workspace_id = $3 AND a.workspace_id = $3)
-          OR ($4::boolean AND a.workspace_id = $3 AND EXISTS (
+           OR ($4::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
             JOIN event_participants ep ON ep.event_id = fw.event_id
               AND ep.athlete_id = a.id AND ep.participant_workspace_id = fw.workspace_id
@@ -399,7 +399,7 @@ export async function updateTimelineEntry(
   entryId: unknown,
   patch: TimelineEntryPatchPayload,
   runTransaction: TransactionRunner = withTransaction,
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry> {
   const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   return runTransaction(async (client) => {
@@ -456,7 +456,7 @@ export async function removeTimelineEntry(
   entryId: unknown,
   payload: TimelineEntryDeletePayload,
   runTransaction: TransactionRunner = withTransaction,
-  allowFixtureAccess = false,
+  allowFixtureAccess = true,
 ): Promise<void> {
   const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   await runTransaction(async (client) => {
