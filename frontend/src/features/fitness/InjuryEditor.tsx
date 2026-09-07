@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '../../components';
+import { Button, DatePicker } from '../../components';
 import {
   INJURY_REGIONS,
   SEVERITY_LABELS,
@@ -161,14 +161,14 @@ export function InjuryEditor({ onPreview, onSave }: InjuryEditorProps) {
     {area && !usesCenterSide(region) && <InjurySelect label="3. Side" placeholder="Select a side..." value={side} options={sideOptions} onChange={(value) => { const next = value as InjurySide; setSide(next); setSeverity(''); updatePreview({ side: next, severity: '' }); }} />}
     {side && <InjurySelect label="4. Severity" placeholder="Select severity..." value={severity} options={severityOptions} onChange={(value) => { const next = value as InjurySeverity; setSeverity(next); updatePreview({ severity: next }); }} />}
     {severity && <>
-      <label className={styles.field}>
+      <div className={styles.field}>
         <span>Date injured <em>Optional</em></span>
-        <input type="date" value={occurrenceDate} onChange={(e) => { setOccurrenceDate(e.target.value); updatePreview({ occurrenceDate: e.target.value }); }} disabled={saving} />
-      </label>
-      <label className={styles.field}>
+        <DatePicker aria-label="Date injured" value={occurrenceDate} onChange={(value) => { setOccurrenceDate(value); updatePreview({ occurrenceDate: value }); }} disabled={saving} />
+      </div>
+      <div className={styles.field}>
         <span>Expected return date <em>Optional</em></span>
-        <input type="date" value={expectedReturnDate} onChange={(e) => { setExpectedReturnDate(e.target.value); updatePreview({ expectedReturnDate: e.target.value }); }} disabled={saving} />
-      </label>
+        <DatePicker aria-label="Expected return date" value={expectedReturnDate} onChange={(value) => { setExpectedReturnDate(value); updatePreview({ expectedReturnDate: value }); }} disabled={saving} />
+      </div>
       <label className={styles.field}>
         <span>Coach notes <em>Optional</em></span>
         <textarea value={notes} onChange={(event) => { setNotes(event.target.value); updatePreview({ notes: event.target.value }); }} placeholder="Injury details, athlete feedback, training limits, physio guidance, recovery progress..." disabled={saving} />

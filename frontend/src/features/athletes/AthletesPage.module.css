@@ -73,10 +73,12 @@
 }
 
 .search:focus-within {
-  outline: 3px solid var(--console-focus);
-  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--console-focus) 58%, var(--console-control-border));
+}
+
+.search:has(input:focus-visible) {
   border-color: var(--console-focus);
-  box-shadow: 0 0 0 4px var(--console-focus-ring);
+  box-shadow: 0 0 0 2px var(--console-focus-ring);
 }
 
 .aiTrigger { position: relative; isolation: isolate; display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; padding: 3px; overflow: hidden; border: 0; border-radius: 50%; background: conic-gradient(from 225deg, #2fe4ff, #2599ff 25%, #8074ff 48%, #e965f5 71%, #ff9cbb 84%, #2fe4ff); box-shadow: 0 0 0 1px rgba(205, 246, 255, .76), 0 0 12px rgba(47, 228, 255, .6), 0 0 22px rgba(195, 105, 255, .48); cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s var(--ease), filter .2s var(--ease); }

@@ -12,6 +12,9 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   variant?: 'filter' | 'field';
   icon?: 'squad' | 'status';
   dotColors?: Record<string, string>;
+  compact?: boolean;
+  menuPlacement?: 'down' | 'up';
+  placeholder?: string;
 }
 
 export function Select({
@@ -22,6 +25,9 @@ export function Select({
   variant = 'filter',
   icon,
   dotColors,
+  compact = false,
+  menuPlacement = 'down',
+  placeholder,
   disabled,
   className,
   'aria-label': ariaLabel,
@@ -37,8 +43,8 @@ export function Select({
   const [open, setOpen] = useState(false);
 
   const selectedLabel = useMemo(
-    () => options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '',
-    [options, value],
+    () => options.find((option) => option.value === value)?.label ?? placeholder ?? options[0]?.label ?? '',
+    [options, placeholder, value],
   );
 
   useEffect(() => {
@@ -118,7 +124,7 @@ export function Select({
   };
 
   return (
-    <div ref={wrapperRef} className={[styles.filter, className, open ? styles.filterOpen : '', disabled ? styles.disabled : ''].filter(Boolean).join(' ')}>
+    <div ref={wrapperRef} className={[styles.filter, compact ? styles.compact : '', className, open ? styles.filterOpen : '', disabled ? styles.disabled : ''].filter(Boolean).join(' ')}>
       <select
         id={selectId}
         ref={selectRef}
@@ -126,6 +132,7 @@ export function Select({
         tabIndex={-1}
         value={value ?? ''}
         onChange={onChange}
+        disabled={disabled}
         {...props}
         aria-hidden="true"
       >
@@ -164,10 +171,10 @@ export function Select({
       >
         <span className={styles.triggerLabel}>{selectedLabel}</span>
       </button>
-      <div
+      {open && <div
         id={menuId}
         ref={menuRef}
-        className={[styles.menu, open ? styles.menuOpen : ''].filter(Boolean).join(' ')}
+        className={[styles.menu, menuPlacement === 'up' ? styles.menuUp : '', styles.menuOpen].filter(Boolean).join(' ')}
         role="listbox"
         aria-labelledby={`${selectId}-trigger`}
         onKeyDown={handleMenuKeyDown}
@@ -194,7 +201,7 @@ export function Select({
             <span>{option.label}</span>
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

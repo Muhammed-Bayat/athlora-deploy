@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { listSquads } from '../../api/squads';
 import { ApiError } from '../../api/client';
-import { Button, Input } from '../../components';
+import { Button, DatePicker, Input, Select } from '../../components';
 import type { Athlete, AthleteMutationPayload, Squad } from '../../types';
 import { athleteErrorMessage } from './athleteError';
 import styles from './AthleteForm.module.css';
@@ -118,14 +118,14 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
 
       <div className={styles.formRow}>
         <div>
-          <label htmlFor="athlete-dob">Date of birth <span>Optional</span></label>
-          <Input id="athlete-dob" type="date" value={draft.dob} onChange={(event) => setField('dob', event.target.value)} invalid={Boolean(errors.dob)} aria-invalid={Boolean(errors.dob)} aria-describedby={errors.dob ? 'athlete-dob-error' : undefined} disabled={submitting} />
-          {errors.dob && <span id="athlete-dob-error" className={styles.fieldError}>{errors.dob}</span>}
+          <label htmlFor="athlete-gender">Gender category <span>Optional</span></label>
+          <Select id="athlete-gender" compact aria-label="Gender category" placeholder="Select gender" value={draft.gender} onChange={(event) => setField('gender', event.target.value)} aria-invalid={Boolean(errors.gender)} aria-describedby={errors.gender ? 'athlete-gender-error' : undefined} disabled={submitting} options={[{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }]} />
+          {errors.gender && <span id="athlete-gender-error" className={styles.fieldError}>{errors.gender}</span>}
         </div>
         <div>
-          <label htmlFor="athlete-gender">Gender category <span>Optional</span></label>
-          <Input id="athlete-gender" value={draft.gender} onChange={(event) => setField('gender', event.target.value)} invalid={Boolean(errors.gender)} aria-invalid={Boolean(errors.gender)} aria-describedby={errors.gender ? 'athlete-gender-error' : undefined} disabled={submitting} />
-          {errors.gender && <span id="athlete-gender-error" className={styles.fieldError}>{errors.gender}</span>}
+          <label htmlFor="athlete-dob">Date of birth <span>Optional</span></label>
+          <DatePicker id="athlete-dob" value={draft.dob} onChange={(value) => setField('dob', value)} invalid={Boolean(errors.dob)} aria-describedby={errors.dob ? 'athlete-dob-error' : undefined} aria-label="Date of birth" disabled={submitting} />
+          {errors.dob && <span id="athlete-dob-error" className={styles.fieldError}>{errors.dob}</span>}
         </div>
       </div>
 
