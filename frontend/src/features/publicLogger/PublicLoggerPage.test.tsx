@@ -26,7 +26,7 @@ describe('PublicLoggerPage', () => {
     vi.mocked(publicLoggerApi.createPublicLoggerEntry).mockResolvedValue({
       id: '44444444-4444-4444-8444-444444444444', eventId: snapshot.event.id,
       athleteId: snapshot.participants[0].athleteId, discipline: '100m', entryType: 'attempt', value: 11.42,
-      unit: 'seconds', isFoul: false, incidentType: null, noteText: null, version: 1,
+      unit: 'seconds', isFoul: false, incidentType: null, version: 1,
       createdAt: '2026-09-01T10:00:00.000Z',
     });
   });
@@ -46,8 +46,8 @@ describe('PublicLoggerPage', () => {
     expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).toContain('opaque-session-token');
     expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).not.toContain('opaque-link-token');
 
-    await user.type(screen.getByLabelText('100m time in seconds'), '11.42');
-    await user.click(screen.getByRole('button', { name: 'Record attempt' }));
+    await user.type(screen.getByLabelText('Finish time for Nia Runner'), '11.42');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(publicLoggerApi.createPublicLoggerEntry).toHaveBeenCalledWith(
       'opaque-session-token', snapshot.event.id, expect.objectContaining({ athleteId: snapshot.participants[0].athleteId, entryType: 'attempt', value: 11.42 }),
     ));
@@ -68,5 +68,35 @@ describe('PublicLoggerPage', () => {
     await user.type(screen.getByLabelText('Name'), 'Timekeeper Lee');
     await user.click(screen.getByRole('button', { name: 'Open logger' }));
     expect(publicLoggerApi.startPublicLoggerSession).toHaveBeenLastCalledWith('second-link-token', 'Timekeeper Lee', 'Independent');
+  });
+
+  it('only shows correction controls supplied for the current public session', async () => {
+    const ownEntry = {
+      id: '44444444-4444-4444-8444-444444444444', eventId: snapshot.event.id,
+      athleteId: snapshot.participants[0].athleteId, discipline: '100m' as const, entryType: 'attempt' as const,
+      value: 11.42, unit: 'seconds' as const, isFoul: false, incidentType: null, version: 1,
+      createdAt: '2026-09-01T10:00:00.000Z', canEdit: true, canUndo: true,
+    };
+    const otherEntry = { ...ownEntry, id: '55555555-5555-4555-8555-555555555555', canEdit: false, canUndo: false };
+    const sessionSnapshot = { ...snapshot, timeline: [ownEntry, otherEntry] };
+    vi.mocked(publicLoggerApi.startPublicLoggerSession).mockResolvedValue({ sessionToken: 'opaque-session-token', snapshot: sessionSnapshot });
+    vi.mocked(publicLoggerApi.getPublicLoggerSnapshot).mockResolvedValue(sessionSnapshot);
+    vi.mocked(publicLoggerApi.updatePublicLoggerEntry).mockResolvedValue(ownEntry);
+    vi.mocked(publicLoggerApi.removePublicLoggerEntry).mockResolvedValue();
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByLabelText('Name'), 'Timekeeper Sam');
+    await user.click(screen.getByRole('button', { name: 'Open logger' }));
+    await screen.findByRole('button', { name: 'Edit' });
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.clear(screen.getByLabelText('Finish time in seconds'));
+    await user.type(screen.getByLabelText('Finish time in seconds'), '11.40');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(publicLoggerApi.updatePublicLoggerEntry).toHaveBeenCalledWith('opaque-session-token', snapshot.event.id, ownEntry.id, { expectedVersion: 1, value: 11.4 }));
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(publicLoggerApi.removePublicLoggerEntry).toHaveBeenCalledWith('opaque-session-token', snapshot.event.id, ownEntry.id, { expectedVersion: 1 }));
   });
 });

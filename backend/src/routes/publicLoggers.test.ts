@@ -6,6 +6,8 @@ const service = vi.hoisted(() => ({
   createPublicLoggerSession: vi.fn(),
   publicLoggerSnapshot: vi.fn(),
   createPublicLoggerEntry: vi.fn(),
+  updatePublicLoggerEntry: vi.fn(),
+  removePublicLoggerEntry: vi.fn(),
   createPublicLoggerLink: vi.fn(),
   listPublicLoggerLinks: vi.fn(),
   revokePublicLoggerLink: vi.fn(),
@@ -30,6 +32,7 @@ describe('public logger routes', () => {
     service.createPublicLoggerEntry.mockResolvedValue({
       id: '44444444-4444-4444-8444-444444444444', eventId: EVENT_ID,
     });
+    service.updatePublicLoggerEntry.mockResolvedValue({ id: '44444444-4444-4444-8444-444444444444', eventId: EVENT_ID });
   });
 
   it('opens a public session without Auth0 and passes the unpersisted link token only to the session service', async () => {
@@ -65,5 +68,22 @@ describe('public logger routes', () => {
 
     expect(response.status).toBe(404);
     expect(service.createPublicLoggerSession).not.toHaveBeenCalled();
+  });
+
+  it('passes public-session edit and undo requests to the restricted service', async () => {
+    const entryId = '44444444-4444-4444-8444-444444444444';
+    const edited = await request(app)
+      .patch(`/api/v1/public/logger/events/${EVENT_ID}/entries/${entryId}`)
+      .set('X-Public-Logger-Session', 'opaque-session')
+      .send({ expectedVersion: 2, value: 11.4 });
+    const undone = await request(app)
+      .delete(`/api/v1/public/logger/events/${EVENT_ID}/entries/${entryId}`)
+      .set('X-Public-Logger-Session', 'opaque-session')
+      .send({ expectedVersion: 3 });
+
+    expect(edited.status).toBe(200);
+    expect(undone.status).toBe(204);
+    expect(service.updatePublicLoggerEntry).toHaveBeenCalledWith('opaque-session', EVENT_ID, entryId, { expectedVersion: 2, value: 11.4 });
+    expect(service.removePublicLoggerEntry).toHaveBeenCalledWith('opaque-session', EVENT_ID, entryId, { expectedVersion: 3 });
   });
 });

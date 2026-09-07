@@ -548,8 +548,8 @@ export function CoachConsole() {
         {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
         {location.pathname === '/console/events' && <><IncomingFixtureInvitations /><EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} /></>}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
-        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
-        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} onBackToEventList={() => routerNavigate('/console/live')} />}
         {location.pathname === '/console/account' && <AuthPage />}
       </main>
     </div>

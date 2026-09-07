@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # Public Logger Links
 
-Public logger links allow meet officials or external contributors to record finish times and incidents for an event without needing an Athlora account. The coach creates a shareable link; the official opens it, identifies themselves, and submits timeline entries through a token-authenticated session.
+Public logger links allow meet officials or external contributors to record finish times and incidents for an event without needing an Athlora account. A coach creates and manages the shareable link from the active Live Logger; the official opens it, identifies themselves, and submits timeline entries through a token-authenticated session.
 
 All paths are relative to `/api/v1`.
 
@@ -57,7 +57,7 @@ Returns all links (active and revoked) for the event, ordered by creation date.
 DELETE /events/:eventId/public-loggers/:linkId
 ```
 
-Sets the link status to `revoked`. Existing sessions remain valid until they expire.
+Sets the link status to `revoked`. Existing sessions lose access immediately.
 
 ## Public Endpoints (Unauthenticated)
 
@@ -66,9 +66,10 @@ Mounted at `/public/logger`. These routes do not require a JWT — they use sess
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/public/logger/sessions` | Start a session using a link token |
-| `POST` | `/public/logger/sessions/event/:eventId` | Start a session by event ID |
 | `GET` | `/public/logger/events/:eventId` | Get event snapshot (participants + timeline) |
 | `POST` | `/public/logger/events/:eventId/entries` | Submit a timeline entry |
+| `PATCH` | `/public/logger/events/:eventId/entries/:entryId` | Correct the caller's own public entry |
+| `DELETE` | `/public/logger/events/:eventId/entries/:entryId` | Undo the caller's own public entry |
 
 ### Start session
 
@@ -105,7 +106,7 @@ GET /public/logger/events/:eventId
 Header: X-Public-Logger-Session: <session-token>
 ```
 
-Returns the current event snapshot: event metadata, participant list, and active timeline entries. Entries omit `recordedBy`, `publicLoggerSessionId`, `deviceId`, `updatedAt`, and `deletedAt`.
+Returns the current event snapshot: event metadata, the complete event participant list (including fixture guest-club athletes), and active timeline entries. Entries omit `recordedBy`, `publicLoggerSessionId`, `deviceId`, `updatedAt`, `deletedAt`, and coach notes. Each entry includes `canEdit` and `canUndo` only when it was created by the current public session.
 
 ### Submit entry
 
@@ -116,6 +117,17 @@ Body: { athleteId, entryType, value?, unit?, incidentType? }
 ```
 
 Creates a timeline entry attributed to the public logger session. The event must be `in_progress`. The athlete must be a participant of the event. After insertion, event results are automatically recomputed.
+
+### Correct or undo an entry
+
+```
+PATCH /public/logger/events/:eventId/entries/:entryId
+DELETE /public/logger/events/:eventId/entries/:entryId
+Header: X-Public-Logger-Session: <session-token>
+Body: { expectedVersion, value? | incidentType? }
+```
+
+Public officials can correct or undo only entries attributed to their current public session. Both operations use optimistic versions and recompute event results. They cannot alter coach, assistant, or other public officials' entries. The existing `coach` role is the head-coach authority and can override any timeline entry or result through the authenticated console.
 
 **Request body:**
 
@@ -135,7 +147,8 @@ Creates a timeline entry attributed to the public logger session. The event must
 - Session tokens are also stored as SHA-256 hashes
 - Sessions are scoped to a single event and expire after the TTL
 - The event must be `in_progress` for entry submission
-- Only participants of the event can receive entries
+- All participants of the linked event, including fixture guest-club athletes, can receive entries
+- Public officials can edit and undo only their own entries; the authenticated `coach` role can override any entry
 - The public logger cannot view coach notes, athlete dates of birth, or other private data
 
 ## Database Tables

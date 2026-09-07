@@ -13,7 +13,6 @@ import type { AthleticsEvent, EventMutationPayload, EventStatus, FixtureTeamRost
 import { EventWeatherPanel } from './EventWeatherPanel';
 import { VenuePreview } from './VenuePreview';
 import { FixtureHostPanel } from './FixtureHostPanel';
-import { PublicLoggerPanel } from './PublicLoggerPanel';
 import { GuestRosterPanel } from './GuestRosterPanel';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
 import styles from './EventsPage.module.css';
@@ -143,8 +142,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
         {!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
-         {canOperate && !isGuest && <PublicLoggerPanel event={event} />}
-        <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={canOperate ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
+        <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
         {isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}
        {canManageLifecycle && <div className={styles.detailActions}><Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{event.status !== 'cancelled' && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
