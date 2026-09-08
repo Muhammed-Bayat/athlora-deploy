@@ -277,7 +277,7 @@ describe('CoachConsole dashboard navigation', () => {
     expect(message.parentElement).toHaveAttribute('title', 'Weather unavailable. Check location permissions or try again.');
   });
 
-  it('does not auto-invoke geolocation when permission is prompt', async () => {
+  it('auto-invokes geolocation when permission is prompt after auth', async () => {
     permissionsQuery.mockResolvedValue({ state: 'prompt' });
     const getCurrentPosition = vi.fn();
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
@@ -289,13 +289,15 @@ describe('CoachConsole dashboard navigation', () => {
 
     renderConsole();
 
-    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
-    expect(getCurrentPosition).not.toHaveBeenCalled();
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalled());
   });
 
   it('invokes geolocation when permission is granted and no cache exists', async () => {
     permissionsQuery.mockResolvedValue({ state: 'granted' });
-    const getCurrentPosition = vi.fn();
+    const successCoords = { latitude: -26.2041, longitude: 28.0473 };
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({ coords: successCoords } as GeolocationPosition);
+    });
     Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
 
     weatherApi.getCurrentWeather.mockResolvedValue({
@@ -393,13 +395,19 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.queryByRole('button', { name: 'Use device location' })).not.toBeInTheDocument();
   });
 
-  it('opts in to device location on button click', async () => {
+  it('opts in to device location on button click after automatic request is denied', async () => {
     permissionsQuery.mockResolvedValue({ state: 'prompt' });
+    let callCount = 0;
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
       value: {
-        getCurrentPosition: (success: PositionCallback) => {
-          success({ coords: { latitude: -33.8688, longitude: 151.2093 } } as GeolocationPosition);
+        getCurrentPosition: (success: PositionCallback, error: PositionErrorCallback) => {
+          callCount += 1;
+          if (callCount === 1) {
+            error({ code: 1, message: 'User denied Geolocation', PERMISSION_DENIED: 1, TIMEOUT: 3, POSITION_UNAVAILABLE: 2 } as GeolocationPositionError);
+          } else {
+            success({ coords: { latitude: -33.8688, longitude: 151.2093 } } as GeolocationPosition);
+          }
         },
       },
     });
@@ -419,5 +427,47 @@ describe('CoachConsole dashboard navigation', () => {
 
     await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalledWith(-33.8688, 151.2093));
     expect(screen.queryByRole('button', { name: 'Use device location' })).not.toBeInTheDocument();
+  });
+
+  it('shows recovery guidance when location permission is denied and weather fails', async () => {
+    permissionsQuery.mockResolvedValue({ state: 'denied' });
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } });
+
+    weatherApi.getCurrentWeather.mockRejectedValue(new Error('Weather service unavailable'));
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    const message = await screen.findByText('Weather unavailable');
+    expect(message.parentElement).toHaveAttribute('title', 'Location access denied. Enable it in your browser settings to see local weather.');
+  });
+
+  it('shows recovery guidance when geolocation is unavailable and weather fails', async () => {
+    Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined });
+
+    weatherApi.getCurrentWeather.mockRejectedValue(new Error('Weather service unavailable'));
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    const message = await screen.findByText('Weather unavailable');
+    expect(message.parentElement).toHaveAttribute('title', 'Location services unavailable. Weather uses timezone as a fallback.');
+  });
+
+  it('allows the console to render and navigate even when weather provider fails', async () => {
+    weatherApi.getCurrentWeather.mockRejectedValue(new Error('Weather service unavailable'));
+    const user = userEvent.setup();
+
+    renderConsole();
+
+    await waitFor(() => expect(weatherApi.getCurrentWeather).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByText('Weather unavailable')).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: /events/i })[0]);
+    expect(screen.getByText('Events list')).toBeInTheDocument();
   });
 });
