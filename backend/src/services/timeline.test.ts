@@ -73,6 +73,7 @@ function successfulQuery(options: {
     if (sql.includes('SELECT e.type, e.status')) {
       return { rows: [{ type: 'competition', status: options.status ?? 'in_progress' }] };
     }
+    if (sql.includes('SELECT rsvp_status FROM event_participants')) return { rows: [] };
     if (sql.includes('SELECT athlete_id') && sql.includes('UNION')) {
       return { rows: options.eventAthletes ?? [] };
     }

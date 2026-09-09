@@ -225,7 +225,20 @@ describe('replaceEvent', () => {
     const [updateSql, updateParameters] = query.mock.calls[1] as [string, unknown[]];
     expect(updateSql).toContain('UPDATE events');
     expect(updateParameters[8]).toBe('in_progress');
-    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', false);
+  });
+
+  it('finalizes outcomes for every present participant when completing an event', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', true);
   });
 
   it('rejects an invalid transition before writing', async () => {
@@ -249,6 +262,24 @@ describe('replaceEvent', () => {
       details: { from: 'cancelled', to: 'scheduled' },
     });
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('rejects starting a fixture with an unresolved invitation before a guest team joins', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ ...eventRow(), fixture_revision: 1 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] });
+
+    await expect(
+      replaceEvent(USER_ID, EVENT_ID, {
+        type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+        time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+      }),
+    ).rejects.toMatchObject({ code: 'FIXTURE_INVITATIONS_PENDING' });
+
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE events'), expect.anything());
   });
 
   it('returns the generic not-found error when no owned row exists', async () => {

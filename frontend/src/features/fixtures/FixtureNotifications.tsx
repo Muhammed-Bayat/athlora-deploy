@@ -45,8 +45,13 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
       });
     };
     load();
+    const refreshTimer = window.setInterval(load, 15_000);
     window.addEventListener('fixture-notifications-changed', load);
-    return () => { current = false; window.removeEventListener('fixture-notifications-changed', load); };
+    return () => {
+      current = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('fixture-notifications-changed', load);
+    };
   }, [activeWorkspace.id, onCountsChange]);
 
   useEffect(() => {

@@ -238,6 +238,18 @@
   min-height: 44px;
 }
 
+.resultsList {
+  max-height: min(60vh, 38rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-2);
+}
+
+.resultsList:focus-visible {
+  outline: 2px solid var(--console-cyan);
+  outline-offset: 2px;
+}
+
 .inlineStatus,
 .inlineError {
   margin: 0;

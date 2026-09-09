@@ -48,4 +48,21 @@ describe('FixtureNotifications', () => {
     await user.click(document.body);
     expect(menu).not.toHaveAttribute('open');
   });
+
+  it('shows a guest change request and its message to the host', async () => {
+    fixtureApi.listFixtureNotifications.mockResolvedValue({
+      data: [{
+        id: 'notification-2', eventId: 'event-1', invitationId: 'invitation-1', kind: 'fixture_responded',
+        payload: { response: 'change_requested', message: 'Can we start at 10:00?', guestWorkspaceName: 'Team B' },
+        readAt: null, createdAt: '2026-09-06T08:00:00.000Z',
+      }],
+      meta: { count: 1 },
+    });
+
+    const user = userEvent.setup();
+    render(<FixtureNotifications onCountsChange={vi.fn()} />);
+
+    await user.click(await screen.findByLabelText('Fixture notifications, 1 unread'));
+    expect(screen.getByText('Team B change requested to your fixture invitation. Can we start at 10:00?')).toBeInTheDocument();
+  });
 });

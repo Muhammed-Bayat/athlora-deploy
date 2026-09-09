@@ -6,7 +6,7 @@ const mockOverrideResultRecord = vi.fn();
 vi.mock('../controllers/results.js', () => ({ overrideResultRecord: mockOverrideResultRecord }));
 
 import { getPool } from '../db/client.js';
-import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant } from './fixtures.js';
+import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertFixtureReadyToStart, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant } from './fixtures.js';
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const HOST_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -81,6 +81,43 @@ describe('assertHostWorkspace', () => {
 
     await expect(assertHostWorkspace({ query } as never, EVENT_ID, HOST_WORKSPACE_ID))
       .resolves.toBeUndefined();
+  });
+});
+
+describe('assertFixtureReadyToStart', () => {
+  it('rejects a fixture with an unanswered invitation', async () => {
+    query.mockResolvedValueOnce({ rows: [{ '1': 1 }] });
+
+    await expect(assertFixtureReadyToStart({ query } as never, EVENT_ID))
+      .rejects.toMatchObject({ code: 'FIXTURE_INVITATIONS_PENDING' });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("status NOT IN ('accepted', 'declined', 'revoked')"),
+      [EVENT_ID],
+    );
+  });
+
+  it('allows a fixture when every invitation is final and teams accepted the current revision', async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(assertFixtureReadyToStart({ query } as never, EVENT_ID)).resolves.toBeUndefined();
+  });
+
+  it('identifies teams with pending or maybe athlete RSVPs', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ workspace_name: 'Team B' }] });
+
+    await expect(assertFixtureReadyToStart({ query } as never, EVENT_ID)).rejects.toMatchObject({
+      code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING',
+      details: { teams: ['Team B'] },
+    });
+
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining("ep.rsvp_status IN ('pending', 'maybe')"),
+      [EVENT_ID],
+    );
   });
 });
 

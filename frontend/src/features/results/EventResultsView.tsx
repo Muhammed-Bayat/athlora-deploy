@@ -90,15 +90,16 @@ export function EventResultsView({
   compact = false,
   onCorrect,
 }: EventResultsViewProps) {
-  const resultByAthlete = new Map(results.map((result) => [result.athleteId, result]));
-  const participantByAthlete = new Map(participants.map((participant) => [
+  const eligibleParticipants = participants.filter((participant) => participant.rsvpStatus !== 'no');
+  const resultByAthlete = new Map(results.filter((result) => participants.find((participant) => participant.athleteId === result.athleteId)?.rsvpStatus !== 'no').map((result) => [result.athleteId, result]));
+  const participantByAthlete = new Map(eligibleParticipants.map((participant) => [
     participant.athleteId,
     participant,
   ]));
   const athleteById = new Map(athletes.map((athlete) => [athlete.id, athlete]));
   const athleteIds = new Set([
-    ...participants.map((participant) => participant.athleteId),
-    ...results.map((result) => result.athleteId),
+    ...eligibleParticipants.map((participant) => participant.athleteId),
+    ...resultByAthlete.keys(),
   ]);
 
   const rows = sortResultPresentationRows([...athleteIds].map((athleteId): EventResultRow => {

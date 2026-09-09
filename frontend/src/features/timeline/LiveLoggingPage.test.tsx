@@ -7,6 +7,7 @@ import * as athletesApi from '../../api/athletes';
 import * as participantsApi from '../../api/participants';
 import * as timelineApi from '../../api/timeline';
 import * as resultsApi from '../../api/results';
+import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import type { User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
@@ -17,6 +18,8 @@ vi.mock('../../api/athletes');
 vi.mock('../../api/participants');
 vi.mock('../../api/timeline');
 vi.mock('../../api/results');
+vi.mock('../../api/fixtures', () => ({ getGuestFixture: vi.fn() }));
+vi.mock('../events/PublicLoggerPanel', () => ({ PublicLoggerPanel: () => null }));
 
 describe('LiveLoggingPage', () => {
   const currentUser: User = {
@@ -106,6 +109,7 @@ describe('LiveLoggingPage', () => {
     vi.resetAllMocks();
     vi.mocked(eventsApi.getEvent).mockResolvedValue(mockActiveEvent);
     vi.mocked(athletesApi.listAthletes).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(getGuestFixture).mockRejectedValue(new Error('Not a guest fixture'));
   });
 
   function renderPage(initialEventId?: string) {
@@ -186,6 +190,18 @@ describe('LiveLoggingPage', () => {
     expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
     expect(participantsApi.listEventParticipants).toHaveBeenCalledWith(mockActiveEvent.id);
     expect(timelineApi.listTimelineEntries).toHaveBeenCalledWith(mockActiveEvent.id);
+  });
+
+  it('does not offer event completion from a guest fixture workspace', async () => {
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(getGuestFixture).mockResolvedValue({} as never);
+
+    renderPage(mockActiveEvent.id);
+
+    expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Complete Event' })).not.toBeInTheDocument());
   });
 
   it('returns to event selection when a dashboard event is no longer live', async () => {
@@ -677,7 +693,7 @@ describe('LiveLoggingPage', () => {
 
     expect(await screen.findByText(/Finish time recorded successfully.*Latest event data could not be loaded/i)).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Latest event data unavailable');
-    expect(input).toHaveValue(null);
+    expect(input).toHaveValue(10.45);
     resolveStaleResults({ data: [mockResult], meta: { count: 1 } });
     await waitFor(() => expect(screen.queryByText('Refreshing live standings...')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();

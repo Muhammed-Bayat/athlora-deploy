@@ -474,7 +474,9 @@ export function ParticipantManager({
     setParticipantsError(null);
     void listEventParticipants(eventId)
       .then(({ data }) => {
-        if (current) setParticipants(sortedParticipants(data));
+        if (current) setParticipants(sortedParticipants(data.filter((participant) =>
+          participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id,
+        )));
       })
       .catch((error: unknown) => {
         if (current) setParticipantsError(errorMessage(error));
@@ -485,7 +487,7 @@ export function ParticipantManager({
     return () => {
       current = false;
     };
-  }, [eventId, participantReloadKey]);
+  }, [activeWorkspace.id, eventId, participantReloadKey]);
 
   useEffect(() => {
     let current = true;

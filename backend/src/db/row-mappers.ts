@@ -161,6 +161,8 @@ export interface TimelineEntryRow {
   incident_type: string | null;
   note_text: string | null;
   recorded_by: string | null;
+  recorder_name?: string | null;
+  recorder_club?: string | null;
   public_logger_session_id?: string | null;
   version: number;
   device_id: string | null;
@@ -732,6 +734,8 @@ export function mapTimelineEntryRow(row: TimelineEntryRow): TimelineEntry {
     incidentType,
     noteText,
     recordedBy: nullableUuid(row.recorded_by, 'timeline_entries.recorded_by'),
+    ...(row.recorder_name === undefined ? {} : { recorderName: nullableString(row.recorder_name, 'timeline_entries.recorder_name') }),
+    ...(row.recorder_club === undefined ? {} : { recorderClub: nullableString(row.recorder_club, 'timeline_entries.recorder_club') }),
     ...(row.public_logger_session_id === undefined ? {} : {
       publicLoggerSessionId: nullableUuid(row.public_logger_session_id, 'timeline_entries.public_logger_session_id'),
     }),

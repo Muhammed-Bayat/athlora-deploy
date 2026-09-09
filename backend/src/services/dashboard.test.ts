@@ -169,7 +169,7 @@ describe('getDashboardSummary', () => {
         })] };
       }
       if (sql.includes("e.status = 'in_progress'")) return { rows: [activeEventRow()] };
-      if (sql.includes('FROM timeline_entries te') && sql.includes('LIMIT $4')) {
+      if (sql.includes('FROM timeline_entries te') && sql.includes('LIMIT $3')) {
         return { rows: [timelineRow()] };
       }
       if (sql.includes('LEFT JOIN LATERAL')) return { rows: [roster] };

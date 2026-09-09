@@ -69,7 +69,13 @@ export async function getAthleteStatisticsDetail(
          WHERE r.athlete_id = $1
            AND r.discipline = $3
             AND a.workspace_id = $2
-            AND e.workspace_id = $2
+             AND (e.workspace_id = $2 OR EXISTS (
+               SELECT 1 FROM event_fixture_workspaces fw
+               JOIN event_participants ep ON ep.event_id = fw.event_id
+                 AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+               WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+                 AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+             ))
            AND e.status <> 'cancelled'
        ), latest AS (
          SELECT effective_result, effective_outcome
@@ -158,7 +164,13 @@ export async function getAthleteStatisticsDetail(
          WHERE r.athlete_id = $1
            AND r.discipline = $3
             AND a.workspace_id = $2
-            AND e.workspace_id = $2
+             AND (e.workspace_id = $2 OR EXISTS (
+               SELECT 1 FROM event_fixture_workspaces fw
+               JOIN event_participants ep ON ep.event_id = fw.event_id
+                 AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+               WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+                 AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+             ))
        ), selected AS (
          (SELECT * FROM history
           WHERE event_type = 'competition'

@@ -194,6 +194,20 @@ async function recomputeResult(
   athleteId: string,
   eventType: EventType,
 ): Promise<void> {
+  const participation = await client.query<{ rsvp_status: string }>(
+    `SELECT rsvp_status FROM event_participants
+     WHERE event_id = $1 AND athlete_id = $2`,
+    [eventId, athleteId],
+  );
+  if (participation.rows[0]?.rsvp_status === 'no') {
+    await client.query(
+      `DELETE FROM results WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
+      [eventId, athleteId, DISCIPLINE_100M],
+    );
+    await recomputePlacings(client, eventId);
+    await recomputeBestFlags(client, athleteId);
+    return;
+  }
   const entries = await client.query<TimelineEntryRow>(
     `SELECT ${TIMELINE_COLUMNS}
      FROM timeline_entries
@@ -230,16 +244,21 @@ async function recomputeResult(
 export async function lockEventResultAthletes(
   client: DbExecutor,
   eventId: string,
+  includePresentParticipants = false,
 ): Promise<string[]> {
   const athletes = await client.query<{ athlete_id: string }>(
     `SELECT athlete_id
      FROM timeline_entries
      WHERE event_id = $1 AND discipline = $2
-     UNION
-     SELECT athlete_id
-     FROM results
-     WHERE event_id = $1 AND discipline = $2
-     ORDER BY athlete_id ASC`,
+      UNION
+      SELECT athlete_id
+      FROM results
+      WHERE event_id = $1 AND discipline = $2
+      ${includePresentParticipants ? `UNION
+      SELECT athlete_id
+      FROM event_participants
+      WHERE event_id = $1 AND rsvp_status <> 'no'` : ''}
+      ORDER BY athlete_id ASC`,
     [eventId, DISCIPLINE_100M],
   );
   if (athletes.rows.length > 0) {
@@ -259,8 +278,9 @@ export async function recomputeEventResults(
   client: DbExecutor,
   eventId: string,
   eventType: EventType,
+  includePresentParticipants = false,
 ): Promise<void> {
-  const athleteIds = await lockEventResultAthletes(client, eventId);
+  const athleteIds = await lockEventResultAthletes(client, eventId, includePresentParticipants);
   for (const athleteId of athleteIds) {
     await recomputeResult(client, eventId, athleteId, eventType);
   }
@@ -323,17 +343,33 @@ export async function listTimelineEntries(
           ))`
     : '';
   const result = await executor.query<TimelineEntryRow>(
-    `SELECT ${TIMELINE_SELECT_COLUMNS}
+    `SELECT ${TIMELINE_SELECT_COLUMNS},
+              COALESCE(public_logger.logger_name, recorder.name) AS recorder_name,
+              CASE WHEN public_logger.id IS NOT NULL THEN NULLIF(public_logger.logger_club, '') ELSE recorder_workspace.name END AS recorder_club
      FROM timeline_entries te
-     JOIN events e ON e.id = te.event_id
-     JOIN athletes a ON a.id = te.athlete_id
-      WHERE te.event_id = $1
+      JOIN events e ON e.id = te.event_id
+      JOIN athletes a ON a.id = te.athlete_id
+      LEFT JOIN users recorder ON recorder.id = te.recorded_by
+      LEFT JOIN public_logger_sessions public_logger ON public_logger.id = te.public_logger_session_id
+      LEFT JOIN LATERAL (
+        SELECT workspace.name
+        FROM workspace_members membership
+        JOIN workspaces workspace ON workspace.id = membership.workspace_id
+        WHERE membership.user_id = te.recorded_by
+          AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fixture_workspace
+            WHERE fixture_workspace.event_id = e.id AND fixture_workspace.workspace_id = membership.workspace_id
+          )
+        ORDER BY membership.workspace_id
+        LIMIT 1
+      ) recorder_workspace ON true
+       WHERE te.event_id = $1
         AND te.deleted_at IS NULL
         AND (
           (e.workspace_id = $2 AND a.workspace_id = $2)
           ${fixtureCondition}
         )
-      ORDER BY te.created_at ASC, te.id ASC`,
+       ORDER BY te.created_at ASC, te.id ASC`,
     allowFixtureAccess ? [ownedEventId, workspaceId, true] : [ownedEventId, workspaceId],
   );
   return result.rows.map(mapTimelineEntryRow);
@@ -351,9 +387,9 @@ export async function createTimelineEntry(
   return runTransaction(async (client) => {
     const locked = await client.query<LockedEventRow>(
       `SELECT e.type, e.status
-        FROM events e
-        JOIN athletes a ON a.id = $2
-        WHERE e.id = $1 AND (
+         FROM events e
+         JOIN athletes a ON a.id = $2
+         WHERE e.id = $1 AND (
           (e.workspace_id = $3 AND a.workspace_id = $3)
            OR ($4::boolean AND EXISTS (
             SELECT 1 FROM event_fixture_workspaces fw
@@ -362,9 +398,13 @@ export async function createTimelineEntry(
               AND (fw.role = 'host' OR (
                 fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
               ))
-          ))
-        )
-        FOR UPDATE OF e, a`,
+           ))
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM event_participants ep
+           WHERE ep.event_id = e.id AND ep.athlete_id = a.id AND ep.rsvp_status = 'no'
+         )
+         FOR UPDATE OF e, a`,
         [ownedEventId, payload.athleteId, workspaceId, allowFixtureAccess],
     );
     const event = locked.rows[0];
