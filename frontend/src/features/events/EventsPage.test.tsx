@@ -220,6 +220,18 @@ async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, scop
   return trigger;
 }
 
+async function selectDate(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement, value: string, label = 'Date') {
+  const trigger = within(scope).getByRole('button', { name: new RegExp(`^${label},`) });
+  await user.click(trigger);
+  const calendar = within(scope).getByRole('dialog', { name: `${label} calendar` });
+  const target = new Date(`${value}T00:00:00`);
+  const current = new Date();
+  const months = (target.getFullYear() - current.getFullYear()) * 12 + target.getMonth() - current.getMonth();
+  const navigation = within(calendar).getByRole('button', { name: months < 0 ? 'Previous month' : 'Next month' });
+  for (let index = 0; index < Math.abs(months); index += 1) await user.click(navigation);
+  await user.click(within(calendar).getByRole('button', { name: `Choose ${target.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` }));
+}
+
 describe('EventsPage', () => {
   it('hands an event id to routed detail navigation', async () => {
     const onOpenEvent = vi.fn();
@@ -319,9 +331,9 @@ describe('EventsPage', () => {
     expect(within(dialog).getByText('Event date is required.')).toBeInTheDocument();
 
     await user.type(within(dialog).getByLabelText('Event title'), '  County 100m  ');
-    await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
-    await user.selectOptions(within(dialog).getByLabelText('Event hour'), '10');
-    await user.selectOptions(within(dialog).getByLabelText('Event minute'), '15');
+    await selectDate(user, dialog, '2026-09-05');
+    await selectThemedOption(user, dialog, 'Event hour', '10');
+    await selectThemedOption(user, dialog, 'Event minute', '15');
     await user.type(within(dialog).getByLabelText(/Location/), '  North Track  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 
@@ -345,18 +357,21 @@ describe('EventsPage', () => {
     await screen.findByRole('button', { name: /City Sprint Meet/ });
     await user.click(screen.getByRole('button', { name: 'Add event' }));
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
-    const hour = within(dialog).getByLabelText('Event hour');
-    const minute = within(dialog).getByLabelText('Event minute');
+    const hour = within(dialog).getByRole('button', { name: 'Event hour' });
+    const minute = within(dialog).getByRole('button', { name: 'Event minute' });
 
     expect(minute).toBeDisabled();
-    expect(within(hour).getByRole('option', { name: '23' })).toBeInTheDocument();
-    expect(within(minute).queryByRole('option', { name: '01' })).not.toBeInTheDocument();
-    await user.selectOptions(hour, '18');
-    await user.selectOptions(minute, '35');
-    expect(hour).toHaveValue('18');
-    expect(minute).toHaveValue('35');
+    await user.click(hour);
+    const hourMenu = hour.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const minuteMenu = minute.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(hourMenu!).getByRole('option', { name: '23' })).toBeInTheDocument();
+    expect(minuteMenu).not.toBeInTheDocument();
+    await user.click(within(hourMenu!).getByRole('option', { name: '18' }));
+    await selectThemedOption(user, dialog, 'Event minute', '35');
+    expect(hour).toHaveTextContent('18');
+    expect(minute).toHaveTextContent('35');
     await user.click(within(dialog).getByRole('button', { name: 'Clear time' }));
-    expect(hour).toHaveValue('');
+    expect(hour).toHaveTextContent('HH');
     expect(minute).toBeDisabled();
   });
 
@@ -400,7 +415,7 @@ describe('EventsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add event' }));
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
     await user.type(within(dialog).getByLabelText('Event title'), 'Taken Meet');
-    await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
+    await selectDate(user, dialog, '2026-09-05');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
     expect(await within(dialog).findByText('Title is unavailable')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Event title')).toHaveValue('Taken Meet');

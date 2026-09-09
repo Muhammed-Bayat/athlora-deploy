@@ -37,10 +37,10 @@ export function ConsentGate({ onConsented }: ConsentGateProps) {
         </p>
 
         <div className={styles.legalLinks}>
-          <a href="/docs/legal/privacy-policy" target="_blank" rel="noopener noreferrer">
+          <a href="https://athlora-deploy.pages.dev/docs/legal/privacy-policy" target="_blank" rel="noopener noreferrer">
             Privacy Policy
           </a>
-          <a href="/docs/legal/terms" target="_blank" rel="noopener noreferrer">
+          <a href="https://athlora-deploy.pages.dev/docs/legal/terms" target="_blank" rel="noopener noreferrer">
             Terms and Conditions
           </a>
         </div>
@@ -54,11 +54,11 @@ export function ConsentGate({ onConsented }: ConsentGateProps) {
           />
           <span>
             I have read and agree to the{' '}
-            <a href="/docs/legal/privacy-policy" target="_blank" rel="noopener noreferrer">
+            <a href="https://athlora-deploy.pages.dev/docs/legal/privacy-policy" target="_blank" rel="noopener noreferrer">
               Privacy Policy
             </a>{' '}
             and{' '}
-            <a href="/docs/legal/terms" target="_blank" rel="noopener noreferrer">
+            <a href="https://athlora-deploy.pages.dev/docs/legal/terms" target="_blank" rel="noopener noreferrer">
               Terms and Conditions
             </a>
           </span>

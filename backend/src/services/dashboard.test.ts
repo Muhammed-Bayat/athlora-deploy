@@ -224,6 +224,9 @@ describe('getDashboardSummary', () => {
     expect(activeCall?.[0]).toContain('fw.accepted_revision = e.fixture_revision');
     expect(activeCall?.[0]).toContain('AND e.discipline = $2');
     expect(activeCall?.[0]).toContain('AND te.discipline = $2');
+    const latestEntriesCall = query.mock.calls.find(([sql]) =>
+      (sql as string).includes('FROM timeline_entries te') && (sql as string).includes('LIMIT $3'));
+    expect(latestEntriesCall?.[1]).toEqual([EVENT_ID, '100m', 10]);
     const upcomingCall = query.mock.calls.find(([sql]) =>
       (sql as string).includes("e.status = 'scheduled'"));
     expect(upcomingCall?.[0]).not.toContain("status = 'cancelled'");

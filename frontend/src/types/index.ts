@@ -306,7 +306,7 @@ export interface TimelineEntryDeletePayload {
   expectedVersion: number;
 }
 
-export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt'>;
+export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit?: boolean; canUndo?: boolean };
 
 export interface PublicLoggerLink {
   id: string;

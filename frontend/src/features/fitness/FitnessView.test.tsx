@@ -25,6 +25,17 @@ async function choose(user: ReturnType<typeof userEvent.setup>, label: string, o
   await user.click(screen.getByRole('option', { name: option }));
 }
 
+async function chooseDate(user: ReturnType<typeof userEvent.setup>, label: string, value: string) {
+  await user.click(screen.getByRole('button', { name: new RegExp(`^${label},`) }));
+  screen.getByRole('dialog', { name: `${label} calendar` });
+  const target = new Date(`${value}T00:00:00`);
+  const current = new Date();
+  const months = (target.getFullYear() - current.getFullYear()) * 12 + target.getMonth() - current.getMonth();
+  const navigation = screen.getByRole('button', { name: months < 0 ? 'Previous month' : 'Next month' });
+  for (let index = 0; index < Math.abs(months); index += 1) await user.click(navigation);
+  await user.click(screen.getByRole('button', { name: `Choose ${target.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` }));
+}
+
 describe('FitnessView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,6 +87,8 @@ describe('FitnessView', () => {
     await choose(user, '2. Specific area', 'Knee');
     await choose(user, '3. Side', 'Left');
     await choose(user, '4. Severity', 'Severe · red');
+    await chooseDate(user, 'Date injured', '2026-08-30');
+    await chooseDate(user, 'Expected return date', '2026-09-15');
 
     await user.click(screen.getByRole('button', { name: 'Save injury' }));
 
@@ -84,6 +97,8 @@ describe('FitnessView', () => {
       area: 'Knee',
       side: 'Left',
       severity: 'Severe',
+      occurrenceDate: '2026-08-30',
+      expectedReturnDate: '2026-09-15',
     }));
   });
 

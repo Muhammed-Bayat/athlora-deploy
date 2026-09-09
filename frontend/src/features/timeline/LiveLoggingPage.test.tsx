@@ -635,7 +635,7 @@ describe('LiveLoggingPage', () => {
     expect(screen.getByText('Refreshing live standings...')).toBeInTheDocument();
     resolveResults({ data: [mockResult], meta: { count: 1 } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'False Start' })).toBeEnabled());
-    expect(await screen.findByText('Finish time recorded successfully.')).toBeInTheDocument();
+    expect(screen.queryByText('Finish time recorded successfully.')).not.toBeInTheDocument();
   });
 
   it('validates and sends an exact penalty correction payload', async () => {
@@ -691,7 +691,6 @@ describe('LiveLoggingPage', () => {
     await user.type(input, '10.45');
     await user.click(screen.getByRole('button', { name: 'Record' }));
 
-    expect(await screen.findByText(/Finish time recorded successfully.*Latest event data could not be loaded/i)).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Latest event data unavailable');
     expect(input).toHaveValue(10.45);
     resolveStaleResults({ data: [mockResult], meta: { count: 1 } });

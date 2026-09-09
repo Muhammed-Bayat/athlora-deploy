@@ -8,6 +8,8 @@ import {
   listPublicLoggerLinks,
   publicLoggerSnapshot,
   revokePublicLoggerLink,
+  removePublicLoggerEntry,
+  updatePublicLoggerEntry,
 } from '../services/publicLoggers.js';
 
 const SESSION_ATTEMPT_WINDOW_MS = 15 * 60_000;
@@ -82,5 +84,22 @@ export const createEntry: RequestHandler = async (req, res, next) => {
     const token = sessionToken(req);
     if (!token) throw new ApiError(401, 'PUBLIC_LOGGER_SESSION_INVALID', 'Public logger access is unavailable');
     res.status(201).json({ data: await createPublicLoggerEntry(token, parameter(req.params.eventId), req.body) });
+  } catch (error) { next(error); }
+};
+
+export const updateEntry: RequestHandler = async (req, res, next) => {
+  try {
+    const token = sessionToken(req);
+    if (!token) throw new ApiError(401, 'PUBLIC_LOGGER_SESSION_INVALID', 'Public logger access is unavailable');
+    res.json({ data: await updatePublicLoggerEntry(token, parameter(req.params.eventId), parameter(req.params.entryId), req.body) });
+  } catch (error) { next(error); }
+};
+
+export const removeEntry: RequestHandler = async (req, res, next) => {
+  try {
+    const token = sessionToken(req);
+    if (!token) throw new ApiError(401, 'PUBLIC_LOGGER_SESSION_INVALID', 'Public logger access is unavailable');
+    await removePublicLoggerEntry(token, parameter(req.params.eventId), parameter(req.params.entryId), req.body);
+    res.status(204).end();
   } catch (error) { next(error); }
 };

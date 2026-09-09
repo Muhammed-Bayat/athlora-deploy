@@ -5,12 +5,13 @@ import { Box3, FileLoader, Mesh, Vector3 } from 'three';
 import type { Injury } from '../../types';
 import { attachAnatomyAttributes, parseAnatomyMap, updateInjuryAttributes } from './anatomySurfaceMap';
 import { createAnatomyMaterial } from './anatomyMaterial';
+import { anatomyMapUrl, anatomyModelUrl } from './anatomyAssets';
 
 type StaticInjury = Pick<Injury, 'bodyRegion' | 'area' | 'side' | 'severity'>;
 
 function StaticHumanModel({ injuries }: { injuries: StaticInjury[] }) {
-  const { scene } = useGLTF('/models/athlora-anatomy.glb');
-  const mapSource = useLoader(FileLoader, '/models/athlora-anatomy-map-v2.json') as string;
+  const { scene } = useGLTF(anatomyModelUrl);
+  const mapSource = useLoader(FileLoader, anatomyMapUrl) as string;
   const map = useMemo(() => parseAnatomyMap(mapSource), [mapSource]);
   const model = useMemo(() => {
     const next = scene.clone(true);
@@ -72,9 +73,9 @@ export function StaticAnatomy({ injuries }: { injuries: StaticInjury[] }) {
     <Canvas
       aria-hidden="true"
       camera={{ position: [0, 1.58, 6.2], fov: 31 }}
-      dpr={[1, 1.25]}
+      dpr={1}
       frameloop="demand"
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      gl={{ antialias: false, powerPreference: 'low-power' }}
       onCreated={({ camera }) => camera.lookAt(0, 1.58, 0)}
     >
       <Suspense fallback={null}><StaticAnatomyScene injuries={injuries} /></Suspense>

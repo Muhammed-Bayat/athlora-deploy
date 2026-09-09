@@ -215,8 +215,8 @@ export async function getDashboardSummary(
                 a.name AS athlete_name,
                  COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
                 a.archived_at AS athlete_archived_at
-           FROM timeline_entries te
-           JOIN athletes a ON a.id = te.athlete_id
+            FROM timeline_entries te
+            JOIN athletes a ON a.id = te.athlete_id
            WHERE te.event_id = $1
              AND te.deleted_at IS NULL
              AND te.discipline = $2

@@ -348,6 +348,7 @@ export function CoachConsole() {
   const [locationPermission, setLocationPermission] = useState<LocationPermission>('unavailable');
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
   const weatherMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const requestedGeoRef = useRef(false);
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
@@ -425,6 +426,23 @@ export function CoachConsole() {
   }, []);
 
   useEffect(() => {
+    if (!weatherEnabled) return;
+    if (locationPermission !== 'prompt') return;
+    if (requestedGeoRef.current) return;
+    requestedGeoRef.current = true;
+    if (!('geolocation' in navigator) || !window.isSecureContext) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        setCachedCoordinates(coords);
+        setLocationPermission('granted');
+      },
+      () => { /* Permission denied or error — weather loading falls back to timezone. */ },
+      { enableHighAccuracy: false, timeout: 5000 },
+    );
+  }, [weatherEnabled, locationPermission]);
+
+  useEffect(() => {
     if (!weatherEnabled) {
       clearGeoCache();
       setLiveWeather(null);
@@ -436,9 +454,15 @@ export function CoachConsole() {
     const reportUnavailableWeather = (error?: unknown) => {
       if (!current) return;
       setLiveWeather(null);
-      setLiveWeatherError(error instanceof ApiError && error.status === 401
-        ? 'Sign in for live weather.'
-        : 'Weather unavailable. Check location permissions or try again.');
+      if (error instanceof ApiError && error.status === 401) {
+        setLiveWeatherError('Sign in for live weather.');
+      } else if (locationPermission === 'denied') {
+        setLiveWeatherError('Location access denied. Enable it in your browser settings to see local weather.');
+      } else if (locationPermission === 'unavailable') {
+        setLiveWeatherError('Location services unavailable. Weather uses timezone as a fallback.');
+      } else {
+        setLiveWeatherError('Weather unavailable. Check location permissions or try again.');
+      }
     };
 
     const applyLiveWeather = (coords: Coordinates, source: 'device' | 'timezone') => {
@@ -484,7 +508,7 @@ export function CoachConsole() {
     }, WEATHER_REFRESH_MS);
 
     return () => { current = false; window.clearInterval(timer); };
-  }, [weatherEnabled]);
+  }, [weatherEnabled, locationPermission]);
 
   const liveReadout = liveWeather
     ? `${liveWeather.label} · ${liveWeather.temperature}°`
@@ -548,8 +572,8 @@ export function CoachConsole() {
         {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
         {location.pathname === '/console/events' && <><IncomingFixtureInvitations /><EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} /></>}
           {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
-        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} />}
-        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} onBackToEventList={() => routerNavigate('/console/live')} />}
         {location.pathname === '/console/account' && <AuthPage />}
       </main>
     </div>

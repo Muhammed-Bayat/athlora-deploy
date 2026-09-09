@@ -74,7 +74,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Realtime** — Socket.IO event subscriptions with Auth0 token verification and workspace-scoped authorization.
 - **Event reminders** — in-app event reminders with mute preferences and notification delivery.
 - **Fixture notifications** — notification bell with unread counts and mark-as-read for fixture lifecycle events.
-- **Public logger links** — shareable unauthenticated links for meet officials to record finish times and incidents.
+- **Public logger links** — shareable unauthenticated links managed from the active Live Logger. Officials use the same per-athlete logging console for every event participant, including guest-club athletes, and may correct or undo only their own session entries; the `coach` role can override any entry or result.
 - **Two-athlete comparison** — side-by-side 100m metrics with interactive SVG chart and URL-persisted state.
 - **Athlete progression** — chronological 100m result history with PB milestones and interactive chart.
 - **Expanded E2E suite** — 15+ spec files covering workspace, roles, squads, lifecycle, injuries, helpers, realtime, reminders, public logger, notifications, authorization, migration, accessibility, routing, and analytics.

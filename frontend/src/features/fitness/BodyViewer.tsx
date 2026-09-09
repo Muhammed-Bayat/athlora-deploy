@@ -5,6 +5,7 @@ import { Box3, FileLoader, Mesh, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { anatomyRegionNames, attachAnatomyAttributes, parseAnatomyMap, updateInjuryAttributes } from './anatomySurfaceMap';
 import { createAnatomyMaterial } from './anatomyMaterial';
+import { anatomyMapUrl, anatomyModelUrl } from './anatomyAssets';
 import type { Injury, InjuryDraft } from './injuryRegions';
 import styles from './FitnessView.module.css';
 
@@ -20,8 +21,8 @@ interface ModelFrame {
 }
 
 function HumanModel({ injuries, preview, debugRegion, onFrame, onMapReady }: BodyViewerProps & { debugRegion: string; onFrame: (frame: ModelFrame) => void; onMapReady: (regions: string[]) => void }) {
-  const { scene } = useGLTF('/models/athlora-anatomy.glb');
-  const mapSource = useLoader(FileLoader, '/models/athlora-anatomy-map-v2.json') as string;
+  const { scene } = useGLTF(anatomyModelUrl);
+  const mapSource = useLoader(FileLoader, anatomyMapUrl) as string;
   const map = useMemo(() => parseAnatomyMap(mapSource), [mapSource]);
   const { model, frame } = useMemo(() => {
     const next = scene.clone(true);
@@ -120,7 +121,7 @@ function Scene({ injuries, preview, debugRegion, resetVersion, onMapReady }: Bod
   </>;
 }
 
-interface ViewerErrorBoundaryProps { children: ReactNode }
+interface ViewerErrorBoundaryProps { children: ReactNode; onRetry: () => void }
 interface ViewerErrorBoundaryState { failed: boolean }
 
 class ViewerErrorBoundary extends Component<ViewerErrorBoundaryProps, ViewerErrorBoundaryState> {
@@ -135,24 +136,30 @@ class ViewerErrorBoundary extends Component<ViewerErrorBoundaryProps, ViewerErro
   }
 
   render() {
-    if (this.state.failed) return <div className={styles.viewerError} role="alert">The anatomical body model could not load. Please try again later.</div>;
+    if (this.state.failed) return <div className={styles.viewerError} role="alert"><p>The anatomical body model could not load.</p><button type="button" onClick={this.props.onRetry}>Retry model</button></div>;
     return this.props.children;
   }
 }
 
 export function BodyViewer({ injuries, preview }: BodyViewerProps) {
   const [resetVersion, setResetVersion] = useState(0);
+  const [modelVersion, setModelVersion] = useState(0);
   const [debugRegion, setDebugRegion] = useState('');
   const [debugRegions, setDebugRegions] = useState<string[]>([]);
+  const retryModel = () => {
+    useGLTF.clear(anatomyModelUrl);
+    useLoader.clear(FileLoader, anatomyMapUrl);
+    setModelVersion((value) => value + 1);
+  };
   return (
     <section className={styles.viewerCard} aria-labelledby="body-viewer-heading">
       <header className={styles.viewerHeader}>
         <div><strong id="body-viewer-heading">3D body map</strong><span>Translucent anatomical heat map</span></div>
         <button type="button" className={styles.resetButton} onClick={() => setResetVersion((value) => value + 1)}>Reset view</button>
       </header>
-      <div className={styles.canvasWrap} role="img" aria-label="A rotatable translucent cyan athlete body showing anatomical injury heat regions">
-        <ViewerErrorBoundary>
-          <Canvas className={styles.canvas} dpr={[1, 1.5]} camera={{ position: [0, 1.6, 6], fov: 31 }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+      <div className={styles.canvasWrap}>
+        <ViewerErrorBoundary key={modelVersion} onRetry={retryModel}>
+          <Canvas key={modelVersion} className={styles.canvas} role="img" aria-label="A rotatable translucent cyan athlete body showing anatomical injury heat regions" dpr={[1, 1.5]} camera={{ position: [0, 1.6, 6], fov: 31 }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
             <Suspense fallback={<Html center><span className={styles.canvasLoader}>Loading anatomical model...</span></Html>}><Scene injuries={injuries} preview={preview} debugRegion={debugRegion} resetVersion={resetVersion} onMapReady={setDebugRegions} /></Suspense>
           </Canvas>
         </ViewerErrorBoundary>
@@ -172,4 +179,4 @@ export function BodyViewer({ injuries, preview }: BodyViewerProps) {
   );
 }
 
-useGLTF.preload('/models/athlora-anatomy.glb');
+useGLTF.preload(anatomyModelUrl);

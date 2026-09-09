@@ -205,6 +205,9 @@
   transform: translateY(0) scale(1);
 }
 
+.menuUp { top: auto; bottom: calc(100% + 8px); transform: translateY(5px) scale(0.985); transform-origin: bottom center; }
+.menuUp.menuOpen { transform: translateY(0) scale(1); }
+
 .menu::before {
   content: '';
   position: absolute;
@@ -276,6 +279,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.compact { min-width: 0; height: 40px; }
+.compact .trigger { padding-right: 34px; font: var(--font-weight-bold) .9rem var(--font-family-mono); }
+.compact .trigger::after { right: 13px; }
+.compact .menu { max-height: min(320px, 50vh); padding: 5px; overflow-y: auto; }
+.compact .option { min-height: 34px; padding: 6px 9px; font-size: .78rem; }
 
 /* ---------- Aurora Mist (light) version of the open dropdown ---------- */
 

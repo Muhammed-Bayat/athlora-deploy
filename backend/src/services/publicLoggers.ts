@@ -3,7 +3,7 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import { DISCIPLINE_100M, type EventStatus, type EventType, type TimelineEntry } from '../types/domain.js';
-import type { TimelineEntryCreatePayload } from '../validation/payloads.js';
+import type { TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../validation/payloads.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { recomputeEventResults } from './timeline.js';
@@ -23,7 +23,7 @@ export interface PublicLoggerLink {
 export interface PublicLoggerSnapshot {
   event: { id: string; title: string; status: EventStatus };
   participants: Array<{ athleteId: string; name: string; teamName: string | null }>;
-  timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt'>>;
+  timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit: boolean; canUndo: boolean }>;
 }
 
 interface LinkRow {
@@ -220,11 +220,92 @@ export async function publicLoggerSnapshot(
         deviceId: _deviceId,
         updatedAt: _updatedAt,
         deletedAt: _deletedAt,
+        noteText: _noteText,
         ...publicEntry
       } = mapTimelineEntryRow(entry);
-      return publicEntry;
+      const editable = _publicLoggerSessionId === session.id;
+      return { ...publicEntry, canEdit: editable, canUndo: editable };
     }),
   };
+}
+
+function publicEntryResult(entry: TimelineEntry): Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> {
+  const { recordedBy: _recordedBy, publicLoggerSessionId: _publicLoggerSessionId, deviceId: _deviceId, updatedAt: _updatedAt, deletedAt: _deletedAt, noteText: _noteText, ...publicEntry } = entry;
+  return publicEntry;
+}
+
+async function lockOwnPublicEntry(client: DbExecutor, sessionToken: string, eventId: string, entryId: string): Promise<{ sessionId: string; eventType: EventType; entry: TimelineEntry }> {
+  assertUuid(eventId); assertUuid(entryId);
+  const session = await client.query<{ id: string; type: EventType; status: EventStatus }>(
+    `SELECT ps.id, e.type, e.status
+     FROM public_logger_sessions ps
+     JOIN public_logger_links pl ON pl.id = ps.link_id
+     JOIN events e ON e.id = ps.event_id
+     WHERE ps.token_hash = $1 AND ps.event_id = $2 AND pl.status = 'active' AND ps.expires_at > now()
+     FOR UPDATE OF ps, pl, e`,
+    [hashPublicLoggerToken(sessionToken), eventId],
+  );
+  const activeSession = session.rows[0];
+  if (!activeSession || activeSession.status !== 'in_progress') throw unavailable();
+  const entry = await client.query<TimelineEntryRow>(
+    `SELECT ${TIMELINE_COLUMNS} FROM timeline_entries
+     WHERE id = $1 AND event_id = $2 AND public_logger_session_id = $3
+     FOR UPDATE`,
+    [entryId, eventId, activeSession.id],
+  );
+  if (!entry.rows[0]) throw notFound();
+  return { sessionId: activeSession.id, eventType: activeSession.type, entry: mapTimelineEntryRow(entry.rows[0]) };
+}
+
+export async function updatePublicLoggerEntry(
+  sessionToken: string,
+  eventId: string,
+  entryId: string,
+  patch: TimelineEntryPatchPayload,
+  runTransaction: TransactionRunner = withTransaction,
+): Promise<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'>> {
+  if (patch.entryType !== undefined || patch.noteText !== undefined) throw new ApiError(422, 'PUBLIC_LOGGER_ENTRY_RESTRICTED', 'Public loggers can only correct the value or incident of their own entry');
+  return runTransaction(async (client) => {
+    const { eventType, entry } = await lockOwnPublicEntry(client, sessionToken, eventId, entryId);
+    if (entry.deletedAt !== null) throw notFound();
+    if (entry.version !== patch.expectedVersion) throw new ApiError(409, 'TIMELINE_ENTRY_VERSION_CONFLICT', 'This timeline entry has changed. Refresh and try again.');
+    const value = patch.value === undefined ? entry.value : patch.value;
+    const incidentType = patch.incidentType === undefined ? entry.incidentType : patch.incidentType;
+    const updated = await client.query<TimelineEntryRow>(
+      `UPDATE timeline_entries SET value = $1, incident_type = $2, version = version + 1, updated_at = now()
+       WHERE id = $3 AND event_id = $4 AND public_logger_session_id IS NOT NULL AND deleted_at IS NULL AND version = $5
+       RETURNING ${TIMELINE_COLUMNS}`,
+      [value, incidentType, entryId, eventId, patch.expectedVersion],
+    );
+    if (!updated.rows[0]) throw notFound();
+    await recomputeEventResults(client, eventId, eventType);
+    return publicEntryResult(mapTimelineEntryRow(updated.rows[0]));
+  });
+}
+
+export async function removePublicLoggerEntry(
+  sessionToken: string,
+  eventId: string,
+  entryId: string,
+  payload: TimelineEntryDeletePayload,
+  runTransaction: TransactionRunner = withTransaction,
+): Promise<void> {
+  await runTransaction(async (client) => {
+    const { eventType, entry } = await lockOwnPublicEntry(client, sessionToken, eventId, entryId);
+    if (entry.deletedAt !== null) {
+      if (entry.version === payload.expectedVersion + 1) return;
+      throw new ApiError(409, 'TIMELINE_ENTRY_VERSION_CONFLICT', 'This timeline entry has changed. Refresh and try again.');
+    }
+    if (entry.version !== payload.expectedVersion) throw new ApiError(409, 'TIMELINE_ENTRY_VERSION_CONFLICT', 'This timeline entry has changed. Refresh and try again.');
+    const removed = await client.query(
+      `UPDATE timeline_entries SET deleted_at = now(), version = version + 1, updated_at = now()
+       WHERE id = $1 AND event_id = $2 AND public_logger_session_id IS NOT NULL AND deleted_at IS NULL AND version = $3
+       RETURNING id`,
+      [entryId, eventId, payload.expectedVersion],
+    );
+    if (removed.rows.length === 0) throw notFound();
+    await recomputeEventResults(client, eventId, eventType);
+  });
 }
 
 export async function createPublicLoggerEntry(

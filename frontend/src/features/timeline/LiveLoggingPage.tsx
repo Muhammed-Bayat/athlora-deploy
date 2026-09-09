@@ -92,6 +92,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const mutationBusy = Boolean(
     submittingAthleteId || submittingIncidentKey || eventMutation || editBusy || undoBusy,
   );
+  const canCorrectEntries = activeWorkspace.role === 'coach';
 
   const openEvent = (eventId: string) => {
     if (onOpenEvent) {
@@ -247,7 +248,6 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       setEvents((current) => current.map((item) => item.id === updated.id ? updated : item));
       setActiveEvent(updated);
       openEvent(updated.id);
-      setToast(`Started event: ${updated.title}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start event');
     } finally {
@@ -555,7 +555,8 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
       {conflictNotice && <div className={styles.conflictAlert} role="alert">{conflictNotice}</div>}
       {secondaryError && <div className={styles.conflictAlert} role="status">{secondaryError}</div>}
-      {toast && <Toast onDismiss={() => setToast(null)}>{toast}</Toast>}
+
+      <PublicLoggerPanel event={activeEvent} />
 
       <div className={styles.workspace}>
         {/* Left: Athlete Logging Console */}
@@ -686,7 +687,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                         {entry.noteText && <p>Note: {entry.noteText}</p>}
                         <small>Recorded by {entry.recorderName ?? 'Independent logger'} · {entry.recorderClub ?? 'Independent'} · v{entry.version}</small>
                       </div>
-                        <div className={styles.timelineActions}>
+                        {canCorrectEntries && <div className={styles.timelineActions}>
                         <button
                           type="button"
                           className={styles.linkButton}
@@ -705,7 +706,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                         >
                           Undo
                         </button>
-                        </div>
+                        </div>}
                     </div>
                   );
                 })}
