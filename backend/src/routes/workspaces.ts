@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { inviteWorkspaceMember, listAccessibleWorkspaces, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../controllers/workspaces.js';
+import { inviteWorkspaceMember, leaveCurrentWorkspace, listAccessibleWorkspaces, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../controllers/workspaces.js';
 import { requireCoach, requireCurrentWorkspace } from '../middleware/capabilities.js';
 
 const router = Router();
 router.get('/', listAccessibleWorkspaces);
+router.delete('/current-membership', leaveCurrentWorkspace);
 router.get('/:workspaceId/members', requireCurrentWorkspace, requireCoach(), listWorkspaceMembers);
 router.patch('/:workspaceId/members/:userId', requireCurrentWorkspace, requireCoach(), updateWorkspaceMemberRole);
 router.get('/:workspaceId/invitations', requireCurrentWorkspace, requireCoach(), listWorkspaceInvitations);

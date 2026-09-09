@@ -414,10 +414,12 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
 
 export function ParticipantManager({
   eventId,
+  canEditRoster,
   onBusyChange,
   onChanged,
 }: {
   eventId: string;
+  canEditRoster: boolean;
   onBusyChange: (busy: boolean) => void;
   onChanged: () => void;
 }) {
@@ -604,7 +606,7 @@ export function ParticipantManager({
             const ownsParticipant = participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id;
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.participantWorkspaceName && <span> · {participant.participantWorkspaceName}</span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
-                {isCoach && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
+                {isCoach && canEditRoster && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
                 <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
@@ -620,9 +622,9 @@ export function ParticipantManager({
 
       {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
 
-      {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
+      {canEditRoster && removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 
-       {isCoach && <div className={styles.assignment}>
+       {isCoach && canEditRoster && <div className={styles.assignment}>
          <span>Assign an active athlete</span>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}

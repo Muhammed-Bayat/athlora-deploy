@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import { getApplicationUserContext, getLocalApplicationUserContext } from '../middleware/auth.js';
-import { acceptInvitation, changeMemberRole, createInvitation, listInvitations, listMembers, listWorkspaces, removeMember, resendInvitation, revokeInvitation } from '../services/workspaces.js';
+import { acceptInvitation, changeMemberRole, createInvitation, leaveWorkspace, listInvitations, listMembers, listWorkspaces, removeMember, resendInvitation, revokeInvitation } from '../services/workspaces.js';
 import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 
@@ -35,4 +35,5 @@ export const acceptWorkspaceInvitation: RequestHandler = async (req, res, next) 
 export const revokeWorkspaceInvitation: RequestHandler = async (req, res, next) => { try { const { userId } = getApplicationUserContext(req); await revokeInvitation(parameter(req.params.workspaceId), parameter(req.params.invitationId), userId); res.status(204).end(); } catch (error) { next(error); } };
 export const resendWorkspaceInvitation: RequestHandler = async (req, res, next) => { try { const { userId } = getApplicationUserContext(req); const invitation = await resendInvitation(parameter(req.params.workspaceId), parameter(req.params.invitationId), userId); res.status(201).json({ data: invitation }); } catch (error) { next(error); } };
 export const removeWorkspaceMember: RequestHandler = async (req, res, next) => { try { const { userId } = getApplicationUserContext(req); await removeMember(parameter(req.params.workspaceId), parameter(req.params.userId), userId); res.status(204).end(); } catch (error) { next(error); } };
+export const leaveCurrentWorkspace: RequestHandler = async (req, res, next) => { try { const { userId, workspaceId } = getApplicationUserContext(req); await leaveWorkspace(workspaceId, userId); res.status(204).end(); } catch (error) { next(error); } };
 export const updateWorkspaceMemberRole: RequestHandler = async (req, res, next) => { try { const { userId } = getApplicationUserContext(req); const role = req.body?.role; if (!['coach', 'assistant'].includes(role)) throw new ApiError(422, 'MEMBER_ROLE_INVALID', 'Role must be coach or assistant'); await changeMemberRole(parameter(req.params.workspaceId), parameter(req.params.userId), role, userId); res.status(204).end(); } catch (error) { next(error); } };

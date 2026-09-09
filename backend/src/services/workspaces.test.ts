@@ -11,6 +11,7 @@ import {
   listInvitations,
   listMembers,
   listWorkspaces,
+  leaveWorkspace,
   removeMember,
   resendInvitation,
   resolveWorkspace,
@@ -175,6 +176,36 @@ describe('removeMember', () => {
     await expect(removeMember(WORKSPACE_ID, USER_ID, ACTOR_ID)).rejects.toMatchObject({
       status: 404,
       code: 'MEMBER_NOT_FOUND',
+    });
+  });
+});
+
+describe('leaveWorkspace', () => {
+  it('removes the current member and records the membership audit without touching event history', async () => {
+    const withTransaction = (await import('../db/transaction.js')).withTransaction;
+    vi.mocked(withTransaction).mockImplementation(async (operation) => {
+      const tq = vi.fn();
+      tq.mockResolvedValueOnce({ rows: [{ role: 'assistant' }] });
+      tq.mockResolvedValueOnce({ rows: [] });
+      tq.mockResolvedValueOnce({ rows: [] });
+      return operation({ query: tq } as never);
+    });
+
+    await expect(leaveWorkspace(WORKSPACE_ID, USER_ID)).resolves.toBeUndefined();
+  });
+
+  it('requires the last coach to assign another coach before leaving', async () => {
+    const withTransaction = (await import('../db/transaction.js')).withTransaction;
+    vi.mocked(withTransaction).mockImplementation(async (operation) => {
+      const tq = vi.fn();
+      tq.mockResolvedValueOnce({ rows: [{ role: 'coach' }] });
+      tq.mockResolvedValueOnce({ rows: [{ user_id: USER_ID }] });
+      return operation({ query: tq } as never);
+    });
+
+    await expect(leaveWorkspace(WORKSPACE_ID, USER_ID)).rejects.toMatchObject({
+      status: 409,
+      code: 'LAST_COACH_REQUIRED',
     });
   });
 });

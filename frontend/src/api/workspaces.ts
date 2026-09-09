@@ -10,6 +10,10 @@ export async function listWorkspaces(): Promise<WorkspaceListResponse> {
   return request<WorkspaceListResponse>('/api/v1/workspaces');
 }
 
+export async function leaveCurrentWorkspace(): Promise<void> {
+  await request<void>('/api/v1/workspaces/current-membership', { method: 'DELETE' });
+}
+
 export async function listWorkspaceMembers(workspaceId: string): Promise<{ data: WorkspaceMember[]; meta: { count: number } }> {
   return request(`/api/v1/workspaces/${workspaceId}/members`);
 }

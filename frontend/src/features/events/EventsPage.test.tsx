@@ -718,6 +718,28 @@ describe('EventsPage', () => {
     expect(screen.getByRole('button', { name: /City Sprint Meet/ })).toHaveTextContent('Cancelled');
   });
 
+  it('keeps completed and cancelled rosters visible but read-only', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Past' }));
+    const completedDetail = await openDetail(user, past.title);
+    expect(await within(completedDetail).findByRole('heading', { name: /Assigned athletes/ })).toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Assign an active athlete' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Remove Ari Runner from event' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Edit event' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Cancel event' })).not.toBeInTheDocument();
+    await user.click(within(completedDetail).getByRole('button', { name: 'Close' }));
+
+    await user.click(screen.getByRole('button', { name: 'Upcoming' }));
+    const cancelledDetail = await openDetail(user, cancelled.title);
+    expect(await within(cancelledDetail).findByRole('heading', { name: /Assigned athletes/ })).toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'Assign an active athlete' })).not.toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'Remove Ari Runner from event' })).not.toBeInTheDocument();
+  });
+
   it('keeps confirmation and data intact when lifecycle mutation fails', async () => {
     eventApi.cancelEvent.mockRejectedValue(
       new ApiError(409, 'INVALID_EVENT_TRANSITION', 'Event changed on another device'),
