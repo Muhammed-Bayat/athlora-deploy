@@ -7,6 +7,7 @@ import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { EventParticipantSummary } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { recomputeEventResults } from './timeline.js';
 import type {
   EventParticipantCreatePayload,
   EventParticipantReplacementPayload,
@@ -180,6 +181,13 @@ export async function replaceEventParticipant(
   );
   const row = result.rows[0];
   if (!row) throw notFound();
+  if (payload.rsvpStatus === 'no') {
+    const event = await executor.query<{ type: 'training' | 'competition' }>(
+      `SELECT type FROM events WHERE id = $1`,
+      [ownedEventId],
+    );
+    await recomputeEventResults(executor, ownedEventId, event.rows[0].type);
+  }
   return mapEventParticipantSummaryRow(row);
 }
 

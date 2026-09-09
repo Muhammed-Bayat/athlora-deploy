@@ -94,16 +94,18 @@ export function EventResultsSection({ event, reloadKey, onCorrect }: EventResult
         </div>
       )}
       {!loading && !error && (
-        <EventResultsView
-          event={event}
-          results={results}
-          participants={participants}
-          timeline={timeline}
-          athletes={athletes}
-          currentUser={currentUser}
-          compact
-          onCorrect={onCorrect}
-        />
+        <div className={styles.resultsList} tabIndex={0} aria-label="Scrollable event results">
+          <EventResultsView
+            event={event}
+            results={results}
+            participants={participants}
+            timeline={timeline}
+            athletes={athletes}
+            currentUser={currentUser}
+            compact
+            onCorrect={onCorrect}
+          />
+        </div>
       )}
     </section>
   );

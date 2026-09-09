@@ -178,7 +178,15 @@ export async function replaceEvent(
          LIMIT 1`,
         [eventId],
       );
-    if (activeGuestTeams.rows.length > 0) {
+    const unresolvedFixtureInvitations = currentRow.fixture_revision === undefined
+      ? { rows: [] }
+      : await client.query(
+        `SELECT 1 FROM fixture_invitations
+         WHERE event_id = $1 AND status NOT IN ('accepted', 'declined', 'revoked')
+         LIMIT 1`,
+        [eventId],
+      );
+    if (activeGuestTeams.rows.length > 0 || unresolvedFixtureInvitations.rows.length > 0) {
       await assertHostWorkspace(client, eventId as string, workspaceId);
       if (materialChange && (currentEvent.status !== 'scheduled' || payload.status !== 'scheduled')) {
         throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture details can only change before the event starts');
@@ -230,7 +238,12 @@ export async function replaceEvent(
       currentEvent.time !== updated.time ||
       currentEvent.status !== updated.status
     ) {
-      await recomputeEventResults(client, eventId, updated.type);
+      await recomputeEventResults(
+        client,
+        eventId,
+        updated.type,
+        currentEvent.status !== 'completed' && updated.status === 'completed',
+      );
     }
     return updated;
   });

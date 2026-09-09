@@ -272,6 +272,8 @@ export interface TimelineEntry {
   incidentType: IncidentType;
   noteText: string | null;
   recordedBy: string | null;
+  recorderName?: string | null;
+  recorderClub?: string | null;
   publicLoggerSessionId?: string | null;
   version: number;
   deviceId: string | null;

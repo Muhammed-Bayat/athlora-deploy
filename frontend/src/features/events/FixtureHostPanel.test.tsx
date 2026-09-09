@@ -125,4 +125,43 @@ describe('FixtureHostPanel', () => {
     expect(await screen.findByRole('button', { name: 'Correct' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Record withdrawal' })).not.toBeInTheDocument();
   });
+
+  it('shows a guest change request with the existing invitation actions', async () => {
+    vi.mocked(listFixtureInvitations).mockResolvedValue({
+      data: [{
+        id: '33333333-3333-4333-8333-333333333333', eventId: event.id, email: null, revision: 1,
+        status: 'change_requested', expiresAt: '2026-09-10T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z',
+        targetWorkspaceId: '44444444-4444-4444-8444-444444444444', targetWorkspaceName: 'Team B',
+        responseMessage: 'Can we start at 10:00?', respondedAt: '2026-09-02T10:00:00.000Z',
+        respondedWorkspaceId: '44444444-4444-4444-8444-444444444444', respondedWorkspaceName: 'Team B', respondedByName: 'Guest Coach',
+      }],
+      meta: { count: 1 },
+    });
+
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
+
+    expect(await screen.findByRole('listitem')).toHaveTextContent('Team B requested a change');
+    expect(screen.getByRole('listitem')).toHaveTextContent('Can we start at 10:00?');
+    expect(screen.getByRole('button', { name: 'Resend' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+  });
+
+  it('keeps declined invitation responses visible to the host', async () => {
+    vi.mocked(listFixtureInvitations).mockResolvedValue({
+      data: [{
+        id: '33333333-3333-4333-8333-333333333333', eventId: event.id, email: null, revision: 1,
+        status: 'declined', expiresAt: '2026-09-10T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z',
+        targetWorkspaceId: '44444444-4444-4444-8444-444444444444', targetWorkspaceName: 'Team B',
+        responseMessage: 'We are unavailable.', respondedAt: '2026-09-02T10:00:00.000Z',
+        respondedWorkspaceId: '44444444-4444-4444-8444-444444444444', respondedWorkspaceName: 'Team B', respondedByName: 'Guest Coach',
+      }],
+      meta: { count: 1 },
+    });
+
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
+
+    expect(await screen.findByRole('heading', { name: 'Responses' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toHaveTextContent('Team B · Declined');
+    expect(screen.getByRole('listitem')).toHaveTextContent('We are unavailable.');
+  });
 });

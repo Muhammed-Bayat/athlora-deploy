@@ -73,6 +73,7 @@ function successfulQuery(options: {
     if (sql.includes('SELECT e.type, e.status')) {
       return { rows: [{ type: 'competition', status: options.status ?? 'in_progress' }] };
     }
+    if (sql.includes('SELECT rsvp_status FROM event_participants')) return { rows: [] };
     if (sql.includes('SELECT athlete_id') && sql.includes('UNION')) {
       return { rows: options.eventAthletes ?? [] };
     }
@@ -123,6 +124,17 @@ describe('timeline service', () => {
     expect(query.mock.calls.some(([sql]) => String(sql).includes('ON CONFLICT'))).toBe(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('SET "placing"'))).toBe(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('SET is_pb'))).toBe(true);
+  });
+
+  it('allows an accepted fixture club to create entries for any assigned fixture athlete', async () => {
+    const query = successfulQuery();
+
+    await createTimelineEntry(USER_ID, EVENT_ID, payload, transaction(query));
+
+    const lock = query.mock.calls.find(([sql]) => String(sql).includes('SELECT e.type, e.status'));
+    expect(lock?.[0]).toContain("fw.role = 'host'");
+    expect(lock?.[0]).toContain("fw.role = 'guest' AND fw.status = 'accepted'");
+    expect(lock?.[0]).not.toContain('ep.participant_workspace_id = fw.workspace_id');
   });
 
   it('rejects a non-live event inside the transaction before inserting', async () => {

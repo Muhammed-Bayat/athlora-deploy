@@ -7,6 +7,7 @@ import type { AthleticsEvent, EventParticipantSummary, Result, TimelineEntry } f
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { FixtureInvitationCreatePayload, FixtureInvitationResponsePayload } from '../validation/payloads.js';
 import { notifyFixtureInvitation, notifyFixtureReacceptanceRequired, notifyFixtureResponse } from './fixtureNotifications.js';
+import { recomputeEventResults } from './timeline.js';
 
 const EVENT_COLUMNS = 'e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at';
 
@@ -519,6 +520,16 @@ export async function assertFixtureReadyToStart(
   client: DbExecutor,
   eventId: string,
 ): Promise<void> {
+  const unresolvedInvitations = await client.query(
+    `SELECT 1 FROM fixture_invitations
+     WHERE event_id = $1 AND status NOT IN ('accepted', 'declined', 'revoked')
+     LIMIT 1`,
+    [eventId],
+  );
+  if (unresolvedInvitations.rows.length > 0) {
+    throw new ApiError(409, 'FIXTURE_INVITATIONS_PENDING', 'Every fixture invitation must be accepted, declined, or revoked before the event starts');
+  }
+
   const pending = await client.query(
     `SELECT 1 FROM event_fixture_workspaces fw
      JOIN events e ON e.id = fw.event_id
@@ -529,6 +540,27 @@ export async function assertFixtureReadyToStart(
   );
   if (pending.rows.length > 0) {
     throw new ApiError(409, 'FIXTURE_REACCEPTANCE_REQUIRED', 'Every participating team must accept the current fixture details before it starts');
+  }
+
+  const unresolvedRsvps = await client.query<{ workspace_name: string }>(
+    `SELECT w.name AS workspace_name
+     FROM event_participants ep
+     JOIN event_fixture_workspaces fw
+       ON fw.event_id = ep.event_id AND fw.workspace_id = ep.participant_workspace_id
+     JOIN workspaces w ON w.id = ep.participant_workspace_id
+     WHERE ep.event_id = $1 AND fw.status = 'accepted' AND ep.rsvp_status IN ('pending', 'maybe')
+     GROUP BY w.name, w.id
+     ORDER BY lower(w.name), w.id`,
+    [eventId],
+  );
+  if (unresolvedRsvps.rows.length > 0) {
+    const teams = unresolvedRsvps.rows.map((row) => row.workspace_name);
+    throw new ApiError(
+      409,
+      'FIXTURE_PARTICIPANT_RSVPS_PENDING',
+      `Athletes in ${teams.join(', ')} still have pending or maybe RSVPs`,
+      { teams },
+    );
   }
 }
 
@@ -656,7 +688,8 @@ export async function listGuestFixtureResults(workspaceId: string, eventId: unkn
   const result = await getPool().query(
     `SELECT r.* FROM results r
      JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = r.athlete_id
-     WHERE r.event_id = $1 AND r.discipline = '100m' AND ep.participant_workspace_id = $2
+      WHERE r.event_id = $1 AND r.discipline = '100m' AND ep.participant_workspace_id = $2
+        AND ep.rsvp_status <> 'no'
      ORDER BY r.athlete_id`,
     [ownedEventId, workspaceId],
   );
@@ -729,6 +762,7 @@ export async function updateGuestFixtureParticipant(
        WHERE event_id = $2 AND athlete_id = $3 AND participant_workspace_id = $5`,
       [rsvpStatus, ownedEventId, ownedAthleteId, ownedActorId, workspaceId],
     );
+    if (rsvpStatus === 'no') await recomputeEventResults(client, ownedEventId, 'competition');
     const result = await client.query<EventParticipantSummaryRow>(
       `SELECT ${PARTICIPANT_COLUMNS} FROM event_participants ep JOIN athletes a ON a.id = ep.athlete_id
        WHERE ep.event_id = $1 AND ep.athlete_id = $2 AND ep.participant_workspace_id = $3`,
@@ -816,8 +850,9 @@ export async function listHostedFixtureResults(
   const [ownedEventId] = scopedIds(workspaceId, eventId);
   await assertHostWorkspace(getPool(), ownedEventId, workspaceId);
   const result = await getPool().query(
-    `SELECT r.* FROM results r
-     WHERE r.event_id = $1 AND r.discipline = '100m'
+     `SELECT r.* FROM results r
+      JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = r.athlete_id
+      WHERE r.event_id = $1 AND r.discipline = '100m' AND ep.rsvp_status <> 'no'
      ORDER BY r.placing ASC NULLS LAST, r.athlete_id`,
     [ownedEventId],
   );

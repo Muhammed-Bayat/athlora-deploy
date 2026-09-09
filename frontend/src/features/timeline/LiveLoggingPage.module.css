@@ -105,6 +105,10 @@
   align-items: center;
 }
 
+.publicLogger {
+  margin-bottom: var(--space-6);
+}
+
 .errorAlert {
   border: 1px solid color-mix(in srgb, var(--console-error-surface) 55%, var(--console-line));
   background: var(--console-error-surface);
@@ -174,6 +178,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  max-height: min(138vh, 124rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-2);
+}
+
+.athleteList:focus-visible,
+.standingsList:focus-visible {
+  outline: 2px solid var(--console-cyan);
+  outline-offset: 2px;
 }
 
 .athleteRow {
@@ -207,10 +221,17 @@
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .finishInputGroup input {
   min-width: 0;
+}
+
+.currentRecord {
+  color: var(--console-teal);
+  font: var(--font-weight-bold) var(--font-size-sm)/1.2 var(--font-family-mono);
+  white-space: nowrap;
 }
 
 .incidentButtonGroup {
@@ -232,6 +253,13 @@
   gap: var(--space-3);
   max-height: 400px;
   overflow-y: auto;
+}
+
+.standingsList {
+  max-height: min(60vh, 38rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-2);
 }
 
 .timelineItem {

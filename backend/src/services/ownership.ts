@@ -34,13 +34,19 @@ export async function assertEventOwnership(workspaceId: string, eventId: unknown
 
 async function assertEventAthleteScoped(workspaceId: string, eventId: unknown, athleteId: unknown, table: string, executor: DbExecutor): Promise<void> {
   const relationship = table === 'events' ? '' : `JOIN ${table} x ON x.event_id = e.id AND x.athlete_id = a.id`;
+  const fixtureAccess = table === 'events'
+    ? `fw.event_id = e.id AND fw.workspace_id = $3
+        AND (fw.role = 'host' OR (
+          fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+        ))`
+    : `fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
+        AND ep.participant_workspace_id = fw.workspace_id
+        AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision`;
   await assertScoped(workspaceId, [eventId, athleteId], `SELECT 1 FROM events e JOIN athletes a ON a.id = $2 ${relationship} WHERE e.id = $1 AND (
     (e.workspace_id = $3 AND a.workspace_id = $3) OR EXISTS (
       SELECT 1 FROM event_fixture_workspaces fw
       JOIN event_participants ep ON ep.event_id = e.id AND ep.athlete_id = a.id
-        AND ep.participant_workspace_id = fw.workspace_id
-      WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
-        AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+      WHERE ${fixtureAccess}
     )
   ) LIMIT 1`, [eventId as string, athleteId as string, workspaceId], executor);
 }
@@ -54,7 +60,7 @@ export async function assertParticipantOwnership(workspaceId: string, eventId: u
 }
 
 export async function assertTimelineEntryOwnership(workspaceId: string, eventId: unknown, entryId: unknown, executor: DbExecutor = getPool()): Promise<void> {
-  await assertScoped(workspaceId, [eventId, entryId], `SELECT 1 FROM timeline_entries te JOIN events e ON e.id = te.event_id JOIN athletes a ON a.id = te.athlete_id WHERE te.id = $1 AND te.event_id = $2 AND ((e.workspace_id = $3 AND a.workspace_id = $3) OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw JOIN event_participants ep ON ep.event_id = e.id AND ep.athlete_id = te.athlete_id AND ep.participant_workspace_id = fw.workspace_id WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision)) LIMIT 1`, [entryId as string, eventId as string, workspaceId], executor);
+  await assertScoped(workspaceId, [eventId, entryId], `SELECT 1 FROM timeline_entries te JOIN events e ON e.id = te.event_id JOIN athletes a ON a.id = te.athlete_id WHERE te.id = $1 AND te.event_id = $2 AND ((e.workspace_id = $3 AND a.workspace_id = $3) OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw JOIN event_participants ep ON ep.event_id = e.id AND ep.athlete_id = te.athlete_id WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND (fw.role = 'host' OR (fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision)))) LIMIT 1`, [entryId as string, eventId as string, workspaceId], executor);
 }
 
 export async function assertTimelineEntryRecordedBy(workspaceId: string, eventId: unknown, entryId: unknown, userId: string, executor: DbExecutor = getPool()): Promise<void> {

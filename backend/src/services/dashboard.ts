@@ -78,8 +78,14 @@ async function listRecentResults(
        FROM results r
        JOIN events e ON e.id = r.event_id
        JOIN athletes a ON a.id = r.athlete_id
-        WHERE e.workspace_id = $1
-          AND a.workspace_id = $1
+         WHERE (e.workspace_id = $1 OR EXISTS (
+             SELECT 1 FROM event_fixture_workspaces fw
+             JOIN event_participants ep ON ep.event_id = fw.event_id
+               AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+             WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+               AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+           ))
+           AND a.workspace_id = $1
          AND r.discipline = $2
          AND e.status <> 'cancelled'
          ${onlyPbs ? 'AND r.is_pb = true' : ''}
@@ -130,8 +136,14 @@ export async function getDashboardSummary(
           FROM results r
           JOIN events e ON e.id = r.event_id
           JOIN athletes a ON a.id = r.athlete_id
-           WHERE e.workspace_id = $1
-             AND a.workspace_id = $1
+            WHERE (e.workspace_id = $1 OR EXISTS (
+                SELECT 1 FROM event_fixture_workspaces fw
+                JOIN event_participants ep ON ep.event_id = fw.event_id
+                  AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+                WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
+              AND a.workspace_id = $1
             AND e.status <> 'cancelled'
             AND r.discipline = $5
             AND r.is_pb = true
@@ -203,8 +215,8 @@ export async function getDashboardSummary(
                 a.name AS athlete_name,
                  COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
                 a.archived_at AS athlete_archived_at
-          FROM timeline_entries te
-          JOIN athletes a ON a.id = te.athlete_id
+            FROM timeline_entries te
+            JOIN athletes a ON a.id = te.athlete_id
            WHERE te.event_id = $1
              AND te.deleted_at IS NULL
              AND te.discipline = $2
@@ -240,7 +252,13 @@ export async function getDashboardSummary(
          JOIN events e ON e.id = r.event_id
          WHERE r.athlete_id = a.id
            AND r.discipline = $2
-            AND e.workspace_id = $1
+             AND (e.workspace_id = $1 OR EXISTS (
+               SELECT 1 FROM event_fixture_workspaces fw
+               JOIN event_participants ep ON ep.event_id = fw.event_id
+                 AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+               WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+                 AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+             ))
            AND e.status <> 'cancelled'
        ) best ON true
          WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'

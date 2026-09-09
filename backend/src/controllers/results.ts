@@ -85,14 +85,15 @@ export const getEventResults: RequestHandler = async (req, res, next) => {
     const eventId = req.params.eventId as string;
     const pool = getPool();
     const resultRes = await pool.query(
-      `SELECT r.*
-       FROM results r
-       JOIN events e ON e.id = r.event_id
-        WHERE r.event_id = $1 AND r.discipline = $2 AND (e.workspace_id = $3 OR EXISTS (
+       `SELECT r.*
+        FROM results r
+        JOIN events e ON e.id = r.event_id
+        JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = r.athlete_id
+         WHERE r.event_id = $1 AND r.discipline = $2 AND (e.workspace_id = $3 OR EXISTS (
           SELECT 1 FROM event_fixture_workspaces fw
           WHERE fw.event_id = e.id AND fw.workspace_id = $3 AND fw.role = 'guest'
             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-        ))`,
+        )) AND ep.rsvp_status <> 'no'`,
        [eventId, DISCIPLINE_100M, workspaceId],
     );
 

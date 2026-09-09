@@ -4,6 +4,7 @@ import { getEvent, listEvents, updateEvent } from '../../api/events';
 import { listEventParticipants } from '../../api/participants';
 import { listTimelineEntries, createTimelineEntry, updateTimelineEntry, deleteTimelineEntry } from '../../api/timeline';
 import { listResults } from '../../api/results';
+import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
@@ -47,6 +48,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
+  const [isGuestFixture, setIsGuestFixture] = useState(false);
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -164,6 +166,9 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         return 'closed';
       }
       setActiveEvent(eventRes);
+      void getGuestFixture(eventId)
+        .then(() => { if (requestId === eventDataRequestRef.current) setIsGuestFixture(true); })
+        .catch(() => { if (requestId === eventDataRequestRef.current) setIsGuestFixture(false); });
       setParticipants(participantsRes.data);
       setTimeline(timelineRes.data);
       setEventDataLoading(false);
@@ -310,7 +315,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         value: num,
         unit: 'seconds',
       });
-      setFinishInputs(prev => ({ ...prev, [athleteId]: '' }));
+      setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback('Finish time recorded successfully.', reload));
     } catch (err) {
@@ -507,13 +512,24 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     );
   }
 
+  const availableParticipants = participants.filter((participant) => participant.rsvpStatus !== 'no');
+  const resultByAthlete = new Map(results.map((result) => [result.athleteId, result]));
+  const currentRecord = (athleteId: string): string => {
+    const result = resultByAthlete.get(athleteId);
+    if (!result) return 'Awaiting result';
+    if (result.manualOverride !== null && result.manualOverride !== undefined) return format100mSeconds(result.manualOverride);
+    if (result.outcome === 'no_result') return 'Awaiting result';
+    if (result.outcome === 'valid' && result.finalResult !== null) return format100mSeconds(result.finalResult);
+    return result.outcome.toUpperCase();
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.activeHeader}>
         <div>
           <span className={styles.eyebrow}>Live Session Active</span>
           <h2 ref={pageHeadingRef} tabIndex={-1}>{activeEvent.title}</h2>
-          <p>{activeEvent.locationName ?? 'Track'} · 100m · {participants.length} assigned athletes</p>
+          <p>{activeEvent.locationName ?? 'Track'} · 100m · {availableParticipants.length} assigned athletes</p>
         </div>
         <div className={styles.headerButtons}>
           <Button
@@ -524,16 +540,17 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           >
             Switch Event
           </Button>
-          <Button
+          {!isGuestFixture && <Button
             variant="danger"
             onClick={() => void handleCompleteEvent()}
             disabled={mutationBusy}
             style={{ minHeight: '44px', minWidth: '44px' }}
           >
             {eventMutation === 'complete' ? 'Completing...' : 'Complete Event'}
-          </Button>
+          </Button>}
         </div>
       </div>
+      <div className={styles.publicLogger}><PublicLoggerPanel event={activeEvent} /></div>
 
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
       {conflictNotice && <div className={styles.conflictAlert} role="alert">{conflictNotice}</div>}
@@ -544,15 +561,15 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       <div className={styles.workspace}>
         {/* Left: Athlete Logging Console */}
         <section className={styles.consoleSection} aria-label="Athlete logging console">
-          <h3>Assigned Athletes ({participants.length})</h3>
-          {participants.length === 0 ? (
+          <h3>Assigned Athletes ({availableParticipants.length})</h3>
+          {availableParticipants.length === 0 ? (
             <EmptyState
               title="No athletes assigned"
               description="Assign athletes to this event from the Events view to record finishes and incidents."
             />
           ) : (
-            <div className={styles.athleteList}>
-              {participants.map(p => {
+            <div className={styles.athleteList} tabIndex={0} aria-label="Scrollable assigned athletes">
+              {availableParticipants.map(p => {
                 const athleteId = p.athleteId;
                 const isSubmitting = submittingAthleteId === athleteId;
                 const val = finishInputs[athleteId] ?? '';
@@ -560,7 +577,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                   <div key={athleteId} className={styles.athleteRow}>
                     <div className={styles.athleteInfo}>
                       <b>{p.athlete.name}</b>
-                       <small>{p.participantWorkspaceName ?? (p.athlete.squadNames?.join(', ') || 'Sprint')} · RSVP: {p.rsvpStatus}</small>
+                        <small>{p.participantWorkspaceName ?? (p.athlete.squadNames?.join(', ') || 'Sprint')} · RSVP: {p.rsvpStatus}</small>
                     </div>
 
                     <div className={styles.controlsGroup}>
@@ -585,6 +602,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                         >
                           {isSubmitting ? 'Logging...' : 'Record'}
                         </Button>
+                        <span className={styles.currentRecord} aria-label={`Current record for ${p.athlete.name}`}>{currentRecord(athleteId)}</span>
                       </div>
 
                       <div className={styles.incidentButtonGroup}>
@@ -650,7 +668,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
               <p className={styles.mutedText}>No timeline entries recorded yet.</p>
             ) : (
               <div className={styles.timelineList}>
-                {timeline.map(entry => {
+                {[...timeline].reverse().map(entry => {
                   const athlete = participants.find(p => p.athleteId === entry.athleteId)?.athlete;
                   const name = athlete?.name ?? entry.athleteId;
                   return (
@@ -667,7 +685,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                           <span className={styles.dangerBadge}>Incident: {getIncidentTypeLabel(entry.incidentType)}</span>
                         )}
                         {entry.noteText && <p>Note: {entry.noteText}</p>}
-                        <small>Recorded by {entry.recordedBy} · v{entry.version}</small>
+                        <small>Recorded by {entry.recorderName ?? 'Independent logger'} · {entry.recorderClub ?? 'Independent'} · v{entry.version}</small>
                       </div>
                         {canCorrectEntries && <div className={styles.timelineActions}>
                         <button
@@ -704,15 +722,17 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
               </Button>
             </div>
             {secondaryLoading && <p className={styles.mutedText} role="status">Refreshing live standings...</p>}
-            <EventResultsView
-              event={activeEvent}
-              results={results}
-              participants={participants}
-              timeline={timeline}
-              athletes={athletes}
-              currentUser={currentUser}
-              compact
-            />
+            <div className={styles.standingsList} tabIndex={0} aria-label="Scrollable live results and standings">
+              <EventResultsView
+                event={activeEvent}
+                results={results}
+                participants={participants}
+                timeline={timeline}
+                athletes={athletes}
+                currentUser={currentUser}
+                compact
+              />
+            </div>
           </div>
         </aside>
       </div>
