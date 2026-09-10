@@ -98,17 +98,20 @@ async function readBody(response: Response): Promise<unknown> {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // Short-circuit when offline: avoids Auth0 token refresh failures (401)
-  // and network errors. Callers handle NETWORK_ERROR by falling back to cache.
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
-  }
-
   const tokenGetter = getAccessToken;
   // Keep an action in the workspace in which it began while Auth0 obtains its token.
   const workspaceId = activeWorkspaceId;
   let accessToken: string | undefined;
-  if (tokenGetter) accessToken = await getCurrentAccessToken();
+  if (tokenGetter) {
+    try {
+      accessToken = await getCurrentAccessToken();
+    } catch {
+      // Auth0 token refresh failed — almost always means offline.
+      // Convert to NETWORK_ERROR so callers can fall back to cache
+      // instead of seeing a confusing "invalid token" 401.
+      throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+    }
+  }
 
   const headers = new Headers(init?.headers);
   if (!headers.has('Content-Type')) {

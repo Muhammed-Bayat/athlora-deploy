@@ -384,7 +384,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback('Finish time recorded successfully.', reload));
     } catch (err) {
-      if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+      if (hasApiCode(err, 'NETWORK_ERROR')) {
         await enqueueCreateEntry(selectedEventId, payload);
         setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
         setToast('Finish time queued for sync when online.');
@@ -423,7 +423,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback(`Recorded incident: ${getIncidentTypeLabel(incidentType)}`, reload));
     } catch (err) {
-      if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+      if (hasApiCode(err, 'NETWORK_ERROR')) {
         await enqueueCreateEntry(selectedEventId, payload);
         setToast(`Incident queued for sync when online: ${getIncidentTypeLabel(incidentType)}`);
         void refreshQueueStatus(selectedEventId);
@@ -498,7 +498,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         shouldRestoreFocus = true;
         setConflictNotice('This entry changed on another device. Latest entries reloaded; reopen it to continue editing.');
         await loadEventData(selectedEventId);
-      } else if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+      } else if (hasApiCode(err, 'NETWORK_ERROR')) {
         const patch: TimelineEntryPatchPayload = editingEntry.entryType === 'note'
           ? { expectedVersion: editingEntry.version, noteText: editNote.trim() }
           : {
@@ -553,7 +553,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         shouldRestoreFocus = true;
         setConflictNotice('This entry changed on another device. Latest entries reloaded; review it before undoing.');
         await loadEventData(selectedEventId);
-      } else if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+      } else if (hasApiCode(err, 'NETWORK_ERROR')) {
         await enqueueDeleteEntry(selectedEventId, undoTarget.id, undoTarget.version);
         setUndoTarget(null);
         shouldRestoreFocus = true;
