@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: true },
       includeAssets: ['logo.png', 'logo-removebg.png'],
       manifest: {
         name: 'Athlora',
