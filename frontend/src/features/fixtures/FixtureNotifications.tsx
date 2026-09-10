@@ -1,15 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { deleteFixtureNotification, getUnreadFixtureNotificationCount, listFixtureNotifications, markFixtureNotificationRead, starFixtureNotification, unstarFixtureNotification } from '../../api/fixtures';
-import type { FixtureNotification } from '../../types';
+import { getUnreadEventReminderCount, listEventReminders, markEventReminderRead } from '../../api/reminders';
+import type { EventReminder, FixtureNotification } from '../../types';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './FixtureNotifications.module.css';
 
 export interface FixtureNotificationCounts {
   events: number;
   fixtures: number;
+  reminders: number;
 }
 
 const EVENT_LIFECYCLE_KINDS: ReadonlySet<FixtureNotification['kind']> = new Set(['fixture_started', 'event_coming_up', 'live_logger_started', 'event_ended']);
+
+interface DisplayItem {
+  kind: 'notification' | 'reminder';
+  id: string;
+  eventId: string;
+  readAt: string | null;
+  createdAt: string;
+  notification?: FixtureNotification;
+  reminder?: EventReminder;
+}
+
+function reminderCopy(reminder: EventReminder): string {
+  if (reminder.threshold === 'seven_days') return 'An event is coming up in 7 days.';
+  return 'An event is coming up tomorrow.';
+}
 
 function notificationCopy(notification: FixtureNotification): string {
   const response = typeof notification.payload.response === 'string' ? notification.payload.response.replace('_', ' ') : null;
@@ -24,29 +41,52 @@ function notificationCopy(notification: FixtureNotification): string {
   return `${club} ${response ?? 'responded'} to your fixture invitation.${message ? ` ${message}` : ''}`;
 }
 
-function notificationDate(notification: FixtureNotification): string {
-  return new Date(notification.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function itemCopy(item: DisplayItem): string {
+  if (item.kind === 'reminder' && item.reminder) return reminderCopy(item.reminder);
+  if (item.notification) return notificationCopy(item.notification);
+  return '';
+}
+
+function itemDate(item: DisplayItem): string {
+  return new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function toDisplayItems(notifications: FixtureNotification[], reminders: EventReminder[]): DisplayItem[] {
+  const items: DisplayItem[] = [
+    ...notifications.map((n) => ({ kind: 'notification' as const, id: n.id, eventId: n.eventId, readAt: n.readAt, createdAt: n.createdAt, notification: n })),
+    ...reminders.map((r) => ({ kind: 'reminder' as const, id: r.id, eventId: r.eventId, readAt: r.readAt, createdAt: r.createdAt, reminder: r })),
+  ];
+  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return items;
 }
 
 export function FixtureNotifications({ onCountsChange }: { onCountsChange: (counts: FixtureNotificationCounts) => void }) {
   const { activeWorkspace } = useWorkspace();
   const notificationsRef = useRef<HTMLDetailsElement | null>(null);
   const [notifications, setNotifications] = useState<FixtureNotification[]>([]);
+  const [reminders, setReminders] = useState<EventReminder[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let current = true;
     const load = () => {
-      void Promise.all([listFixtureNotifications(), getUnreadFixtureNotificationCount()]).then(([response, unread]) => {
+      void Promise.all([
+        listFixtureNotifications(),
+        getUnreadFixtureNotificationCount(),
+        listEventReminders(),
+        getUnreadEventReminderCount(),
+      ]).then(([response, unread, reminderResponse, reminderUnread]) => {
         if (!current) return;
         setNotifications(response.data);
-        setUnreadCount(unread);
+        setReminders(reminderResponse.data);
+        setUnreadCount(unread + reminderUnread);
         onCountsChange({
           events: response.data.filter((item) => item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
           fixtures: response.data.filter((item) => item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+          reminders: reminderUnread,
         });
       }).catch(() => {
-        if (current) onCountsChange({ events: 0, fixtures: 0 });
+        if (current) onCountsChange({ events: 0, fixtures: 0, reminders: 0 });
       });
     };
     load();
@@ -67,7 +107,7 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
   }, []);
 
-  const markRead = async (notification: FixtureNotification) => {
+  const markNotificationRead = async (notification: FixtureNotification) => {
     if (notification.readAt) return;
     await markFixtureNotificationRead(notification.id);
     setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
@@ -75,7 +115,28 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     onCountsChange({
       events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
       fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      reminders: reminders.filter((item) => item.readAt === null).length,
     });
+  };
+
+  const markReminderRead = async (reminder: EventReminder) => {
+    if (reminder.readAt) return;
+    await markEventReminderRead(reminder.id);
+    setReminders((current) => current.map((item) => item.id === reminder.id ? { ...item, readAt: new Date().toISOString() } : item));
+    setUnreadCount((count) => Math.max(0, count - 1));
+    onCountsChange({
+      events: notifications.filter((item) => item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      fixtures: notifications.filter((item) => item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      reminders: reminders.filter((item) => item.id !== reminder.id && item.readAt === null).length,
+    });
+  };
+
+  const handleMarkRead = async (item: DisplayItem) => {
+    if (item.kind === 'reminder' && item.reminder) {
+      await markReminderRead(item.reminder);
+    } else if (item.notification) {
+      await markNotificationRead(item.notification);
+    }
   };
 
   const toggleStar = async (e: React.MouseEvent, notification: FixtureNotification) => {
@@ -99,20 +160,23 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     onCountsChange({
       events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
       fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      reminders: reminders.filter((item) => item.readAt === null).length,
     });
   };
 
+  const displayItems = toDisplayItems(notifications, reminders);
+
   return <details ref={notificationsRef} className={styles.notifications}>
-    <summary aria-label={`Fixture notifications, ${unreadCount} unread`}>
+    <summary aria-label={`Notifications, ${unreadCount} unread`}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
       {unreadCount > 0 && <span className={styles.badge} aria-hidden="true">{unreadCount > 9 ? '9+' : unreadCount}</span>}
     </summary>
-    <section className={styles.panel} aria-label="Fixture notifications">
+    <section className={styles.panel} aria-label="Notifications">
       <header className={styles.panelHeader}>
-        <div><p>Fixture activity</p><h2>Notifications</h2></div>
+        <div><p>Updates</p><h2>Notifications</h2></div>
         <span>{unreadCount ? `${unreadCount} new` : 'All caught up'}</span>
       </header>
-      {notifications.length === 0 ? <div className={styles.empty}><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg></i><p>No fixture notifications yet.</p></div> : <ul className={styles.list}>{notifications.map((notification) => <li key={notification.id} className={styles.item}><button type="button" data-read={Boolean(notification.readAt)} onClick={() => void markRead(notification)} disabled={Boolean(notification.readAt)} aria-label={notification.readAt ? `Notification read: ${notificationCopy(notification)}` : `Mark notification as read: ${notificationCopy(notification)}`}><i aria-hidden="true" /><span><strong>{notification.readAt ? 'Read' : 'New'}</strong><span>{notificationCopy(notification)}</span></span><time dateTime={notification.createdAt}>{notificationDate(notification)}</time></button><span className={styles.actions}><button type="button" className={styles.starBtn} data-starred={Boolean(notification.starredAt)} onClick={(e) => void toggleStar(e, notification)} aria-label={notification.starredAt ? `Unstar notification: ${notificationCopy(notification)}` : `Star notification: ${notificationCopy(notification)}`}><svg viewBox="0 0 24 24" fill={notification.starredAt ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></button>{notification.readAt && <button type="button" className={styles.deleteBtn} onClick={(e) => void handleDelete(e, notification)} aria-label={`Delete notification: ${notificationCopy(notification)}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}</span></li>)}</ul>}
+      {displayItems.length === 0 ? <div className={styles.empty}><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg></i><p>No notifications yet.</p></div> : <ul className={styles.list}>{displayItems.map((item) => <li key={`${item.kind}-${item.id}`} className={styles.item}><button type="button" data-read={Boolean(item.readAt)} onClick={() => void handleMarkRead(item)} disabled={Boolean(item.readAt)} aria-label={item.readAt ? `Notification read: ${itemCopy(item)}` : `Mark notification as read: ${itemCopy(item)}`}><i aria-hidden="true" /><span><strong>{item.readAt ? 'Read' : 'New'}</strong><span>{itemCopy(item)}</span></span><time dateTime={item.createdAt}>{itemDate(item)}</time></button>{item.kind === 'notification' && item.notification && <span className={styles.actions}><button type="button" className={styles.starBtn} data-starred={Boolean(item.notification.starredAt)} onClick={(e) => void toggleStar(e, item.notification!)} aria-label={item.notification.starredAt ? `Unstar notification: ${notificationCopy(item.notification!)}` : `Star notification: ${notificationCopy(item.notification!)}`}><svg viewBox="0 0 24 24" fill={item.notification.starredAt ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></button>{item.notification.readAt && <button type="button" className={styles.deleteBtn} onClick={(e) => void handleDelete(e, item.notification!)} aria-label={`Delete notification: ${notificationCopy(item.notification!)}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}</span>}</li>)}</ul>}
     </section>
   </details>;
 }

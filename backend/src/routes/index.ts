@@ -20,6 +20,7 @@ import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js'
 import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
+import remindersRouter from './reminders.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, resolveLocalApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
@@ -119,5 +120,6 @@ router.use(
 );
 router.use('/fixtures', verifyAuth0Token, resolveApplicationUser, fixturesRouter);
 router.use('/notifications', verifyAuth0Token, resolveApplicationUser, fixtureNotificationsRouter);
+router.use('/reminders', verifyAuth0Token, resolveApplicationUser, remindersRouter);
 
 export default router;
