@@ -7,12 +7,15 @@ import { listResults } from '../../api/results';
 import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
+import { OfflineIndicator } from '../../components/OfflineIndicator';
+import { QueueStatusBadge } from './QueueStatusBadge';
 import { useCurrentUser } from '../auth/CurrentUserContext';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { EventResultsView } from '../results/EventResultsView';
 import { PublicLoggerPanel } from '../events/PublicLoggerPanel';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
+import { useEventOffline } from '../../hooks/useEventOffline';
 import type {
   AthleticsEvent,
   Athlete,
@@ -47,6 +50,16 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const { activeWorkspace } = useWorkspace();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
+  const {
+    isOnline,
+    cacheEventData: cacheEventOfflineData,
+    getCachedEventData,
+    createEntry: enqueueCreateEntry,
+    updateEntry: enqueueUpdateEntry,
+    deleteEntry: enqueueDeleteEntry,
+    syncPending,
+    refreshQueueStatus,
+  } = useEventOffline(currentUser?.id ?? '', selectedEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
   const [isGuestFixture, setIsGuestFixture] = useState(false);
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
@@ -158,6 +171,10 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         listTimelineEntries(eventId),
       ]);
       if (requestId !== eventDataRequestRef.current) return 'failed';
+
+      // Cache event data for offline use
+      void cacheEventOfflineData(eventId, activeWorkspace.id, eventRes, participantsRes.data, timelineRes.data);
+
       if (eventRes.status !== 'in_progress') {
         setEvents((current) => current.filter((event) => event.id !== eventId));
         setSelectedEventId(null);
@@ -178,9 +195,22 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       else void secondary;
       return 'loaded';
     } catch (err) {
-      if (requestId === eventDataRequestRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to load event data');
+      if (requestId !== eventDataRequestRef.current) return 'failed';
+
+      // Offline fallback: serve from cache
+      if (!isOnline) {
+        const cached = await getCachedEventData(eventId);
+        if (cached && cached.event) {
+          setActiveEvent(cached.event);
+          setParticipants(cached.participants);
+          setTimeline(cached.timeline);
+          setEventDataLoading(false);
+          setToast('Showing cached data. Connect to internet to sync.');
+          return 'loaded';
+        }
       }
+
+      setError(err instanceof Error ? err.message : 'Failed to load event data');
       return 'failed';
     } finally {
       if (requestId === eventDataRequestRef.current) setEventDataLoading(false);
@@ -212,6 +242,23 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   useEffect(() => {
     if (editError) window.requestAnimationFrame(() => editErrorRef.current?.focus());
   }, [editError]);
+
+  // Sync pending offline actions when coming back online
+  useEffect(() => {
+    if (!isOnline || !selectedEventId) return;
+    const syncOnReconnect = async () => {
+      try {
+        const result = await syncPending(selectedEventId);
+        if (result.accepted > 0 || result.duplicates > 0) {
+          setToast(`Synced ${result.accepted + result.duplicates} queued action(s).`);
+          void loadEventDataRef.current(selectedEventId);
+        }
+      } catch {
+        // Sync errors are non-fatal
+      }
+    };
+    void syncOnReconnect();
+  }, [isOnline, selectedEventId, syncPending]);
 
   useRealtimeRoom({
     workspaceId: activeWorkspace.id,
@@ -307,14 +354,23 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setError(null);
     setConflictNotice(null);
 
+    const payload = {
+      athleteId,
+      discipline: '100m' as const,
+      entryType: 'attempt' as const,
+      value: num,
+      unit: 'seconds' as const,
+    };
+
     try {
-      await createTimelineEntry(selectedEventId, {
-        athleteId,
-        discipline: '100m',
-        entryType: 'attempt',
-        value: num,
-        unit: 'seconds',
-      });
+      if (!isOnline) {
+        await enqueueCreateEntry(selectedEventId, payload);
+        setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
+        setToast('Finish time queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
+        return;
+      }
+      await createTimelineEntry(selectedEventId, payload);
       setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback('Finish time recorded successfully.', reload));
@@ -334,14 +390,22 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setError(null);
     setConflictNotice(null);
 
+    const payload = {
+      athleteId,
+      discipline: '100m' as const,
+      entryType: 'penalty' as const,
+      incidentType,
+      value: null,
+    };
+
     try {
-      await createTimelineEntry(selectedEventId, {
-        athleteId,
-        discipline: '100m',
-        entryType: 'penalty',
-        incidentType,
-        value: null,
-      });
+      if (!isOnline) {
+        await enqueueCreateEntry(selectedEventId, payload);
+        setToast(`Incident queued for sync when online: ${getIncidentTypeLabel(incidentType)}`);
+        void refreshQueueStatus(selectedEventId);
+        return;
+      }
+      await createTimelineEntry(selectedEventId, payload);
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback(`Recorded incident: ${getIncidentTypeLabel(incidentType)}`, reload));
     } catch (err) {
@@ -395,6 +459,16 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
             value: isTimedEntry ? valNum : null,
             incidentType: editIncident,
           };
+
+      if (!isOnline) {
+        await enqueueUpdateEntry(selectedEventId, editingEntry.id, patch);
+        setEditingEntry(null);
+        shouldRestoreFocus = true;
+        setToast('Edit queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
+        return;
+      }
+
       await updateTimelineEntry(selectedEventId, editingEntry.id, patch);
       setEditingEntry(null);
       shouldRestoreFocus = true;
@@ -426,6 +500,15 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
     let shouldRestoreFocus = false;
     try {
+      if (!isOnline) {
+        await enqueueDeleteEntry(selectedEventId, undoTarget.id, undoTarget.version);
+        setUndoTarget(null);
+        shouldRestoreFocus = true;
+        setToast('Undo queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
+        return;
+      }
+
       await deleteTimelineEntry(selectedEventId, undoTarget.id, {
         expectedVersion: undoTarget.version,
       });
@@ -457,6 +540,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         <div className={styles.header}>
           <h1 ref={pageHeadingRef} tabIndex={-1}>Live Race Logger</h1>
           <p>Select an in-progress or scheduled 100m event to launch track-side recording.</p>
+          <OfflineIndicator />
         </div>
         {error && <div className={styles.errorAlert} role="alert">{error}</div>}
         {toast && <Toast onDismiss={() => setToast(null)}>{toast}</Toast>}
@@ -532,6 +616,10 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           <p>{activeEvent.locationName ?? 'Track'} · 100m · {availableParticipants.length} assigned athletes</p>
         </div>
         <div className={styles.headerButtons}>
+          <OfflineIndicator />
+          {selectedEventId && currentUser && (
+            <QueueStatusBadge eventId={selectedEventId} userId={currentUser.id} />
+          )}
           <Button
             variant="secondary"
             onClick={returnToEventList}
