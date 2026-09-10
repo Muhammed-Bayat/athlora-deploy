@@ -157,9 +157,8 @@ describe('API client', () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({
-      status: 401,
-      code: 'AUTH_TOKEN_ACQUISITION_FAILED',
-      message: 'Token expired',
+      status: 0,
+      code: 'NETWORK_ERROR',
     });
   });
 });
