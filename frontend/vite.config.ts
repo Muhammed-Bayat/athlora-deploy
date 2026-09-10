@@ -16,6 +16,7 @@ export default defineConfig({
         theme_color: '#001D3C',
         background_color: '#00070D',
         display: 'standalone',
+        id: '/console',
         start_url: '/console',
         scope: '/',
         icons: [

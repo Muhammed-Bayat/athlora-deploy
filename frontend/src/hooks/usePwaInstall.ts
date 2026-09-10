@@ -16,12 +16,15 @@ export function usePwaInstall(): PwaInstallState {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    console.log('[PWA] usePwaInstall mounted, display-mode:', window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser');
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('[PWA] beforeinstallprompt fired');
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
+      console.log('[PWA] appinstalled fired');
       setIsInstalled(true);
       setDeferredPrompt(null);
     };
