@@ -11,6 +11,7 @@ export interface FixtureNotification {
   kind: FixtureNotificationKind;
   payload: Record<string, unknown>;
   readAt: string | null;
+  starredAt: string | null;
   createdAt: string;
 }
 
@@ -25,7 +26,8 @@ function timestamp(value: Date | string | null): string | null {
 
 function mapNotification(row: {
   id: string; event_id: string; invitation_id: string | null; kind: FixtureNotificationKind;
-  payload: Record<string, unknown>; read_at: Date | string | null; created_at: Date | string;
+  payload: Record<string, unknown>; read_at: Date | string | null; starred_at: Date | string | null;
+  created_at: Date | string;
 }): FixtureNotification {
   return {
     id: row.id,
@@ -34,6 +36,7 @@ function mapNotification(row: {
     kind: row.kind,
     payload: row.payload,
     readAt: timestamp(row.read_at),
+    starredAt: timestamp(row.starred_at),
     createdAt: timestamp(row.created_at)!,
   };
 }
@@ -95,12 +98,13 @@ export async function listFixtureNotifications(userId: string, workspaceId: stri
   if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId)) throw notFound();
   const result = await executor.query<{
     id: string; event_id: string; invitation_id: string | null; kind: FixtureNotificationKind;
-    payload: Record<string, unknown>; read_at: Date | string | null; created_at: Date | string;
+    payload: Record<string, unknown>; read_at: Date | string | null; starred_at: Date | string | null;
+    created_at: Date | string;
   }>(
-    `SELECT id, event_id, invitation_id, kind, payload, read_at, created_at
+    `SELECT id, event_id, invitation_id, kind, payload, read_at, starred_at, created_at
      FROM fixture_notifications
-     WHERE recipient_user_id = $1 AND workspace_id = $2
-     ORDER BY created_at DESC, id DESC`,
+     WHERE recipient_user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+     ORDER BY starred_at DESC NULLS LAST, created_at DESC, id DESC`,
     [userId, workspaceId],
   );
   return result.rows.map(mapNotification);
@@ -110,7 +114,7 @@ export async function countUnreadFixtureNotifications(userId: string, workspaceI
   if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId)) throw notFound();
   const result = await executor.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM fixture_notifications
-     WHERE recipient_user_id = $1 AND workspace_id = $2 AND read_at IS NULL`,
+     WHERE recipient_user_id = $1 AND workspace_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
     [userId, workspaceId],
   );
   return Number(result.rows[0]?.count ?? 0);
@@ -121,6 +125,39 @@ export async function markFixtureNotificationRead(userId: string, workspaceId: s
   const result = await getPool().query(
     `UPDATE fixture_notifications SET read_at = COALESCE(read_at, now())
      WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw notFound();
+}
+
+export async function deleteFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET deleted_at = now()
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND read_at IS NOT NULL AND deleted_at IS NULL
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw new ApiError(409, 'NOT_DELETABLE', 'Notification must be read before deletion');
+}
+
+export async function starFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET starred_at = COALESCE(starred_at, now())
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND deleted_at IS NULL
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw notFound();
+}
+
+export async function unstarFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET starred_at = NULL
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND deleted_at IS NULL
      RETURNING id`,
     [notificationId, userId, workspaceId],
   );

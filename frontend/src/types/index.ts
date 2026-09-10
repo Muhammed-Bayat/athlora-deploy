@@ -254,6 +254,7 @@ export interface FixtureNotification {
   kind: FixtureNotificationKind;
   payload: Record<string, unknown>;
   readAt: string | null;
+  starredAt: string | null;
   createdAt: string;
 }
 
