@@ -16,6 +16,7 @@ import { EventResultsView } from '../results/EventResultsView';
 import { PublicLoggerPanel } from '../events/PublicLoggerPanel';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import { useEventOffline } from '../../hooks/useEventOffline';
+import { isDeviceOnline } from '../../offline/networkStatus';
 import type {
   AthleticsEvent,
   Athlete,
@@ -124,7 +125,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   };
 
   const loadEvents = async (): Promise<boolean> => {
-    if (!navigator.onLine) {
+    if (!isDeviceOnline()) {
       setEventsLoading(false);
       return false;
     }
@@ -202,7 +203,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       if (requestId !== eventDataRequestRef.current) return 'failed';
 
       // Offline fallback: serve from cache
-      if (!isOnline || !navigator.onLine) {
+      if (!isOnline || !isDeviceOnline()) {
         const cached = await getCachedEventData(eventId);
         if (cached && cached.event) {
           setActiveEvent(cached.event);
@@ -249,7 +250,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
   // Sync pending offline actions when coming back online
   useEffect(() => {
-    if (!isOnline || !navigator.onLine || !selectedEventId) return;
+    if (!isOnline || !isDeviceOnline() || !selectedEventId) return;
     const syncOnReconnect = async () => {
       try {
         const result = await syncPending(selectedEventId);
@@ -372,7 +373,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     };
 
     try {
-      if (!isOnline || !navigator.onLine) {
+      if (!isOnline || !isDeviceOnline()) {
         await enqueueCreateEntry(selectedEventId, payload);
         setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
         setToast('Finish time queued for sync when online.');
@@ -413,7 +414,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     };
 
     try {
-      if (!isOnline || !navigator.onLine) {
+      if (!isOnline || !isDeviceOnline()) {
         await enqueueCreateEntry(selectedEventId, payload);
         setToast(`Incident queued for sync when online: ${getIncidentTypeLabel(incidentType)}`);
         void refreshQueueStatus(selectedEventId);
@@ -478,7 +479,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
             incidentType: editIncident,
           };
 
-      if (!isOnline || !navigator.onLine) {
+      if (!isOnline || !isDeviceOnline()) {
         await enqueueUpdateEntry(selectedEventId, editingEntry.id, patch);
         setEditingEntry(null);
         shouldRestoreFocus = true;
@@ -531,7 +532,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
     let shouldRestoreFocus = false;
     try {
-      if (!isOnline || !navigator.onLine) {
+      if (!isOnline || !isDeviceOnline()) {
         await enqueueDeleteEntry(selectedEventId, undoTarget.id, undoTarget.version);
         setUndoTarget(null);
         shouldRestoreFocus = true;

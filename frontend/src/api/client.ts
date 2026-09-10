@@ -1,4 +1,5 @@
 import type { ApiList, User } from '../types';
+import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 let getAccessToken: (() => Promise<string>) | undefined;
@@ -45,9 +46,20 @@ export function setAccessTokenGetter(getter: (() => Promise<string>) | undefined
 // Realtime connections use the same Auth0 token source as HTTP requests.
 export async function getCurrentAccessToken(): Promise<string | undefined> {
   if (!getAccessToken) return undefined;
+  // Prevent Auth0 background token refresh when offline — avoids 401 cascade.
+  // Uses both navigator.onLine (immediate) and failure tracking (reliable).
+  if (!isDeviceOnline()) return undefined;
   try {
-    return await getAccessToken();
+    const token = await getAccessToken();
+    recordNetworkSuccess();
+    return token;
   } catch (error) {
+    // If the error is a network failure, record it so future requests
+    // short-circuit immediately without waiting for Auth0.
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('network') || msg.includes('Network') || msg.includes('fetch') || msg.includes('offline') || msg.includes('Failed to fetch')) {
+      recordNetworkFailure();
+    }
     throw new ApiError(
       401,
       'AUTH_TOKEN_ACQUISITION_FAILED',
@@ -98,6 +110,12 @@ async function readBody(response: Response): Promise<unknown> {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Short-circuit when offline: avoids Auth0 token refresh failures (401)
+  // and fetch errors. Uses both navigator.onLine and failure tracking.
+  if (!isDeviceOnline()) {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+  }
+
   const tokenGetter = getAccessToken;
   // Keep an action in the workspace in which it began while Auth0 obtains its token.
   const workspaceId = activeWorkspaceId;
@@ -109,6 +127,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Auth0 token refresh failed — almost always means offline.
       // Convert to NETWORK_ERROR so callers can fall back to cache
       // instead of seeing a confusing "invalid token" 401.
+      recordNetworkFailure();
       throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
     }
   }
@@ -130,7 +149,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers,
     });
+    recordNetworkSuccess();
   } catch (error) {
+    recordNetworkFailure();
     throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
   }
 

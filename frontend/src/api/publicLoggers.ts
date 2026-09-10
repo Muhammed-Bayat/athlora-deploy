@@ -1,10 +1,11 @@
 import type { ApiList, PublicLoggerLink, PublicLoggerSnapshot, PublicTimelineEntry, TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../types';
 import { ApiError, request } from './client';
+import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  if (!isDeviceOnline()) {
     throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
   }
   let response: Response;
@@ -13,7 +14,9 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: { 'Content-Type': 'application/json', ...init?.headers },
     });
+    recordNetworkSuccess();
   } catch (error) {
+    recordNetworkFailure();
     throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
   }
   const body = response.status === 204 ? undefined : await response.json().catch(() => undefined) as unknown;

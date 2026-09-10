@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentAccessToken } from '../../api/client';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { isDeviceOnline } from '../../offline/networkStatus';
 
 export type RealtimeConnectionState = 'unavailable' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -37,9 +39,11 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
   const [state, setState] = useState<RealtimeConnectionState>(() => (
     import.meta.env.VITE_REALTIME_URL ? 'disconnected' : 'unavailable'
   ));
+  const { isOnline } = useOnlineStatus();
   const invalidateRef = useRef(onInvalidate);
   const invalidatingRef = useRef(false);
   const receivedNotificationIdsRef = useRef(new Set<string>());
+  const socketRef = useRef<Socket | undefined>(undefined);
   invalidateRef.current = onInvalidate;
 
   useEffect(() => {
@@ -50,7 +54,6 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
     }
 
     let active = true;
-    let socket: Socket | undefined;
     const invalidate = (payload?: unknown) => {
       const id = typeof payload === 'object' && payload !== null && 'id' in payload && typeof payload.id === 'string'
         ? payload.id
@@ -68,8 +71,14 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
       });
     };
 
-    setState('connecting');
-    void (async () => {
+    const connect = async () => {
+      if (!active) return;
+      // Don't attempt connection when offline — avoids Auth0 token refresh 401s.
+      if (!isDeviceOnline()) {
+        setState('unavailable');
+        return;
+      }
+      setState('connecting');
       try {
         const token = await getCurrentAccessToken();
         if (!token || !active) {
@@ -78,10 +87,12 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
         }
         const { io } = await loadSocketModule();
         if (!active) return;
-        socket = io(realtimeUrl, {
+        const socket = io(realtimeUrl, {
           auth: { token, workspaceId },
           transports: ['websocket', 'polling'],
+          reconnection: false,
         });
+        socketRef.current = socket;
         socket.on('connect', () => {
           if (!active || !socket) return;
           socket.emit(realtimeProtocol.subscribeEvent, eventId);
@@ -97,15 +108,28 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
       } catch {
         if (active) setState('unavailable');
       }
-    })();
+    };
+
+    void connect();
 
     return () => {
       active = false;
+      const socket = socketRef.current;
+      socketRef.current = undefined;
       if (!socket) return;
       socket.off(realtimeProtocol.invalidated, invalidate);
       socket.disconnect();
     };
-  }, [eventId, workspaceId]);
+  }, [eventId, workspaceId, isOnline]);
+
+  // Disconnect when going offline to prevent reconnection attempts.
+  useEffect(() => {
+    if (!isOnline && socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = undefined;
+      setState('disconnected');
+    }
+  }, [isOnline]);
 
   return state;
 }
