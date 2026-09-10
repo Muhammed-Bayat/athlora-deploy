@@ -54,10 +54,6 @@ function StaticTrackWorld() {
           <lineBasicMaterial color={lane === 3 ? '#d7fdff' : '#3c90a5'} transparent opacity={lane === 3 ? 0.96 : 0.46} />
         </lineLoop>
       ))}
-      <mesh position={[0, 0.09, 0]}>
-        <circleGeometry args={[1.48, 48]} />
-        <meshBasicMaterial color="#093547" transparent opacity={0.78} />
-      </mesh>
     </group>
   );
 }

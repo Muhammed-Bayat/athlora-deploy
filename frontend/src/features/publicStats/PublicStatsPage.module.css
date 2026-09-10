@@ -49,8 +49,7 @@
 .hero h1 em { color: #8ae9f2; font-style: normal; text-shadow: 0 0 30px rgba(138, 233, 242, 0.28); }
 .hero > div > p:last-child { max-width: 500px; margin: 24px 0 0; color: #a9c2cb; font-size: 1.02rem; line-height: 1.7; }
 
-.trackFigure { position: relative; min-height: 348px; margin: 0; border: 1px solid rgba(138, 233, 242, 0.14); border-radius: 28px; background: radial-gradient(circle at 48% 46%, rgba(12, 77, 94, 0.33), rgba(1, 14, 23, 0.82) 66%); box-shadow: inset 0 1px rgba(255, 255, 255, 0.045), 0 34px 80px rgba(0, 0, 0, 0.3), 0 0 55px rgba(69, 190, 215, 0.08); overflow: hidden; }
-.trackFigure::before { content: ''; position: absolute; inset: 12px; border: 1px solid rgba(138, 233, 242, 0.08); border-radius: 20px; pointer-events: none; }
+.trackFigure { position: relative; min-height: 348px; margin: 0; }
 .trackCanvas { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
 .trackFigure figcaption { position: absolute; right: 20px; bottom: 18px; left: 20px; color: #9abac3; font: 700 0.62rem var(--font-family-mono); letter-spacing: 0.1em; text-align: right; text-transform: uppercase; pointer-events: none; }
 .trackFallback { position: absolute; inset: 20% 8%; display: grid; place-items: center; transform: rotate(-7deg); }
