@@ -44,6 +44,10 @@ export interface Club {
   updatedAt: string;
 }
 
+export interface ClubPublication {
+  publicResultsEnabled: boolean;
+}
+
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ClubJoinRequest {
@@ -98,6 +102,26 @@ export interface ClubStatistics {
 
 export interface ClubComparisonDetail {
   clubs: [ClubStatistics, ClubStatistics];
+}
+
+export interface PublicClub {
+  id: string;
+  name: string;
+}
+
+export interface PublicAthleteStatistics {
+  athlete: { id: string; name: string };
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+}
+
+export interface PublicClubStatistics extends ClubStatistics {
+  athletes: PublicAthleteStatistics[];
 }
 
 export interface Athlete {

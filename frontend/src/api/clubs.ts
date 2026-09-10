@@ -4,6 +4,7 @@ import type {
   ClubAthleteLookup,
   ClubComparisonDetail,
   ClubJoinRequest,
+  ClubPublication,
   ClubStatistics,
 } from '../types';
 
@@ -32,6 +33,18 @@ export async function getClubComparison(
 ): Promise<ClubComparisonDetail> {
   const params = new URLSearchParams({ club1Id, club2Id });
   const response = await request<{ data: ClubComparisonDetail }>(`/api/v1/clubs/comparison?${params.toString()}`);
+  return response.data;
+}
+
+export async function getClubPublication(): Promise<ClubPublication> {
+  const response = await request<{ data: ClubPublication }>('/api/v1/clubs/publication');
+  return response.data;
+}
+
+export async function updateClubPublication(publicResultsEnabled: boolean): Promise<ClubPublication> {
+  const response = await request<{ data: ClubPublication }>('/api/v1/clubs/publication', {
+    method: 'PUT', body: JSON.stringify({ publicResultsEnabled }),
+  });
   return response.data;
 }
 

@@ -14,6 +14,7 @@ import {
   type ClubAthleteLookup,
   type ClubComparisonDetail,
   type ClubJoinRequest,
+  type ClubPublication,
   type ClubStatistics,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
@@ -80,6 +81,34 @@ export async function listClubs(search: string | null): Promise<Club[]> {
     [search],
   );
   return result.rows.map(mapClubRow);
+}
+
+export async function getClubPublication(
+  workspaceId: string,
+  executor: DbExecutor = getPool(),
+): Promise<ClubPublication> {
+  const result = await executor.query<{ public_results_enabled: boolean }>(
+    'SELECT public_results_enabled FROM clubs WHERE workspace_id = $1',
+    [workspaceId],
+  );
+  if (!result.rows[0]) throw clubNotFound();
+  return { publicResultsEnabled: result.rows[0].public_results_enabled };
+}
+
+export async function updateClubPublication(
+  workspaceId: string,
+  publicResultsEnabled: boolean,
+  executor: DbExecutor = getPool(),
+): Promise<ClubPublication> {
+  const result = await executor.query<{ public_results_enabled: boolean }>(
+    `UPDATE clubs
+     SET public_results_enabled = $2, updated_at = now()
+     WHERE workspace_id = $1
+     RETURNING public_results_enabled`,
+    [workspaceId, publicResultsEnabled],
+  );
+  if (!result.rows[0]) throw clubNotFound();
+  return { publicResultsEnabled: result.rows[0].public_results_enabled };
 }
 
 export async function listClubComparisonAthletes(

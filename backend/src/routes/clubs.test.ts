@@ -12,12 +12,14 @@ vi.mock('../services/clubs.js', () => ({
   createClub: vi.fn(),
   createJoinRequest: vi.fn(),
   getClubComparison: vi.fn(),
+  getClubPublication: vi.fn(),
   getClubStatistics: vi.fn(),
   listClubComparisonAthletes: vi.fn(),
   listClubJoinRequests: vi.fn(),
   listClubs: vi.fn(),
   listMyJoinRequests: vi.fn(),
   reviewJoinRequest: vi.fn(),
+  updateClubPublication: vi.fn(),
   withdrawJoinRequest: vi.fn(),
 }));
 
@@ -130,6 +132,27 @@ describe('club routes', () => {
     expect(clubService.listClubComparisonAthletes).toHaveBeenCalledWith(CLUB_ID, 'ari');
     expect(clubService.getClubStatistics).toHaveBeenCalledWith(CLUB_ID);
     expect(clubService.getClubComparison).toHaveBeenCalledWith(CLUB_ID, REQUEST_ID);
+  });
+
+  it('lets a coach view and update the active club publication setting', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.getClubPublication).mockResolvedValue({ publicResultsEnabled: false });
+    vi.mocked(clubService.updateClubPublication).mockResolvedValue({ publicResultsEnabled: true });
+
+    const status = await request(app)
+      .get('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid');
+    const updated = await request(app)
+      .put('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid')
+      .send({ publicResultsEnabled: true });
+
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual({ data: { publicResultsEnabled: false } });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toEqual({ data: { publicResultsEnabled: true } });
+    expect(clubService.getClubPublication).toHaveBeenCalledWith(WORKSPACE_ID);
+    expect(clubService.updateClubPublication).toHaveBeenCalledWith(WORKSPACE_ID, true);
   });
 
   it('requires the active club workspace and a coach to approve a request', async () => {
