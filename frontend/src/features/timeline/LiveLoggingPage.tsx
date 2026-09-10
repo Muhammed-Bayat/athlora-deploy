@@ -198,7 +198,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       if (requestId !== eventDataRequestRef.current) return 'failed';
 
       // Offline fallback: serve from cache
-      if (!isOnline) {
+      if (!isOnline || !navigator.onLine) {
         const cached = await getCachedEventData(eventId);
         if (cached && cached.event) {
           setActiveEvent(cached.event);
@@ -368,7 +368,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     };
 
     try {
-      if (!isOnline) {
+      if (!isOnline || !navigator.onLine) {
         await enqueueCreateEntry(selectedEventId, payload);
         setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
         setToast('Finish time queued for sync when online.');
@@ -380,7 +380,12 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback('Finish time recorded successfully.', reload));
     } catch (err) {
-      if (!(await recoverClosedEvent(err))) {
+      if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+        await enqueueCreateEntry(selectedEventId, payload);
+        setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
+        setToast('Finish time queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
+      } else if (!(await recoverClosedEvent(err))) {
         setError(err instanceof Error ? err.message : 'Failed to record finish');
       }
     } finally {
@@ -404,7 +409,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     };
 
     try {
-      if (!isOnline) {
+      if (!isOnline || !navigator.onLine) {
         await enqueueCreateEntry(selectedEventId, payload);
         setToast(`Incident queued for sync when online: ${getIncidentTypeLabel(incidentType)}`);
         void refreshQueueStatus(selectedEventId);
@@ -414,7 +419,11 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       const reload = await loadEventData(selectedEventId, true);
       setToast(mutationFeedback(`Recorded incident: ${getIncidentTypeLabel(incidentType)}`, reload));
     } catch (err) {
-      if (!(await recoverClosedEvent(err))) {
+      if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+        await enqueueCreateEntry(selectedEventId, payload);
+        setToast(`Incident queued for sync when online: ${getIncidentTypeLabel(incidentType)}`);
+        void refreshQueueStatus(selectedEventId);
+      } else if (!(await recoverClosedEvent(err))) {
         setError(err instanceof Error ? err.message : 'Failed to record incident');
       }
     } finally {
@@ -465,7 +474,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
             incidentType: editIncident,
           };
 
-      if (!isOnline) {
+      if (!isOnline || !navigator.onLine) {
         await enqueueUpdateEntry(selectedEventId, editingEntry.id, patch);
         setEditingEntry(null);
         shouldRestoreFocus = true;
@@ -485,6 +494,19 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         shouldRestoreFocus = true;
         setConflictNotice('This entry changed on another device. Latest entries reloaded; reopen it to continue editing.');
         await loadEventData(selectedEventId);
+      } else if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+        const patch: TimelineEntryPatchPayload = editingEntry.entryType === 'note'
+          ? { expectedVersion: editingEntry.version, noteText: editNote.trim() }
+          : {
+              expectedVersion: editingEntry.version,
+              value: isTimedEntry ? valNum : null,
+              incidentType: editIncident,
+            };
+        await enqueueUpdateEntry(selectedEventId, editingEntry.id, patch);
+        setEditingEntry(null);
+        shouldRestoreFocus = true;
+        setToast('Edit queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
       } else if (!(await recoverClosedEvent(err))) {
         setEditError(err instanceof Error ? err.message : 'Failed to update entry');
       } else {
@@ -505,7 +527,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
     let shouldRestoreFocus = false;
     try {
-      if (!isOnline) {
+      if (!isOnline || !navigator.onLine) {
         await enqueueDeleteEntry(selectedEventId, undoTarget.id, undoTarget.version);
         setUndoTarget(null);
         shouldRestoreFocus = true;
@@ -527,6 +549,12 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         shouldRestoreFocus = true;
         setConflictNotice('This entry changed on another device. Latest entries reloaded; review it before undoing.');
         await loadEventData(selectedEventId);
+      } else if (hasApiCode(err, 'NETWORK_ERROR') && !navigator.onLine) {
+        await enqueueDeleteEntry(selectedEventId, undoTarget.id, undoTarget.version);
+        setUndoTarget(null);
+        shouldRestoreFocus = true;
+        setToast('Undo queued for sync when online.');
+        void refreshQueueStatus(selectedEventId);
       } else if (!(await recoverClosedEvent(err))) {
         setUndoError(err instanceof Error ? err.message : 'Failed to delete entry');
       } else {
