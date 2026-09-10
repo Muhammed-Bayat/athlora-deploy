@@ -245,7 +245,7 @@ export interface FixtureTeamRoster {
   participants: EventParticipantSummary[];
 }
 
-export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started';
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started' | 'event_coming_up' | 'live_logger_started' | 'event_ended';
 
 export interface FixtureNotification {
   id: string;

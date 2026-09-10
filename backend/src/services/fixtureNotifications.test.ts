@@ -8,10 +8,13 @@ import {
   deleteFixtureNotification,
   listFixtureNotifications,
   markFixtureNotificationRead,
+  notifyEventComingUp,
+  notifyEventEnded,
   notifyFixtureInvitation,
   notifyFixtureReacceptanceRequired,
   notifyFixtureResponse,
   notifyFixtureStarted,
+  notifyLiveLoggerStarted,
   starFixtureNotification,
   unstarFixtureNotification,
 } from './fixtureNotifications.js';
@@ -181,5 +184,41 @@ describe('fixture notifications', () => {
 
     await expect(unstarFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('creates event_coming_up notifications for workspace coaches and assistants', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyEventComingUp({ query } as never, EVENT_ID, WORKSPACE_ID);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("'event_coming_up'");
+    expect(sql).toContain("'event:coming_up:' || ($1::uuid)::text");
+    expect(sql).toContain("wm.role IN ('coach', 'assistant')");
+    expect(parameters).toEqual([EVENT_ID, WORKSPACE_ID]);
+  });
+
+  it('creates live_logger_started notifications for workspace coaches and assistants', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyLiveLoggerStarted({ query } as never, EVENT_ID, WORKSPACE_ID);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("'live_logger_started'");
+    expect(sql).toContain("'event:live_logger_started:' || ($1::uuid)::text");
+    expect(sql).toContain("wm.role IN ('coach', 'assistant')");
+    expect(parameters).toEqual([EVENT_ID, WORKSPACE_ID]);
+  });
+
+  it('creates event_ended notifications for workspace coaches and assistants', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await notifyEventEnded({ query } as never, EVENT_ID, WORKSPACE_ID);
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("'event_ended'");
+    expect(sql).toContain("'event:ended:' || ($1::uuid)::text");
+    expect(sql).toContain("wm.role IN ('coach', 'assistant')");
+    expect(parameters).toEqual([EVENT_ID, WORKSPACE_ID]);
   });
 });

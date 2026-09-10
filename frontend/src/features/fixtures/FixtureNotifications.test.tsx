@@ -104,6 +104,70 @@ describe('FixtureNotifications', () => {
     expect(screen.getByRole('button', { name: /Delete notification: A fixture you are participating in has started/i })).toBeInTheDocument();
   });
 
+  it('shows event_coming_up notification copy', async () => {
+    fixtureApi.listFixtureNotifications.mockResolvedValue({
+      data: [
+        { id: 'n1', eventId: 'e1', invitationId: null, kind: 'event_coming_up', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+      ],
+      meta: { count: 1 },
+    });
+
+    const user = userEvent.setup();
+    render(<FixtureNotifications onCountsChange={vi.fn()} />);
+
+    await user.click(await screen.findByLabelText('Fixture notifications, 1 unread'));
+    expect(screen.getByText('An event has been scheduled.')).toBeInTheDocument();
+  });
+
+  it('shows live_logger_started notification copy', async () => {
+    fixtureApi.listFixtureNotifications.mockResolvedValue({
+      data: [
+        { id: 'n1', eventId: 'e1', invitationId: null, kind: 'live_logger_started', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+      ],
+      meta: { count: 1 },
+    });
+
+    const user = userEvent.setup();
+    render(<FixtureNotifications onCountsChange={vi.fn()} />);
+
+    await user.click(await screen.findByLabelText('Fixture notifications, 1 unread'));
+    expect(screen.getByText('Live logging has started for an event.')).toBeInTheDocument();
+  });
+
+  it('shows event_ended notification copy', async () => {
+    fixtureApi.listFixtureNotifications.mockResolvedValue({
+      data: [
+        { id: 'n1', eventId: 'e1', invitationId: null, kind: 'event_ended', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+      ],
+      meta: { count: 1 },
+    });
+
+    const user = userEvent.setup();
+    render(<FixtureNotifications onCountsChange={vi.fn()} />);
+
+    await user.click(await screen.findByLabelText('Fixture notifications, 1 unread'));
+    expect(screen.getByText('An event has ended.')).toBeInTheDocument();
+  });
+
+  it('counts event lifecycle notifications as events category', async () => {
+    const onCountsChange = vi.fn();
+    fixtureApi.listFixtureNotifications.mockResolvedValue({
+      data: [
+        { id: 'n1', eventId: 'e1', invitationId: null, kind: 'event_coming_up', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+        { id: 'n2', eventId: 'e1', invitationId: null, kind: 'live_logger_started', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+        { id: 'n3', eventId: 'e1', invitationId: null, kind: 'event_ended', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+        { id: 'n4', eventId: 'e1', invitationId: null, kind: 'fixture_invited', payload: {}, readAt: null, starredAt: null, createdAt: '2026-09-06T08:00:00.000Z' },
+      ],
+      meta: { count: 4 },
+    });
+    fixtureApi.getUnreadFixtureNotificationCount.mockResolvedValue(4);
+
+    render(<FixtureNotifications onCountsChange={onCountsChange} />);
+
+    await screen.findByLabelText('Fixture notifications, 4 unread');
+    expect(onCountsChange).toHaveBeenLastCalledWith({ events: 3, fixtures: 1 });
+  });
+
   it('deletes a read notification and removes it from the list', async () => {
     fixtureApi.listFixtureNotifications.mockResolvedValue({
       data: [
