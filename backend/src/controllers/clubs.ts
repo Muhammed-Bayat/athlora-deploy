@@ -5,12 +5,14 @@ import {
   createClub,
   createJoinRequest,
   getClubComparison,
+  getClubPublication,
   getClubStatistics,
   listClubComparisonAthletes,
   listClubJoinRequests,
   listClubs,
   listMyJoinRequests,
   reviewJoinRequest,
+  updateClubPublication,
   withdrawJoinRequest,
 } from '../services/clubs.js';
 import { normalizeRequiredString } from '../validation/primitives.js';
@@ -77,6 +79,23 @@ export const comparison: RequestHandler = async (req, res, next) => {
   try {
     const clubComparison = await getClubComparison(req.query.club1Id, req.query.club2Id);
     res.json({ data: clubComparison });
+  } catch (error) { next(error); }
+};
+
+export const publication: RequestHandler = async (req, res, next) => {
+  try {
+    const publication = await getClubPublication(getApplicationUserContext(req).workspaceId);
+    res.json({ data: publication });
+  } catch (error) { next(error); }
+};
+
+export const updatePublication: RequestHandler = async (req, res, next) => {
+  try {
+    const publication = await updateClubPublication(
+      getApplicationUserContext(req).workspaceId,
+      req.body.publicResultsEnabled,
+    );
+    res.json({ data: publication });
   } catch (error) { next(error); }
 };
 

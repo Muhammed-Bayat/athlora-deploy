@@ -109,6 +109,41 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
+async function sendRequest<T>(path: string, init: RequestInit | undefined, headers: Headers): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+    });
+    recordNetworkSuccess();
+  } catch (error) {
+    recordNetworkFailure();
+    throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
+  }
+
+  let payload: unknown;
+  try {
+    payload = await readBody(response);
+  } catch (error) {
+    if (response.ok) {
+      throw error;
+    }
+  }
+
+  if (!response.ok) {
+    const apiError = parseError(payload);
+    throw new ApiError(
+      response.status,
+      apiError?.code ?? 'HTTP_ERROR',
+      apiError?.message ?? `Request failed with status ${response.status}`,
+      apiError?.details,
+    );
+  }
+
+  return payload as T;
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Short-circuit when offline: avoids Auth0 token refresh failures (401)
   // and fetch errors. Uses both navigator.onLine and failure tracking.
@@ -143,38 +178,20 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('X-Workspace-Id', workspaceId);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers,
-    });
-    recordNetworkSuccess();
-  } catch (error) {
-    recordNetworkFailure();
-    throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
+  return sendRequest<T>(path, init, headers);
+}
+
+export async function requestPublic<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!isDeviceOnline()) {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
   }
 
-  let payload: unknown;
-  try {
-    payload = await readBody(response);
-  } catch (error) {
-    if (response.ok) {
-      throw error;
-    }
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  if (!response.ok) {
-    const apiError = parseError(payload);
-    throw new ApiError(
-      response.status,
-      apiError?.code ?? 'HTTP_ERROR',
-      apiError?.message ?? `Request failed with status ${response.status}`,
-      apiError?.details,
-    );
-  }
-
-  return payload as T;
+  return sendRequest<T>(path, init, headers);
 }
 
 export async function list<T>(resource: string): Promise<ApiList<T>> {

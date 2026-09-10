@@ -10,6 +10,8 @@ const mockListClubs = vi.fn();
 const mockListClubComparisonAthletes = vi.fn();
 const mockGetClubStatistics = vi.fn();
 const mockGetClubComparison = vi.fn();
+const mockGetClubPublication = vi.fn();
+const mockUpdateClubPublication = vi.fn();
 
 vi.mock('../../api/comparison', () => ({
   getTwoAthleteComparison: (...args: unknown[]) => mockGetTwoAthleteComparison(...args),
@@ -24,6 +26,8 @@ vi.mock('../../api/clubs', () => ({
   listClubComparisonAthletes: (...args: unknown[]) => mockListClubComparisonAthletes(...args),
   getClubStatistics: (...args: unknown[]) => mockGetClubStatistics(...args),
   getClubComparison: (...args: unknown[]) => mockGetClubComparison(...args),
+  getClubPublication: (...args: unknown[]) => mockGetClubPublication(...args),
+  updateClubPublication: (...args: unknown[]) => mockUpdateClubPublication(...args),
 }));
 
 const ATHLETE_1 = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Alice Sprint', coachId: 'u1', dob: null, gender: null, notes: null, archivedAt: null, status: 'active' as const, statusChangedAt: '2026-01-01T00:00:00.000Z', statusChangedBy: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
@@ -89,6 +93,7 @@ beforeEach(() => {
       : [{ id: ATHLETE_2.id, name: 'Bob Dash', status: 'active' }],
     meta: { count: 1 },
   }));
+  mockGetClubPublication.mockResolvedValue({ publicResultsEnabled: false });
 });
 
 function renderPage(params?: Record<string, string>) {
@@ -110,6 +115,16 @@ describe('ComparisonPage', () => {
     renderPage();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Compare 100m Performance');
     expect(screen.getByRole('button', { name: 'Comparison mode' })).toHaveTextContent('Athlete vs athlete in my club');
+  });
+
+  it('lets a coach publish the club results from the comparison page', async () => {
+    mockUpdateClubPublication.mockResolvedValue({ publicResultsEnabled: true });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Publish results' }));
+
+    expect(mockUpdateClubPublication).toHaveBeenCalledWith(true);
+    expect(await screen.findByText('Public')).toBeInTheDocument();
   });
 
   it('shows the same-club athlete prompt until two distinct athletes are selected', () => {

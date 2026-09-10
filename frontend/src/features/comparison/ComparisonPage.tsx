@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { getTwoAthleteComparison } from '../../api/comparison';
 import {
   getClubComparison,
+  getClubPublication,
   getClubStatistics,
   listClubComparisonAthletes,
   listClubs,
+  updateClubPublication,
 } from '../../api/clubs';
 import { listAthletes } from '../../api/athletes';
 import { Button, Card, Select } from '../../components';
@@ -14,6 +16,7 @@ import type {
   Club,
   ClubAthleteLookup,
   ClubComparisonDetail,
+  ClubPublication,
   ClubStatistics,
   ComparisonAthleteAggregate,
   ComparisonDetail,
@@ -21,6 +24,7 @@ import type {
 } from '../../types';
 import { format100mSeconds, formatDateOnly } from '../../utils/formatting';
 import styles from './ComparisonPage.module.css';
+import { useWorkspace } from '../auth/WorkspaceContext';
 
 const SVG_PADDING = { top: 28, right: 24, bottom: 48, left: 64 };
 const SVG_WIDTH = 700;
@@ -390,6 +394,7 @@ function athleteSearchMessage(clubId: string, search: string, loading: boolean):
 }
 
 export function ComparisonPage() {
+  const { activeWorkspace } = useWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const modeParam = searchParams.get('mode');
   const mode: ComparisonMode = isComparisonMode(modeParam) ? modeParam : 'athlete-club';
@@ -419,6 +424,10 @@ export function ComparisonPage() {
   const [athleteError, setAthleteError] = useState<string | null>(null);
   const [clubStatisticsError, setClubStatisticsError] = useState<string | null>(null);
   const [clubComparisonError, setClubComparisonError] = useState<string | null>(null);
+  const [publication, setPublication] = useState<ClubPublication | null>(null);
+  const [publicationLoading, setPublicationLoading] = useState(true);
+  const [publicationUpdating, setPublicationUpdating] = useState(false);
+  const [publicationError, setPublicationError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
   const deferredClub1Search = useDeferredValue(club1Search);
   const deferredClub2Search = useDeferredValue(club2Search);
@@ -438,6 +447,36 @@ export function ComparisonPage() {
       });
     return () => { current = false; };
   }, []);
+
+  useEffect(() => {
+    let current = true;
+    setPublicationLoading(true);
+    setPublicationError(null);
+    void getClubPublication()
+      .then((result) => {
+        if (current) setPublication(result);
+      })
+      .catch((error: unknown) => {
+        if (current) setPublicationError(error instanceof Error ? error.message : 'Could not load publication status');
+      })
+      .finally(() => {
+        if (current) setPublicationLoading(false);
+      });
+    return () => { current = false; };
+  }, [activeWorkspace.id]);
+
+  const togglePublication = useCallback(() => {
+    if (!publication || activeWorkspace.role !== 'coach') return;
+    const nextEnabled = !publication.publicResultsEnabled;
+    setPublicationUpdating(true);
+    setPublicationError(null);
+    void updateClubPublication(nextEnabled)
+      .then(setPublication)
+      .catch((error: unknown) => {
+        setPublicationError(error instanceof Error ? error.message : 'Could not update publication status');
+      })
+      .finally(() => setPublicationUpdating(false));
+  }, [activeWorkspace.role, publication]);
 
   useEffect(() => {
     if (mode === 'athlete-club') return;
@@ -689,6 +728,29 @@ export function ComparisonPage() {
           <p className={styles.subtitle}>Compare athlete progression or all-time club performance.</p>
         </div>
       </div>
+
+      <Card>
+        <div className={styles.publicationPanel}>
+          <div>
+            <p className={styles.publicationEyebrow}>Public statistics</p>
+            <h2>Share this club's 100m results</h2>
+            <p>
+              Publishing makes the club name, non-archived athlete names, and all-time 100m metrics visible on Athlora's public Stats page.
+            </p>
+          </div>
+          <div className={styles.publicationAction}>
+            {publicationLoading ? <p>Loading publication status...</p> : activeWorkspace.role === 'coach' ? (
+              <Button onClick={togglePublication} disabled={publicationUpdating}>
+                {publication?.publicResultsEnabled ? 'Stop publishing' : 'Publish results'}
+              </Button>
+            ) : <p>Only a coach can change this setting.</p>}
+            {publication && <span className={publication.publicResultsEnabled ? styles.published : styles.unpublished}>
+              {publication.publicResultsEnabled ? 'Public' : 'Private'}
+            </span>}
+          </div>
+        </div>
+        {publicationError && <p className={styles.publicationError} role="alert">{publicationError}</p>}
+      </Card>
 
       <Card>
         <div className={styles.modeSelector}>

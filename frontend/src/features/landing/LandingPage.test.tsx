@@ -47,6 +47,12 @@ describe('LandingPage', () => {
     expect(callbacks.onPasswordHelp).toHaveBeenCalledTimes(2);
   });
 
+  it('links visitors to the public statistics page from the header', () => {
+    renderLanding();
+
+    expect(screen.getByRole('link', { name: 'Stats' })).toHaveAttribute('href', '/stats');
+  });
+
   it('supports keyboard tabs, FAQ relationships, and menu focus restoration', () => {
     renderLanding();
     const athletesTab = screen.getByRole('tab', { name: 'Athletes' });

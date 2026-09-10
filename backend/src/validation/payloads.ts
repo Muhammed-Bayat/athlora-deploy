@@ -77,6 +77,10 @@ export interface AthleteStatusPayload {
   status: AthleteLifecycleStatus;
 }
 
+export interface ClubPublicationPayload {
+  publicResultsEnabled: boolean;
+}
+
 export interface EventCreatePayload {
   type: EventType;
   discipline: Discipline;
@@ -216,6 +220,7 @@ const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
 const FIXTURE_INVITATION_CREATE_FIELDS = ['targetClubId', 'expiresInDays'] as const;
 const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
+const CLUB_PUBLICATION_FIELDS = ['publicResultsEnabled'] as const;
 
 type PayloadObject = Record<string, unknown>;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
@@ -246,6 +251,21 @@ function payloadObject(input: unknown): PayloadObject {
 
 function hasOwn(payload: PayloadObject, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, field);
+}
+
+export function parseClubPublicationPayload(input: unknown): ClubPublicationPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, CLUB_PUBLICATION_FIELDS, issues);
+
+  if (!hasOwn(payload, 'publicResultsEnabled')) {
+    issues.push(issue('publicResultsEnabled', 'required', 'Field is required'));
+  } else if (typeof payload.publicResultsEnabled !== 'boolean') {
+    issues.push(issue('publicResultsEnabled', 'invalid_type', 'Expected a boolean'));
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { publicResultsEnabled: payload.publicResultsEnabled as boolean };
 }
 
 export function parseEventParticipantCreatePayload(

@@ -21,6 +21,7 @@ import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
 import remindersRouter from './reminders.js';
+import publicStatisticsRouter from './publicStatistics.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, resolveLocalApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
@@ -81,6 +82,7 @@ squadsRouter.post('/:id/unarchive', requireOperationalAccess(), squads.unarchive
 
 router.use('/auth', authRouter);
 router.use('/public/logger', publicLoggerRouter);
+router.use('/public/statistics', publicStatisticsRouter);
 // Acceptance cannot require an existing workspace membership.
 router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
 // Listing is used to decide whether a synchronized user needs Club onboarding.

@@ -4,6 +4,8 @@ import { getApplicationUserContext, resolveApplicationUser, resolveLocalApplicat
 import { requireCoach } from '../middleware/capabilities.js';
 import { ApiError } from '../middleware/errors.js';
 import { assertActiveClubWorkspace } from '../services/clubs.js';
+import { validateBody } from '../middleware/validation.js';
+import { parseClubPublicationPayload } from '../validation/payloads.js';
 
 const router = Router();
 
@@ -23,6 +25,15 @@ router.post('/join-requests/:id/withdraw', verifyAuth0Token, resolveLocalApplica
 router.post('/:clubId/join-requests', verifyAuth0Token, resolveLocalApplicationUser, clubs.requestJoin);
 
 router.get('/comparison', verifyAuth0Token, resolveApplicationUser, clubs.comparison);
+router.get('/publication', verifyAuth0Token, resolveApplicationUser, clubs.publication);
+router.put(
+  '/publication',
+  verifyAuth0Token,
+  resolveApplicationUser,
+  requireCoach(),
+  validateBody(parseClubPublicationPayload),
+  clubs.updatePublication,
+);
 router.get('/:clubId/athletes', verifyAuth0Token, resolveApplicationUser, clubs.listComparisonAthletes);
 router.get('/:clubId/statistics', verifyAuth0Token, resolveApplicationUser, clubs.statistics);
 

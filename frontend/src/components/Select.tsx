@@ -76,6 +76,7 @@ export function Select({
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedSearch));
   }, [options, search, searchable]);
+  const scrollableOptions = searchable && visibleOptions.length > 6;
 
   if (variant === 'field') {
     return (
@@ -237,31 +238,33 @@ export function Select({
             />
           </div>
         )}
-        {visibleOptions.map((option) => (
-          <button
-            type="button"
-            key={option.value}
-            role="option"
-            aria-selected={option.value === value}
-            className={[styles.option, option.value === value ? styles.selected : ''].filter(Boolean).join(' ')}
-            onClick={() => pick(option.value)}
-          >
-            {dotColors?.[option.value] && (
-              <span
-                className={styles.optionDot}
-                style={{
-                  background: dotColors[option.value],
-                  boxShadow: `0 0 0 3px ${dotColors[option.value]}26, 0 0 8px ${dotColors[option.value]}40`,
-                }}
-                aria-hidden="true"
-              />
-            )}
-            <span>{option.label}</span>
-          </button>
-        ))}
-        {visibleOptions.length === 0 && (
-          <p className={styles.empty} role="status">{emptyMessage}</p>
-        )}
+        <div className={scrollableOptions ? styles.scrollableOptions : undefined}>
+          {visibleOptions.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              role="option"
+              aria-selected={option.value === value}
+              className={[styles.option, option.value === value ? styles.selected : ''].filter(Boolean).join(' ')}
+              onClick={() => pick(option.value)}
+            >
+              {dotColors?.[option.value] && (
+                <span
+                  className={styles.optionDot}
+                  style={{
+                    background: dotColors[option.value],
+                    boxShadow: `0 0 0 3px ${dotColors[option.value]}26, 0 0 8px ${dotColors[option.value]}40`,
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+              <span>{option.label}</span>
+            </button>
+          ))}
+          {visibleOptions.length === 0 && (
+            <p className={styles.empty} role="status">{emptyMessage}</p>
+          )}
+        </div>
       </div>}
     </div>
   );

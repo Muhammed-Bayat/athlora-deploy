@@ -109,8 +109,11 @@ describeDB('migrations against a real database', () => {
       '0018_fixture_notifications.sql',
       '0019_offline_logger_designation.sql',
       '0019_targeted_fixture_invitations_and_single_membership.sql',
-      '0020_sync_idempotency.sql',
-      '0021_user_consent.sql',
+       '0020_sync_idempotency.sql',
+       '0021_user_consent.sql',
+       '0022_notification_star_delete.sql',
+       '0023_event_lifecycle_notifications.sql',
+       '0024_public_club_statistics.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -125,6 +128,7 @@ describeDB('migrations against a real database', () => {
     expect(await hasColumn('athlete_squads', 'squad_id')).toBe(true);
     expect(await hasColumn('events', 'fixture_revision')).toBe(true);
     expect(await hasColumn('event_participants', 'participant_workspace_id')).toBe(true);
+    expect(await hasColumn('clubs', 'public_results_enabled')).toBe(true);
 
     expect(await hasIndex('idx_events_created_by')).toBe(true);
     expect(await hasIndex('idx_events_status_date')).toBe(true);
@@ -135,6 +139,7 @@ describeDB('migrations against a real database', () => {
     expect(await hasIndex('idx_timeline_entries_event_active_recent')).toBe(true);
     expect(await hasIndex('idx_account_deletions_status')).toBe(true);
     expect(await hasIndex('idx_account_deletions_retry')).toBe(true);
+    expect(await hasIndex('idx_clubs_public_results_name')).toBe(true);
   });
 
   it('baselines an existing 0001 schema and applies the pending 0002', async () => {
@@ -171,8 +176,11 @@ describeDB('migrations against a real database', () => {
       '0018_fixture_notifications.sql',
       '0019_offline_logger_designation.sql',
       '0019_targeted_fixture_invitations_and_single_membership.sql',
-      '0020_sync_idempotency.sql',
-      '0021_user_consent.sql',
+       '0020_sync_idempotency.sql',
+       '0021_user_consent.sql',
+       '0022_notification_star_delete.sql',
+       '0023_event_lifecycle_notifications.sql',
+       '0024_public_club_statistics.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -182,7 +190,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(22);
+    expect(rows).toHaveLength(25);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 
