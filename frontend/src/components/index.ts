@@ -8,3 +8,4 @@ export { Modal } from './Modal';
 export { Toast, type ToastVariant } from './Toast';
 export { EmptyState } from './EmptyState';
 export { AsyncBoundary } from './AsyncBoundary';
+export { InstallButton } from './InstallButton';
