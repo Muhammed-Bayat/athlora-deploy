@@ -5,12 +5,15 @@ vi.mock('../db/client.js', () => ({ getPool: vi.fn() }));
 import { getPool } from '../db/client.js';
 import {
   countUnreadFixtureNotifications,
+  deleteFixtureNotification,
   listFixtureNotifications,
   markFixtureNotificationRead,
   notifyFixtureInvitation,
   notifyFixtureReacceptanceRequired,
   notifyFixtureResponse,
   notifyFixtureStarted,
+  starFixtureNotification,
+  unstarFixtureNotification,
 } from './fixtureNotifications.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -28,11 +31,11 @@ describe('fixture notifications', () => {
   it('lists only notifications scoped to the active user and workspace', async () => {
     query.mockResolvedValueOnce({ rows: [{
       id: NOTIFICATION_ID, event_id: EVENT_ID, invitation_id: null, kind: 'fixture_started',
-      payload: { revision: 2 }, read_at: null, created_at: new Date('2026-09-01T00:00:00.000Z'),
+      payload: { revision: 2 }, read_at: null, starred_at: null, created_at: new Date('2026-09-01T00:00:00.000Z'),
     }] });
 
     await expect(listFixtureNotifications(USER_ID, WORKSPACE_ID)).resolves.toEqual([expect.objectContaining({
-      id: NOTIFICATION_ID, eventId: EVENT_ID, kind: 'fixture_started', readAt: null,
+      id: NOTIFICATION_ID, eventId: EVENT_ID, kind: 'fixture_started', readAt: null, starredAt: null,
     })]);
     expect(query).toHaveBeenCalledWith(expect.stringContaining('recipient_user_id = $1 AND workspace_id = $2'), [USER_ID, WORKSPACE_ID]);
   });
@@ -124,5 +127,59 @@ describe('fixture notifications', () => {
       null,
       'Guest Club',
     ]);
+  });
+
+  it('deletes a read notification with scoped ownership', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: NOTIFICATION_ID }] });
+
+    await expect(deleteFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID)).resolves.toBeUndefined();
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('deleted_at = now()');
+    expect(sql).toContain('read_at IS NOT NULL');
+    expect(sql).toContain('recipient_user_id = $2 AND workspace_id = $3');
+    expect(parameters).toEqual([NOTIFICATION_ID, USER_ID, WORKSPACE_ID]);
+  });
+
+  it('rejects deleting an unread notification', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(deleteFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID))
+      .rejects.toMatchObject({ code: 'NOT_DELETABLE' });
+  });
+
+  it('stars a notification with scoped ownership', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: NOTIFICATION_ID }] });
+
+    await expect(starFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID)).resolves.toBeUndefined();
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('COALESCE(starred_at, now())');
+    expect(sql).toContain('deleted_at IS NULL');
+    expect(sql).toContain('recipient_user_id = $2 AND workspace_id = $3');
+    expect(parameters).toEqual([NOTIFICATION_ID, USER_ID, WORKSPACE_ID]);
+  });
+
+  it('returns not found when starring a notification outside the active scope', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(starFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('unstars a notification with scoped ownership', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: NOTIFICATION_ID }] });
+
+    await expect(unstarFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID)).resolves.toBeUndefined();
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('starred_at = NULL');
+    expect(sql).toContain('deleted_at IS NULL');
+    expect(sql).toContain('recipient_user_id = $2 AND workspace_id = $3');
+    expect(parameters).toEqual([NOTIFICATION_ID, USER_ID, WORKSPACE_ID]);
+  });
+
+  it('returns not found when unstarring a notification outside the active scope', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(unstarFixtureNotification(USER_ID, WORKSPACE_ID, NOTIFICATION_ID))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

@@ -72,4 +72,24 @@ describe('fixture API', () => {
     expect(listener).toHaveBeenCalledOnce();
     window.removeEventListener('fixture-notifications-changed', listener);
   });
+
+  it('sends delete, star, and unstar notification requests', async () => {
+    const NOTIFICATION_ID = '33333333-3333-4333-8333-333333333333';
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response(undefined, 204))
+      .mockResolvedValueOnce(response(undefined, 204))
+      .mockResolvedValueOnce(response(undefined, 204));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fixtures.deleteFixtureNotification(NOTIFICATION_ID);
+    await fixtures.starFixtureNotification(NOTIFICATION_ID);
+    await fixtures.unstarFixtureNotification(NOTIFICATION_ID);
+
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['DELETE', 'POST', 'POST']);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      expect.stringContaining(`/api/v1/notifications/${NOTIFICATION_ID}`),
+      expect.stringContaining(`/api/v1/notifications/${NOTIFICATION_ID}/star`),
+      expect.stringContaining(`/api/v1/notifications/${NOTIFICATION_ID}/unstar`),
+    ]);
+  });
 });

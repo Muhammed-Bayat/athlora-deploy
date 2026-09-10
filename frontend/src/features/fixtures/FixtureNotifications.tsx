@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getUnreadFixtureNotificationCount, listFixtureNotifications, markFixtureNotificationRead } from '../../api/fixtures';
+import { deleteFixtureNotification, getUnreadFixtureNotificationCount, listFixtureNotifications, markFixtureNotificationRead, starFixtureNotification, unstarFixtureNotification } from '../../api/fixtures';
 import type { FixtureNotification } from '../../types';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import styles from './FixtureNotifications.module.css';
@@ -73,6 +73,30 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     });
   };
 
+  const toggleStar = async (e: React.MouseEvent, notification: FixtureNotification) => {
+    e.stopPropagation();
+    const wasStarred = notification.starredAt !== null;
+    setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, starredAt: wasStarred ? null : new Date().toISOString() } : item));
+    if (wasStarred) {
+      await unstarFixtureNotification(notification.id);
+    } else {
+      await starFixtureNotification(notification.id);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, notification: FixtureNotification) => {
+    e.stopPropagation();
+    await deleteFixtureNotification(notification.id);
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
+    if (!notification.readAt) {
+      setUnreadCount((count) => Math.max(0, count - 1));
+    }
+    onCountsChange({
+      events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind === 'fixture_started').length,
+      fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind !== 'fixture_started').length,
+    });
+  };
+
   return <details ref={notificationsRef} className={styles.notifications}>
     <summary aria-label={`Fixture notifications, ${unreadCount} unread`}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
@@ -83,7 +107,7 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
         <div><p>Fixture activity</p><h2>Notifications</h2></div>
         <span>{unreadCount ? `${unreadCount} new` : 'All caught up'}</span>
       </header>
-      {notifications.length === 0 ? <div className={styles.empty}><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg></i><p>No fixture notifications yet.</p></div> : <ul className={styles.list}>{notifications.map((notification) => <li key={notification.id}><button type="button" data-read={Boolean(notification.readAt)} onClick={() => void markRead(notification)} disabled={Boolean(notification.readAt)} aria-label={notification.readAt ? `Notification read: ${notificationCopy(notification)}` : `Mark notification as read: ${notificationCopy(notification)}`}><i aria-hidden="true" /><span><strong>{notification.readAt ? 'Read' : 'New'}</strong><span>{notificationCopy(notification)}</span></span><time dateTime={notification.createdAt}>{notificationDate(notification)}</time></button></li>)}</ul>}
+      {notifications.length === 0 ? <div className={styles.empty}><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg></i><p>No fixture notifications yet.</p></div> : <ul className={styles.list}>{notifications.map((notification) => <li key={notification.id} className={styles.item}><button type="button" data-read={Boolean(notification.readAt)} onClick={() => void markRead(notification)} disabled={Boolean(notification.readAt)} aria-label={notification.readAt ? `Notification read: ${notificationCopy(notification)}` : `Mark notification as read: ${notificationCopy(notification)}`}><i aria-hidden="true" /><span><strong>{notification.readAt ? 'Read' : 'New'}</strong><span>{notificationCopy(notification)}</span></span><time dateTime={notification.createdAt}>{notificationDate(notification)}</time></button><span className={styles.actions}><button type="button" className={styles.starBtn} data-starred={Boolean(notification.starredAt)} onClick={(e) => void toggleStar(e, notification)} aria-label={notification.starredAt ? `Unstar notification: ${notificationCopy(notification)}` : `Star notification: ${notificationCopy(notification)}`}><svg viewBox="0 0 24 24" fill={notification.starredAt ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></button>{notification.readAt && <button type="button" className={styles.deleteBtn} onClick={(e) => void handleDelete(e, notification)} aria-label={`Delete notification: ${notificationCopy(notification)}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}</span></li>)}</ul>}
     </section>
   </details>;
 }
