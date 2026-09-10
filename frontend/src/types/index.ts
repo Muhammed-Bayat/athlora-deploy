@@ -70,6 +70,36 @@ export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
 export type AthleteStatus = 'active' | 'inactive' | 'archived';
 
+export interface ClubAthleteLookup {
+  id: string;
+  name: string;
+  status: AthleteStatus;
+}
+
+export interface ClubRosterCounts {
+  active: number;
+  inactive: number;
+  archived: number;
+  total: number;
+}
+
+export interface ClubStatistics {
+  club: Pick<Club, 'id' | 'name'>;
+  roster: ClubRosterCounts;
+  distinctAthletesWithValidResults: number;
+  total100mResultCount: number;
+  valid100mResultCount: number;
+  fastestValidTime: number | null;
+  latestValidTime: number | null;
+  averageValidTime: number | null;
+  medianValidTime: number | null;
+  populationStandardDeviation: number | null;
+}
+
+export interface ClubComparisonDetail {
+  clubs: [ClubStatistics, ClubStatistics];
+}
+
 export interface Athlete {
   id: string;
   coachId: string;

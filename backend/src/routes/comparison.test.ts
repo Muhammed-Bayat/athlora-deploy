@@ -2,7 +2,10 @@ import request from 'supertest';
 import { jwtVerify } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
-import { getTwoAthleteComparison } from '../services/comparison.js';
+import {
+  getCrossClubAthleteComparison,
+  getTwoAthleteComparison,
+} from '../services/comparison.js';
 import { ApiError } from '../middleware/errors.js';
 import type { ComparisonDetail } from '../types/domain.js';
 import { createApp } from '../app.js';
@@ -18,6 +21,7 @@ vi.mock('../db/client.js', () => ({
 }));
 
 vi.mock('../services/comparison.js', () => ({
+  getCrossClubAthleteComparison: vi.fn(),
   getTwoAthleteComparison: vi.fn(),
 }));
 
@@ -99,6 +103,47 @@ describe('comparison API route', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('DUPLICATE_ATHLETE_ID');
+  });
+
+  it('uses the cross-club comparison scope when requested', async () => {
+    const comparison: ComparisonDetail = {
+      athletes: [
+        {
+          athlete: { id: ATHLETE_1_ID, name: 'Athlete One', squadNames: [], archivedAt: null },
+          pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
+          totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+        },
+        {
+          athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', squadNames: [], archivedAt: null },
+          pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
+          totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+        },
+      ],
+    };
+    query.mockResolvedValueOnce(synchronizedUser());
+    vi.mocked(getCrossClubAthleteComparison).mockResolvedValue(comparison);
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison?athlete1Id=${ATHLETE_1_ID}&athlete2Id=${ATHLETE_2_ID}&scope=cross-club`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: comparison });
+    expect(getCrossClubAthleteComparison).toHaveBeenCalledWith(ATHLETE_1_ID, ATHLETE_2_ID);
+    expect(getTwoAthleteComparison).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported comparison scopes', async () => {
+    query.mockResolvedValueOnce(synchronizedUser());
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison?athlete1Id=${ATHLETE_1_ID}&athlete2Id=${ATHLETE_2_ID}&scope=all`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('COMPARISON_SCOPE_INVALID');
+    expect(getTwoAthleteComparison).not.toHaveBeenCalled();
+    expect(getCrossClubAthleteComparison).not.toHaveBeenCalled();
   });
 
   it('returns 404 for foreign/missing athlete IDs', async () => {

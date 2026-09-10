@@ -4,6 +4,9 @@ import { ApiError } from '../middleware/errors.js';
 import {
   createClub,
   createJoinRequest,
+  getClubComparison,
+  getClubStatistics,
+  listClubComparisonAthletes,
   listClubJoinRequests,
   listClubs,
   listMyJoinRequests,
@@ -52,6 +55,28 @@ export const withdraw: RequestHandler = async (req, res, next) => {
   try {
     await withdrawJoinRequest(parameter(req.params.id), getLocalApplicationUserContext(req).userId);
     res.status(204).end();
+  } catch (error) { next(error); }
+};
+
+export const listComparisonAthletes: RequestHandler = async (req, res, next) => {
+  try {
+    const search = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : null;
+    const athletes = await listClubComparisonAthletes(parameter(req.params.clubId), search);
+    res.json({ data: athletes, meta: { count: athletes.length } });
+  } catch (error) { next(error); }
+};
+
+export const statistics: RequestHandler = async (req, res, next) => {
+  try {
+    const clubStatistics = await getClubStatistics(parameter(req.params.clubId));
+    res.json({ data: clubStatistics });
+  } catch (error) { next(error); }
+};
+
+export const comparison: RequestHandler = async (req, res, next) => {
+  try {
+    const clubComparison = await getClubComparison(req.query.club1Id, req.query.club2Id);
+    res.json({ data: clubComparison });
   } catch (error) { next(error); }
 };
 

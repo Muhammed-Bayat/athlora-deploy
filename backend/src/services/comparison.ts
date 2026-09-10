@@ -10,6 +10,7 @@ import {
   type ComparisonAthleteAggregate,
 } from '../types/domain.js';
 import { ApiError } from '../middleware/errors.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
 
 type ReadTransactionRunner = <T>(
@@ -48,11 +49,17 @@ const PROGRESSION_SELECT = `
     FROM results r
     JOIN events e ON e.id = r.event_id
     JOIN athletes a ON a.id = r.athlete_id
-    WHERE r.athlete_id = $1
-      AND r.discipline = $3
-      AND a.workspace_id = $2
-      AND e.workspace_id = $2
-      AND e.status <> 'cancelled'
+     WHERE r.athlete_id = $1
+       AND r.discipline = $3
+       AND a.workspace_id = $2
+       AND (e.workspace_id = $2 OR EXISTS (
+         SELECT 1 FROM event_fixture_workspaces fw
+         JOIN event_participants ep ON ep.event_id = fw.event_id
+           AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+         WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+           AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+       ))
+       AND e.status <> 'cancelled'
   ), enriched AS (
     SELECT *,
            (event_status <> 'cancelled' AND effective_outcome = 'valid')
@@ -192,5 +199,45 @@ export async function getTwoAthleteComparison(
     return {
       athletes: [athlete1, athlete2],
     };
+  });
+}
+
+export async function getCrossClubAthleteComparison(
+  athlete1Id: unknown,
+  athlete2Id: unknown,
+  runTransaction: ReadTransactionRunner = withReadTransaction,
+): Promise<ComparisonDetail> {
+  if (!isCanonicalUuid(athlete1Id) || !isCanonicalUuid(athlete2Id)) throw notFound();
+  if (athlete1Id === athlete2Id) {
+    throw new ApiError(400, 'DUPLICATE_ATHLETE_ID', 'Exactly two distinct athlete IDs are required');
+  }
+
+  return runTransaction(async (client) => {
+    const athletes = await client.query<{ id: string; workspace_id: string }>(
+      `SELECT a.id, a.workspace_id
+       FROM athletes a
+       JOIN clubs c ON c.workspace_id = a.workspace_id
+       WHERE a.id = ANY($1::uuid[])`,
+      [[athlete1Id, athlete2Id]],
+    );
+    if (athletes.rows.length !== 2) throw notFound();
+
+    const workspacesByAthleteId = new Map(
+      athletes.rows.map((athlete) => [athlete.id, athlete.workspace_id]),
+    );
+    const athlete1WorkspaceId = workspacesByAthleteId.get(athlete1Id);
+    const athlete2WorkspaceId = workspacesByAthleteId.get(athlete2Id);
+    if (!athlete1WorkspaceId || !athlete2WorkspaceId) throw notFound();
+    if (athlete1WorkspaceId === athlete2WorkspaceId) {
+      throw new ApiError(
+        422,
+        'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS',
+        'Cross-club comparison requires athletes from distinct club workspaces',
+      );
+    }
+
+    const athlete1 = await fetchAthleteAggregate(athlete1WorkspaceId, athlete1Id, client);
+    const athlete2 = await fetchAthleteAggregate(athlete2WorkspaceId, athlete2Id, client);
+    return { athletes: [athlete1, athlete2] };
   });
 }

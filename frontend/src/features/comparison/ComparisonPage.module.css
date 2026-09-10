@@ -19,6 +19,20 @@
   color: var(--console-ink);
 }
 
+.subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.modeSelector,
+.singleSelector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 420px;
+}
+
 .selectorRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -31,7 +45,9 @@
   gap: var(--space-2);
 }
 
-.selector label {
+.selector label,
+.modeSelector label,
+.singleSelector label {
   color: var(--console-muted);
   font: var(--font-weight-bold) 0.75rem var(--font-family-mono);
   letter-spacing: 0.08em;
@@ -94,6 +110,13 @@
 
 .comparisonTable td {
   color: var(--console-ink);
+}
+
+.viewToggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .chartWrap {
@@ -246,5 +269,10 @@
   .legend {
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .modeSelector,
+  .singleSelector {
+    max-width: none;
   }
 }

@@ -6,10 +6,15 @@ describe('club API', () => {
   it('covers discovery, membership, and review requests', async () => {
     const data = { id: 'id-1' };
     const fetchMock = vi.fn<typeof fetch>();
-    for (let index = 0; index < 8; index += 1) fetchMock.mockResolvedValueOnce(response(index === 0 || index === 3 || index === 5 ? { data: [], meta: { count: 0 } } : { data }));
+    for (let index = 0; index < 11; index += 1) fetchMock.mockResolvedValueOnce(response(index === 0 || index === 3 || index === 5 || index === 8 ? { data: [], meta: { count: 0 } } : { data }));
     vi.stubGlobal('fetch', fetchMock);
-    await clubs.listClubs(' Fast Club '); await clubs.createClub('Fast Club'); await clubs.requestToJoinClub('club-1'); await clubs.listMyClubJoinRequests(); await clubs.withdrawClubJoinRequest('request-1'); await clubs.listClubJoinRequests('club-1'); await clubs.approveClubJoinRequest('club-1', 'request-1', 'assistant'); await clubs.rejectClubJoinRequest('club-1', 'request-1');
+    const controller = new AbortController();
+    await clubs.listClubs(' Fast Club '); await clubs.createClub('Fast Club'); await clubs.requestToJoinClub('club-1'); await clubs.listMyClubJoinRequests(); await clubs.withdrawClubJoinRequest('request-1'); await clubs.listClubJoinRequests('club-1'); await clubs.approveClubJoinRequest('club-1', 'request-1', 'assistant'); await clubs.rejectClubJoinRequest('club-1', 'request-1'); await clubs.listClubComparisonAthletes('club-1', ' Ari & Bea ', controller.signal); await clubs.getClubStatistics('club-1'); await clubs.getClubComparison('club-1', 'club-2');
     expect(fetchMock.mock.calls[0]?.[0]).toContain('clubs?q=Fast%20Club');
     expect(fetchMock.mock.calls[6]?.[1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify({ role: 'assistant' }) }));
+    expect(fetchMock.mock.calls[8]?.[0]).toContain('clubs/club-1/athletes?q=Ari%20%26%20Bea');
+    expect(fetchMock.mock.calls[8]?.[1]).toEqual(expect.objectContaining({ signal: controller.signal }));
+    expect(fetchMock.mock.calls[9]?.[0]).toContain('clubs/club-1/statistics');
+    expect(fetchMock.mock.calls[10]?.[0]).toContain('clubs/comparison?club1Id=club-1&club2Id=club-2');
   });
 });
