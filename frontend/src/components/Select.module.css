@@ -254,6 +254,18 @@
   text-align: center;
 }
 
+.scrollableOptions {
+  max-height: min(320px, 46vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(138, 233, 242, 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+.scrollableOptions::-webkit-scrollbar { width: 8px; }
+.scrollableOptions::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(138, 233, 242, 0.44); background-clip: padding-box; }
+.scrollableOptions::-webkit-scrollbar-thumb:hover { background-color: rgba(138, 233, 242, 0.68); }
+
 .option {
   position: relative;
   width: 100%;

@@ -45,7 +45,7 @@ function StaticTrackWorld() {
   }, [lanes, surface]);
 
   return (
-    <group rotation={[0.16, -0.36, 0]}>
+    <group position={[-0.5, 0, 0]} rotation={[0.16, -0.36, 0]}>
       <mesh geometry={surface} receiveShadow>
         <meshStandardMaterial color="#062333" roughness={0.78} metalness={0.3} transparent opacity={0.96} side={DoubleSide} />
       </mesh>

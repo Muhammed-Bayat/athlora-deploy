@@ -97,14 +97,14 @@
 .galleryControls button:hover, .galleryControls button:focus-visible { border-color: #8ae9f2; background: rgba(13, 77, 92, 0.82); outline: none; transform: translateY(-2px); }
 .galleryViewport { position: relative; height: 510px; margin-top: 6px; perspective: 1500px; outline: none; touch-action: pan-y; user-select: none; }
 .galleryViewport:focus-visible { box-shadow: 0 0 0 2px rgba(138, 233, 242, 0.44); border-radius: 28px; }
-.gallerySlot { position: absolute; top: 20px; left: 50%; width: min(332px, 75vw); z-index: var(--gallery-z); transform: translateX(-50%) translateX(var(--gallery-x)) translateY(var(--gallery-y)) rotateY(var(--gallery-rotation)) scale(var(--gallery-scale)); transform-origin: center bottom; transition: transform 0.52s var(--ease), opacity 0.38s var(--ease), filter 0.38s var(--ease); }
+.gallerySlot { position: absolute; top: 20px; left: 50%; width: min(332px, 75vw); z-index: var(--gallery-z); transform: translateX(-50%) translateX(var(--gallery-x)) translateY(var(--gallery-y)) rotateY(var(--gallery-rotation)) scale(var(--gallery-scale)); transform-origin: center bottom; transition: transform 0.6s var(--ease), opacity 0.42s var(--ease), filter 0.42s var(--ease); }
 .gallerySlot[aria-hidden="true"] { opacity: 0; filter: blur(3px); pointer-events: none; }
 
 .athleteCard { min-height: 455px; border-radius: 23px; cursor: default; }
 .athleteVisual { position: relative; height: 193px; overflow: hidden; border-bottom: 1px solid rgba(138, 233, 242, 0.12); background: radial-gradient(circle at 66% 26%, rgba(114, 217, 233, 0.32), transparent 46%), linear-gradient(145deg, #0d475d, #031d2d 72%); }
 .athleteVisual::before { content: ''; position: absolute; width: 208px; height: 208px; top: 22px; right: -37px; border: 1px solid rgba(192, 250, 255, 0.22); border-radius: 50%; box-shadow: 0 0 0 19px rgba(138, 233, 242, 0.05), 0 0 0 43px rgba(138, 233, 242, 0.025); }
 .athleteVisual > span { position: absolute; top: 16px; left: 18px; color: rgba(219, 254, 255, 0.56); font: 700 2.2rem var(--font-display); letter-spacing: -0.08em; }
-.athleteVisual svg { position: absolute; right: 18px; bottom: -20px; width: 185px; height: 220px; fill: rgba(218, 253, 255, 0.82); filter: drop-shadow(0 0 18px rgba(138, 233, 242, 0.27)); transform: rotate(-4deg); }
+.athleteVisual svg { position: absolute; right: 14px; bottom: -10px; width: 190px; height: 210px; color: rgba(218, 253, 255, 0.82); filter: drop-shadow(0 0 18px rgba(138, 233, 242, 0.27)); transform: rotate(-4deg); }
 .athleteContent { padding: 19px; }
 .cardEyebrow { margin: 0; color: #8ae9f2; font: 700 0.58rem var(--font-family-mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .athleteContent h3 { margin: 7px 0 16px; color: #f0fcff; font: 700 1.38rem var(--font-display); letter-spacing: -0.055em; }

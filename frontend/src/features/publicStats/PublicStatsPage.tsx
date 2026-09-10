@@ -38,7 +38,16 @@ function resetTilt(event: PointerEvent<HTMLElement>) {
 }
 
 function AthleteSilhouette() {
-  return <svg viewBox="0 0 180 220" aria-hidden="true"><circle cx="112" cy="42" r="20" /><path d="M94 66c-19 12-30 31-31 57l-24 31 17 14 29-34 12-35 11 48-32 46 19 14 39-51-5-58 28 23 18-18-38-39c-13-12-28-15-42-8Z" /><path d="m109 147 17 65h23l-18-72" /></svg>;
+  return (
+    <svg viewBox="0 0 200 220" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="14" aria-hidden="true">
+      <circle cx="136" cy="32" r="15" fill="currentColor" stroke="none" />
+      <path d="M121 56 100 96l25 25" />
+      <path d="m106 79-37 23-23-13" />
+      <path d="m111 79 37 18 22-19" />
+      <path d="m122 117-36 48-32 18" />
+      <path d="m123 117 31 42 30 1" />
+    </svg>
+  );
 }
 
 function AthleteStatCard({ athlete }: { athlete: PublicAthleteStatistics }) {
@@ -94,6 +103,8 @@ function ClubStatCard({ statistics }: { statistics: PublicClubStatistics }) {
 function AthleteGallery({ athletes }: { athletes: PublicAthleteStatistics[] }) {
   const [active, setActive] = useState(0);
   const dragStart = useRef<number | null>(null);
+  const wheelDelta = useRef(0);
+  const lastWheelNavigation = useRef(0);
 
   useEffect(() => {
     setActive((current) => Math.min(current, Math.max(athletes.length - 1, 0)));
@@ -117,9 +128,14 @@ function AthleteGallery({ athletes }: { athletes: PublicAthleteStatistics[] }) {
     if (event.key === 'End') { event.preventDefault(); setActive(athletes.length - 1); }
   };
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (Math.abs(event.deltaY) < 4) return;
+    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
     event.preventDefault();
-    move(event.deltaY > 0 ? 1 : -1);
+    if (Date.now() - lastWheelNavigation.current < 550) return;
+    wheelDelta.current += event.deltaX;
+    if (Math.abs(wheelDelta.current) < 36) return;
+    move(wheelDelta.current > 0 ? 1 : -1);
+    wheelDelta.current = 0;
+    lastWheelNavigation.current = Date.now();
   };
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     dragStart.current = event.clientX;
@@ -134,7 +150,7 @@ function AthleteGallery({ athletes }: { athletes: PublicAthleteStatistics[] }) {
 
   return (
     <section className={styles.gallerySection} aria-labelledby="athlete-gallery-heading">
-      <div className={styles.sectionHeading}><div><p className={styles.kicker}>The roster</p><h2 id="athlete-gallery-heading">Athletes on the curve</h2></div><p>Drag, scroll, or use arrow keys to move through every public athlete profile.</p></div>
+      <div className={styles.sectionHeading}><div><p className={styles.kicker}>The roster</p><h2 id="athlete-gallery-heading">Athletes on the curve</h2></div><p>Drag sideways, swipe, or use arrow keys to move through every public athlete profile.</p></div>
       <div className={styles.galleryControls}><button type="button" onClick={() => move(-1)} aria-label="Previous athlete">Previous</button><span aria-live="polite">{active + 1} / {athletes.length}</span><button type="button" onClick={() => move(1)} aria-label="Next athlete">Next</button></div>
       <div className={styles.galleryViewport} role="region" aria-label="Circular athlete profile gallery" tabIndex={0} onKeyDown={handleKeyDown} onWheel={handleWheel} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerCancel={() => { dragStart.current = null; }}>
         {athletes.map((athlete, index) => {
