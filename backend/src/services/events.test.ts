@@ -26,6 +26,15 @@ vi.mock('./timeline.js', () => ({
   recomputeEventResults: vi.fn(),
 }));
 
+const fixtureNotifications = vi.hoisted(() => ({
+  notifyEventComingUp: vi.fn(),
+  notifyEventEnded: vi.fn(),
+  notifyFixtureStarted: vi.fn(),
+  notifyLiveLoggerStarted: vi.fn(),
+}));
+
+vi.mock('./fixtureNotifications.js', () => fixtureNotifications);
+
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const query = vi.fn();
@@ -198,6 +207,24 @@ describe('createEvent', () => {
       'scheduled',
     ]);
   });
+
+  it('sends an event_coming_up notification to workspace members', async () => {
+    query.mockResolvedValue({ rows: [eventRow()] });
+
+    await createEvent(USER_ID, {
+      type: 'competition',
+      discipline: '100m',
+      title: 'City Sprint Meet',
+      date: '2026-09-01',
+      time: null,
+      locationName: null,
+      latitude: null,
+      longitude: null,
+      status: 'scheduled',
+    });
+
+    expect(fixtureNotifications.notifyEventComingUp).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
+  });
 });
 
 describe('replaceEvent', () => {
@@ -239,6 +266,58 @@ describe('replaceEvent', () => {
     });
 
     expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', true);
+  });
+
+  it('sends a live_logger_started notification when transitioning from scheduled to in_progress', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+    });
+
+    expect(fixtureNotifications.notifyLiveLoggerStarted).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
+  });
+
+  it('sends an event_ended notification when transitioning from in_progress to completed', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(fixtureNotifications.notifyEventEnded).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
+  });
+
+  it('does not send live_logger_started when not transitioning from scheduled to in_progress', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(fixtureNotifications.notifyLiveLoggerStarted).not.toHaveBeenCalled();
+  });
+
+  it('does not send event_ended when not transitioning from in_progress to completed', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+    });
+
+    expect(fixtureNotifications.notifyEventEnded).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid transition before writing', async () => {

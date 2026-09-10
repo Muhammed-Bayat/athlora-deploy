@@ -9,12 +9,17 @@ export interface FixtureNotificationCounts {
   fixtures: number;
 }
 
+const EVENT_LIFECYCLE_KINDS: ReadonlySet<FixtureNotification['kind']> = new Set(['fixture_started', 'event_coming_up', 'live_logger_started', 'event_ended']);
+
 function notificationCopy(notification: FixtureNotification): string {
   const response = typeof notification.payload.response === 'string' ? notification.payload.response.replace('_', ' ') : null;
   const club = typeof notification.payload.guestWorkspaceName === 'string' ? notification.payload.guestWorkspaceName : 'A guest club';
   if (notification.kind === 'fixture_started') return 'A fixture you are participating in has started.';
   if (notification.kind === 'fixture_invited') return 'You have a new fixture invitation.';
   if (notification.kind === 'fixture_reacceptance_required') return 'A fixture changed and needs your club to reaccept.';
+  if (notification.kind === 'event_coming_up') return 'An event has been scheduled.';
+  if (notification.kind === 'live_logger_started') return 'Live logging has started for an event.';
+  if (notification.kind === 'event_ended') return 'An event has ended.';
   const message = typeof notification.payload.message === 'string' ? notification.payload.message : null;
   return `${club} ${response ?? 'responded'} to your fixture invitation.${message ? ` ${message}` : ''}`;
 }
@@ -37,8 +42,8 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
         setNotifications(response.data);
         setUnreadCount(unread);
         onCountsChange({
-          events: response.data.filter((item) => item.readAt === null && item.kind === 'fixture_started').length,
-          fixtures: response.data.filter((item) => item.readAt === null && item.kind !== 'fixture_started').length,
+          events: response.data.filter((item) => item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+          fixtures: response.data.filter((item) => item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
         });
       }).catch(() => {
         if (current) onCountsChange({ events: 0, fixtures: 0 });
@@ -68,8 +73,8 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
     setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
     setUnreadCount((count) => Math.max(0, count - 1));
     onCountsChange({
-      events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind === 'fixture_started').length,
-      fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind !== 'fixture_started').length,
+      events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
     });
   };
 
@@ -92,8 +97,8 @@ export function FixtureNotifications({ onCountsChange }: { onCountsChange: (coun
       setUnreadCount((count) => Math.max(0, count - 1));
     }
     onCountsChange({
-      events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind === 'fixture_started').length,
-      fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && item.kind !== 'fixture_started').length,
+      events: notifications.filter((item) => item.id !== notification.id && item.readAt === null && EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
+      fixtures: notifications.filter((item) => item.id !== notification.id && item.readAt === null && !EVENT_LIFECYCLE_KINDS.has(item.kind)).length,
     });
   };
 

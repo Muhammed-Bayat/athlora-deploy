@@ -2,7 +2,7 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 
-export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started';
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started' | 'event_coming_up' | 'live_logger_started' | 'event_ended';
 
 export interface FixtureNotification {
   id: string;
@@ -91,6 +91,45 @@ export async function notifyFixtureStarted(client: DbExecutor, eventId: string, 
      WHERE fw.event_id = $1::uuid AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = $2::integer
      ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
     [eventId, revision],
+  );
+}
+
+export async function notifyEventComingUp(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'event_coming_up',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:coming_up:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
+  );
+}
+
+export async function notifyLiveLoggerStarted(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'live_logger_started',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:live_logger_started:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
+  );
+}
+
+export async function notifyEventEnded(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'event_ended',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:ended:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
   );
 }
 
