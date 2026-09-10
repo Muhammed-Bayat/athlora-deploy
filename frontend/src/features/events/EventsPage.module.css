@@ -446,7 +446,7 @@
 .weatherPanel {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  margin: var(--space-4) 0;
   padding: var(--space-4);
   border: 1px solid var(--console-line);
   border-radius: var(--radius-md);
