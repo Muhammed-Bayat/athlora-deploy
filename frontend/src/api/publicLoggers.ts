@@ -4,6 +4,9 @@ import { ApiError, request } from './client';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+  }
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/public/logger${path}`, {

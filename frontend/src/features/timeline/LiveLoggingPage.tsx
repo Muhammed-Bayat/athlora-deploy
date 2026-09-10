@@ -124,6 +124,10 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   };
 
   const loadEvents = async (): Promise<boolean> => {
+    if (!navigator.onLine) {
+      setEventsLoading(false);
+      return false;
+    }
     setEventsLoading(true);
     setError(null);
     try {
@@ -245,7 +249,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
   // Sync pending offline actions when coming back online
   useEffect(() => {
-    if (!isOnline || !selectedEventId) return;
+    if (!isOnline || !navigator.onLine || !selectedEventId) return;
     const syncOnReconnect = async () => {
       try {
         const result = await syncPending(selectedEventId);
