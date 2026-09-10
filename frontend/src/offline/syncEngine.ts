@@ -1,11 +1,35 @@
-import { postSyncBatch, type SyncBatchRequest } from '../api/sync';
+import {
+  createTimelineEntry,
+  updateTimelineEntry,
+  deleteTimelineEntry,
+} from '../api/timeline';
 import { getPendingActions, markSynced, markFailed } from './actionQueue';
+import type { OfflineAction } from './db';
+import type { TimelineEntryCreatePayload, TimelineEntryPatchPayload } from '../types';
 
 export interface DrainResult {
   accepted: number;
   rejected: number;
   duplicates: number;
   failed: number;
+}
+
+async function replayAction(action: OfflineAction): Promise<void> {
+  switch (action.actionType) {
+    case 'create_entry':
+      await createTimelineEntry(action.eventId, action.payload as unknown as TimelineEntryCreatePayload);
+      break;
+    case 'edit_entry':
+      if (!action.entryId) throw new Error('edit_entry missing entryId');
+      await updateTimelineEntry(action.eventId, action.entryId, action.payload as unknown as TimelineEntryPatchPayload);
+      break;
+    case 'undo_entry':
+      if (!action.entryId) throw new Error('undo_entry missing entryId');
+      await deleteTimelineEntry(action.eventId, action.entryId, {
+        expectedVersion: action.expectedVersion ?? 0,
+      });
+      break;
+  }
 }
 
 export async function drainQueue(
@@ -15,47 +39,22 @@ export async function drainQueue(
   const pending = await getPendingActions(eventId, userId);
   if (pending.length === 0) return { accepted: 0, rejected: 0, duplicates: 0, failed: 0 };
 
-  const request: SyncBatchRequest = {
-    deviceId: pending[0].deviceId,
-    eventId,
-    actions: pending.map((a) => ({
-      actionId: a.id,
-      actionType: a.actionType,
-      payload: a.payload,
-      expectedVersion: a.expectedVersion,
-      clientTimestamp: new Date(a.createdAt).toISOString(),
-    })),
-  };
-
-  let response: { receipts: Array<{ actionId: string; status: string; code?: string }>; recomputedResults: boolean };
-  try {
-    response = await postSyncBatch(request);
-  } catch (err) {
-    for (const action of pending) {
-      await markFailed(action.id, err instanceof Error ? err.message : 'Network error', userId);
-    }
-    return { accepted: 0, rejected: 0, duplicates: 0, failed: pending.length };
-  }
-
   const result: DrainResult = { accepted: 0, rejected: 0, duplicates: 0, failed: 0 };
 
-  for (const receipt of response.receipts) {
-    const action = pending.find((a) => a.id === receipt.actionId);
-    if (!action) continue;
-
-    switch (receipt.status) {
-      case 'accepted':
-        await markSynced(action.id, receipt as unknown as Record<string, unknown>, userId);
-        result.accepted++;
-        break;
-      case 'duplicate':
-        await markSynced(action.id, receipt as unknown as Record<string, unknown>, userId);
+  for (const action of pending) {
+    try {
+      await replayAction(action);
+      await markSynced(action.id, { replayed: true }, userId);
+      result.accepted++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sync failed';
+      if (msg.includes('not found') || msg.includes('NOT_FOUND') || msg.includes('404')) {
+        await markSynced(action.id, { skipped: 'entry_not_found' }, userId);
         result.duplicates++;
-        break;
-      case 'rejected':
-        await markFailed(action.id, receipt.code ?? 'REJECTED', userId);
-        result.rejected++;
-        break;
+      } else {
+        await markFailed(action.id, msg, userId);
+        result.failed++;
+      }
     }
   }
 

@@ -249,12 +249,17 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     const syncOnReconnect = async () => {
       try {
         const result = await syncPending(selectedEventId);
-        if (result.accepted > 0 || result.duplicates > 0) {
-          setToast(`Synced ${result.accepted + result.duplicates} queued action(s).`);
+        const total = result.accepted + result.duplicates + result.failed;
+        if (total > 0) {
+          if (result.failed > 0) {
+            setToast(`Synced ${result.accepted + result.duplicates} of ${total} queued action(s). ${result.failed} failed.`);
+          } else {
+            setToast(`Synced ${result.accepted + result.duplicates} queued action(s).`);
+          }
           void loadEventDataRef.current(selectedEventId);
         }
       } catch {
-        // Sync errors are non-fatal
+        // Sync errors are non-fatal (e.g. IndexedDB unavailable in test environments)
       }
     };
     void syncOnReconnect();
