@@ -37,19 +37,6 @@ function resetTilt(event: PointerEvent<HTMLElement>) {
   event.currentTarget.style.setProperty('--glow-y', '50%');
 }
 
-function AthleteSilhouette() {
-  return (
-    <svg viewBox="0 0 200 220" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="14" aria-hidden="true">
-      <circle cx="136" cy="32" r="15" fill="currentColor" stroke="none" />
-      <path d="M121 56 100 96l25 25" />
-      <path d="m106 79-37 23-23-13" />
-      <path d="m111 79 37 18 22-19" />
-      <path d="m122 117-36 48-32 18" />
-      <path d="m123 117 31 42 30 1" />
-    </svg>
-  );
-}
-
 function AthleteStatCard({ athlete }: { athlete: PublicAthleteStatistics }) {
   const metrics = [
     ['PB', formatMetric(athlete.pb)],
@@ -66,7 +53,7 @@ function AthleteStatCard({ athlete }: { athlete: PublicAthleteStatistics }) {
       <div className={styles.cardSheen} aria-hidden="true" />
       <div className={styles.athleteVisual} aria-hidden="true">
         <span>{initials}</span>
-        <AthleteSilhouette />
+        <img src="/WLogo.png" alt="" />
       </div>
       <div className={styles.athleteContent}>
         <p className={styles.cardEyebrow}>100m athlete</p>
