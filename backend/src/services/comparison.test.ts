@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DbExecutor } from '../db/client.js';
 import type { AthleteRow, ProgressionEntryRow } from '../db/row-mappers.js';
-import { getTwoAthleteComparison } from './comparison.js';
+import {
+  getCrossClubAthleteComparison,
+  getTwoAthleteComparison,
+} from './comparison.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ATHLETE_1_ID = '22222222-2222-4222-8222-222222222222';
 const ATHLETE_2_ID = '44444444-4444-4444-8444-444444444444';
+const OTHER_WORKSPACE_ID = '66666666-6666-4666-8666-666666666666';
 const EVENT_1_ID = '33333333-3333-4333-8333-333333333333';
 const EVENT_2_ID = '55555555-5555-5555-8555-555555555555';
 const TIMESTAMP = new Date('2026-08-17T10:00:00.000Z');
@@ -180,6 +184,8 @@ describe('getTwoAthleteComparison', () => {
     const [sql] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('), enriched AS (');
     expect(sql).toContain('AS counts_towards_statistics');
+    expect(sql).toContain("fw.role = 'guest'");
+    expect(sql).toContain("fw.status = 'accepted'");
   });
 
   it('excludes void outcomes from valid count and PB', async () => {
@@ -464,5 +470,55 @@ describe('getTwoAthleteComparison', () => {
     expect(comparison.athletes[0].consistency).toBeNull();
     expect(comparison.athletes[0].improvement).toBeNull();
     expect(comparison.athletes[0].latestEffectiveResult).toBeNull();
+  });
+});
+
+describe('getCrossClubAthleteComparison', () => {
+  it('requires athletes from distinct club workspaces', async () => {
+    const query = vi.fn().mockResolvedValueOnce({
+      rows: [
+        { id: ATHLETE_1_ID, workspace_id: USER_ID },
+        { id: ATHLETE_2_ID, workspace_id: USER_ID },
+      ],
+    });
+
+    await expect(
+      getCrossClubAthleteComparison(ATHLETE_1_ID, ATHLETE_2_ID, runner(query)),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: 'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS',
+    });
+    expect(query.mock.calls[0]?.[0]).toContain('JOIN clubs c ON c.workspace_id = a.workspace_id');
+  });
+
+  it('returns the existing safe comparison detail for athletes in separate clubs', async () => {
+    const a1Row = athleteRow({ id: ATHLETE_1_ID, name: 'Athlete One' });
+    const a2Row = athleteRow({ id: ATHLETE_2_ID, name: 'Athlete Two' });
+    const query = vi.fn()
+      .mockResolvedValueOnce({
+        rows: [
+          { id: ATHLETE_1_ID, workspace_id: USER_ID },
+          { id: ATHLETE_2_ID, workspace_id: OTHER_WORKSPACE_ID },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [a1Row] })
+      .mockResolvedValueOnce({ rows: [queryRow({}, { summary_pb: '11.20', summary_total: 1, summary_valid: 1 })] })
+      .mockResolvedValueOnce({ rows: [a2Row] })
+      .mockResolvedValueOnce({ rows: [queryRow({ athlete_id: ATHLETE_2_ID, athlete_name: 'Athlete Two' }, { summary_pb: '11.80', summary_total: 1, summary_valid: 1 })] });
+
+    const comparison = await getCrossClubAthleteComparison(
+      ATHLETE_1_ID,
+      ATHLETE_2_ID,
+      runner(query),
+    );
+
+    expect(comparison).toMatchObject({
+      athletes: [
+        { athlete: { id: ATHLETE_1_ID, name: 'Athlete One' }, pb: 11.2 },
+        { athlete: { id: ATHLETE_2_ID, name: 'Athlete Two' }, pb: 11.8 },
+      ],
+    });
+    expect(query.mock.calls[2]?.[1]).toEqual([ATHLETE_1_ID, USER_ID, '100m']);
+    expect(query.mock.calls[4]?.[1]).toEqual([ATHLETE_2_ID, OTHER_WORKSPACE_ID, '100m']);
   });
 });

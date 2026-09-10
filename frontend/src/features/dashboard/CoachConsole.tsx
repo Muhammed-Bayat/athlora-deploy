@@ -38,7 +38,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   stats: { title: 'Season Stats', subtitle: 'Teams, athletes, results, and performance trends' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
-  comparison: { title: 'Compare Athletes', subtitle: 'Compare all-time 100m progression for two athletes' },
+  comparison: { title: 'Compare Performance', subtitle: 'Compare athlete progression and all-time club performance' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
   fixtures: { title: 'Events', subtitle: 'Manage shared club events' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },

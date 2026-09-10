@@ -1,4 +1,4 @@
-import { getPool } from '../db/client.js';
+import { getPool, type DbExecutor } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import {
   mapClubJoinRequestRow,
@@ -7,7 +7,69 @@ import {
   type ClubRow,
 } from '../db/row-mappers.js';
 import { ApiError } from '../middleware/errors.js';
-import type { Club, ClubJoinRequest } from '../types/domain.js';
+import {
+  DISCIPLINE_100M,
+  type AthleteLifecycleStatus,
+  type Club,
+  type ClubAthleteLookup,
+  type ClubComparisonDetail,
+  type ClubJoinRequest,
+  type ClubStatistics,
+} from '../types/domain.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
+
+interface ClubSummaryRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+}
+
+interface ClubAthleteLookupRow {
+  id: string;
+  name: string;
+  lifecycle_status: AthleteLifecycleStatus;
+}
+
+interface ClubStatisticsRow {
+  active_count: number | string;
+  inactive_count: number | string;
+  archived_count: number | string;
+  total_count: number | string;
+  distinct_athletes_with_valid_results: number | string;
+  total_100m_result_count: number | string;
+  valid_100m_result_count: number | string;
+  fastest_valid_time: number | string | null;
+  latest_valid_time: number | string | null;
+  average_valid_time: number | string | null;
+  median_valid_time: number | string | null;
+  population_standard_deviation: number | string | null;
+}
+
+function clubNotFound(): ApiError {
+  return new ApiError(404, 'CLUB_NOT_FOUND', 'Club not found');
+}
+
+function count(value: number | string): number {
+  return Number(value);
+}
+
+function nullableNumber(value: number | string | null): number | null {
+  return value === null ? null : Number(value);
+}
+
+async function findClub(
+  clubId: unknown,
+  executor: DbExecutor,
+): Promise<ClubStatistics['club'] & { workspaceId: string }> {
+  if (!isCanonicalUuid(clubId)) throw clubNotFound();
+  const result = await executor.query<ClubSummaryRow>(
+    'SELECT id, workspace_id, name FROM clubs WHERE id = $1',
+    [clubId],
+  );
+  const club = result.rows[0];
+  if (!club) throw clubNotFound();
+  return { id: club.id, name: club.name, workspaceId: club.workspace_id };
+}
 
 export async function listClubs(search: string | null): Promise<Club[]> {
   const result = await getPool().query<ClubRow>(
@@ -18,6 +80,131 @@ export async function listClubs(search: string | null): Promise<Club[]> {
     [search],
   );
   return result.rows.map(mapClubRow);
+}
+
+export async function listClubComparisonAthletes(
+  clubId: unknown,
+  search: string | null,
+  executor: DbExecutor = getPool(),
+): Promise<ClubAthleteLookup[]> {
+  const club = await findClub(clubId, executor);
+  const result = await executor.query<ClubAthleteLookupRow>(
+    `SELECT a.id, a.name, a.lifecycle_status
+     FROM athletes a
+     WHERE a.workspace_id = $1
+       AND a.lifecycle_status <> 'archived'
+       AND ($2::text IS NULL OR a.name ILIKE '%' || $2 || '%')
+     ORDER BY lower(a.name), a.created_at, a.id`,
+    [club.workspaceId, search],
+  );
+  return result.rows.map((athlete) => ({
+    id: athlete.id,
+    name: athlete.name,
+    status: athlete.lifecycle_status,
+  }));
+}
+
+export async function getClubStatistics(
+  clubId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<ClubStatistics> {
+  const club = await findClub(clubId, executor);
+  const result = await executor.query<ClubStatisticsRow>(
+    `WITH roster AS (
+       SELECT a.id, a.lifecycle_status
+       FROM athletes a
+       WHERE a.workspace_id = $1
+     ), effective AS (
+       SELECT r.athlete_id,
+              e.date AS event_date,
+              e.time AS event_time,
+              e.created_at AS event_created_at,
+              e.id AS event_id,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+                  THEN r.manual_override
+                ELSE r.final_result
+              END AS effective_result,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                ELSE r.outcome
+              END AS effective_outcome
+       FROM results r
+       JOIN roster a ON a.id = r.athlete_id
+       JOIN events e ON e.id = r.event_id
+       WHERE r.discipline = $2
+         AND e.status <> 'cancelled'
+         AND (e.workspace_id = $1 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           JOIN event_participants ep ON ep.event_id = fw.event_id
+             AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+           WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
+     ), valid AS (
+       SELECT *
+       FROM effective
+       WHERE effective_outcome = 'valid' AND effective_result IS NOT NULL
+     )
+     SELECT
+       (SELECT COUNT(*) FILTER (WHERE lifecycle_status = 'active') FROM roster) AS active_count,
+       (SELECT COUNT(*) FILTER (WHERE lifecycle_status = 'inactive') FROM roster) AS inactive_count,
+       (SELECT COUNT(*) FILTER (WHERE lifecycle_status = 'archived') FROM roster) AS archived_count,
+       (SELECT COUNT(*) FROM roster) AS total_count,
+       (SELECT COUNT(DISTINCT athlete_id) FROM valid) AS distinct_athletes_with_valid_results,
+       COUNT(*) AS total_100m_result_count,
+       (SELECT COUNT(*) FROM valid) AS valid_100m_result_count,
+       (SELECT MIN(effective_result) FROM valid) AS fastest_valid_time,
+       (SELECT effective_result FROM valid
+        ORDER BY event_date DESC, event_time DESC NULLS LAST, event_created_at DESC, event_id DESC
+        LIMIT 1) AS latest_valid_time,
+       (SELECT AVG(effective_result) FROM valid) AS average_valid_time,
+       (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY effective_result) FROM valid)
+         AS median_valid_time,
+       CASE WHEN (SELECT COUNT(*) FROM valid) < 2 THEN NULL
+            ELSE (SELECT stddev_pop(effective_result) FROM valid)
+       END AS population_standard_deviation
+     FROM effective`,
+    [club.workspaceId, DISCIPLINE_100M],
+  );
+  const statistics = result.rows[0];
+  if (!statistics) throw new Error('Club statistics aggregate query returned no row');
+
+  return {
+    club: { id: club.id, name: club.name },
+    roster: {
+      active: count(statistics.active_count),
+      inactive: count(statistics.inactive_count),
+      archived: count(statistics.archived_count),
+      total: count(statistics.total_count),
+    },
+    distinctAthletesWithValidResults: count(statistics.distinct_athletes_with_valid_results),
+    total100mResultCount: count(statistics.total_100m_result_count),
+    valid100mResultCount: count(statistics.valid_100m_result_count),
+    fastestValidTime: nullableNumber(statistics.fastest_valid_time),
+    latestValidTime: nullableNumber(statistics.latest_valid_time),
+    averageValidTime: nullableNumber(statistics.average_valid_time),
+    medianValidTime: nullableNumber(statistics.median_valid_time),
+    populationStandardDeviation: nullableNumber(statistics.population_standard_deviation),
+  };
+}
+
+export async function getClubComparison(
+  club1Id: unknown,
+  club2Id: unknown,
+): Promise<ClubComparisonDetail> {
+  if (typeof club1Id !== 'string' || typeof club2Id !== 'string') {
+    throw new ApiError(400, 'CLUB_IDS_REQUIRED', 'Exactly two club IDs are required');
+  }
+  if (club1Id === club2Id) {
+    throw new ApiError(400, 'DUPLICATE_CLUB_ID', 'Exactly two distinct club IDs are required');
+  }
+
+  const club1 = await getClubStatistics(club1Id);
+  const club2 = await getClubStatistics(club2Id);
+  return { clubs: [club1, club2] };
 }
 
 export async function createClub(userId: string, name: string): Promise<Club> {

@@ -219,6 +219,41 @@
   opacity: 0.6;
 }
 
+.menuSearch {
+  padding: 3px 3px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(138, 233, 242, 0.10);
+}
+
+.searchInput {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(138, 233, 242, 0.15);
+  border-radius: 9px;
+  background: rgba(1, 15, 24, 0.64);
+  color: #E5F1F5;
+  font: 500 0.75rem var(--font-family-base);
+}
+
+.searchInput::placeholder {
+  color: rgba(200, 220, 228, 0.58);
+}
+
+.searchInput:focus-visible {
+  border-color: rgba(138, 233, 242, 0.45);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(69, 190, 215, 0.10);
+}
+
+.empty {
+  margin: 0;
+  padding: 12px 11px;
+  color: #ABC5CF;
+  font: 0.75rem var(--font-family-base);
+  text-align: center;
+}
+
 .option {
   position: relative;
   width: 100%;
@@ -340,6 +375,26 @@
 
 :global(html.theme-light) .menu::before {
   background: linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.29), transparent);
+}
+
+:global(html.theme-light) .menuSearch {
+  border-bottom-color: rgba(0, 94, 131, 0.10);
+}
+
+:global(html.theme-light) .searchInput {
+  border-color: rgba(0, 94, 131, 0.15);
+  background: rgba(255, 255, 255, 0.72);
+  color: #173E50;
+}
+
+:global(html.theme-light) .searchInput::placeholder,
+:global(html.theme-light) .empty {
+  color: #587787;
+}
+
+:global(html.theme-light) .searchInput:focus-visible {
+  border-color: rgba(0, 146, 188, 0.42);
+  box-shadow: 0 0 0 3px rgba(0, 146, 188, 0.09);
 }
 
 :global(html.theme-light) .option {

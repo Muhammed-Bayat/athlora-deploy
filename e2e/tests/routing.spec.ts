@@ -33,7 +33,7 @@ test.describe('routing and navigation', () => {
 
   test('comparison page loads with query parameters', async ({ page }) => {
     await page.goto('/console/comparison');
-    await waitForView(page, 'Two-Athlete 100m Comparison');
+    await waitForView(page, 'Compare 100m Performance');
   });
 
   test('unknown console route redirects to dashboard', async ({ page }) => {

@@ -22,6 +22,10 @@ router.get('/join-requests/me', verifyAuth0Token, resolveLocalApplicationUser, c
 router.post('/join-requests/:id/withdraw', verifyAuth0Token, resolveLocalApplicationUser, clubs.withdraw);
 router.post('/:clubId/join-requests', verifyAuth0Token, resolveLocalApplicationUser, clubs.requestJoin);
 
+router.get('/comparison', verifyAuth0Token, resolveApplicationUser, clubs.comparison);
+router.get('/:clubId/athletes', verifyAuth0Token, resolveApplicationUser, clubs.listComparisonAthletes);
+router.get('/:clubId/statistics', verifyAuth0Token, resolveApplicationUser, clubs.statistics);
+
 router.get('/:clubId/join-requests', verifyAuth0Token, resolveApplicationUser, requireCoach(), requireActiveClubWorkspace, clubs.listJoinRequests);
 router.post('/:clubId/join-requests/:id/approve', verifyAuth0Token, resolveApplicationUser, requireCoach(), requireActiveClubWorkspace, clubs.approve);
 router.post('/:clubId/join-requests/:id/reject', verifyAuth0Token, resolveApplicationUser, requireCoach(), requireActiveClubWorkspace, clubs.reject);
