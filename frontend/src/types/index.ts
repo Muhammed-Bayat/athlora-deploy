@@ -258,6 +258,18 @@ export interface FixtureNotification {
   createdAt: string;
 }
 
+export type EventReminderThreshold = 'seven_days' | 'one_day';
+
+export interface EventReminder {
+  id: string;
+  eventId: string;
+  eventVersion: number;
+  threshold: EventReminderThreshold;
+  scheduledFor: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
 export type IncidentType = 'false_start' | 'dq' | 'dnf' | 'dns' | 'lane_infringement' | null;
 

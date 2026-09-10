@@ -338,7 +338,7 @@ export function CoachConsole() {
   const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
-  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0 });
+  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0, reminders: 0 });
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
   const [isNight, setIsNight] = useState(false);
@@ -543,7 +543,7 @@ export function CoachConsole() {
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       </div>
-       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures} unread event notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
