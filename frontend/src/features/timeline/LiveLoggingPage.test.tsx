@@ -635,7 +635,7 @@ describe('LiveLoggingPage', () => {
     expect(screen.getByText('Refreshing live standings...')).toBeInTheDocument();
     resolveResults({ data: [mockResult], meta: { count: 1 } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'False Start' })).toBeEnabled());
-    expect(screen.queryByText('Finish time recorded successfully.')).not.toBeInTheDocument();
+    expect(screen.getByText('Finish time recorded successfully.')).toBeInTheDocument();
   });
 
   it('validates and sends an exact penalty correction payload', async () => {

@@ -643,8 +643,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
       {conflictNotice && <div className={styles.conflictAlert} role="alert">{conflictNotice}</div>}
       {secondaryError && <div className={styles.conflictAlert} role="status">{secondaryError}</div>}
-
-      <PublicLoggerPanel event={activeEvent} />
+      {toast && <Toast onDismiss={() => setToast(null)}>{toast}</Toast>}
 
       <div className={styles.workspace}>
         {/* Left: Athlete Logging Console */}
