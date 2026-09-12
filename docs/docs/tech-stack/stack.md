@@ -11,7 +11,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 |-------|------|-----|
 | Frontend framework | React + Vite (TypeScript, strict) | Fast dev/build, strict typing, standard React data flow |
 | Styling | Plain CSS (variables + modules) | Design tokens from approved mockups, no runtime dependency |
-| Landing visuals | SVG + CSS (shared `TrackArtwork`) + DOM chase-camera | Mockup-exact oval art for the hero reveal and cinematic lap; no WebGL dependency |
+| Landing visuals | Three.js + React Three Fiber | One scroll-driven, procedural stadium tunnel and athletics track camera shot with a continuous first-person-to-track-flight handoff and performance-graph morph |
 | Fitness body viewer | Three.js + React Three Fiber + Drei | On-demand static anatomical viewer for persistent injury mapping with topology-bound surface heat maps |
 | Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
@@ -57,7 +57,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - **Chart.js**: batteries-included for line/bar charts without a heavier data-viz framework.
 - **Open-Meteo**: no API key, free rate limits — ideal for a university project with no billing.
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
-- **Lazy-loaded SVG/CSS landing track**: the mockup-exact oval is drawn once as a shared SVG component and painted differently per context; the cinematic lap is pure DOM transforms, so the landing page needs no WebGL.
+- **Lazy-loaded R3F landing stage**: one fixed decorative canvas renders the procedural tunnel, stadium, shared track, runner signals, and performance ribbon. It keeps camera state in mutable refs, uses reusable Three vectors/curves, limits DPR, pauses while hidden, and lowers detail on compact displays.
 - **Three.js / React Three Fiber / Drei**: on-demand anatomical body viewer for persistent injury mapping with topology-bound surface heat maps.
 - **@google/genai**: Google Gemini SDK for the Live voice assistant, providing the `BidiGenerateContentConstrained` WebSocket API and tool-call interception.
 - **qrcode**: QR code generation for public logger link sharing.

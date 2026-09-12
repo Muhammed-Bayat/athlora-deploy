@@ -15,17 +15,35 @@ function renderLanding() {
 describe('LandingPage', () => {
   afterEach(() => {
     vi.useRealTimers();
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
   });
 
-  it('runs the opening identity beat before typing the hero headline', () => {
+  it('shows the branded landing animation for two seconds', () => {
     vi.useFakeTimers();
     renderLanding();
 
-    expect(screen.getByText('ATHLORA')).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(2000));
-    expect(screen.queryByText('ATHLORA')).not.toBeInTheDocument();
+    expect(screen.getByTestId('landing-intro')).toHaveTextContent('ATHLORA');
+    act(() => vi.advanceTimersByTime(1999));
+    expect(screen.getByTestId('landing-intro')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByTestId('landing-intro')).not.toBeInTheDocument();
+  });
+
+  it('renders complete hero lines for scroll reveals without a typewriter', () => {
+    vi.useFakeTimers();
+    renderLanding();
+
+    const heading = screen.getByRole('heading', { name: 'Track the squad. Run the season.' });
+    expect(heading).toHaveTextContent('Run the season.');
+    expect(heading.querySelector('i')).toBeNull();
+    expect(heading.querySelectorAll('[data-scroll-reveal]')).toHaveLength(2);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 1000 });
+    fireEvent.scroll(window);
+    act(() => vi.advanceTimersByTime(32));
     act(() => vi.advanceTimersByTime(1400));
     expect(screen.getByRole('heading', { name: 'Track the squad. Run the season.' })).toHaveTextContent('Track the squad.');
+    expect(screen.getByRole('link', { name: 'Skip cinematic introduction' })).toHaveAttribute('href', '#top');
+    expect(document.getElementById('cinematic-intro')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('wires the persistent account actions to the supplied callbacks', () => {
