@@ -117,33 +117,63 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
   const reducedMotion = useRef(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches).current;
   const pageRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
+  const introProgressRef = useRef(0);
   const storyPositionsRef = useRef<number[]>([]);
+  const introEndRef = useRef(1);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [activeTab, setActiveTab] = useState<PreviewTab>('athletes');
   const [activeChapter, setActiveChapter] = useState('top');
+  const [chapterRailVisible, setChapterRailVisible] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [introVisible, setIntroVisible] = useState(!reducedMotion);
-  const [typedCount, setTypedCount] = useState(reducedMotion ? 32 : 0);
+  const [landingIntroVisible, setLandingIntroVisible] = useState(!reducedMotion);
 
   useEffect(() => {
-    if (reducedMotion) return;
-    const introTimer = window.setTimeout(() => setIntroVisible(false), 2000);
-    return () => window.clearTimeout(introTimer);
+    if (!landingIntroVisible) return;
+    const timer = window.setTimeout(() => setLandingIntroVisible(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [landingIntroVisible]);
+
+  useEffect(() => {
+    const root = pageRef.current;
+    if (!root || reducedMotion) return;
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>(
+      `.${styles.chapterContent} > :not(h1), .${styles.titleLine}, .${styles.productCopy} > *, .${styles.ctaContent} > *`,
+    ));
+    let frame = 0;
+    let positions: number[] = [];
+    const measure = () => {
+      positions = nodes.map((node) => node.getBoundingClientRect().top + window.scrollY);
+    };
+    const update = () => {
+      frame = 0;
+      nodes.forEach((node, index) => {
+        const progress = Math.min(1, Math.max(0, (window.scrollY + window.innerHeight * .94 - positions[index]) / (window.innerHeight * .28)));
+        const eased = 1 - Math.pow(1 - progress, 3);
+        node.style.setProperty('--text-reveal', eased.toFixed(4));
+      });
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    const resize = () => {
+      nodes.forEach((node) => node.removeAttribute('data-scroll-reveal'));
+      measure();
+      update();
+      nodes.forEach((node) => node.setAttribute('data-scroll-reveal', ''));
+    };
+    resize();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', resize);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    observer?.observe(root);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+      nodes.forEach((node) => { node.removeAttribute('data-scroll-reveal'); node.style.removeProperty('--text-reveal'); });
+    };
   }, [reducedMotion]);
-
-  useEffect(() => {
-    if (reducedMotion || introVisible) return;
-    const typeTimer = window.setInterval(() => setTypedCount((count) => {
-      if (count >= 32) {
-        window.clearInterval(typeTimer);
-        return count;
-      }
-      return count + 1;
-    }), 42);
-    return () => window.clearInterval(typeTimer);
-  }, [introVisible, reducedMotion]);
 
   useEffect(() => {
     let frame = 0;
@@ -152,11 +182,17 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
         const element = document.getElementById(id);
         return element?.offsetTop || index * window.innerHeight;
       });
+      introEndRef.current = Math.max(1, (document.getElementById('top')?.offsetTop ?? window.innerHeight) - window.innerHeight * .34);
     };
     const update = () => {
       frame = 0;
       const positions = storyPositionsRef.current;
-      const scroll = window.scrollY + window.innerHeight * .34;
+      const scrollY = window.scrollY;
+      const scroll = scrollY + window.innerHeight * .34;
+      const introProgress = Math.min(1, Math.max(0, scrollY / introEndRef.current));
+      introProgressRef.current = introProgress;
+      setChapterRailVisible(introProgress >= .65);
+      pageRef.current?.style.setProperty('--intro-progress', introProgress.toFixed(4));
       let index = 0;
       while (index < positions.length - 1 && scroll >= positions[index + 1]) index += 1;
       const start = positions[index] ?? 0;
@@ -206,25 +242,21 @@ export function LandingPage({ onLogin, onSignup, onPasswordHelp }: LandingPagePr
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKeyDown); trigger?.focus(); };
   }, [menuOpen]);
 
-  const fullTitle = 'Track the squad.\nRun the season.';
-  const visibleTitle = fullTitle.slice(0, typedCount);
-  const lineBreak = visibleTitle.indexOf('\n');
-  const firstLine = lineBreak === -1 ? visibleTitle : visibleTitle.slice(0, lineBreak);
-  const secondLine = lineBreak === -1 ? '' : visibleTitle.slice(lineBreak + 1);
-
   return <div className={styles.page} ref={pageRef}>
-    <Suspense fallback={null}><PersistentWebGLStage progressRef={progressRef} /></Suspense>
+    <Suspense fallback={null}><PersistentWebGLStage progressRef={progressRef} introProgressRef={introProgressRef} /></Suspense>
     <div className={styles.staticAtmosphere} aria-hidden="true"><i /><i /><i /></div>
-    {introVisible && <div className={styles.intro} aria-hidden="true"><div><span>Athletics coaching · performance system</span><strong>ATHLORA</strong><i /><small>Run the whole season from one place</small></div></div>}
-    <header className={styles.header}><nav className={styles.nav} aria-label="Landing page"><a href="#top" className={styles.brandLink} aria-label="Athlora home"><Brand /></a><div className={styles.desktopActions}><AccountButton onClick={onLogin}>Log in</AccountButton><a className={`${styles.button} ${styles.secondary}`} href="/stats">Stats</a><AccountButton primary onClick={onSignup}>Get started</AccountButton></div><button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label="Open menu" aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen(true)}><span /></button></nav></header>
+    {landingIntroVisible && <div className={styles.intro} data-testid="landing-intro" aria-hidden="true"><div><span>Athletics coaching · performance system</span><strong>ATHLORA</strong><i /><small>Run the whole season from one place</small></div></div>}
+    <a className={styles.skipCinematic} href="#top">Skip cinematic introduction</a>
+    <header className={styles.header}><nav className={styles.nav} aria-label="Landing page"><a href="#cinematic-intro" className={styles.brandLink} aria-label="Athlora home"><Brand /></a><div className={styles.desktopActions}><AccountButton onClick={onLogin}>Log in</AccountButton><a className={`${styles.button} ${styles.secondary}`} href="/stats">Stats</a><AccountButton primary onClick={onSignup}>Get started</AccountButton></div><button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label="Open menu" aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen(true)}><span /></button></nav></header>
     {menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} role="dialog" aria-modal="true" aria-label="Navigation menu"><div><Brand compact /><button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)}>+</button></div><nav aria-label="Mobile landing page">{chapters.slice(1).map(([id, label]) => <a href={`#${id}`} key={id} onClick={() => setMenuOpen(false)}>{label}</a>)}</nav><AccountButton onClick={onLogin}>Log in</AccountButton><a className={`${styles.button} ${styles.secondary}`} href="/stats">Stats</a><AccountButton primary onClick={onSignup}>Get started</AccountButton><button type="button" className={styles.passwordButton} onClick={onPasswordHelp}>Forgot password</button></div>}
-    <aside className={styles.chapterRail} aria-label="Story chapters">{chapters.slice(0, -1).map(([id, label]) => <a key={id} href={`#${id}`} aria-current={activeChapter === id ? 'location' : undefined}><span />{label}</a>)}</aside>
+    {chapterRailVisible && <aside className={styles.chapterRail} aria-label="Story chapters">{chapters.slice(0, -1).map(([id, label]) => <a key={id} href={`#${id}`} aria-current={activeChapter === id ? 'location' : undefined}><span />{label}</a>)}</aside>}
     <main>
-      <section id="top" className={`${styles.chapter} ${styles.hero}`} aria-labelledby="landing-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Athletics coaching, in motion</p><h1 id="landing-title" aria-label="Track the squad. Run the season."><span aria-hidden="true">{firstLine || '\u00a0'}<br />{secondLine.startsWith('Run the ') ? <>Run the <em>{secondLine.slice(8)}</em></> : secondLine}<i className={typedCount < fullTitle.length ? styles.caret : ''} /></span></h1><p className={styles.heroCopy}>One calm, connected place for every athlete, every trial and every decision that carries a season forward.</p><div className={styles.actions}><AccountButton primary onClick={onSignup}>Get started free <Icon name="arrow" /></AccountButton><a className={`${styles.button} ${styles.secondary}`} href="#product">See Athlora in motion</a></div></div><p className={styles.scrollPrompt} aria-hidden="true">Scroll to enter the track <i /></p></section>
+      <div id="cinematic-intro" className={styles.cinematicIntro} aria-hidden="true" />
+      <section id="top" className={`${styles.chapter} ${styles.hero}`} aria-labelledby="landing-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Athletics coaching, in motion</p><h1 id="landing-title" aria-label="Track the squad. Run the season."><span className={styles.titleLine}>Track the squad.</span><span className={styles.titleLine}>Run the <em>season.</em></span></h1><p className={styles.heroCopy}>One calm, connected place for every athlete, every trial and every decision that carries a season forward.</p><div className={styles.actions}><AccountButton primary onClick={onSignup}>Get started free <Icon name="arrow" /></AccountButton><a className={`${styles.button} ${styles.secondary}`} href="#product">See Athlora in motion</a></div></div><p className={styles.scrollPrompt} aria-hidden="true">Scroll to enter the track <i /></p></section>
       <section id="squad" className={`${styles.chapter} ${styles.squad}`} aria-labelledby="squad-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>The squad</p><h2 id="squad-title">One squad.<br />Every athlete visible.</h2><p>Follow readiness, personal bests and momentum as signals moving through the same world, instead of scattered across spreadsheets.</p><div className={styles.athleteMoments}><article><b>Jordan Lee</b><span>100m sprint · 10.86s PB</span><i>Peaking</i></article><article><b>Mia Santos</b><span>400m sprint · 54.20s PB</span><i>On track</i></article><article><b>Efe Adeyemi</b><span>200m sprint · 21.14s PB</span><i>Peaking</i></article></div></div></section>
       <section id="product" className={`${styles.chapter} ${styles.product}`} aria-labelledby="product-title"><div className={styles.productLayout}><div className={styles.productCopy}><p className={styles.eyebrow}>The coach's console</p><h2 id="product-title">The season comes into focus.</h2><p>Athlora emerges when the world needs a decision. Read the roster, calendar and trend without leaving the story.</p></div><ProductPanel activeTab={activeTab} onTabChange={setActiveTab} /></div></section>
       <section id="events" className={`${styles.chapter} ${styles.events}`} aria-labelledby="events-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Meets and training</p><h2 id="events-title">Move through the season,<br />not a list of dates.</h2><p>Trials, camps and competition appear as milestones ahead on the track, with the detail close when it matters.</p><div className={styles.eventMoments}><span><Icon name="signal" /><b>Training</b><small>Tuesday · 16:30</small></span><span><Icon name="calendar" /><b>Time trial</b><small>Saturday · 09:00</small></span></div></div></section>
-      <section id="trend" className={`${styles.chapter} ${styles.trend}`} aria-labelledby="trend-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Track to trend</p><h2 id="trend-title">Every lane tells a<br />performance story.</h2><p>The work on track becomes the curve you use to understand what comes next.</p><div className={styles.metricLine}><span>100m sprint group</span><b>11.47 <i>→</i> 11.24 PB</b></div><a className={`${styles.button} ${styles.secondary}`} href="/console/stats">Explore season statistics</a></div></section>
+      <section id="trend" className={`${styles.chapter} ${styles.trend}`} aria-labelledby="trend-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Track to trend</p><h2 id="trend-title">Every lane tells a<br />performance story.</h2><p>The work on track becomes the curve you use to understand what comes next.</p><div className={styles.metricLine}><span>100m sprint group</span><b>11.47 <i>→</i> 11.24 PB</b></div></div></section>
       <section id="fitness" className={`${styles.chapter} ${styles.fitness}`} aria-labelledby="fitness-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>Athlete intelligence</p><h2 id="fitness-title">See more than<br />performance.</h2><p>Fitness and injury context remains attached to the athlete, grounded in verified anatomy rather than a separate report.</p><p className={styles.anatomyNote}><span />Left knee · moderate signal</p></div></section>
       <section id="system" className={`${styles.chapter} ${styles.system}`} aria-labelledby="system-title"><div className={styles.chapterContent}><p className={styles.eyebrow}>One connected system</p><h2 id="system-title">The entire season,<br />in one place.</h2><p>Roster decisions, planned events and performance context stay connected from first session to final meet.</p><ol className={styles.systemSteps}><li><b>01</b> Build the squad</li><li><b>02</b> Shape the season</li><li><b>03</b> Read the trend</li></ol></div></section>
       <section id="cta" className={`${styles.chapter} ${styles.cta}`} aria-labelledby="cta-title"><div className={styles.ctaContent}><p className={styles.eyebrow}>Your next lap starts here</p><h2 id="cta-title">Ready to run the season?</h2><p>Set up your squad in minutes and make every session count.</p><div className={styles.actions}><AccountButton primary onClick={onSignup}>Get started free <Icon name="arrow" /></AccountButton><AccountButton onClick={onLogin}>I already have an account</AccountButton></div></div></section>

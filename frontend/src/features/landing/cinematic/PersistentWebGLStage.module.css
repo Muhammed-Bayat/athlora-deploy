@@ -13,9 +13,3 @@
   width: 100% !important;
   height: 100% !important;
 }
-
-@media (max-width: 900px), (prefers-reduced-motion: reduce) {
-  .stage {
-    display: none;
-  }
-}
