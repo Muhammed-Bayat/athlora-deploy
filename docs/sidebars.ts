@@ -16,6 +16,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Testing',
+      items: ['testing/overview'],
+    },
+    {
+      type: 'category',
       label: 'Architecture',
       items: ['architecture/overview', 'architecture/offline-sync', 'tech-stack/stack'],
     },
