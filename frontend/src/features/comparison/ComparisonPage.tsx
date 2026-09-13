@@ -479,7 +479,6 @@ export function ComparisonPage() {
   }, [activeWorkspace.role, publication]);
 
   useEffect(() => {
-    if (mode === 'athlete-club') return;
     let current = true;
     setClubsLoading(true);
     setClubsError(null);
@@ -497,7 +496,7 @@ export function ComparisonPage() {
         if (current) setClubsLoading(false);
       });
     return () => { current = false; };
-  }, [clubRefreshKey, mode]);
+  }, [activeWorkspace.id, clubRefreshKey]);
 
   useEffect(() => {
     if (mode !== 'athlete-cross-club' || !club1Id || deferredClub1Search.trim().length < 2) {

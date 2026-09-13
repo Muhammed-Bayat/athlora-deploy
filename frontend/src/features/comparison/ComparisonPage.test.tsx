@@ -117,6 +117,16 @@ describe('ComparisonPage', () => {
     expect(screen.getByRole('button', { name: 'Comparison mode' })).toHaveTextContent('Athlete vs athlete in my club');
   });
 
+  it('preloads club choices so changing comparison mode does not refetch them', async () => {
+    renderPage();
+
+    await waitFor(() => expect(mockListClubs).toHaveBeenCalledTimes(1));
+    await choose('Comparison mode', 'Club vs club');
+
+    expect(mockListClubs).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Select first club for comparison' })).not.toBeDisabled();
+  });
+
   it('lets a coach publish the club results from the comparison page', async () => {
     mockUpdateClubPublication.mockResolvedValue({ publicResultsEnabled: true });
     renderPage();
