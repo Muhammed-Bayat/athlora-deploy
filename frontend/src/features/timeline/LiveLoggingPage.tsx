@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { listAthletes } from '../../api/athletes';
 import { getEvent, listEvents, updateEvent } from '../../api/events';
 import { listEventParticipants } from '../../api/participants';
@@ -10,6 +10,7 @@ import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components'
 import { useCurrentUser } from '../auth/CurrentUserContext';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
+import { useEventOfflineSync } from '../../hooks/useEventOfflineSync';
 import { EventResultsView } from '../results/EventResultsView';
 import { PublicLoggerPanel } from '../events/PublicLoggerPanel';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
@@ -23,6 +24,15 @@ import type {
   TimelineEntryPatchPayload,
 } from '../../types';
 import styles from './LiveLoggingPage.module.css';
+import badgeStyles from './QueueStatusBadge.module.css';
+
+function getDeviceId(): string {
+  const stored = localStorage.getItem('athlora_device_id');
+  if (stored) return stored;
+  const id = crypto.randomUUID();
+  localStorage.setItem('athlora_device_id', id);
+  return id;
+}
 
 function hasApiCode(error: unknown, code: string): boolean {
   return error instanceof ApiError && error.code === code;
@@ -89,6 +99,12 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     async () => 'failed',
   );
   const editErrorRef = useRef<HTMLParagraphElement>(null);
+  const deviceId = useMemo(() => getDeviceId(), []);
+  const offlineSync = useEventOfflineSync({
+    userId: currentUser?.id ?? '',
+    eventId: selectedEventId ?? '',
+    deviceId,
+  });
   const mutationBusy = Boolean(
     submittingAthleteId || submittingIncidentKey || eventMutation || editBusy || undoBusy,
   );
@@ -308,6 +324,15 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setConflictNotice(null);
 
     try {
+      if (!offlineSync.isOnline) {
+        await offlineSync.enqueue({
+          actionType: 'create_entry',
+          payload: { athleteId, discipline: '100m', entryType: 'attempt', value: num, unit: 'seconds' },
+        });
+        setFinishInputs(prev => ({ ...prev, [athleteId]: rawVal }));
+        setToast('Finish time queued for sync. It will be submitted when you are back online.');
+        return;
+      }
       await createTimelineEntry(selectedEventId, {
         athleteId,
         discipline: '100m',
@@ -335,6 +360,14 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setConflictNotice(null);
 
     try {
+      if (!offlineSync.isOnline) {
+        await offlineSync.enqueue({
+          actionType: 'create_entry',
+          payload: { athleteId, discipline: '100m', entryType: 'penalty', incidentType, value: null },
+        });
+        setToast(`Incident queued for sync: ${getIncidentTypeLabel(incidentType)}`);
+        return;
+      }
       await createTimelineEntry(selectedEventId, {
         athleteId,
         discipline: '100m',
@@ -388,6 +421,21 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
     let shouldRestoreFocus = false;
     try {
+      if (!offlineSync.isOnline) {
+        const patch: TimelineEntryPatchPayload = editingEntry.entryType === 'note'
+          ? { expectedVersion: editingEntry.version, noteText: editNote.trim() }
+          : { expectedVersion: editingEntry.version, value: isTimedEntry ? valNum : null, incidentType: editIncident };
+        await offlineSync.enqueue({
+          actionType: 'edit_entry',
+          payload: patch as unknown as Record<string, unknown>,
+          entryId: editingEntry.id,
+          expectedVersion: editingEntry.version,
+        });
+        setEditingEntry(null);
+        shouldRestoreFocus = true;
+        setToast('Edit queued for sync. It will be submitted when you are back online.');
+        return;
+      }
       const patch: TimelineEntryPatchPayload = editingEntry.entryType === 'note'
         ? { expectedVersion: editingEntry.version, noteText: editNote.trim() }
         : {
@@ -426,6 +474,18 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
 
     let shouldRestoreFocus = false;
     try {
+      if (!offlineSync.isOnline) {
+        await offlineSync.enqueue({
+          actionType: 'undo_entry',
+          payload: { entryId: undoTarget.id, expectedVersion: undoTarget.version },
+          entryId: undoTarget.id,
+          expectedVersion: undoTarget.version,
+        });
+        setUndoTarget(null);
+        shouldRestoreFocus = true;
+        setToast('Undo queued for sync. It will be submitted when you are back online.');
+        return;
+      }
       await deleteTimelineEntry(selectedEventId, undoTarget.id, {
         expectedVersion: undoTarget.version,
       });
@@ -532,6 +592,21 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           <p>{activeEvent.locationName ?? 'Track'} · 100m · {availableParticipants.length} assigned athletes</p>
         </div>
         <div className={styles.headerButtons}>
+          {!offlineSync.isOnline && (
+            <span className={`${badgeStyles.badge} ${badgeStyles.pending}`} role="status">
+              Offline
+            </span>
+          )}
+          {offlineSync.pendingCount > 0 && offlineSync.isOnline && (
+            <span className={`${badgeStyles.badge} ${badgeStyles.pending}`} role="status">
+              Syncing {offlineSync.pendingCount}...
+            </span>
+          )}
+          {offlineSync.failedCount > 0 && (
+            <span className={`${badgeStyles.badge} ${badgeStyles.failed}`} role="status">
+              {offlineSync.failedCount} failed
+            </span>
+          )}
           <Button
             variant="secondary"
             onClick={returnToEventList}

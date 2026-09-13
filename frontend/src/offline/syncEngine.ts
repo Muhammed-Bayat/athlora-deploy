@@ -1,11 +1,17 @@
 import { postSyncBatch, type SyncBatchRequest } from '../api/sync';
+import { postPublicSyncBatch, toPublicSyncAction } from '../api/publicSync';
 import { getPendingActions, markSynced, markFailed } from './actionQueue';
+import { getPendingPublicActions, markPublicSynced, markPublicFailed } from './publicActionQueue';
 
 export interface DrainResult {
   accepted: number;
   rejected: number;
   duplicates: number;
   failed: number;
+}
+
+export interface PublicDrainResult extends DrainResult {
+  sessionExpired: boolean;
 }
 
 export async function drainQueue(
@@ -60,4 +66,55 @@ export async function drainQueue(
   }
 
   return result;
+}
+
+export async function drainPublicQueue(
+  eventId: string,
+  sessionToken: string,
+): Promise<PublicDrainResult> {
+  const pending = await getPendingPublicActions(eventId, sessionToken);
+  if (pending.length === 0) return { accepted: 0, rejected: 0, duplicates: 0, failed: 0, sessionExpired: false };
+
+  const request = {
+    eventId,
+    deviceId: pending[0].deviceId,
+    actions: pending.map(toPublicSyncAction),
+  };
+
+  let response: { receipts: Array<{ actionId: string; status: string; code?: string }>; recomputedResults: boolean };
+  let sessionExpired = false;
+  try {
+    response = await postPublicSyncBatch(sessionToken, request);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Network error';
+    sessionExpired = message.includes('Invalid or expired');
+    for (const action of pending) {
+      await markPublicFailed(action.id, message, sessionToken);
+    }
+    return { accepted: 0, rejected: 0, duplicates: 0, failed: pending.length, sessionExpired };
+  }
+
+  const result: DrainResult = { accepted: 0, rejected: 0, duplicates: 0, failed: 0 };
+
+  for (const receipt of response.receipts) {
+    const action = pending.find((a) => a.id === receipt.actionId);
+    if (!action) continue;
+
+    switch (receipt.status) {
+      case 'accepted':
+        await markPublicSynced(action.id, receipt as unknown as Record<string, unknown>, sessionToken);
+        result.accepted++;
+        break;
+      case 'duplicate':
+        await markPublicSynced(action.id, receipt as unknown as Record<string, unknown>, sessionToken);
+        result.duplicates++;
+        break;
+      case 'rejected':
+        await markPublicFailed(action.id, receipt.code ?? 'REJECTED', sessionToken);
+        result.rejected++;
+        break;
+    }
+  }
+
+  return { ...result, sessionExpired };
 }

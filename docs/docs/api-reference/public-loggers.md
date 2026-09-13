@@ -70,6 +70,7 @@ Mounted at `/public/logger`. These routes do not require a JWT — they use sess
 | `POST` | `/public/logger/events/:eventId/entries` | Submit a timeline entry |
 | `PATCH` | `/public/logger/events/:eventId/entries/:entryId` | Correct the caller's own public entry |
 | `DELETE` | `/public/logger/events/:eventId/entries/:entryId` | Undo the caller's own public entry |
+| `POST` | `/public/logger/sync/batch` | Submit a batch of offline actions |
 
 ### Start session
 
@@ -129,6 +130,53 @@ Body: { expectedVersion, value? | incidentType? }
 
 Public officials can correct or undo only entries attributed to their current public session. Both operations use optimistic versions and recompute event results. They cannot alter coach, assistant, or other public officials' entries. The existing `coach` role is the head-coach authority and can override any timeline entry or result through the authenticated console.
 
+### Batch sync (offline)
+
+```
+POST /public/logger/sync/batch
+Header: Authorization: Bearer <session-token>
+Body: {
+  eventId: string,
+  deviceId: string,
+  actions: PublicSyncActionInput[]
+}
+```
+
+Queues multiple offline actions for batch processing. The public logger frontend enqueues actions in IndexedDB when offline and drains them via this endpoint on reconnect.
+
+**Action input:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `actionId` | UUID | Yes | Client-generated UUID (idempotency key) |
+| `actionType` | `create_entry` \| `edit_entry` \| `undo_entry` | Yes | Action type |
+| `payload` | object | Yes | Action-specific data |
+| `expectedVersion` | number | No | For edit/undo — used for audit logging |
+| `clientTimestamp` | ISO 8601 | Yes | When the action was created on the client |
+
+**Conflict resolution:** Last-write-wins. If an edit targets a stale version, the conflict is logged in `public_sync_conflict_log` and the winning value is applied. This differs from the authenticated endpoint which rejects stale edits with `VERSION_CONFLICT`.
+
+**Response:**
+
+```json
+{
+  "receipts": [
+    {
+      "actionId": "uuid",
+      "status": "accepted",
+      "entryId": "uuid",
+      "serverVersion": 2
+    },
+    {
+      "actionId": "uuid",
+      "status": "rejected",
+      "code": "ENTRY_NOT_FOUND"
+    }
+  ],
+  "recomputedResults": true
+}
+```
+
 **Request body:**
 
 | Field | Type | Required | Description |
@@ -154,8 +202,10 @@ Public officials can correct or undo only entries attributed to their current pu
 ## Database Tables
 
 - `public_logger_links` — shareable link records (token hash, status, event association)
-- `public_logger_sessions` — active sessions (token hash, logger identity, expiry)
+- `public_logger_sessions` — active sessions (token hash, logger identity, expiry, device ID)
 - `timeline_entries.public_logger_session_id` — links entries back to the session that created them
+- `public_sync_action_receipts` — idempotent receipts for batch sync actions
+- `public_sync_conflict_log` — audit log for last-write-wins conflict resolution
 
 ## AI declaration
 

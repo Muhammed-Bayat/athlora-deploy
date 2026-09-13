@@ -17,6 +17,7 @@ import injuriesRouter from './injuries.js';
 import comparisonRouter from './comparison.js';
 import eventHelpersRouter from './eventHelpers.js';
 import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js';
+import publicSyncRouter from './publicSync.js';
 import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
@@ -80,6 +81,7 @@ squadsRouter.post('/:id/unarchive', requireOperationalAccess(), squads.unarchive
 
 router.use('/auth', authRouter);
 router.use('/public/logger', publicLoggerRouter);
+router.use('/public/logger/sync', publicSyncRouter);
 // Acceptance cannot require an existing workspace membership.
 router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
 // Listing is used to decide whether a synchronized user needs Club onboarding.

@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+dev-dist/
 
 # Env files (templates are committed as .env.example)
 .env
