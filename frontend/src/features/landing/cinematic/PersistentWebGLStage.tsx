@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Html, useGLTF } from '@react-three/drei';
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import {
@@ -6,16 +6,32 @@ import {
   CatmullRomCurve3,
   DoubleSide,
   Float32BufferAttribute,
+  FileLoader,
   Line,
   LineBasicMaterial,
   MathUtils,
-  MeshStandardMaterial,
+  MeshBasicMaterial,
+  type PerspectiveCamera,
   Vector3,
 } from 'three';
 import styles from './PersistentWebGLStage.module.css';
-import { anatomyModelUrl } from '../../fitness/anatomyAssets';
+import { anatomyMapUrl, anatomyModelUrl } from '../../fitness/anatomyAssets';
+import { StadiumIntro } from './StadiumIntro';
+import {
+  getIntroCameraState,
+  INTRO_CAMERA_START_FOV,
+  INTRO_CAMERA_START_POSITION,
+  INTRO_TIMELINE_SPAN,
+  LEGACY_CAMERA_HANDOFF_FOV,
+} from './introTimeline';
+import { getLegacyCameraState, LEGACY_CAMERA_HANDOFF_PROGRESS } from './legacyCamera';
 
 interface PersistentWebGLStageProps {
+  progressRef: MutableRefObject<number>;
+  introProgressRef: MutableRefObject<number>;
+}
+
+interface StoryProgressProps {
   progressRef: MutableRefObject<number>;
 }
 
@@ -44,14 +60,31 @@ function smoothstep(start: number, end: number, value: number) {
   return t * t * (3 - 2 * t);
 }
 
-function SceneDirector({ targetRef, visualRef }: { targetRef: MutableRefObject<number>; visualRef: MutableRefObject<number> }) {
+function SceneDirector({
+  targetRef,
+  introTargetRef,
+  visualTimelineRef,
+  introVisualRef,
+  storyVisualRef,
+}: {
+  targetRef: MutableRefObject<number>;
+  introTargetRef: MutableRefObject<number>;
+  visualTimelineRef: MutableRefObject<number>;
+  introVisualRef: MutableRefObject<number>;
+  storyVisualRef: MutableRefObject<number>;
+}) {
   useFrame((_, delta) => {
-    visualRef.current = MathUtils.damp(visualRef.current, targetRef.current, 5.2, delta);
+    const timelineTarget = introTargetRef.current < 1
+      ? introTargetRef.current * INTRO_TIMELINE_SPAN
+      : INTRO_TIMELINE_SPAN + targetRef.current * (1 - INTRO_TIMELINE_SPAN);
+    visualTimelineRef.current = MathUtils.damp(visualTimelineRef.current, timelineTarget, 5.2, delta);
+    introVisualRef.current = MathUtils.clamp(visualTimelineRef.current / INTRO_TIMELINE_SPAN, 0, 1);
+    storyVisualRef.current = MathUtils.clamp((visualTimelineRef.current - INTRO_TIMELINE_SPAN) / (1 - INTRO_TIMELINE_SPAN), 0, 1);
   }, -1);
   return null;
 }
 
-function stadiumPoints(radius: number, straight: number, y = .03, samples = 180) {
+function stadiumPoints(radius: number, straight: number, y = .03, samples = 320) {
   return Array.from({ length: samples }, (_, index) => {
     const angle = (index / samples) * Math.PI * 2;
     return new Vector3(Math.sign(Math.cos(angle) || 1) * straight + Math.cos(angle) * radius, y, Math.sin(angle) * radius);
@@ -59,8 +92,8 @@ function stadiumPoints(radius: number, straight: number, y = .03, samples = 180)
 }
 
 function createTrackGeometry() {
-  const outer = stadiumPoints(4.2, 5.55, 0, 220);
-  const inner = stadiumPoints(1.78, 5.55, 0, 220);
+  const outer = stadiumPoints(4.2, 5.55, 0, 320);
+  const inner = stadiumPoints(1.78, 5.55, 0, 320);
   const positions: number[] = [];
   const indices: number[] = [];
   outer.forEach((point, index) => {
@@ -80,7 +113,7 @@ function createTrackGeometry() {
   return geometry;
 }
 
-function TrackLane({ progressRef, lane }: { progressRef: MutableRefObject<number>; lane: number }) {
+function TrackLane({ progressRef, introProgressRef, lane }: { progressRef: MutableRefObject<number>; introProgressRef: MutableRefObject<number>; lane: number }) {
   const geometry = useMemo(() => {
     const radius = 2.02 + lane * .29;
     const next = new BufferGeometry().setFromPoints(stadiumPoints(radius, 5.55, .045));
@@ -92,32 +125,37 @@ function TrackLane({ progressRef, lane }: { progressRef: MutableRefObject<number
   useFrame(() => {
     const material = materialRef.current;
     if (!material) return;
-    const reveal = smoothstep(.02 + lane * .006, .18 + lane * .008, progressRef.current);
-    material.opacity = reveal * (lane === 3 ? .88 : .38);
+    const legacyReveal = smoothstep(.02 + lane * .006, .18 + lane * .008, progressRef.current);
+    const introReveal = smoothstep(.27 + lane * .008, .47 + lane * .01, introProgressRef.current);
+    const reveal = Math.max(legacyReveal, introReveal);
+    material.opacity = reveal * (lane === 3 ? .96 : .56);
   });
 
-  return <lineLoop geometry={geometry}><lineBasicMaterial ref={materialRef} color={lane === 3 ? '#d7fdff' : '#4a8291'} transparent depthWrite={false} /></lineLoop>;
+  return <lineLoop geometry={geometry} renderOrder={-1}><lineBasicMaterial ref={materialRef} color={lane === 3 ? '#e8feff' : '#72b8c5'} transparent depthWrite={false} toneMapped={false} fog={false} /></lineLoop>;
 }
 
-function TrackWorld({ progressRef }: PersistentWebGLStageProps) {
+function TrackWorld({ progressRef, introProgressRef }: PersistentWebGLStageProps) {
   const geometry = useMemo(createTrackGeometry, []);
-  const surfaceRef = useRef<MeshStandardMaterial>(null);
+  const surfaceRef = useRef<MeshBasicMaterial>(null);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useFrame(() => {
-    const reveal = smoothstep(.015, .18, progressRef.current);
+    const legacyReveal = smoothstep(.015, .18, progressRef.current);
+    const introReveal = smoothstep(.18, .42, introProgressRef.current);
+    const reveal = Math.max(legacyReveal, introReveal);
     if (surfaceRef.current) surfaceRef.current.opacity = .12 + reveal * .86;
   });
 
   return <group rotation={[0, -.13, 0]}>
-    <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial ref={surfaceRef} color="#05151d" roughness={.82} metalness={.18} transparent side={DoubleSide} />
+    {/* Draw the surface before lanes and story overlays regardless of camera sorting. */}
+    <mesh geometry={geometry} renderOrder={-2}>
+      <meshBasicMaterial ref={surfaceRef} color="#05151d" transparent side={DoubleSide} fog={false} toneMapped={false} />
     </mesh>
-    {Array.from({ length: 8 }, (_, lane) => <TrackLane key={lane} lane={lane} progressRef={progressRef} />)}
+    {Array.from({ length: 8 }, (_, lane) => <TrackLane key={lane} lane={lane} progressRef={progressRef} introProgressRef={introProgressRef} />)}
   </group>;
 }
 
-function AthleteSignals({ progressRef }: PersistentWebGLStageProps) {
+function AthleteSignals({ progressRef }: StoryProgressProps) {
   const groupRef = useRef<import('three').Group>(null);
   const curve = useMemo(() => new CatmullRomCurve3(stadiumPoints(2.9, 5.55, .12, 96), true), []);
   const offsets = useMemo(() => [.04, .27, .49, .72], []);
@@ -137,7 +175,7 @@ function AthleteSignals({ progressRef }: PersistentWebGLStageProps) {
   return <group ref={groupRef}>{offsets.map((offset) => <mesh key={offset}><sphereGeometry args={[.09, 12, 12]} /><meshBasicMaterial color="#d8fdff" /></mesh>)}</group>;
 }
 
-function EventMarkers({ progressRef }: PersistentWebGLStageProps) {
+function EventMarkers({ progressRef }: StoryProgressProps) {
   const groupRef = useRef<import('three').Group>(null);
   const positions = useMemo(() => [
     new Vector3(5.4, .08, 2.85),
@@ -156,7 +194,7 @@ function EventMarkers({ progressRef }: PersistentWebGLStageProps) {
   return <group ref={groupRef}>{positions.map((position, index) => <group key={position.toArray().join('-')} position={position}><mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[.27, .018, 8, 32]} /><meshBasicMaterial color={index === 1 ? '#d8fdff' : '#49c8da'} transparent opacity={.9} /></mesh><mesh position={[0, .36, 0]}><cylinderGeometry args={[.008, .008, .7, 6]} /><meshBasicMaterial color="#8ae9f2" transparent opacity={.72} /></mesh></group>)}</group>;
 }
 
-function PerformanceRibbon({ progressRef }: PersistentWebGLStageProps) {
+function PerformanceRibbon({ progressRef }: StoryProgressProps) {
   const trackPoints = useMemo(() => stadiumPoints(2.88, 5.55, .065, 180), []);
   const dataPoints = useMemo(() => [
     [32, '11.47'], [68, '11.39'], [111, '11.31'], [154, '11.24 PB'],
@@ -199,41 +237,41 @@ function PerformanceRibbon({ progressRef }: PersistentWebGLStageProps) {
   return <><primitive object={line} /><group>{dataPoints.map(([, value], index) => <group key={value} ref={(node) => { markerRefs.current[index] = node; }}><mesh><sphereGeometry args={[.12, 12, 12]} /><meshBasicMaterial color="#f4feff" /></mesh>{labelsVisible && <Html transform distanceFactor={8} center><span style={{ display: 'block', padding: '4px 7px', border: '1px solid rgba(138, 233, 242, .44)', borderRadius: '999px', color: '#d9fdff', background: 'rgba(0, 12, 20, .74)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '10px', fontWeight: 700, letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{value}</span></Html>}</group>)}</group></>;
 }
 
-function CameraRig({ progressRef }: PersistentWebGLStageProps) {
+function CameraRig({ progressRef, introProgressRef, compact, reducedMotion }: PersistentWebGLStageProps & { compact: boolean; reducedMotion: boolean }) {
   const { camera } = useThree();
-  const positionPath = useMemo(() => new CatmullRomCurve3([
-    new Vector3(0, .82, 14.8), new Vector3(3.4, .94, 10.7), new Vector3(8.6, 1.18, 5.1),
-    new Vector3(9.5, 1.34, -2.2), new Vector3(5.3, 1.52, -7.4), new Vector3(-2.8, 1.4, -8.7),
-    new Vector3(-8.8, 1.7, -3.2), new Vector3(-8.4, 2.4, 4.8), new Vector3(-2.6, 2.95, 8.8),
-    new Vector3(5.8, 6.7, 13.4), new Vector3(0, 10.8, 16.6),
-  ]), []);
-  const targetPath = useMemo(() => new CatmullRomCurve3([
-    new Vector3(0, .06, 1.2), new Vector3(3.8, .08, .5), new Vector3(6.7, .14, -1.6),
-    new Vector3(4.7, .18, -3.3), new Vector3(.7, .22, -3.7), new Vector3(-3.7, .32, -1.5),
-    new Vector3(-4.4, .55, 1.8), new Vector3(-1.5, 1.15, .4), new Vector3(0, 1.7, 0),
-    new Vector3(0, .2, 0), new Vector3(0, .1, 0),
-  ]), []);
   const targetPosition = useRef(new Vector3());
   const targetLookAt = useRef(new Vector3());
   const actualLookAt = useRef(new Vector3());
 
   useFrame((_, delta) => {
-    const progress = progressRef.current;
-    positionPath.getPointAt(progress, targetPosition.current);
-    targetPath.getPointAt(progress, targetLookAt.current);
+    const introProgress = introProgressRef.current;
+    const fov = introProgress < 1
+      ? getIntroCameraState(introProgress, { compact, reducedMotion }, targetPosition.current, targetLookAt.current).fov
+      : (() => {
+        const legacyProgress = LEGACY_CAMERA_HANDOFF_PROGRESS + progressRef.current * (1 - LEGACY_CAMERA_HANDOFF_PROGRESS);
+        getLegacyCameraState(legacyProgress, targetPosition.current, targetLookAt.current);
+        return LEGACY_CAMERA_HANDOFF_FOV;
+      })();
     const damp = 1 - Math.exp(-5.4 * Math.min(delta, .05));
     camera.position.lerp(targetPosition.current, damp);
     actualLookAt.current.lerp(targetLookAt.current, damp);
     camera.lookAt(actualLookAt.current);
+    const perspectiveCamera = camera as PerspectiveCamera;
+    if (perspectiveCamera.isPerspectiveCamera && Math.abs(perspectiveCamera.fov - fov) > .001) {
+      perspectiveCamera.fov = fov;
+      perspectiveCamera.updateProjectionMatrix();
+    }
   });
   return null;
 }
 
-function FitnessTeaserGate({ progressRef }: PersistentWebGLStageProps) {
+function FitnessTeaserGate({ progressRef }: StoryProgressProps) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const loadTeaser = () => {
       useGLTF.preload(anatomyModelUrl);
+      useLoader.preload(FileLoader, anatomyMapUrl);
+      void loadFitnessTeaser();
       setReady(true);
     };
     // Parsing the 5 MB anatomy model during the intro competes with its animation.
@@ -249,45 +287,54 @@ function FitnessTeaserGate({ progressRef }: PersistentWebGLStageProps) {
   return ready ? <Suspense fallback={null}><LandingFitnessTeaser progressRef={progressRef} /></Suspense> : null;
 }
 
-function LandingScene({ progressRef }: PersistentWebGLStageProps) {
-  const visualProgressRef = useRef(0);
+function LandingScene({ progressRef, introProgressRef, compact, reducedMotion }: PersistentWebGLStageProps & { compact: boolean; reducedMotion: boolean }) {
+  const visualTimelineRef = useRef(0);
+  const introVisualRef = useRef(0);
+  const storyVisualRef = useRef(0);
   return <>
     <fog attach="fog" args={['#00070d', 11, 31]} />
     <ambientLight intensity={.2} color="#9beff8" />
     <directionalLight position={[4, 8, 6]} intensity={1.65} color="#d8feff" />
     <pointLight position={[-5, 4, 1]} intensity={4.5} distance={14} color="#087f9c" />
-    <SceneDirector targetRef={progressRef} visualRef={visualProgressRef} />
-    <CameraRig progressRef={visualProgressRef} />
-    <TrackWorld progressRef={visualProgressRef} />
-    <AthleteSignals progressRef={visualProgressRef} />
-    <EventMarkers progressRef={visualProgressRef} />
-    <PerformanceRibbon progressRef={visualProgressRef} />
-    <FitnessTeaserGate progressRef={visualProgressRef} />
+    <SceneDirector targetRef={progressRef} introTargetRef={introProgressRef} visualTimelineRef={visualTimelineRef} introVisualRef={introVisualRef} storyVisualRef={storyVisualRef} />
+    <StadiumIntro introProgressRef={introVisualRef} compact={compact} />
+    <CameraRig progressRef={storyVisualRef} introProgressRef={introVisualRef} compact={compact} reducedMotion={reducedMotion} />
+    <TrackWorld progressRef={storyVisualRef} introProgressRef={introVisualRef} />
+    <AthleteSignals progressRef={storyVisualRef} />
+    <EventMarkers progressRef={storyVisualRef} />
+    <PerformanceRibbon progressRef={storyVisualRef} />
+    <FitnessTeaserGate progressRef={storyVisualRef} />
   </>;
 }
 
 function canRenderStage() {
-  if (typeof window === 'undefined' || !window.matchMedia || typeof window.WebGLRenderingContext !== 'function' || import.meta.env.MODE === 'test' || /jsdom/i.test(window.navigator.userAgent)) return false;
-  return !window.matchMedia('(max-width: 900px)').matches && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return typeof window !== 'undefined' && !!window.matchMedia && typeof window.WebGLRenderingContext === 'function' && import.meta.env.MODE !== 'test' && !/jsdom/i.test(window.navigator.userAgent);
 }
 
-export function PersistentWebGLStage({ progressRef }: PersistentWebGLStageProps) {
+export function PersistentWebGLStage({ progressRef, introProgressRef }: PersistentWebGLStageProps) {
   const [eligible, setEligible] = useState(canRenderStage);
   const [paused, setPaused] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
+    if (!window.matchMedia) return;
     const compact = window.matchMedia('(max-width: 900px)');
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updateEligibility = () => setEligible(canRenderStage());
+    const updatePreferences = () => {
+      setEligible(canRenderStage());
+      setCompact(compact.matches);
+      setReducedMotion(reduced.matches);
+    };
     const updateVisibility = () => setPaused(document.visibilityState !== 'visible');
+    updatePreferences();
     updateVisibility();
-    compact.addEventListener('change', updateEligibility);
-    reduced.addEventListener('change', updateEligibility);
+    compact.addEventListener('change', updatePreferences);
+    reduced.addEventListener('change', updatePreferences);
     document.addEventListener('visibilitychange', updateVisibility);
-    return () => { compact.removeEventListener('change', updateEligibility); reduced.removeEventListener('change', updateEligibility); document.removeEventListener('visibilitychange', updateVisibility); };
+    return () => { compact.removeEventListener('change', updatePreferences); reduced.removeEventListener('change', updatePreferences); document.removeEventListener('visibilitychange', updateVisibility); };
   }, []);
   if (!eligible) return null;
-  return <StageErrorBoundary><div className={styles.stage} aria-hidden="true"><Canvas dpr={[1, 1.5]} camera={{ position: [0, .82, 14.8], fov: 39, near: .1, far: 65 }} frameloop={paused ? 'never' : 'always'} gl={{ alpha: false, antialias: true, powerPreference: 'high-performance' }}><Suspense fallback={null}><LandingScene progressRef={progressRef} /></Suspense></Canvas></div></StageErrorBoundary>;
+  return <StageErrorBoundary><div className={styles.stage} aria-hidden="true"><Canvas dpr={compact ? [1, 1] : [1, 1.5]} camera={{ position: [...INTRO_CAMERA_START_POSITION], fov: INTRO_CAMERA_START_FOV, near: .1, far: 65 }} frameloop={paused ? 'never' : 'always'} gl={{ alpha: false, antialias: true, powerPreference: 'high-performance' }}><Suspense fallback={null}><LandingScene progressRef={progressRef} introProgressRef={introProgressRef} compact={compact} reducedMotion={reducedMotion} /></Suspense></Canvas></div></StageErrorBoundary>;
 }
-const LandingFitnessTeaser = lazy(() =>
-  import('./LandingFitnessTeaser').then((module) => ({ default: module.LandingFitnessTeaser })),
-);
+const loadFitnessTeaser = () => import('./LandingFitnessTeaser').then((module) => ({ default: module.LandingFitnessTeaser }));
+const LandingFitnessTeaser = lazy(loadFitnessTeaser);

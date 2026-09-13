@@ -165,13 +165,17 @@ Athletes carry persistent injury records with body-region mapping. Each injury h
 
 Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `onsetDate`, `resolutionDate`, `notes`. Severity is one of `minor`, `moderate`, `severe`. Side is one of `left`, `right`, `bilateral`.
 
-### 3.4 Two-athlete comparison
+### 3.4 Performance comparisons
 
 | Method & path | Purpose |
 |---|---|
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=` | Compare two athletes side by side |
+| `GET /athletes/comparison?athlete1Id=&athlete2Id=&scope=cross-club` | Compare two athletes from distinct clubs |
+| `GET /clubs/:clubId/athletes?q=` | Search a club's non-archived roster for comparison selection |
+| `GET /clubs/:clubId/statistics` | Get all-time 100m club roster statistics |
+| `GET /clubs/comparison?club1Id=&club2Id=` | Compare all-time 100m statistics for two clubs |
 
-Returns both athletes' PB, latest result, valid result count, average time, consistency (standard deviation), and improvement metrics. Used by the Comparison page for head-to-head analysis.
+The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
 ### 3.5 Public logger links
 

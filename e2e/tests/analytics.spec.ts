@@ -1,7 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openView, waitForView, addAthlete, addEvent } from './helpers';
 
 const token = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+async function chooseComparisonOption(page: Page, label: string, option: string): Promise<void> {
+  await page.getByRole('button', { name: label }).click();
+  await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
+}
 
 test.describe('analytics and comparison', () => {
   test('athlete performance page shows statistics', async ({ page }) => {
@@ -49,7 +54,7 @@ test.describe('analytics and comparison', () => {
   test('comparison page shows empty state without athletes', async ({ page }) => {
     await page.goto('/console');
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Two-Athlete 100m Comparison');
+    await waitForView(page, 'Compare 100m Performance');
 
     await expect(page.getByText(/Select exactly two different athletes/)).toBeVisible();
   });
@@ -66,12 +71,10 @@ test.describe('analytics and comparison', () => {
     await addAthlete(page, bravo, 'E2E');
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Two-Athlete 100m Comparison');
+    await waitForView(page, 'Compare 100m Performance');
 
-    const select1 = page.getByLabel('Select first athlete for comparison');
-    const select2 = page.getByLabel('Select second athlete for comparison');
-    await select1.selectOption({ label: alpha });
-    await select2.selectOption({ label: bravo });
+    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
+    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
 
     const metrics = page.getByRole('list', { name: 'Comparison metrics summary' });
     await expect(metrics.getByText(`${alpha} PB`, { exact: true })).toBeVisible();
@@ -90,12 +93,10 @@ test.describe('analytics and comparison', () => {
     await addAthlete(page, bravo, 'E2E');
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Two-Athlete 100m Comparison');
+    await waitForView(page, 'Compare 100m Performance');
 
-    const select1 = page.getByLabel('Select first athlete for comparison');
-    const select2 = page.getByLabel('Select second athlete for comparison');
-    await select1.selectOption({ label: alpha });
-    await select2.selectOption({ label: bravo });
+    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
+    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
 
     await expect(page.getByRole('list', { name: 'Comparison metrics summary' })).toBeVisible();
 

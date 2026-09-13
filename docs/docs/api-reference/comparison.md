@@ -2,105 +2,75 @@
 sidebar_position: 2
 ---
 
-# Two-Athlete 100m Comparison
+# 100m Comparisons
 
-The two-athlete comparison endpoint provides side-by-side all-time 100m metrics and aligned progression data for exactly two athletes. It reuses the same effective result logic as the athlete statistics endpoint.
+The Compare page supports all-time 100m athlete and club analysis. All responses use effective results: void outcomes are excluded and a positive manual override takes precedence over the recorded final result.
 
-## Endpoint
+## Athlete Comparison
 
 ```
 GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}
 ```
 
-## Query Parameters
+The default comparison is restricted to two distinct athletes in the caller's club workspace.
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `athlete1Id` | UUID | Yes | First athlete's canonical ID |
-| `athlete2Id` | UUID | Yes | Second athlete's canonical ID |
+### Cross-Club Athlete Comparison
 
-## Validation Rules
+```
+GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}&scope=cross-club
+```
 
-- Both IDs must be valid UUIDs.
-- Both IDs must match different athletes.
-- Both athletes must exist in the caller's workspace.
-- The comparison uses the caller's resolved `workspace_id` via Auth0 token middleware.
+- Both IDs are required, valid UUIDs, and must be different.
+- The athletes must belong to different club workspaces.
+- The caller must be an authenticated member of an application workspace.
+- The response contains only the existing safe comparison identity and performance fields. It never exposes date of birth, notes, injury data, or other private athlete profile fields.
+- The UI requires users to select two clubs first, then search each club's roster by name before selecting the athletes.
 
-## Response Shape
+Both athlete endpoints return side-by-side all-time 100m PB, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting.
+
+## Club Roster Lookup
+
+```
+GET /api/v1/clubs/{clubId}/athletes?q={name}
+```
+
+This authenticated lookup supports the cross-club athlete selectors. `q` is optional and case-insensitive. Archived athletes are excluded. The response exposes only safe selection data:
 
 ```json
 {
-  "data": {
-    "athletes": [
-      {
-        "athlete": {
-          "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          "name": "Alice Sprint",
-          "squadNames": ["Sprint Squad"],
-          "archivedAt": null
-        },
-        "pb": 11.20,
-        "latestEffectiveResult": 11.30,
-        "latestEffectiveOutcome": "valid",
-        "validResultCount": 5,
-        "totalResultCount": 7,
-        "average": 11.35,
-        "consistency": 0.12,
-        "improvement": 0.30,
-        "progression": [
-          {
-            "event": { "id": "e1", "title": "Race 1", "date": "2026-01-01", "discipline": "100m", "status": "completed" },
-            "result": { "eventId": "e1", "athleteId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "discipline": "100m", "outcome": "valid", "finalResult": 11.50, "unit": "seconds", "placing": 1, "isPb": true, "isSb": true },
-            "effectiveResult": 11.50,
-            "effectiveOutcome": "valid",
-            "countsTowardsStatistics": true,
-            "runningPb": null,
-            "isNewPb": true
-          }
-        ]
-      }
-    ]
-  }
+  "data": [
+    { "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "name": "Alice Sprint", "status": "active" }
+  ],
+  "meta": { "count": 1 }
 }
 ```
 
-## Metric Definitions
-
-| Metric | Formula | Notes |
-|---|---|---|
-| **PB (Personal Best)** | `MIN(effective_result)` where `effective_result IS NOT NULL` | Lowest valid 100m time in seconds |
-| **Latest effective result** | `effective_result` from the most recent entry | Most recent valid result; `NULL` if no valid results |
-| **Valid result count** | `COUNT(*)` where `countsTowards_statistics = TRUE` | Only void outcomes and valid results |
-| **Average** | `SUM(effective_result) / COUNT(*)` | Arithmetic mean of valid results only |
-| **Consistency (SD)** | Population standard deviation of valid results | Lower = more consistent times |
-| **Improvement** | `earliest_valid_result - PB` | Positive = got faster; zero = no change |
-| **Aligned progression** | Chronologically ordered progression entries | Both athletes' entries aligned by date for charting |
-
-## Effective Result Logic
-
-The effective result for each entry is derived identically to the athlete statistics endpoint:
+## Club Statistics
 
 ```
-CASE
-  WHEN outcome IN ('dq', 'dnf', 'dns') THEN NULL
-  WHEN manual_override > 0 THEN manual_override
-  ELSE final_result
-END
+GET /api/v1/clubs/{clubId}/statistics
 ```
 
-- **Cancelled events** are excluded (`e.status <> 'cancelled'`).
-- **Void outcomes** (`dq`, `dnf`, `dns`) always produce `NULL` effective results and never count towards statistics.
-- **Manual overrides** take precedence over `final_result` when present, subject to audit field validation.
-- **`no_result`** entries have `final_result = NULL` and produce a `NULL` effective result.
+Returns all-time 100m performance for the club's current roster, including:
 
-## Query Performance
+- Roster counts for active, inactive, archived, and total athletes.
+- Distinct athletes with valid results.
+- Total and valid 100m result counts.
+- Fastest and latest valid time.
+- Average, median, and population standard deviation of valid times.
 
-Athlete fetches are executed **sequentially** (not in parallel) to ensure predictable query ordering and avoid connection pool contention. For athletes with large histories, the progression array may be significant; the frontend handles this with lazy rendering.
+## Club Comparison
 
-## Authorization
+```
+GET /api/v1/clubs/comparison?club1Id={uuid}&club2Id={uuid}
+```
 
-The endpoint requires a valid Auth0 token and resolves the caller's workspace via the `resolveApplicationUser` middleware. Both athletes must belong to the caller's workspace; cross-workspace comparisons are rejected with HTTP 404.
+Compares exactly two distinct clubs using the same all-time statistics returned by the single-club endpoint. Duplicate club IDs return `400 DUPLICATE_CLUB_ID`; unknown clubs return `404 CLUB_NOT_FOUND`.
 
-## Scope
+## Effective Result Scope
 
-This endpoint is **100m-only**. The discipline filter is hardcoded in the service query (`discipline = '100m'`). Additional discipline comparisons will be added in future iterations.
+- The discipline is fixed to 100m and values are measured in seconds.
+- Cancelled events are excluded.
+- `dq`, `dnf`, and `dns` outcomes never count as valid results.
+- A positive `manualOverride` is used instead of `finalResult`.
+- An athlete's result at an accepted guest fixture counts for their own club's statistics and progression.

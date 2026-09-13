@@ -44,6 +44,15 @@ export interface Club {
   updatedAt: string;
 }
 
+export interface ClubCalendarEvent {
+  club: Pick<Club, 'id' | 'name'>;
+  event: AthleticsEvent;
+}
+
+export interface ClubPublication {
+  publicResultsEnabled: boolean;
+}
+
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ClubJoinRequest {
@@ -69,6 +78,56 @@ export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
 export type AthleteStatus = 'active' | 'inactive' | 'archived';
+
+export interface ClubAthleteLookup {
+  id: string;
+  name: string;
+  status: AthleteStatus;
+}
+
+export interface ClubRosterCounts {
+  active: number;
+  inactive: number;
+  archived: number;
+  total: number;
+}
+
+export interface ClubStatistics {
+  club: Pick<Club, 'id' | 'name'>;
+  roster: ClubRosterCounts;
+  distinctAthletesWithValidResults: number;
+  total100mResultCount: number;
+  valid100mResultCount: number;
+  fastestValidTime: number | null;
+  latestValidTime: number | null;
+  averageValidTime: number | null;
+  medianValidTime: number | null;
+  populationStandardDeviation: number | null;
+}
+
+export interface ClubComparisonDetail {
+  clubs: [ClubStatistics, ClubStatistics];
+}
+
+export interface PublicClub {
+  id: string;
+  name: string;
+}
+
+export interface PublicAthleteStatistics {
+  athlete: { id: string; name: string };
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+}
+
+export interface PublicClubStatistics extends ClubStatistics {
+  athletes: PublicAthleteStatistics[];
+}
 
 export interface Athlete {
   id: string;
@@ -245,7 +304,7 @@ export interface FixtureTeamRoster {
   participants: EventParticipantSummary[];
 }
 
-export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started';
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started' | 'event_coming_up' | 'live_logger_started' | 'event_ended';
 
 export interface FixtureNotification {
   id: string;
@@ -253,6 +312,19 @@ export interface FixtureNotification {
   invitationId: string | null;
   kind: FixtureNotificationKind;
   payload: Record<string, unknown>;
+  readAt: string | null;
+  starredAt: string | null;
+  createdAt: string;
+}
+
+export type EventReminderThreshold = 'seven_days' | 'one_day';
+
+export interface EventReminder {
+  id: string;
+  eventId: string;
+  eventVersion: number;
+  threshold: EventReminderThreshold;
+  scheduledFor: string;
   readAt: string | null;
   createdAt: string;
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { EventDetailPage } from './EventDetailPage';
 import { createEvent, listEvents, updateEvent } from '../../api/events';
+import { listClubCalendarEvents, listClubs } from '../../api/clubs';
 import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
 import {
@@ -17,6 +18,7 @@ import {
   DISCIPLINE_100M,
   type Athlete,
   type AthleticsEvent,
+  type Club,
   type EventParticipantSummary,
   type EventMutationPayload,
   type EventStatus,
@@ -29,6 +31,7 @@ import { useWorkspace } from '../auth/WorkspaceContext';
 
 type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
+type CalendarScope = 'team' | 'combined';
 type Editor = 'new' | AthleticsEvent | null;
 
 interface EventDraft {
@@ -414,10 +417,12 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
 
 export function ParticipantManager({
   eventId,
+  canEditRoster,
   onBusyChange,
   onChanged,
 }: {
   eventId: string;
+  canEditRoster: boolean;
   onBusyChange: (busy: boolean) => void;
   onChanged: () => void;
 }) {
@@ -604,7 +609,7 @@ export function ParticipantManager({
             const ownsParticipant = participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id;
             return <li key={participant.athleteId}>
               <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.participantWorkspaceName && <span> · {participant.participantWorkspaceName}</span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
-                {isCoach && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
+                {isCoach && canEditRoster && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
                 <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
@@ -620,9 +625,9 @@ export function ParticipantManager({
 
       {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
 
-      {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
+      {canEditRoster && removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
 
-       {isCoach && <div className={styles.assignment}>
+       {isCoach && canEditRoster && <div className={styles.assignment}>
          <span>Assign an active athlete</span>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
@@ -652,8 +657,14 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>(() => ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventStatus : '');
   const [view, setView] = useState<EventView>(() => {
     if (defaultView) return defaultView;
-    return window.innerWidth <= 768 ? 'list' : 'list';
+    return 'calendar';
   });
+  const [calendarScope, setCalendarScope] = useState<CalendarScope>('team');
+  const [selectedClubs, setSelectedClubs] = useState<Club[]>([]);
+  const [clubSearch, setClubSearch] = useState('');
+  const [clubResults, setClubResults] = useState<Club[]>([]);
+  const [clubEvents, setClubEvents] = useState<{ event: AthleticsEvent; clubId: string; clubName: string }[]>([]);
+  const [clubLoading, setClubLoading] = useState(false);
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
@@ -684,6 +695,38 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   }, [activeWorkspace.id, reloadKey]);
 
   useEffect(() => {
+    const query = clubSearch.trim();
+    if (!query) {
+      setClubResults([]);
+      return undefined;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      void listClubs(query)
+        .then(({ data }) => { if (current) setClubResults(data); })
+        .catch(() => { if (current) setClubResults([]); });
+    }, 250);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [clubSearch]);
+
+  useEffect(() => {
+    if (calendarScope !== 'combined' || selectedClubs.length === 0) {
+      setClubEvents([]);
+      setClubLoading(false);
+      return;
+    }
+    let current = true;
+    setClubLoading(true);
+    void listClubCalendarEvents(selectedClubs.map((club) => club.id))
+      .then(({ data }) => {
+        if (current) setClubEvents(data.map(({ event, club }) => ({ event, clubId: club.id, clubName: club.name })));
+      })
+      .catch(() => { if (current) setClubEvents([]); })
+      .finally(() => { if (current) setClubLoading(false); });
+    return () => { current = false; };
+  }, [calendarScope, selectedClubs]);
+
+  useEffect(() => {
     setSelectedId(null);
     setEditor(null);
     setNotice(null);
@@ -701,14 +744,25 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
   };
 
+  const calendarSource = calendarScope === 'combined'
+    ? Array.from(new Map([...events, ...clubEvents.map(({ event }) => event)].map((event) => [event.id, event])).values())
+    : events;
+  const clubsForEvent = (eventId: string) => clubEvents.filter(({ event }) => event.id === eventId).map(({ clubName }) => clubName);
+  const clubNameForEvent = (eventId: string) => clubsForEvent(eventId).join(', ');
+  const clubColorForEvent = (eventId: string) => {
+    const clubId = clubEvents.find(({ event }) => event.id === eventId)?.clubId;
+    return clubId ? selectedClubs.findIndex((club) => club.id === clubId) % 4 : -1;
+  };
+  const isJointEvent = (eventId: string) => events.some((event) => event.id === eventId) && clubsForEvent(eventId).length > 0;
   const filtered = sortedEvents(
-    events.filter((event) => {
+    calendarSource.filter((event) => {
       const dateMatches = dateTab === 'all' || (dateTab === 'upcoming' ? event.date >= today : event.date < today);
       return dateMatches && (!typeFilter || event.type === typeFilter) && (!statusFilter || event.status === statusFilter);
     }),
     dateTab === 'past',
   );
   const calendarEvents = filtered.filter((event) => event.date === selectedDay);
+  const hasDisplayEvents = calendarSource.length > 0;
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
   const pending = editorBusy;
 
@@ -785,13 +839,26 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
         </div>
       </header>
 
+      {view === 'calendar' && <section className={styles.calendarScope} aria-label="Club calendars">
+        <div className={styles.scopeToggle} role="group" aria-label="Calendar scope">
+          <button type="button" aria-pressed={calendarScope === 'team'} onClick={() => setCalendarScope('team')}>My team</button>
+          <button type="button" aria-pressed={calendarScope === 'combined'} onClick={() => setCalendarScope('combined')}>Club calendars</button>
+        </div>
+        {calendarScope === 'team' ? <p>Your events and accepted shared fixtures.</p> : <div className={styles.clubPicker}>
+          <div><label htmlFor="calendar-club-search">Add clubs to the calendar</label><Input id="calendar-club-search" value={clubSearch} onChange={(input) => setClubSearch(input.target.value)} placeholder="Search clubs" /></div>
+          {clubResults.length > 0 && <ul className={styles.clubResults}>{clubResults.filter((club) => club.workspaceId !== activeWorkspace.id && !selectedClubs.some((selected) => selected.id === club.id)).map((club) => <li key={club.id}><span>{club.name}</span><Button variant="ghost" onClick={() => { setSelectedClubs((current) => [...current, club]); setClubSearch(''); setClubResults([]); }}>Add</Button></li>)}</ul>}
+          {selectedClubs.length > 0 && <ul className={styles.selectedClubs} aria-label="Selected clubs">{selectedClubs.map((club, index) => <li data-club-index={index % 4} key={club.id}><i aria-hidden="true" />{club.name}<button type="button" aria-label={`Remove ${club.name}`} onClick={() => setSelectedClubs((current) => current.filter((selected) => selected.id !== club.id))}>×</button></li>)}</ul>}
+          <p>{clubLoading ? 'Loading club calendars...' : selectedClubs.length ? `Showing your schedule alongside ${selectedClubs.length} selected club${selectedClubs.length === 1 ? '' : 's'}.` : 'Search for one or more clubs to combine their upcoming schedules with yours.'}</p>
+        </div>}
+      </section>}
+
        {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
-      {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
+      {!loading && !loadError && !hasDisplayEvents && calendarScope === 'team' && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
 
-      {!loading && !loadError && events.length > 0 && view === 'calendar' && (
+      {!loading && !loadError && hasDisplayEvents && view === 'calendar' && (
         <div className={styles.calendar}>
           <header>
             <h2>{first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
@@ -802,15 +869,21 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
             {cells.map((cell, index) => {
               const dayEvents = cell.iso ? filtered.filter((event) => event.date === cell.iso) : [];
               const label = cell.current ? `${formattedDate(cell.iso, true)}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : `Outside current month, day ${cell.day}`;
-              return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}><span>{cell.day}</span><i aria-hidden="true">{dayEvents.slice(0, 3).map((event) => <i data-type={event.type} key={event.id} />)}</i></button>;
+              return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}>
+                <span>{cell.day}</span>
+                <span className={styles.calendarEvents} aria-hidden="true">
+                  {dayEvents.slice(0, 2).map((event) => <span className={styles.calendarEvent} data-club-index={clubColorForEvent(event.id) >= 0 ? clubColorForEvent(event.id) : undefined} data-shared={isJointEvent(event.id) || undefined} data-type={event.type} key={event.id}><b>{event.time?.slice(0, 5) ?? 'TBC'}</b>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)} · ` : clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.title}</span>)}
+                  {dayEvents.length > 2 && <span className={styles.calendarMore}>+{dayEvents.length - 2} more</span>}
+                </span>
+              </button>;
             })}
           </div>
         </div>
       )}
 
-      {!loading && !loadError && events.length > 0 && view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formattedDate(selectedDay, true)}</h2>}
+      {!loading && !loadError && hasDisplayEvents && view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formattedDate(selectedDay, true)}</h2>}
 
-      {!loading && !loadError && events.length > 0 && ((view === 'list' && filtered.length === 0) || (view === 'calendar' && calendarEvents.length === 0)) && (
+      {!loading && !loadError && (hasDisplayEvents || calendarScope === 'combined') && ((view === 'list' && filtered.length === 0) || (view === 'calendar' && calendarEvents.length === 0)) && (
         <div className={styles.emptyPanel}>
           <EmptyState title={view === 'calendar' ? 'Nothing scheduled on this day' : 'No events match your filters'} description="Choose another date or adjust the event filters." />
           {hasFilters && <Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
@@ -846,8 +919,9 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
                             <span>
                               <i data-type={event.type}>{formattedType(event.type)}</i>
                               <i data-status={event.status}>{formattedStatus(event.status)}</i>
+                              {clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}
                             </span>
-                            <small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small>
+                            <small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small>
                           </span>
                           <span aria-hidden="true">›</span>
                         </button>
@@ -867,7 +941,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
                       if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
                     }}>
                     <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
-                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
+                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i>{clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}</span><small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
                     <span aria-hidden="true">›</span>
                   </button>
                 </Card>

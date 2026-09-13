@@ -33,7 +33,7 @@ test.describe('accessibility deep audit', () => {
   test('comparison page has no serious violations', async ({ page }) => {
     await page.goto('/');
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Two-Athlete 100m Comparison');
+    await waitForView(page, 'Compare 100m Performance');
     await expectNoSeriousViolations(page);
   });
 

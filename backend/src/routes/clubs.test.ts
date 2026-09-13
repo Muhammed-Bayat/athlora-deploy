@@ -11,10 +11,16 @@ vi.mock('../services/clubs.js', () => ({
   assertActiveClubWorkspace: vi.fn(),
   createClub: vi.fn(),
   createJoinRequest: vi.fn(),
+  getClubComparison: vi.fn(),
+  listClubCalendarEvents: vi.fn(),
+  getClubPublication: vi.fn(),
+  getClubStatistics: vi.fn(),
+  listClubComparisonAthletes: vi.fn(),
   listClubJoinRequests: vi.fn(),
   listClubs: vi.fn(),
   listMyJoinRequests: vi.fn(),
   reviewJoinRequest: vi.fn(),
+  updateClubPublication: vi.fn(),
   withdrawJoinRequest: vi.fn(),
 }));
 
@@ -63,6 +69,103 @@ describe('club routes', () => {
 
     expect(response.status).toBe(201);
     expect(clubService.createClub).toHaveBeenCalledWith(USER_ID, 'Track Club');
+  });
+
+  it('protects comparison lookup, statistics, and cross-club comparison with an application workspace', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.listClubComparisonAthletes).mockResolvedValue([
+      { id: USER_ID, name: 'Ari Runner', status: 'active' },
+    ]);
+    vi.mocked(clubService.getClubStatistics).mockResolvedValue({
+      club: { id: CLUB_ID, name: 'Track Club' },
+      roster: { active: 1, inactive: 0, archived: 0, total: 1 },
+      distinctAthletesWithValidResults: 0,
+      total100mResultCount: 0,
+      valid100mResultCount: 0,
+      fastestValidTime: null,
+      latestValidTime: null,
+      averageValidTime: null,
+      medianValidTime: null,
+      populationStandardDeviation: null,
+    });
+    vi.mocked(clubService.getClubComparison).mockResolvedValue({ clubs: [
+      {
+        club: { id: CLUB_ID, name: 'Track Club' },
+        roster: { active: 1, inactive: 0, archived: 0, total: 1 },
+        distinctAthletesWithValidResults: 0,
+        total100mResultCount: 0,
+        valid100mResultCount: 0,
+        fastestValidTime: null,
+        latestValidTime: null,
+        averageValidTime: null,
+        medianValidTime: null,
+        populationStandardDeviation: null,
+      },
+      {
+        club: { id: REQUEST_ID, name: 'Rivals' },
+        roster: { active: 0, inactive: 0, archived: 0, total: 0 },
+        distinctAthletesWithValidResults: 0,
+        total100mResultCount: 0,
+        valid100mResultCount: 0,
+        fastestValidTime: null,
+        latestValidTime: null,
+        averageValidTime: null,
+        medianValidTime: null,
+        populationStandardDeviation: null,
+      },
+    ] });
+
+    const athletes = await request(app)
+      .get(`/api/v1/clubs/${CLUB_ID}/athletes?q=ari`)
+      .set('Authorization', 'Bearer valid');
+    const statistics = await request(app)
+      .get(`/api/v1/clubs/${CLUB_ID}/statistics`)
+      .set('Authorization', 'Bearer valid');
+    const comparison = await request(app)
+      .get(`/api/v1/clubs/comparison?club1Id=${CLUB_ID}&club2Id=${REQUEST_ID}`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(athletes.status).toBe(200);
+    expect(athletes.body).toEqual({ data: [{ id: USER_ID, name: 'Ari Runner', status: 'active' }], meta: { count: 1 } });
+    expect(statistics.status).toBe(200);
+    expect(statistics.body.data.club).toEqual({ id: CLUB_ID, name: 'Track Club' });
+    expect(comparison.status).toBe(200);
+    expect(clubService.listClubComparisonAthletes).toHaveBeenCalledWith(CLUB_ID, 'ari');
+    expect(clubService.getClubStatistics).toHaveBeenCalledWith(CLUB_ID);
+    expect(clubService.getClubComparison).toHaveBeenCalledWith(CLUB_ID, REQUEST_ID);
+  });
+
+  it('returns upcoming events for selected clubs', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.listClubCalendarEvents).mockResolvedValue([]);
+
+    const response = await request(app)
+      .get(`/api/v1/clubs/calendar?clubId=${CLUB_ID}&clubId=${REQUEST_ID}`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID]);
+  });
+
+  it('lets a coach view and update the active club publication setting', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.getClubPublication).mockResolvedValue({ publicResultsEnabled: false });
+    vi.mocked(clubService.updateClubPublication).mockResolvedValue({ publicResultsEnabled: true });
+
+    const status = await request(app)
+      .get('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid');
+    const updated = await request(app)
+      .put('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid')
+      .send({ publicResultsEnabled: true });
+
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual({ data: { publicResultsEnabled: false } });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toEqual({ data: { publicResultsEnabled: true } });
+    expect(clubService.getClubPublication).toHaveBeenCalledWith(WORKSPACE_ID);
+    expect(clubService.updateClubPublication).toHaveBeenCalledWith(WORKSPACE_ID, true);
   });
 
   it('requires the active club workspace and a coach to approve a request', async () => {

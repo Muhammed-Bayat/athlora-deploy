@@ -6,7 +6,7 @@ import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { recomputeEventResults } from './timeline.js';
 import { assertFixtureReadyToStart, assertHostWorkspace, markFixtureReacceptanceRequired } from './fixtures.js';
-import { notifyFixtureStarted } from './fixtureNotifications.js';
+import { notifyEventComingUp, notifyEventEnded, notifyFixtureStarted, notifyLiveLoggerStarted } from './fixtureNotifications.js';
 import type {
   EventCreatePayload,
   EventListQuery,
@@ -138,7 +138,9 @@ export async function createEvent(
       payload.status,
     ],
   );
-  return mapEventRow(result.rows[0]);
+  const event = mapEventRow(result.rows[0]);
+  await notifyEventComingUp(executor, event.id, workspaceId);
+  return event;
 }
 
 type TransactionRunner = <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T>;
@@ -231,6 +233,12 @@ export async function replaceEvent(
     const updated = mapEventRow(result.rows[0]);
     if (currentEvent.status === 'scheduled' && updated.status === 'in_progress' && currentRow.fixture_revision !== undefined) {
       await notifyFixtureStarted(client, eventId, currentRow.fixture_revision);
+    }
+    if (currentEvent.status === 'scheduled' && updated.status === 'in_progress') {
+      await notifyLiveLoggerStarted(client, eventId as string, workspaceId);
+    }
+    if (currentEvent.status === 'in_progress' && updated.status === 'completed') {
+      await notifyEventEnded(client, eventId as string, workspaceId);
     }
     if (
       currentEvent.type !== updated.type ||

@@ -4,10 +4,16 @@ import { ApiError } from '../middleware/errors.js';
 import {
   createClub,
   createJoinRequest,
+  getClubComparison,
+  getClubPublication,
+  getClubStatistics,
+  listClubCalendarEvents,
+  listClubComparisonAthletes,
   listClubJoinRequests,
   listClubs,
   listMyJoinRequests,
   reviewJoinRequest,
+  updateClubPublication,
   withdrawJoinRequest,
 } from '../services/clubs.js';
 import { normalizeRequiredString } from '../validation/primitives.js';
@@ -22,6 +28,14 @@ export const list: RequestHandler = async (req, res, next) => {
     const search = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : null;
     const clubs = await listClubs(search);
     res.json({ data: clubs, meta: { count: clubs.length } });
+  } catch (error) { next(error); }
+};
+
+export const calendar: RequestHandler = async (req, res, next) => {
+  try {
+    const clubIds = Array.isArray(req.query.clubId) ? req.query.clubId : req.query.clubId ? [req.query.clubId] : [];
+    const events = await listClubCalendarEvents(clubIds);
+    res.json({ data: events, meta: { count: events.length } });
   } catch (error) { next(error); }
 };
 
@@ -52,6 +66,45 @@ export const withdraw: RequestHandler = async (req, res, next) => {
   try {
     await withdrawJoinRequest(parameter(req.params.id), getLocalApplicationUserContext(req).userId);
     res.status(204).end();
+  } catch (error) { next(error); }
+};
+
+export const listComparisonAthletes: RequestHandler = async (req, res, next) => {
+  try {
+    const search = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : null;
+    const athletes = await listClubComparisonAthletes(parameter(req.params.clubId), search);
+    res.json({ data: athletes, meta: { count: athletes.length } });
+  } catch (error) { next(error); }
+};
+
+export const statistics: RequestHandler = async (req, res, next) => {
+  try {
+    const clubStatistics = await getClubStatistics(parameter(req.params.clubId));
+    res.json({ data: clubStatistics });
+  } catch (error) { next(error); }
+};
+
+export const comparison: RequestHandler = async (req, res, next) => {
+  try {
+    const clubComparison = await getClubComparison(req.query.club1Id, req.query.club2Id);
+    res.json({ data: clubComparison });
+  } catch (error) { next(error); }
+};
+
+export const publication: RequestHandler = async (req, res, next) => {
+  try {
+    const publication = await getClubPublication(getApplicationUserContext(req).workspaceId);
+    res.json({ data: publication });
+  } catch (error) { next(error); }
+};
+
+export const updatePublication: RequestHandler = async (req, res, next) => {
+  try {
+    const publication = await updateClubPublication(
+      getApplicationUserContext(req).workspaceId,
+      req.body.publicResultsEnabled,
+    );
+    res.json({ data: publication });
   } catch (error) { next(error); }
 };
 

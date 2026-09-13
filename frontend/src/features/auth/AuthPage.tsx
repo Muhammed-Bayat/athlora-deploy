@@ -5,7 +5,7 @@ import { ApiError } from '../../api/client';
 import { Button, Card, Input, Modal, Select } from '../../components';
 import { useCurrentUser } from './CurrentUserContext';
 import { useWorkspace } from './WorkspaceContext';
-import { inviteWorkspaceMember, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../../api/workspaces';
+import { inviteWorkspaceMember, leaveCurrentWorkspace, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../../api/workspaces';
 import { approveClubJoinRequest, listClubJoinRequests, listClubs, rejectClubJoinRequest } from '../../api/clubs';
 import type { ClubJoinRequest, WorkspaceInvitation, WorkspaceMember } from '../../types';
 import styles from './AuthPage.module.css';
@@ -25,8 +25,11 @@ export function AuthPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveBusy, setLeaveBusy] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(isCoach);
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -66,6 +69,19 @@ export function AuthPage() {
     } catch (requestError) {
       setDeleteError(message(requestError));
       setDeleteBusy(false);
+    }
+  };
+
+  const leaveClub = async () => {
+    if (confirmation !== 'LEAVE') return;
+    setLeaveBusy(true);
+    setLeaveError(null);
+    try {
+      await leaveCurrentWorkspace();
+      window.dispatchEvent(new Event('athlora-workspace-left'));
+    } catch (requestError) {
+      setLeaveError(message(requestError));
+      setLeaveBusy(false);
     }
   };
 
@@ -210,6 +226,12 @@ export function AuthPage() {
         </Card>
 
         <Card className={styles.danger}>
+          <p>Club membership</p><h2>Leave {activeWorkspace.name}</h2>
+          <span>Leave this Club without deleting your account. Your past event records and live logging attribution remain in place.</span>
+          <Button variant="danger" onClick={() => { setLeaveError(null); setConfirmation(''); setLeaveOpen(true); }}>Leave club</Button>
+        </Card>
+
+        <Card className={styles.danger}>
           <p>Danger zone</p><h2>Delete account</h2>
           <span>Permanently remove your Auth0 identity and Athlora Club access, including athletes, events, assignments, timeline entries, and results.</span>
           <Button variant="danger" onClick={() => { setDeleteError(null); setConfirmation(''); setDeleteOpen(true); }}>Delete my account</Button>
@@ -249,6 +271,18 @@ export function AuthPage() {
           <div className={styles.actions}>
             <Button variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>Keep account</Button>
             <Button variant="danger" onClick={() => void deleteAccount()} disabled={deleteBusy || confirmation !== 'DELETE'}>{deleteBusy ? 'Deleting account...' : 'Delete permanently'}</Button>
+          </div>
+        </div>
+      </Modal>
+      <Modal open={leaveOpen} title={`Leave ${activeWorkspace.name}`} onClose={() => { if (!leaveBusy) setLeaveOpen(false); }} closeDisabled={leaveBusy}>
+        <div className={styles.confirmation}>
+          <p>You will lose access to this Club and return to Club setup. Your past records, including live-event entries, remain visible in this Club. Type <strong>LEAVE</strong> to confirm.</p>
+          <label htmlFor="club-leave-confirmation">Confirmation</label>
+          <Input id="club-leave-confirmation" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} disabled={leaveBusy} autoComplete="off" />
+          {leaveError && <p className={styles.error} role="alert">{leaveError}</p>}
+          <div className={styles.actions}>
+            <Button variant="secondary" onClick={() => setLeaveOpen(false)} disabled={leaveBusy}>Stay in club</Button>
+            <Button variant="danger" onClick={() => void leaveClub()} disabled={leaveBusy || confirmation !== 'LEAVE'}>{leaveBusy ? 'Leaving...' : 'Leave club'}</Button>
           </div>
         </div>
       </Modal>

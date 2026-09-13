@@ -118,6 +118,72 @@
 
 .list li + li { margin-top: 2px; }
 
+.list .item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.list .item > button:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.actions {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  gap: 2px;
+  padding: 6px 4px 0 0;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease);
+}
+
+.list .item:hover .actions,
+.actions:focus-within {
+  opacity: 1;
+}
+
+.starBtn,
+.deleteBtn {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #66838F;
+  cursor: pointer;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+
+.starBtn:hover,
+.deleteBtn:hover {
+  background: rgba(138, 233, 242, 0.1);
+  color: #A8C7D3;
+}
+
+.starBtn[data-starred=true] {
+  color: #FFD166;
+}
+
+.starBtn[data-starred=true]:hover {
+  color: #FFBA44;
+}
+
+.starBtn svg,
+.deleteBtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.deleteBtn:hover {
+  color: #E2664F;
+}
+
 .list button {
   display: grid;
   width: 100%;
@@ -243,6 +309,12 @@
 :global(html.theme-light) .panelHeader h2 { color: #123747; }
 :global(html.theme-light) .panelHeader > span { border-color: rgba(0, 78, 105, 0.10); background: rgba(0, 146, 188, 0.07); color: #52717E; }
 :global(html.theme-light) .list button:hover { border-color: rgba(0, 146, 188, 0.13); background: rgba(255, 255, 255, 0.42); }
+:global(html.theme-light) .starBtn:hover,
+:global(html.theme-light) .deleteBtn:hover { background: rgba(0, 146, 188, 0.1); }
+:global(html.theme-light) .starBtn { color: #8A9DA5; }
+:global(html.theme-light) .starBtn[data-starred=true] { color: #D4940A; }
+:global(html.theme-light) .deleteBtn { color: #8A9DA5; }
+:global(html.theme-light) .deleteBtn:hover { color: #C44D35; }
 :global(html.theme-light) .list strong { color: #0B526A; }
 :global(html.theme-light) .list strong + span { color: #577482; }
 :global(html.theme-light) .list time { color: #76909B; }

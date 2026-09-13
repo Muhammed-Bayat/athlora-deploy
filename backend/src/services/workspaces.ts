@@ -135,6 +135,28 @@ export async function removeMember(workspaceId: string, userId: string, actorId:
   });
 }
 
+export async function leaveWorkspace(workspaceId: string, userId: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const member = await client.query<{ role: 'coach' | 'assistant' }>(
+      'SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 FOR UPDATE',
+      [workspaceId, userId],
+    );
+    if (!member.rows[0]) throw new ApiError(404, 'MEMBER_NOT_FOUND', 'Membership not found');
+    if (member.rows[0].role === 'coach') {
+      const coaches = await client.query<{ user_id: string }>(
+        "SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND role = 'coach' FOR UPDATE",
+        [workspaceId],
+      );
+      if (coaches.rows.length <= 1) throw new ApiError(409, 'LAST_COACH_REQUIRED', 'Assign another coach before leaving this club');
+    }
+    await client.query('DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2', [workspaceId, userId]);
+    await client.query(
+      "INSERT INTO workspace_membership_audit (workspace_id, user_id, actor_id, action, role) VALUES ($1, $2, $2, 'removed', $3)",
+      [workspaceId, userId, member.rows[0].role],
+    );
+  });
+}
+
 export async function changeMemberRole(
   workspaceId: string,
   userId: string,

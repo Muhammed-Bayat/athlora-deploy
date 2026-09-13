@@ -13,6 +13,9 @@ import {
   assertActiveClubWorkspace,
   createClub,
   createJoinRequest,
+  getClubComparison,
+  getClubStatistics,
+  listClubComparisonAthletes,
   listClubJoinRequests,
   listClubs,
   listMyJoinRequests,
@@ -53,6 +56,111 @@ describe('listClubs', () => {
     query.mockResolvedValue(poolRow([]));
     await listClubs(null);
     expect(query.mock.calls[0][1]).toEqual([null]);
+  });
+});
+
+describe('club comparison data', () => {
+  it('lists only non-archived safe athlete lookup fields', async () => {
+    query
+      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([
+        { id: USER_ID, name: 'Ari Runner', lifecycle_status: 'active' },
+        { id: ACTOR_ID, name: 'Bea Runner', lifecycle_status: 'inactive' },
+      ]));
+
+    const athletes = await listClubComparisonAthletes(CLUB_ID, 'Runner');
+
+    expect(athletes).toEqual([
+      { id: USER_ID, name: 'Ari Runner', status: 'active' },
+      { id: ACTOR_ID, name: 'Bea Runner', status: 'inactive' },
+    ]);
+    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain("a.lifecycle_status <> 'archived'");
+    expect(sql).toContain('ILIKE');
+    expect(parameters).toEqual([WORKSPACE_ID, 'Runner']);
+  });
+
+  it('derives all-time club statistics from effective valid results', async () => {
+    query
+      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([{
+        active_count: '2', inactive_count: '1', archived_count: '1', total_count: '4',
+        distinct_athletes_with_valid_results: '2', total_100m_result_count: '5',
+        valid_100m_result_count: '3', fastest_valid_time: '10.90', latest_valid_time: '11.20',
+        average_valid_time: '11.10', median_valid_time: '11.20', population_standard_deviation: '0.12',
+      }]));
+
+    const statistics = await getClubStatistics(CLUB_ID);
+
+    expect(statistics).toEqual({
+      club: { id: CLUB_ID, name: 'Sprinters' },
+      roster: { active: 2, inactive: 1, archived: 1, total: 4 },
+      distinctAthletesWithValidResults: 2,
+      total100mResultCount: 5,
+      valid100mResultCount: 3,
+      fastestValidTime: 10.9,
+      latestValidTime: 11.2,
+      averageValidTime: 11.1,
+      medianValidTime: 11.2,
+      populationStandardDeviation: 0.12,
+    });
+    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain("e.status <> 'cancelled'");
+    expect(sql).toContain("fw.role = 'guest'");
+    expect(sql).toContain("fw.status = 'accepted'");
+    expect(sql).toContain('stddev_pop');
+    expect(parameters).toEqual([WORKSPACE_ID, '100m']);
+  });
+
+  it('returns null population standard deviation for fewer than two valid results', async () => {
+    query
+      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([{
+        active_count: '1', inactive_count: '0', archived_count: '0', total_count: '1',
+        distinct_athletes_with_valid_results: '1', total_100m_result_count: '1',
+        valid_100m_result_count: '1', fastest_valid_time: '11.20', latest_valid_time: '11.20',
+        average_valid_time: '11.20', median_valid_time: '11.20', population_standard_deviation: null,
+      }]));
+
+    await expect(getClubStatistics(CLUB_ID)).resolves.toMatchObject({
+      populationStandardDeviation: null,
+    });
+  });
+
+  it('returns side-by-side statistics for two distinct clubs', async () => {
+    const otherClubId = '66666666-6666-4666-8666-666666666666';
+    const otherWorkspaceId = '77777777-7777-4777-8777-777777777777';
+    const statisticsRow = {
+      active_count: '0', inactive_count: '0', archived_count: '0', total_count: '0',
+      distinct_athletes_with_valid_results: '0', total_100m_result_count: '0',
+      valid_100m_result_count: '0', fastest_valid_time: null, latest_valid_time: null,
+      average_valid_time: null, median_valid_time: null, population_standard_deviation: null,
+    };
+    query
+      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([statisticsRow]))
+      .mockResolvedValueOnce(poolRow([{ id: otherClubId, workspace_id: otherWorkspaceId, name: 'Harriers' }]))
+      .mockResolvedValueOnce(poolRow([statisticsRow]));
+
+    await expect(getClubComparison(CLUB_ID, otherClubId)).resolves.toMatchObject({
+      clubs: [
+        { club: { id: CLUB_ID, name: 'Sprinters' } },
+        { club: { id: otherClubId, name: 'Harriers' } },
+      ],
+    });
+  });
+
+  it('rejects duplicate and absent club IDs', async () => {
+    await expect(getClubComparison(CLUB_ID, CLUB_ID)).rejects.toMatchObject({
+      status: 400,
+      code: 'DUPLICATE_CLUB_ID',
+    });
+
+    query.mockResolvedValueOnce(poolRow([]));
+    await expect(getClubComparison(CLUB_ID, '66666666-6666-4666-8666-666666666666')).rejects.toMatchObject({
+      status: 404,
+      code: 'CLUB_NOT_FOUND',
+    });
   });
 });
 

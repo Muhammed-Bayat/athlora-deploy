@@ -12,6 +12,7 @@ const workspaceApi = vi.hoisted(() => ({
   listWorkspaceInvitations: vi.fn(),
   resendWorkspaceInvitation: vi.fn(),
   updateWorkspaceMemberRole: vi.fn(),
+  leaveCurrentWorkspace: vi.fn(),
 }));
 const clubApi = vi.hoisted(() => ({
   listClubs: vi.fn(),
@@ -94,6 +95,25 @@ describe('AuthPage', () => {
     await waitFor(() => expect(authApi.deleteCurrentAccount).toHaveBeenCalledOnce());
     expect(auth0.logout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
     expect(dialog).toBeInTheDocument();
+  });
+
+  it('leaves the current Club while preserving the signed-in account', async () => {
+    workspaceApi.leaveCurrentWorkspace.mockResolvedValue(undefined);
+    const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Leave club' }));
+    const dialog = screen.getByRole('dialog', { name: /Leave / });
+    const submit = within(dialog).getByRole('button', { name: 'Leave club' });
+    expect(submit).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Confirmation'), 'LEAVE');
+    await user.click(submit);
+
+    await waitFor(() => expect(workspaceApi.leaveCurrentWorkspace).toHaveBeenCalledOnce());
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'athlora-workspace-left' }));
+    expect(auth0.logout).not.toHaveBeenCalled();
+    dispatchEvent.mockRestore();
   });
 
   it('keeps the account available with an announced error when deletion fails', async () => {

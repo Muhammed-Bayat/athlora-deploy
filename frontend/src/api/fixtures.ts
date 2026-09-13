@@ -30,6 +30,18 @@ export async function markFixtureNotificationRead(notificationId: string): Promi
   await request<void>(`/api/v1/notifications/${notificationId}/read`, { method: 'POST' });
 }
 
+export async function deleteFixtureNotification(notificationId: string): Promise<void> {
+  await request<void>(`/api/v1/notifications/${notificationId}`, { method: 'DELETE' });
+}
+
+export async function starFixtureNotification(notificationId: string): Promise<void> {
+  await request<void>(`/api/v1/notifications/${notificationId}/star`, { method: 'POST' });
+}
+
+export async function unstarFixtureNotification(notificationId: string): Promise<void> {
+  await request<void>(`/api/v1/notifications/${notificationId}/unstar`, { method: 'POST' });
+}
+
 export function refreshFixtureNotifications(): void {
   window.dispatchEvent(new Event('fixture-notifications-changed'));
 }

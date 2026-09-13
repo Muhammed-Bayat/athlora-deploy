@@ -15,6 +15,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   compact?: boolean;
   menuPlacement?: 'down' | 'up';
   placeholder?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 export function Select({
@@ -28,6 +32,10 @@ export function Select({
   compact = false,
   menuPlacement = 'down',
   placeholder,
+  searchable = false,
+  searchPlaceholder = 'Search options',
+  emptyMessage = 'No matching options',
+  onSearchChange,
   disabled,
   className,
   'aria-label': ariaLabel,
@@ -40,7 +48,9 @@ export function Select({
   const selectRef = useRef<HTMLSelectElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label ?? placeholder ?? options[0]?.label ?? '',
@@ -55,6 +65,18 @@ export function Select({
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !searchable) return;
+    window.requestAnimationFrame(() => searchRef.current?.focus());
+  }, [open, searchable]);
+
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !search.trim()) return options;
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    return options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedSearch));
+  }, [options, search, searchable]);
+  const scrollableOptions = searchable && visibleOptions.length > 6;
 
   if (variant === 'field') {
     return (
@@ -110,6 +132,7 @@ export function Select({
   };
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.target instanceof HTMLInputElement) return;
     const buttons = optionButtons();
     if (buttons.length === 0) return;
     const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -118,6 +141,28 @@ export function Select({
       focusOption(current + (event.key === 'ArrowDown' ? 1 : -1));
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+  };
+
+  const updateSearch = (nextSearch: string) => {
+    setSearch(nextSearch);
+    onSearchChange?.(nextSearch);
+  };
+
+  const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      focusOption(0);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      focusOption(-1);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       triggerRef.current?.focus();
     }
@@ -179,28 +224,47 @@ export function Select({
         aria-labelledby={`${selectId}-trigger`}
         onKeyDown={handleMenuKeyDown}
       >
-        {options.map((option) => (
-          <button
-            type="button"
-            key={option.value}
-            role="option"
-            aria-selected={option.value === value}
-            className={[styles.option, option.value === value ? styles.selected : ''].filter(Boolean).join(' ')}
-            onClick={() => pick(option.value)}
-          >
-            {dotColors?.[option.value] && (
-              <span
-                className={styles.optionDot}
-                style={{
-                  background: dotColors[option.value],
-                  boxShadow: `0 0 0 3px ${dotColors[option.value]}26, 0 0 8px ${dotColors[option.value]}40`,
-                }}
-                aria-hidden="true"
-              />
-            )}
-            <span>{option.label}</span>
-          </button>
-        ))}
+        {searchable && (
+          <div className={styles.menuSearch}>
+            <input
+              ref={searchRef}
+              className={styles.searchInput}
+              type="search"
+              value={search}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              onChange={(event) => updateSearch(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
+            />
+          </div>
+        )}
+        <div className={scrollableOptions ? styles.scrollableOptions : undefined}>
+          {visibleOptions.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              role="option"
+              aria-selected={option.value === value}
+              className={[styles.option, option.value === value ? styles.selected : ''].filter(Boolean).join(' ')}
+              onClick={() => pick(option.value)}
+            >
+              {dotColors?.[option.value] && (
+                <span
+                  className={styles.optionDot}
+                  style={{
+                    background: dotColors[option.value],
+                    boxShadow: `0 0 0 3px ${dotColors[option.value]}26, 0 0 8px ${dotColors[option.value]}40`,
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+              <span>{option.label}</span>
+            </button>
+          ))}
+          {visibleOptions.length === 0 && (
+            <p className={styles.empty} role="status">{emptyMessage}</p>
+          )}
+        </div>
       </div>}
     </div>
   );

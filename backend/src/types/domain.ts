@@ -21,6 +21,60 @@ export interface Club {
   updatedAt: string;
 }
 
+export interface ClubPublication {
+  publicResultsEnabled: boolean;
+}
+
+export interface ClubAthleteLookup {
+  id: string;
+  name: string;
+  status: AthleteLifecycleStatus;
+}
+
+export interface ClubRosterCounts {
+  active: number;
+  inactive: number;
+  archived: number;
+  total: number;
+}
+
+export interface ClubStatistics {
+  club: Pick<Club, 'id' | 'name'>;
+  roster: ClubRosterCounts;
+  distinctAthletesWithValidResults: number;
+  total100mResultCount: number;
+  valid100mResultCount: number;
+  fastestValidTime: number | null;
+  latestValidTime: number | null;
+  averageValidTime: number | null;
+  medianValidTime: number | null;
+  populationStandardDeviation: number | null;
+}
+
+export interface ClubComparisonDetail {
+  clubs: [ClubStatistics, ClubStatistics];
+}
+
+export interface PublicClub {
+  id: string;
+  name: string;
+}
+
+export interface PublicAthleteStatistics {
+  athlete: { id: string; name: string };
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+}
+
+export interface PublicClubStatistics extends ClubStatistics {
+  athletes: PublicAthleteStatistics[];
+}
+
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ClubJoinRequest {

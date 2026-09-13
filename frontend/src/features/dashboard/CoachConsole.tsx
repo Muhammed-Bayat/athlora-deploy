@@ -14,6 +14,8 @@ import { ApiError } from '../../api/client';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
+import { InstallButton } from '../../components/InstallButton';
+import { OfflineIndicator } from '../../components/OfflineIndicator';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -38,7 +40,7 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
   stats: { title: 'Season Stats', subtitle: 'Teams, athletes, results, and performance trends' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
-  comparison: { title: 'Compare Athletes', subtitle: 'Compare all-time 100m progression for two athletes' },
+  comparison: { title: 'Compare Performance', subtitle: 'Compare athlete progression and all-time club performance' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
   fixtures: { title: 'Events', subtitle: 'Manage shared club events' },
   live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
@@ -338,7 +340,7 @@ export function CoachConsole() {
   const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
-  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0 });
+  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0, reminders: 0 });
   const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
   const [isNight, setIsNight] = useState(false);
@@ -543,7 +545,7 @@ export function CoachConsole() {
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       </div>
-       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures} unread event notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures}</small>}</button></li>)}</ul></nav>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
         <header><span>Squad readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
@@ -559,8 +561,10 @@ export function CoachConsole() {
            <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
            <details ref={weatherMenuRef} className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
-          <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{liveWeather && liveWeather.source === 'timezone' && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
-          <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
+           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{liveWeather && liveWeather.source === 'timezone' && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
+           <InstallButton />
+           <OfflineIndicator />
+           <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>

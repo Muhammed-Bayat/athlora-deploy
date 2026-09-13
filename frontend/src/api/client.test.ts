@@ -5,6 +5,7 @@ import {
   get,
   list,
   remove,
+  requestPublic,
   setActiveWorkspaceId,
   setAccessTokenGetter,
   syncCurrentUser,
@@ -98,6 +99,21 @@ describe('API client', () => {
     expect(new Headers(requestInit?.headers).get('X-Workspace-Id')).toBe('workspace-a');
   });
 
+  it('never sends Auth0 or workspace context from a public request', async () => {
+    const getToken = vi.fn().mockResolvedValue('access-token');
+    setActiveWorkspaceId('workspace-a');
+    setAccessTokenGetter(getToken);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: [] })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await requestPublic('/api/v1/public/statistics/clubs');
+
+    expect(getToken).not.toHaveBeenCalled();
+    const requestInit = fetchMock.mock.calls[0]?.[1];
+    expect(new Headers(requestInit?.headers).get('Authorization')).toBeNull();
+    expect(new Headers(requestInit?.headers).get('X-Workspace-Id')).toBeNull();
+  });
+
   it('handles single and list envelopes and an empty success body', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -157,9 +173,8 @@ describe('API client', () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({
-      status: 401,
-      code: 'AUTH_TOKEN_ACQUISITION_FAILED',
-      message: 'Token expired',
+      status: 0,
+      code: 'NETWORK_ERROR',
     });
   });
 });

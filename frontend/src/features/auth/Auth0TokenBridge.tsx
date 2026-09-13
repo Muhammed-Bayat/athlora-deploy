@@ -46,6 +46,15 @@ export function Auth0TokenBridge({ children }: Auth0TokenBridgeProps) {
   }, [getAccessTokenSilently, isAuthenticated]);
 
   useEffect(() => {
+    const recheckMembership = () => {
+      window.history.replaceState({}, '', '/console');
+      setRetry((currentRetry) => currentRetry + 1);
+    };
+    window.addEventListener('athlora-workspace-left', recheckMembership);
+    return () => window.removeEventListener('athlora-workspace-left', recheckMembership);
+  }, []);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       attemptRef.current = undefined;
       return;

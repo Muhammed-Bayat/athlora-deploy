@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { isDeviceOnline, onConnectivityChange } from '../offline/networkStatus';
 
 export interface OnlineStatus {
   isOnline: boolean;
@@ -27,7 +28,7 @@ async function probeNetwork(): Promise<boolean> {
 }
 
 export function useOnlineStatus(): OnlineStatus {
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const wasOfflineRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -58,8 +59,10 @@ export function useOnlineStatus(): OnlineStatus {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Poll for actual connectivity — navigator.onLine is unreliable on desktop
-    // (e.g., airplane mode may not fire the 'offline' event)
+    const unsubConnectivity = onConnectivityChange((online) => {
+      setIsOnline(online);
+    });
+
     const interval = setInterval(async () => {
       if (!mountedRef.current) return;
       const reachable = await probeNetwork();
@@ -80,6 +83,7 @@ export function useOnlineStatus(): OnlineStatus {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      unsubConnectivity();
       clearInterval(interval);
     };
   }, []);

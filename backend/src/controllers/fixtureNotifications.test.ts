@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const services = vi.hoisted(() => ({ countUnreadFixtureNotifications: vi.fn(), listFixtureNotifications: vi.fn(), markFixtureNotificationRead: vi.fn() }));
+const services = vi.hoisted(() => ({ countUnreadFixtureNotifications: vi.fn(), deleteFixtureNotification: vi.fn(), listFixtureNotifications: vi.fn(), markFixtureNotificationRead: vi.fn(), starFixtureNotification: vi.fn(), unstarFixtureNotification: vi.fn() }));
 const auth = vi.hoisted(() => ({ getApplicationUserContext: vi.fn(() => ({ userId: 'user-1', workspaceId: 'workspace-1' })) }));
 vi.mock('../services/fixtureNotifications.js', () => services);
 vi.mock('../middleware/auth.js', () => auth);
 import * as notifications from './fixtureNotifications.js';
 function response() { const value = { status: vi.fn(), json: vi.fn(), end: vi.fn() }; value.status.mockReturnValue(value); return value; }
 describe('fixture notification controllers', () => {
-  beforeEach(() => { vi.clearAllMocks(); services.listFixtureNotifications.mockResolvedValue([{ id: 'notice-1' }]); services.countUnreadFixtureNotifications.mockResolvedValue(2); services.markFixtureNotificationRead.mockResolvedValue(undefined); });
+  beforeEach(() => { vi.clearAllMocks(); services.listFixtureNotifications.mockResolvedValue([{ id: 'notice-1' }]); services.countUnreadFixtureNotifications.mockResolvedValue(2); services.markFixtureNotificationRead.mockResolvedValue(undefined); services.deleteFixtureNotification.mockResolvedValue(undefined); services.starFixtureNotification.mockResolvedValue(undefined); services.unstarFixtureNotification.mockResolvedValue(undefined); });
   it('lists, counts, and marks notifications read', async () => { for (const handler of [notifications.list, notifications.unreadCount, notifications.markRead]) { const res = response(); const next = vi.fn(); await handler({ params: { notificationId: 'notice-1' } } as never, res as never, next); expect(next).not.toHaveBeenCalled(); } expect(services.markFixtureNotificationRead).toHaveBeenCalledWith('user-1', 'workspace-1', 'notice-1'); });
+  it('deletes a read notification', async () => { const res = response(); const next = vi.fn(); await notifications.deleteNotification({ params: { notificationId: 'notice-1' } } as never, res as never, next); expect(next).not.toHaveBeenCalled(); expect(services.deleteFixtureNotification).toHaveBeenCalledWith('user-1', 'workspace-1', 'notice-1'); expect(res.status).toHaveBeenCalledWith(204); });
+  it('stars a notification', async () => { const res = response(); const next = vi.fn(); await notifications.starNotification({ params: { notificationId: 'notice-1' } } as never, res as never, next); expect(next).not.toHaveBeenCalled(); expect(services.starFixtureNotification).toHaveBeenCalledWith('user-1', 'workspace-1', 'notice-1'); expect(res.status).toHaveBeenCalledWith(204); });
+  it('unstars a notification', async () => { const res = response(); const next = vi.fn(); await notifications.unstarNotification({ params: { notificationId: 'notice-1' } } as never, res as never, next); expect(next).not.toHaveBeenCalled(); expect(services.unstarFixtureNotification).toHaveBeenCalledWith('user-1', 'workspace-1', 'notice-1'); expect(res.status).toHaveBeenCalledWith(204); });
 });

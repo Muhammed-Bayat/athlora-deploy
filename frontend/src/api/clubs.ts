@@ -1,9 +1,58 @@
 import { request } from './client';
-import type { Club, ClubJoinRequest } from '../types';
+import type {
+  Club,
+  ClubCalendarEvent,
+  ClubAthleteLookup,
+  ClubComparisonDetail,
+  ClubJoinRequest,
+  ClubPublication,
+  ClubStatistics,
+} from '../types';
 
 export async function listClubs(search = ''): Promise<{ data: Club[]; meta: { count: number } }> {
   const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : '';
   return request(`/api/v1/clubs${query}`);
+}
+
+export async function listClubCalendarEvents(clubIds: string[]): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
+  const query = new URLSearchParams();
+  clubIds.forEach((clubId) => query.append('clubId', clubId));
+  return request(`/api/v1/clubs/calendar?${query.toString()}`);
+}
+
+export async function listClubComparisonAthletes(
+  clubId: string,
+  search: string,
+  signal?: AbortSignal,
+): Promise<{ data: ClubAthleteLookup[]; meta: { count: number } }> {
+  const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : '';
+  return request(`/api/v1/clubs/${clubId}/athletes${query}`, { signal });
+}
+
+export async function getClubStatistics(clubId: string): Promise<ClubStatistics> {
+  const response = await request<{ data: ClubStatistics }>(`/api/v1/clubs/${clubId}/statistics`);
+  return response.data;
+}
+
+export async function getClubComparison(
+  club1Id: string,
+  club2Id: string,
+): Promise<ClubComparisonDetail> {
+  const params = new URLSearchParams({ club1Id, club2Id });
+  const response = await request<{ data: ClubComparisonDetail }>(`/api/v1/clubs/comparison?${params.toString()}`);
+  return response.data;
+}
+
+export async function getClubPublication(): Promise<ClubPublication> {
+  const response = await request<{ data: ClubPublication }>('/api/v1/clubs/publication');
+  return response.data;
+}
+
+export async function updateClubPublication(publicResultsEnabled: boolean): Promise<ClubPublication> {
+  const response = await request<{ data: ClubPublication }>('/api/v1/clubs/publication', {
+    method: 'PUT', body: JSON.stringify({ publicResultsEnabled }),
+  });
+  return response.data;
 }
 
 export async function createClub(name: string): Promise<Club> {

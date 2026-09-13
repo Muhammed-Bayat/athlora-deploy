@@ -4,8 +4,10 @@ import { request } from './client';
 export async function getTwoAthleteComparison(
   athlete1Id: string,
   athlete2Id: string,
+  scope?: 'cross-club',
 ): Promise<ComparisonDetail> {
   const params = new URLSearchParams({ athlete1Id, athlete2Id });
+  if (scope) params.set('scope', scope);
   const response = await request<{ data: ComparisonDetail }>(`/api/v1/athletes/comparison?${params.toString()}`);
   return response.data;
 }

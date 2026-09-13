@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: true },
       includeAssets: ['logo.png', 'logo-removebg.png'],
       manifest: {
         name: 'Athlora',
@@ -15,6 +16,7 @@ export default defineConfig({
         theme_color: '#001D3C',
         background_color: '#00070D',
         display: 'standalone',
+        id: '/console',
         start_url: '/console',
         scope: '/',
         icons: [
@@ -33,6 +35,22 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
+          },
+        ],
+        screenshots: [
+          {
+            src: 'screenshots/dashboard-desktop.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Athlora Dashboard',
+          },
+          {
+            src: 'screenshots/dashboard-mobile.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Athlora Mobile',
           },
         ],
       },
