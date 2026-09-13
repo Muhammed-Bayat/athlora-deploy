@@ -5,6 +5,7 @@ import {
   createClub,
   createJoinRequest,
   getClubComparison,
+  getClubMultiComparison,
   getClubPublication,
   getClubStatistics,
   listClubCalendarEvents,
@@ -87,6 +88,13 @@ export const statistics: RequestHandler = async (req, res, next) => {
 export const comparison: RequestHandler = async (req, res, next) => {
   try {
     const clubComparison = await getClubComparison(req.query.club1Id, req.query.club2Id);
+    res.json({ data: clubComparison });
+  } catch (error) { next(error); }
+};
+
+export const multiComparison: RequestHandler = async (req, res, next) => {
+  try {
+    const clubComparison = await getClubMultiComparison(req.query.clubId);
     res.json({ data: clubComparison });
   } catch (error) { next(error); }
 };

@@ -65,6 +65,10 @@
 .selectors + .selectors { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
 .selector { min-width: 0; }
 .selector label { display: block; margin: 0 0 8px 2px; color: #a5c4cd; font: 700 0.65rem var(--font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+
+.comparisonSelection { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; margin: var(--space-3) 0 0; list-style: none; }
+.comparisonSelection li { display: inline-flex; align-items: center; gap: var(--space-2); padding: 6px 9px; border: 1px solid rgba(138, 233, 242, 0.28); border-radius: var(--radius-pill); background: rgba(69, 190, 215, 0.1); color: var(--ui-white); font-size: 0.78rem; }
+.comparisonSelection button { border: 0; background: transparent; color: var(--cyan-200); cursor: pointer; font-size: 1rem; }
 .selector > div { width: 100%; }
 .error { margin: 18px 0 0; color: #ff9c8a; font-size: 0.86rem; }
 .loading, .emptyState { position: relative; margin: 32px auto 0; padding: 18px 22px; border: 1px solid rgba(138, 233, 242, 0.13); border-radius: 16px; background: rgba(3, 23, 35, 0.72); color: #aac6ce; font-size: 0.9rem; line-height: 1.5; text-align: center; box-shadow: inset 0 1px rgba(255, 255, 255, 0.03); }

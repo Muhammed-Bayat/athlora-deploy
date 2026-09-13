@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
 import {
   getCrossClubAthleteComparison,
+  getCrossClubMultiAthleteComparison,
+  getMultiAthleteComparison,
   getTwoAthleteComparison,
 } from '../services/comparison.js';
 import { ApiError } from '../middleware/errors.js';
@@ -22,6 +24,8 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../services/comparison.js', () => ({
   getCrossClubAthleteComparison: vi.fn(),
+  getCrossClubMultiAthleteComparison: vi.fn(),
+  getMultiAthleteComparison: vi.fn(),
   getTwoAthleteComparison: vi.fn(),
 }));
 
@@ -131,6 +135,32 @@ describe('comparison API route', () => {
     expect(response.body).toEqual({ data: comparison });
     expect(getCrossClubAthleteComparison).toHaveBeenCalledWith(ATHLETE_1_ID, ATHLETE_2_ID);
     expect(getTwoAthleteComparison).not.toHaveBeenCalled();
+  });
+
+  it('returns a multi-athlete comparison for repeated athleteId parameters', async () => {
+    const comparison = { athletes: [] };
+    query.mockResolvedValueOnce(synchronizedUser());
+    vi.mocked(getMultiAthleteComparison).mockResolvedValue(comparison);
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison/multi?athleteId=${ATHLETE_1_ID}&athleteId=${ATHLETE_2_ID}`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: comparison });
+    expect(getMultiAthleteComparison).toHaveBeenCalledWith(USER_ID, [ATHLETE_1_ID, ATHLETE_2_ID]);
+  });
+
+  it('uses cross-club scope for multi-athlete comparisons', async () => {
+    query.mockResolvedValueOnce(synchronizedUser());
+    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [] });
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison/multi?athleteId=${ATHLETE_1_ID}&athleteId=${ATHLETE_2_ID}&scope=cross-club`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(getCrossClubMultiAthleteComparison).toHaveBeenCalledWith([ATHLETE_1_ID, ATHLETE_2_ID]);
   });
 
   it('rejects unsupported comparison scopes', async () => {

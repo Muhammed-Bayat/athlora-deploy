@@ -3,6 +3,8 @@ import type { DbExecutor } from '../db/client.js';
 import type { AthleteRow, ProgressionEntryRow } from '../db/row-mappers.js';
 import {
   getCrossClubAthleteComparison,
+  getCrossClubMultiAthleteComparison,
+  getMultiAthleteComparison,
   getTwoAthleteComparison,
 } from './comparison.js';
 
@@ -473,6 +475,32 @@ describe('getTwoAthleteComparison', () => {
   });
 });
 
+describe('getMultiAthleteComparison', () => {
+  it('rejects selections outside two to five unique UUIDs', async () => {
+    await expect(getMultiAthleteComparison(USER_ID, [ATHLETE_1_ID], runner(vi.fn())))
+      .rejects.toMatchObject({ code: 'ATHLETE_IDS_INVALID' });
+    await expect(getMultiAthleteComparison(USER_ID, [ATHLETE_1_ID, ATHLETE_1_ID], runner(vi.fn())))
+      .rejects.toMatchObject({ code: 'ATHLETE_IDS_INVALID' });
+  });
+
+  it('reuses aggregates in requested order', async () => {
+    const query = vi.fn((sql: string, parameters: unknown[]) => {
+      const athleteId = parameters[0];
+      if (sql.includes('WITH effective')) return Promise.resolve({ rows: [] });
+      if (athleteId === ATHLETE_1_ID) {
+        return Promise.resolve({ rows: [athleteRow({ id: ATHLETE_1_ID, name: 'Athlete One' })] });
+      }
+      return Promise.resolve({ rows: [athleteRow({ id: ATHLETE_2_ID, name: 'Athlete Two' })] });
+    });
+
+    const comparison = await getMultiAthleteComparison(
+      USER_ID, [ATHLETE_1_ID, ATHLETE_2_ID], runner(query),
+    );
+
+    expect(comparison.athletes.map(({ athlete }) => athlete.name)).toEqual(['Athlete One', 'Athlete Two']);
+  });
+});
+
 describe('getCrossClubAthleteComparison', () => {
   it('requires athletes from distinct club workspaces', async () => {
     const query = vi.fn().mockResolvedValueOnce({
@@ -520,5 +548,20 @@ describe('getCrossClubAthleteComparison', () => {
     });
     expect(query.mock.calls[2]?.[1]).toEqual([ATHLETE_1_ID, USER_ID, '100m']);
     expect(query.mock.calls[4]?.[1]).toEqual([ATHLETE_2_ID, OTHER_WORKSPACE_ID, '100m']);
+  });
+});
+
+describe('getCrossClubMultiAthleteComparison', () => {
+  it('requires every athlete to be from a distinct club workspace', async () => {
+    const query = vi.fn().mockResolvedValueOnce({
+      rows: [
+        { id: ATHLETE_1_ID, workspace_id: USER_ID },
+        { id: ATHLETE_2_ID, workspace_id: USER_ID },
+      ],
+    });
+
+    await expect(getCrossClubMultiAthleteComparison(
+      [ATHLETE_1_ID, ATHLETE_2_ID], runner(query),
+    )).rejects.toMatchObject({ code: 'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS' });
   });
 });

@@ -1,4 +1,4 @@
-import type { ComparisonDetail } from '../types';
+import type { ComparisonDetail, MultiComparisonDetail } from '../types';
 import { request } from './client';
 
 export async function getTwoAthleteComparison(
@@ -9,5 +9,16 @@ export async function getTwoAthleteComparison(
   const params = new URLSearchParams({ athlete1Id, athlete2Id });
   if (scope) params.set('scope', scope);
   const response = await request<{ data: ComparisonDetail }>(`/api/v1/athletes/comparison?${params.toString()}`);
+  return response.data;
+}
+
+export async function getMultiAthleteComparison(
+  athleteIds: string[],
+  scope?: 'cross-club',
+): Promise<MultiComparisonDetail> {
+  const params = new URLSearchParams();
+  athleteIds.forEach((athleteId) => params.append('athleteId', athleteId));
+  if (scope) params.set('scope', scope);
+  const response = await request<{ data: MultiComparisonDetail }>(`/api/v1/athletes/comparison/multi?${params.toString()}`);
   return response.data;
 }

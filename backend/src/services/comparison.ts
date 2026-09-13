@@ -8,6 +8,7 @@ import {
   DISCIPLINE_100M,
   type ComparisonDetail,
   type ComparisonAthleteAggregate,
+  type MultiComparisonDetail,
 } from '../types/domain.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
@@ -19,6 +20,17 @@ type ReadTransactionRunner = <T>(
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
+}
+
+function validateAthleteIds(athleteIds: unknown): string[] {
+  if (!Array.isArray(athleteIds)
+    || athleteIds.length < 2
+    || athleteIds.length > 5
+    || !athleteIds.every(isCanonicalUuid)
+    || new Set(athleteIds).size !== athleteIds.length) {
+    throw new ApiError(422, 'ATHLETE_IDS_INVALID', 'Select two to five unique athlete IDs');
+  }
+  return athleteIds;
 }
 
 const PROGRESSION_SELECT = `
@@ -239,5 +251,51 @@ export async function getCrossClubAthleteComparison(
     const athlete1 = await fetchAthleteAggregate(athlete1WorkspaceId, athlete1Id, client);
     const athlete2 = await fetchAthleteAggregate(athlete2WorkspaceId, athlete2Id, client);
     return { athletes: [athlete1, athlete2] };
+  });
+}
+
+export async function getMultiAthleteComparison(
+  workspaceId: string,
+  athleteIds: unknown,
+  runTransaction: ReadTransactionRunner = withReadTransaction,
+): Promise<MultiComparisonDetail> {
+  const ids = validateAthleteIds(athleteIds);
+  return runTransaction(async (client) => ({
+    athletes: await Promise.all(ids.map((athleteId) => fetchAthleteAggregate(workspaceId, athleteId, client))),
+  }));
+}
+
+export async function getCrossClubMultiAthleteComparison(
+  athleteIds: unknown,
+  runTransaction: ReadTransactionRunner = withReadTransaction,
+): Promise<MultiComparisonDetail> {
+  const ids = validateAthleteIds(athleteIds);
+  return runTransaction(async (client) => {
+    const athletes = await client.query<{ id: string; workspace_id: string }>(
+      `SELECT a.id, a.workspace_id
+       FROM athletes a
+       JOIN clubs c ON c.workspace_id = a.workspace_id
+       WHERE a.id = ANY($1::uuid[])`,
+      [ids],
+    );
+    if (athletes.rows.length !== ids.length) throw notFound();
+
+    const workspacesByAthleteId = new Map(
+      athletes.rows.map((athlete) => [athlete.id, athlete.workspace_id]),
+    );
+    const workspaceIds = ids.map((id) => workspacesByAthleteId.get(id));
+    if (workspaceIds.some((workspaceId) => !workspaceId)) throw notFound();
+    if (new Set(workspaceIds).size !== ids.length) {
+      throw new ApiError(
+        422,
+        'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS',
+        'Cross-club comparison requires athletes from distinct club workspaces',
+      );
+    }
+
+    return {
+      athletes: await Promise.all(ids.map((athleteId, index) =>
+        fetchAthleteAggregate(workspaceIds[index]!, athleteId, client))),
+    };
   });
 }

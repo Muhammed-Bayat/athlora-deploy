@@ -14,6 +14,7 @@ import {
   createClub,
   createJoinRequest,
   getClubComparison,
+  getClubMultiComparison,
   getClubStatistics,
   listClubComparisonAthletes,
   listClubJoinRequests,
@@ -60,6 +61,28 @@ describe('listClubs', () => {
 });
 
 describe('club comparison data', () => {
+  it('builds multi-club comparisons from the existing statistics aggregate', async () => {
+    query.mockImplementation((sql: string, parameters: unknown[]) => {
+      if (sql.includes('FROM clubs WHERE id')) {
+        const clubId = parameters[0];
+        return Promise.resolve(poolRow([clubId === CLUB_ID
+          ? { id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }
+          : { id: REQUEST_ID, workspace_id: USER_ID, name: 'Rivals' }]));
+      }
+      return Promise.resolve(poolRow([{
+        active_count: 0, inactive_count: 0, archived_count: 0, total_count: 0,
+        distinct_athletes_with_valid_results: 0, total_100m_result_count: 0,
+        valid_100m_result_count: 0, fastest_valid_time: null, latest_valid_time: null,
+        average_valid_time: null, median_valid_time: null, population_standard_deviation: null,
+      }]));
+    });
+
+    await expect(getClubMultiComparison([CLUB_ID, REQUEST_ID])).resolves.toMatchObject({
+      clubs: [{ club: { id: CLUB_ID } }, { club: { id: REQUEST_ID } }],
+    });
+    await expect(getClubMultiComparison([CLUB_ID])).rejects.toMatchObject({ code: 'CLUB_IDS_INVALID' });
+  });
+
   it('lists only non-archived safe athlete lookup fields', async () => {
     query
       .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))

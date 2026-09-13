@@ -15,6 +15,7 @@ import {
   type Club,
   type ClubAthleteLookup,
   type ClubComparisonDetail,
+  type ClubMultiComparisonDetail,
   type ClubJoinRequest,
   type ClubPublication,
   type ClubStatistics,
@@ -270,6 +271,17 @@ export async function getClubComparison(
   const club1 = await getClubStatistics(club1Id);
   const club2 = await getClubStatistics(club2Id);
   return { clubs: [club1, club2] };
+}
+
+export async function getClubMultiComparison(clubIds: unknown): Promise<ClubMultiComparisonDetail> {
+  if (!Array.isArray(clubIds)
+    || clubIds.length < 2
+    || clubIds.length > 5
+    || !clubIds.every(isCanonicalUuid)
+    || new Set(clubIds).size !== clubIds.length) {
+    throw new ApiError(422, 'CLUB_IDS_INVALID', 'Select two to five unique club IDs');
+  }
+  return { clubs: await Promise.all(clubIds.map((clubId) => getClubStatistics(clubId))) };
 }
 
 export async function createClub(userId: string, name: string): Promise<Club> {
