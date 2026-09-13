@@ -1,8 +1,9 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getTwoAthleteComparison } from '../../api/comparison';
+import { getMultiAthleteComparison, getTwoAthleteComparison } from '../../api/comparison';
 import {
   getClubComparison,
+  getClubMultiComparison,
   getClubPublication,
   getClubStatistics,
   listClubComparisonAthletes,
@@ -15,11 +16,11 @@ import type {
   Athlete,
   Club,
   ClubAthleteLookup,
-  ClubComparisonDetail,
+  ClubMultiComparisonDetail,
   ClubPublication,
   ClubStatistics,
   ComparisonAthleteAggregate,
-  ComparisonDetail,
+  MultiComparisonDetail,
   ProgressionEntry,
 } from '../../types';
 import { format100mSeconds, formatDateOnly } from '../../utils/formatting';
@@ -35,6 +36,8 @@ const CHART_HEIGHT = SVG_HEIGHT - SVG_PADDING.top - SVG_PADDING.bottom;
 type ViewMode = 'chart' | 'table';
 type ComparisonMode = 'athlete-club' | 'athlete-cross-club' | 'club-statistics' | 'club-comparison';
 type ChartPoint = { x: number; y: number; entry: ProgressionEntry; athleteIndex: number };
+const MAX_COMPARISON_ITEMS = 5;
+const SERIES_COLORS = ['var(--console-comparison-series-a)', 'var(--console-comparison-series-b)', '#bb8af5', '#f0b45e', '#78d69a'];
 
 interface ChartGeometry {
   series: ChartPoint[][];
@@ -69,7 +72,7 @@ function closestPoint(points: ChartPoint[], svg: SVGSVGElement | null, clientX: 
   ));
 }
 
-function buildComparisonChartGeometry(athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate]): ChartGeometry | null {
+function buildComparisonChartGeometry(athletes: ComparisonAthleteAggregate[]): ChartGeometry | null {
   const series = athletes.map((athlete, athleteIndex) =>
     athlete.progression
       .filter((entry) => entry.effectiveOutcome === 'valid' && entry.effectiveResult !== null)
@@ -139,32 +142,29 @@ function TextMetricCard({ label, value }: { label: string; value: string | numbe
   );
 }
 
-function ComparisonTable({ comparison }: { comparison: ComparisonDetail }) {
-  const [athlete1, athlete2] = comparison.athletes;
-  const rows: Array<{ label: string; athlete1: string; athlete2: string }> = [
-    { label: 'PB', athlete1: formatMetric(athlete1.pb), athlete2: formatMetric(athlete2.pb) },
-    { label: 'Latest effective result', athlete1: formatMetric(athlete1.latestEffectiveResult), athlete2: formatMetric(athlete2.latestEffectiveResult) },
-    { label: 'Valid result count', athlete1: String(athlete1.validResultCount), athlete2: String(athlete2.validResultCount) },
-    { label: 'Average', athlete1: formatMetric(athlete1.average), athlete2: formatMetric(athlete2.average) },
-    { label: 'Consistency (SD)', athlete1: formatMetric(athlete1.consistency), athlete2: formatMetric(athlete2.consistency) },
-    { label: 'Improvement', athlete1: formatMetric(athlete1.improvement), athlete2: formatMetric(athlete2.improvement) },
+function ComparisonTable({ comparison }: { comparison: MultiComparisonDetail }) {
+  const rows: Array<{ label: string; value: (athlete: ComparisonAthleteAggregate) => string }> = [
+    { label: 'PB', value: (athlete) => formatMetric(athlete.pb) },
+    { label: 'Latest effective result', value: (athlete) => formatMetric(athlete.latestEffectiveResult) },
+    { label: 'Valid result count', value: (athlete) => String(athlete.validResultCount) },
+    { label: 'Average', value: (athlete) => formatMetric(athlete.average) },
+    { label: 'Consistency (SD)', value: (athlete) => formatMetric(athlete.consistency) },
+    { label: 'Improvement', value: (athlete) => formatMetric(athlete.improvement) },
   ];
 
   return (
-    <table className={styles.comparisonTable} aria-label="Two-athlete comparison metrics">
+    <table className={styles.comparisonTable} aria-label={comparison.athletes.length === 2 ? 'Two-athlete comparison metrics' : 'Athlete comparison metrics'}>
       <thead>
         <tr>
           <th scope="col">Metric</th>
-          <th scope="col">{athlete1.athlete.name}</th>
-          <th scope="col">{athlete2.athlete.name}</th>
+          {comparison.athletes.map((athlete) => <th key={athlete.athlete.id} scope="col">{athlete.athlete.name}</th>)}
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => (
           <tr key={row.label}>
             <th scope="row">{row.label}</th>
-            <td>{row.athlete1}</td>
-            <td>{row.athlete2}</td>
+            {comparison.athletes.map((athlete) => <td key={athlete.athlete.id}>{row.value(athlete)}</td>)}
           </tr>
         ))}
       </tbody>
@@ -172,15 +172,20 @@ function ComparisonTable({ comparison }: { comparison: ComparisonDetail }) {
   );
 }
 
-function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
+function ComparisonChart({ comparison }: { comparison: MultiComparisonDetail }) {
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
   const geometry = useMemo(
     () => buildComparisonChartGeometry(comparison.athletes),
     [comparison],
   );
+  const athleteColors = useMemo(() => new Map(
+    [...comparison.athletes]
+      .sort((left, right) => left.athlete.id.localeCompare(right.athlete.id))
+      .map((athlete, index) => [athlete.athlete.id, SERIES_COLORS[index]]),
+  ), [comparison.athletes]);
 
   if (!geometry) {
-    return <p className={styles.empty}>Neither athlete has a valid 100m result to chart.</p>;
+    return <p className={styles.empty}>None of the selected athletes has a valid 100m result to chart.</p>;
   }
 
   const { series, yTickValues } = geometry;
@@ -188,17 +193,17 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
   return (
     <div className={styles.chartWrap}>
       <h2 className={styles.chartHeading}>
-        {`${comparison.athletes[0].athlete.name} vs ${comparison.athletes[1].athlete.name}: 100m Progression`}
+        {`${comparison.athletes.map((athlete) => athlete.athlete.name).join(' vs ')}: 100m Progression`}
       </h2>
       <svg
         className={styles.svg}
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         role="img"
-        aria-label={`Two-athlete 100m progression chart comparing ${comparison.athletes[0].athlete.name} and ${comparison.athletes[1].athlete.name}`}
+        aria-label={`100m progression chart comparing ${comparison.athletes.map((athlete) => athlete.athlete.name).join(', ')}`}
       >
-        <title>{`100m progression comparison: ${comparison.athletes[0].athlete.name} vs ${comparison.athletes[1].athlete.name}`}</title>
+          <title>{`100m progression comparison: ${comparison.athletes.map((athlete) => athlete.athlete.name).join(' vs ')}`}</title>
         <desc>
-          {`Chronological progression of valid 100m results for ${comparison.athletes[0].athlete.name} and ${comparison.athletes[1].athlete.name}`}
+          {`Chronological progression of valid 100m results for ${comparison.athletes.map((athlete) => athlete.athlete.name).join(', ')}`}
         </desc>
 
         <line
@@ -263,8 +268,10 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
               <>
                 <polyline
                   data-series={`athlete-${athleteIndex + 1}`}
+                  data-series-color={athleteColors.get(comparison.athletes[athleteIndex].athlete.id)}
                   points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
-                  className={athleteIndex === 0 ? styles.seriesLineA : styles.seriesLineB}
+                  className={styles.seriesLine}
+                  style={{ stroke: athleteColors.get(comparison.athletes[athleteIndex].athlete.id) }}
                 />
                 <polyline
                   data-testid={`comparison-line-hit-area-${athleteIndex + 1}`}
@@ -286,7 +293,8 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
                 cx={point.x}
                 cy={point.y}
                 r={4.5}
-                className={athleteIndex === 0 ? styles.seriesPointA : styles.seriesPointB}
+                className={styles.seriesPoint}
+                style={{ fill: athleteColors.get(comparison.athletes[athleteIndex].athlete.id) }}
                 tabIndex={0}
                 role="img"
                 aria-label={`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}
@@ -315,14 +323,10 @@ function ComparisonChart({ comparison }: { comparison: ComparisonDetail }) {
         )}
       </svg>
       <div className={styles.legend} role="list" aria-label="Chart legend">
-        <span className={styles.legendItem} role="listitem">
-          <span className={`${styles.legendLine} ${styles.legendLineA}`} aria-hidden="true" />
-          {comparison.athletes[0].athlete.name}
-        </span>
-        <span className={styles.legendItem} role="listitem">
-          <span className={`${styles.legendLine} ${styles.legendLineB}`} aria-hidden="true" />
-          {comparison.athletes[1].athlete.name}
-        </span>
+        {comparison.athletes.map((athlete) => <span key={athlete.athlete.id} className={styles.legendItem} role="listitem">
+          <span className={styles.legendLine} style={{ background: athleteColors.get(athlete.athlete.id) }} aria-hidden="true" />
+          {athlete.athlete.name}
+        </span>)}
       </div>
     </div>
   );
@@ -358,28 +362,23 @@ function ClubStatisticsTable({ statistics }: { statistics: ClubStatistics }) {
   );
 }
 
-function ClubComparisonTable({ comparison }: { comparison: ClubComparisonDetail }) {
-  const [club1, club2] = comparison.clubs;
-  const rows: Array<{ label: string; club1: string; club2: string }> = [
-    { label: 'Total roster', club1: String(club1.roster.total), club2: String(club2.roster.total) },
-    { label: 'Active athletes', club1: String(club1.roster.active), club2: String(club2.roster.active) },
-    { label: 'Athletes with valid results', club1: String(club1.distinctAthletesWithValidResults), club2: String(club2.distinctAthletesWithValidResults) },
-    { label: 'Valid 100m results', club1: String(club1.valid100mResultCount), club2: String(club2.valid100mResultCount) },
-    { label: 'Fastest valid time', club1: formatMetric(club1.fastestValidTime), club2: formatMetric(club2.fastestValidTime) },
-    { label: 'Latest valid time', club1: formatMetric(club1.latestValidTime), club2: formatMetric(club2.latestValidTime) },
-    { label: 'Average valid time', club1: formatMetric(club1.averageValidTime), club2: formatMetric(club2.averageValidTime) },
-    { label: 'Median valid time', club1: formatMetric(club1.medianValidTime), club2: formatMetric(club2.medianValidTime) },
-    { label: 'Consistency (SD)', club1: formatMetric(club1.populationStandardDeviation), club2: formatMetric(club2.populationStandardDeviation) },
+function ClubComparisonTable({ comparison }: { comparison: ClubMultiComparisonDetail }) {
+  const rows: Array<{ label: string; value: (club: ClubStatistics) => string }> = [
+    { label: 'Total roster', value: (club) => String(club.roster.total) }, { label: 'Active athletes', value: (club) => String(club.roster.active) },
+    { label: 'Athletes with valid results', value: (club) => String(club.distinctAthletesWithValidResults) }, { label: 'Valid 100m results', value: (club) => String(club.valid100mResultCount) },
+    { label: 'Fastest valid time', value: (club) => formatMetric(club.fastestValidTime) }, { label: 'Latest valid time', value: (club) => formatMetric(club.latestValidTime) },
+    { label: 'Average valid time', value: (club) => formatMetric(club.averageValidTime) }, { label: 'Median valid time', value: (club) => formatMetric(club.medianValidTime) },
+    { label: 'Consistency (SD)', value: (club) => formatMetric(club.populationStandardDeviation) },
   ];
 
   return (
     <table className={styles.comparisonTable} aria-label="Club comparison metrics">
       <thead>
-        <tr><th scope="col">Metric</th><th scope="col">{club1.club.name}</th><th scope="col">{club2.club.name}</th></tr>
+        <tr><th scope="col">Metric</th>{comparison.clubs.map((club) => <th key={club.club.id} scope="col">{club.club.name}</th>)}</tr>
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.label}><th scope="row">{row.label}</th><td>{row.club1}</td><td>{row.club2}</td></tr>
+          <tr key={row.label}><th scope="row">{row.label}</th>{comparison.clubs.map((club) => <td key={club.club.id}>{row.value(club)}</td>)}</tr>
         ))}
       </tbody>
     </table>
@@ -393,6 +392,37 @@ function athleteSearchMessage(clubId: string, search: string, loading: boolean):
   return 'No athletes match this search';
 }
 
+function CrossClubAthleteSelector({ index, clubId, athleteId, clubs, selectedClubIds, onClubChange, onAthleteChange, onRemove }: {
+  index: number; clubId: string; athleteId: string; clubs: Club[]; selectedClubIds: string[];
+  onClubChange: (value: string) => void; onAthleteChange: (value: string) => void; onRemove: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [athletes, setAthletes] = useState<ClubAthleteLookup[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!clubId || deferredSearch.trim().length < 2) { setAthletes([]); return; }
+    const controller = new AbortController();
+    setLoading(true);
+    void listClubComparisonAthletes(clubId, deferredSearch, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setAthletes(result.data); })
+      .catch(() => { if (!controller.signal.aborted) setAthletes([]); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [clubId, deferredSearch]);
+  const clubOptions = clubs.filter((club) => club.id === clubId || !selectedClubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }));
+  const position = index + 1;
+  const clubLabel = index === 0 ? 'Select first club for athlete comparison' : index === 1 ? 'Select second club for athlete comparison' : `Select club ${position} for athlete comparison`;
+  const athleteLabel = index === 0 ? 'Search first athlete by name' : index === 1 ? 'Search second athlete by name' : `Search athlete ${position} by name`;
+  return <div className={styles.selector}>
+    <label htmlFor={`cross-club-${position}-select`}>Club {position}</label>
+    <Select id={`cross-club-${position}-select`} value={clubId} onChange={(event) => onClubChange(event.target.value)} aria-label={clubLabel} placeholder="Select club..." options={[{ value: '', label: 'Select club...' }, ...clubOptions]} />
+    <label htmlFor={`cross-athlete-${position}-select`}>Search athlete {position} by name</label>
+    <Select key={`cross-athlete-${position}-${clubId}`} id={`cross-athlete-${position}-select`} value={athleteId} onChange={(event) => onAthleteChange(event.target.value)} disabled={!clubId} searchable searchPlaceholder={athleteLabel} emptyMessage={athleteSearchMessage(clubId, search, loading)} aria-label={athleteLabel} placeholder="Search club roster..." options={athletes.map((athlete) => ({ value: athlete.id, label: athlete.name }))} onSearchChange={(value) => { setSearch(value); onAthleteChange(''); }} />
+    {(clubId || athleteId) && <Button onClick={onRemove}>Remove athlete {position}</Button>}
+  </div>;
+}
+
 export function ComparisonPage() {
   const { activeWorkspace } = useWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -402,6 +432,10 @@ export function ComparisonPage() {
   const athlete2Id = searchParams.get('athlete2Id') ?? '';
   const club1Id = searchParams.get('club1Id') ?? '';
   const club2Id = searchParams.get('club2Id') ?? '';
+  const athleteIds = Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`athlete${index + 1}Id`) ?? '').filter(Boolean);
+  const clubIds = Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`club${index + 1}Id`) ?? '').filter(Boolean);
+  void athlete1Id;
+  void athlete2Id;
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [athletesLoading, setAthletesLoading] = useState(true);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -415,9 +449,14 @@ export function ComparisonPage() {
   const [club1AthletesLoading, setClub1AthletesLoading] = useState(false);
   const [club2AthletesLoading, setClub2AthletesLoading] = useState(false);
   const [crossSearchError, setCrossSearchError] = useState<string | null>(null);
-  const [comparison, setComparison] = useState<ComparisonDetail | null>(null);
+  void club1Athletes;
+  void club2Athletes;
+  void club1AthletesLoading;
+  void club2AthletesLoading;
+  void crossSearchError;
+  const [comparison, setComparison] = useState<MultiComparisonDetail | null>(null);
   const [clubStatistics, setClubStatistics] = useState<ClubStatistics | null>(null);
-  const [clubComparison, setClubComparison] = useState<ClubComparisonDetail | null>(null);
+  const [clubComparison, setClubComparison] = useState<ClubMultiComparisonDetail | null>(null);
   const [athleteComparisonLoading, setAthleteComparisonLoading] = useState(false);
   const [clubStatisticsLoading, setClubStatisticsLoading] = useState(false);
   const [clubComparisonLoading, setClubComparisonLoading] = useState(false);
@@ -429,6 +468,8 @@ export function ComparisonPage() {
   const [publicationUpdating, setPublicationUpdating] = useState(false);
   const [publicationError, setPublicationError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
+  const [athleteSlotCount, setAthleteSlotCount] = useState(2);
+  const [clubSlotCount, setClubSlotCount] = useState(2);
   const deferredClub1Search = useDeferredValue(club1Search);
   const deferredClub2Search = useDeferredValue(club2Search);
 
@@ -554,12 +595,9 @@ export function ComparisonPage() {
     };
   }, [club2Id, deferredClub2Search, mode]);
 
-  const athleteSelectionValid = Boolean(
-    (mode === 'athlete-club' || (club1Id && club2Id && club1Id !== club2Id))
-      && athlete1Id
-      && athlete2Id
-      && athlete1Id !== athlete2Id,
-  );
+  const athleteSelectionValid = athleteIds.length >= 2
+    && new Set(athleteIds).size === athleteIds.length
+    && (mode === 'athlete-club' || (clubIds.length === athleteIds.length && new Set(clubIds).size === clubIds.length));
 
   useEffect(() => {
     if ((mode !== 'athlete-club' && mode !== 'athlete-cross-club') || !athleteSelectionValid) {
@@ -571,11 +609,11 @@ export function ComparisonPage() {
     let current = true;
     setAthleteComparisonLoading(true);
     setAthleteError(null);
-    void getTwoAthleteComparison(
-      athlete1Id,
-      athlete2Id,
-      mode === 'athlete-cross-club' ? 'cross-club' : undefined,
-    )
+    const scope = mode === 'athlete-cross-club' ? 'cross-club' : undefined;
+    const request = athleteIds.length === 2
+      ? getTwoAthleteComparison(athleteIds[0], athleteIds[1], scope)
+      : getMultiAthleteComparison(athleteIds, scope);
+    void request
       .then((value) => {
         if (current) setComparison(value);
       })
@@ -589,7 +627,7 @@ export function ComparisonPage() {
         if (current) setAthleteComparisonLoading(false);
       });
     return () => { current = false; };
-  }, [athlete1Id, athlete2Id, athleteSelectionValid, mode]);
+  }, [athleteIds.join(','), athleteSelectionValid, mode]);
 
   useEffect(() => {
     if (mode !== 'club-statistics' || !club1Id) {
@@ -617,7 +655,7 @@ export function ComparisonPage() {
     return () => { current = false; };
   }, [club1Id, mode]);
 
-  const clubSelectionValid = Boolean(club1Id && club2Id && club1Id !== club2Id);
+  const clubSelectionValid = clubIds.length >= 2 && new Set(clubIds).size === clubIds.length;
 
   useEffect(() => {
     if (mode !== 'club-comparison' || !clubSelectionValid) {
@@ -629,7 +667,10 @@ export function ComparisonPage() {
     let current = true;
     setClubComparisonLoading(true);
     setClubComparisonError(null);
-    void getClubComparison(club1Id, club2Id)
+    const request = clubIds.length === 2
+      ? getClubComparison(clubIds[0], clubIds[1])
+      : getClubMultiComparison(clubIds);
+    void request
       .then((value) => {
         if (current) setClubComparison(value);
       })
@@ -643,7 +684,7 @@ export function ComparisonPage() {
         if (current) setClubComparisonLoading(false);
       });
     return () => { current = false; };
-  }, [club1Id, club2Id, clubSelectionValid, mode]);
+  }, [clubIds.join(','), clubSelectionValid, mode]);
 
   const updateParam = useCallback((key: string, value: string) => {
     setSearchParams((previous) => {
@@ -654,11 +695,39 @@ export function ComparisonPage() {
     });
   }, [setSearchParams]);
 
+  const updateSelection = useCallback((prefix: 'athlete' | 'club', values: string[]) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => index + 1).forEach((index) => next.delete(`${prefix}${index}Id`));
+      values.forEach((value, index) => { if (value) next.set(`${prefix}${index + 1}Id`, value); });
+      return next;
+    });
+  }, [setSearchParams]);
+
+  const removeCrossClubSelection = useCallback((index: number) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      const nextClubIds = clubIds.filter((_, position) => position !== index);
+      const nextAthleteIds = athleteIds.filter((_, position) => position !== index);
+      Array.from({ length: MAX_COMPARISON_ITEMS }, (_, position) => position + 1).forEach((position) => {
+        next.delete(`club${position}Id`);
+        next.delete(`athlete${position}Id`);
+      });
+      nextClubIds.forEach((id, position) => next.set(`club${position + 1}Id`, id));
+      nextAthleteIds.forEach((id, position) => next.set(`athlete${position + 1}Id`, id));
+      return next;
+    });
+    setAthleteSlotCount((count) => Math.max(2, count - 1));
+  }, [athleteIds, clubIds, setSearchParams]);
+
   const changeMode = useCallback((nextMode: ComparisonMode) => {
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       next.set('mode', nextMode);
-      ['athlete1Id', 'athlete2Id', 'club1Id', 'club2Id'].forEach((key) => next.delete(key));
+      Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => index + 1).forEach((index) => {
+        next.delete(`athlete${index}Id`);
+        next.delete(`club${index}Id`);
+      });
       return next;
     });
     setClub1Search('');
@@ -693,6 +762,8 @@ export function ComparisonPage() {
       return next;
     });
   }, [setSearchParams]);
+  void updateParam;
+  void updateCrossClubSearch;
 
   const club1Options = clubs
     .filter((club) => club.id !== club2Id || club.id === club1Id)
@@ -700,6 +771,7 @@ export function ComparisonPage() {
   const club2Options = clubs
     .filter((club) => club.id !== club1Id || club.id === club2Id)
     .map((club) => ({ value: club.id, label: club.name }));
+  void club2Options;
 
   const athleteMode = mode === 'athlete-club' || mode === 'athlete-cross-club';
   const loading = athleteMode
@@ -767,99 +839,22 @@ export function ComparisonPage() {
       {mode === 'athlete-club' && (
         <Card>
           <div className={styles.selectorRow}>
-            <div className={styles.selector}>
-              <label htmlFor="athlete1-select">Athlete 1</label>
-              <Select
-                id="athlete1-select"
-                value={athlete1Id}
-                onChange={(event) => updateParam('athlete1Id', event.target.value)}
-                disabled={athletesLoading}
-                aria-label="Select first athlete for comparison"
-                placeholder="Select athlete..."
-                options={[
-                  { value: '', label: 'Select athlete...' },
-                  ...athletes.map((athlete) => ({ value: athlete.id, label: athlete.name })),
-                ]}
-              />
-            </div>
-            <div className={styles.selector}>
-              <label htmlFor="athlete2-select">Athlete 2</label>
-              <Select
-                id="athlete2-select"
-                value={athlete2Id}
-                onChange={(event) => updateParam('athlete2Id', event.target.value)}
-                disabled={athletesLoading}
-                aria-label="Select second athlete for comparison"
-                placeholder="Select athlete..."
-                options={[
-                  { value: '', label: 'Select athlete...' },
-                  ...athletes.map((athlete) => ({ value: athlete.id, label: athlete.name })),
-                ]}
-              />
-            </div>
+            {Array.from({ length: Math.max(2, athleteIds.length, athleteSlotCount) }, (_, index) => <div className={styles.selector} key={index}>
+              <label htmlFor={`athlete${index + 1}-select`}>Athlete {index + 1}</label>
+              <Select id={`athlete${index + 1}-select`} value={athleteIds[index] ?? ''} onChange={(event) => { const next = [...athleteIds]; next[index] = event.target.value; updateSelection('athlete', next); }} disabled={athletesLoading} aria-label={`Select athlete ${index + 1} for comparison`} placeholder="Select athlete..." options={[{ value: '', label: 'Select athlete...' }, ...athletes.filter((athlete) => athlete.id === athleteIds[index] || !athleteIds.includes(athlete.id)).map((athlete) => ({ value: athlete.id, label: athlete.name }))]} />
+              {athleteIds[index] && <Button onClick={() => { updateSelection('athlete', athleteIds.filter((_, position) => position !== index)); setAthleteSlotCount((count) => Math.max(2, count - 1)); }}>Remove athlete {index + 1}</Button>}
+            </div>)}
           </div>
+          {Math.max(athleteIds.length, athleteSlotCount) < MAX_COMPARISON_ITEMS && <Button onClick={() => setAthleteSlotCount((count) => count + 1)}>Add athlete</Button>}
         </Card>
       )}
 
       {mode === 'athlete-cross-club' && (
         <Card>
           <div className={styles.selectorRow}>
-            <div className={styles.selector}>
-              <label htmlFor="cross-club1-select">First club</label>
-              <Select
-                id="cross-club1-select"
-                value={club1Id}
-                onChange={(event) => updateClub('club1Id', event.target.value)}
-                disabled={clubsLoading}
-                aria-label="Select first club for athlete comparison"
-                placeholder="Select club..."
-                options={[{ value: '', label: 'Select club...' }, ...club1Options]}
-              />
-              <label htmlFor="cross-athlete1-select">Search first athlete by name</label>
-              <Select
-                key={`cross-athlete1-${club1Id}`}
-                id="cross-athlete1-select"
-                value={athlete1Id}
-                onChange={(event) => updateParam('athlete1Id', event.target.value)}
-                disabled={!club1Id}
-                searchable
-                searchPlaceholder="Search first athlete by name"
-                emptyMessage={athleteSearchMessage(club1Id, club1Search, club1AthletesLoading)}
-                aria-label="Search first athlete by name"
-                placeholder="Search club roster..."
-                options={club1Athletes.map((athlete) => ({ value: athlete.id, label: athlete.name }))}
-                onSearchChange={(value) => updateCrossClubSearch('athlete1Id', value)}
-              />
-            </div>
-            <div className={styles.selector}>
-              <label htmlFor="cross-club2-select">Second club</label>
-              <Select
-                id="cross-club2-select"
-                value={club2Id}
-                onChange={(event) => updateClub('club2Id', event.target.value)}
-                disabled={clubsLoading}
-                aria-label="Select second club for athlete comparison"
-                placeholder="Select club..."
-                options={[{ value: '', label: 'Select club...' }, ...club2Options]}
-              />
-              <label htmlFor="cross-athlete2-select">Search second athlete by name</label>
-              <Select
-                key={`cross-athlete2-${club2Id}`}
-                id="cross-athlete2-select"
-                value={athlete2Id}
-                onChange={(event) => updateParam('athlete2Id', event.target.value)}
-                disabled={!club2Id}
-                searchable
-                searchPlaceholder="Search second athlete by name"
-                emptyMessage={athleteSearchMessage(club2Id, club2Search, club2AthletesLoading)}
-                aria-label="Search second athlete by name"
-                placeholder="Search club roster..."
-                options={club2Athletes.map((athlete) => ({ value: athlete.id, label: athlete.name }))}
-                onSearchChange={(value) => updateCrossClubSearch('athlete2Id', value)}
-              />
-            </div>
+            {Array.from({ length: Math.max(2, athleteIds.length, athleteSlotCount) }, (_, index) => <CrossClubAthleteSelector key={index} index={index} clubId={clubIds[index] ?? ''} athleteId={athleteIds[index] ?? ''} clubs={clubs} selectedClubIds={clubIds} onClubChange={(value) => setSearchParams((previous) => { const next = new URLSearchParams(previous); if (value) next.set(`club${index + 1}Id`, value); else next.delete(`club${index + 1}Id`); next.delete(`athlete${index + 1}Id`); return next; })} onAthleteChange={(value) => { const next = [...athleteIds]; next[index] = value; updateSelection('athlete', next); }} onRemove={() => removeCrossClubSelection(index)} />)}
           </div>
-          {crossSearchError && <p className={styles.error} role="alert">{crossSearchError}</p>}
+          {Math.max(athleteIds.length, athleteSlotCount) < MAX_COMPARISON_ITEMS && <Button onClick={() => setAthleteSlotCount((count) => count + 1)}>Add athlete</Button>}
         </Card>
       )}
 
@@ -883,31 +878,13 @@ export function ComparisonPage() {
       {mode === 'club-comparison' && (
         <Card>
           <div className={styles.selectorRow}>
-            <div className={styles.selector}>
-              <label htmlFor="club1-select">First club</label>
-              <Select
-                id="club1-select"
-                value={club1Id}
-                onChange={(event) => updateClub('club1Id', event.target.value)}
-                disabled={clubsLoading}
-                aria-label="Select first club for comparison"
-                placeholder="Select club..."
-                options={[{ value: '', label: 'Select club...' }, ...club1Options]}
-              />
-            </div>
-            <div className={styles.selector}>
-              <label htmlFor="club2-select">Second club</label>
-              <Select
-                id="club2-select"
-                value={club2Id}
-                onChange={(event) => updateClub('club2Id', event.target.value)}
-                disabled={clubsLoading}
-                aria-label="Select second club for comparison"
-                placeholder="Select club..."
-                options={[{ value: '', label: 'Select club...' }, ...club2Options]}
-              />
-            </div>
+            {Array.from({ length: Math.max(2, clubIds.length, clubSlotCount) }, (_, index) => <div className={styles.selector} key={index}>
+              <label htmlFor={`club${index + 1}-select`}>{index === 0 ? 'First club' : index === 1 ? 'Second club' : `Club ${index + 1}`}</label>
+              <Select id={`club${index + 1}-select`} value={clubIds[index] ?? ''} onChange={(event) => { const next = [...clubIds]; next[index] = event.target.value; updateSelection('club', next); }} disabled={clubsLoading} aria-label={`Select ${index === 0 ? 'first' : index === 1 ? 'second' : `${index + 1}th`} club for comparison`} placeholder="Select club..." options={[{ value: '', label: 'Select club...' }, ...clubs.filter((club) => club.id === clubIds[index] || !clubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} />
+              {clubIds[index] && <Button onClick={() => { updateSelection('club', clubIds.filter((_, position) => position !== index)); setClubSlotCount((count) => Math.max(2, count - 1)); }}>Remove club {index + 1}</Button>}
+            </div>)}
           </div>
+          {Math.max(clubIds.length, clubSlotCount) < MAX_COMPARISON_ITEMS && <Button onClick={() => setClubSlotCount((count) => count + 1)}>Add club</Button>}
         </Card>
       )}
 
@@ -942,10 +919,10 @@ export function ComparisonPage() {
         <>
           <Card>
             <div className={styles.metricsGrid} role="list" aria-label="Comparison metrics summary">
-              <div role="listitem"><MetricCard label={`${comparison.athletes[0].athlete.name} PB`} value={comparison.athletes[0].pb} /></div>
-              <div role="listitem"><MetricCard label={`${comparison.athletes[1].athlete.name} PB`} value={comparison.athletes[1].pb} /></div>
-              <div role="listitem"><MetricCard label={`${comparison.athletes[0].athlete.name} latest`} value={comparison.athletes[0].latestEffectiveResult} /></div>
-              <div role="listitem"><MetricCard label={`${comparison.athletes[1].athlete.name} latest`} value={comparison.athletes[1].latestEffectiveResult} /></div>
+              {comparison.athletes.flatMap((athlete) => [
+                <div key={`${athlete.athlete.id}-pb`} role="listitem"><MetricCard label={`${athlete.athlete.name} PB`} value={athlete.pb} /></div>,
+                <div key={`${athlete.athlete.id}-latest`} role="listitem"><MetricCard label={`${athlete.athlete.name} latest`} value={athlete.latestEffectiveResult} /></div>,
+              ])}
             </div>
           </Card>
 

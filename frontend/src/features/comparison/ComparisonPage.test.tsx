@@ -5,16 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComparisonPage } from './ComparisonPage';
 
 const mockGetTwoAthleteComparison = vi.fn();
+const mockGetMultiAthleteComparison = vi.fn();
 const mockListAthletes = vi.fn();
 const mockListClubs = vi.fn();
 const mockListClubComparisonAthletes = vi.fn();
 const mockGetClubStatistics = vi.fn();
 const mockGetClubComparison = vi.fn();
+const mockGetClubMultiComparison = vi.fn();
 const mockGetClubPublication = vi.fn();
 const mockUpdateClubPublication = vi.fn();
 
 vi.mock('../../api/comparison', () => ({
   getTwoAthleteComparison: (...args: unknown[]) => mockGetTwoAthleteComparison(...args),
+  getMultiAthleteComparison: (...args: unknown[]) => mockGetMultiAthleteComparison(...args),
 }));
 
 vi.mock('../../api/athletes', () => ({
@@ -26,14 +29,17 @@ vi.mock('../../api/clubs', () => ({
   listClubComparisonAthletes: (...args: unknown[]) => mockListClubComparisonAthletes(...args),
   getClubStatistics: (...args: unknown[]) => mockGetClubStatistics(...args),
   getClubComparison: (...args: unknown[]) => mockGetClubComparison(...args),
+  getClubMultiComparison: (...args: unknown[]) => mockGetClubMultiComparison(...args),
   getClubPublication: (...args: unknown[]) => mockGetClubPublication(...args),
   updateClubPublication: (...args: unknown[]) => mockUpdateClubPublication(...args),
 }));
 
 const ATHLETE_1 = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Alice Sprint', coachId: 'u1', dob: null, gender: null, notes: null, archivedAt: null, status: 'active' as const, statusChangedAt: '2026-01-01T00:00:00.000Z', statusChangedBy: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
 const ATHLETE_2 = { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Bob Dash', coachId: 'u1', dob: null, gender: null, notes: null, archivedAt: null, status: 'active' as const, statusChangedAt: '2026-01-01T00:00:00.000Z', statusChangedBy: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+const ATHLETE_3 = { ...ATHLETE_2, id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', name: 'Cara Bolt' };
 const CLUB_1 = { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', workspaceId: 'w1', name: 'Alpha Athletics', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
 const CLUB_2 = { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', workspaceId: 'w2', name: 'Bravo Track', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+const CLUB_3 = { ...CLUB_2, id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', workspaceId: 'w3', name: 'Cascade Running' };
 
 const comparisonResult = {
   athletes: [
@@ -85,8 +91,8 @@ const clubStatistics = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockListAthletes.mockResolvedValue({ data: [ATHLETE_1, ATHLETE_2] });
-  mockListClubs.mockResolvedValue({ data: [CLUB_1, CLUB_2], meta: { count: 2 } });
+  mockListAthletes.mockResolvedValue({ data: [ATHLETE_1, ATHLETE_2, ATHLETE_3] });
+  mockListClubs.mockResolvedValue({ data: [CLUB_1, CLUB_2, CLUB_3], meta: { count: 3 } });
   mockListClubComparisonAthletes.mockImplementation((clubId: string) => Promise.resolve({
     data: clubId === CLUB_1.id
       ? [{ id: ATHLETE_1.id, name: 'Alice Sprint', status: 'active' }]
@@ -168,6 +174,28 @@ describe('ComparisonPage', () => {
     expect(screen.getByText('Consistency (SD)')).toBeInTheDocument();
   });
 
+  it('uses the multi-athlete API and renders every selected athlete', async () => {
+    const third = { ...comparisonResult.athletes[1], athlete: { ...comparisonResult.athletes[1].athlete, id: ATHLETE_3.id, name: ATHLETE_3.name } };
+    mockGetMultiAthleteComparison.mockResolvedValue({ athletes: [...comparisonResult.athletes, third] });
+    renderPage({ athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id, athlete3Id: ATHLETE_3.id });
+
+    expect(await screen.findByText('Cara Bolt PB')).toBeInTheDocument();
+    expect(mockGetMultiAthleteComparison).toHaveBeenCalledWith([ATHLETE_1.id, ATHLETE_2.id, ATHLETE_3.id], undefined);
+    expect(new Set(Array.from(document.querySelectorAll('[data-series-color]'), (line) => line.getAttribute('data-series-color'))).size).toBe(3);
+    await userEvent.click(screen.getByRole('button', { name: 'Table' }));
+    expect(screen.getByRole('columnheader', { name: ATHLETE_3.name })).toBeInTheDocument();
+  });
+
+  it('removes either athlete from a same-club comparison', async () => {
+    mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
+    renderPage({ athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove athlete 1' }));
+
+    expect(await screen.findByText('Select exactly two different athletes from your club.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove athlete 1' })).toBeInTheDocument();
+  });
+
   it('shows loading and error states for athlete comparisons', async () => {
     mockGetTwoAthleteComparison.mockReturnValue(new Promise(() => {}));
     renderPage({ athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
@@ -237,6 +265,26 @@ describe('ComparisonPage', () => {
     expect(await screen.findByText('Select two different clubs, then search for one athlete from each club.')).toBeInTheDocument();
   });
 
+  it('removes a cross-club athlete and its club selection', async () => {
+    mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
+    renderPage({ mode: 'athlete-cross-club', club1Id: CLUB_1.id, club2Id: CLUB_2.id, athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove athlete 1' }));
+
+    expect(await screen.findByText('Select two different clubs, then search for one athlete from each club.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select first club for athlete comparison' })).toHaveTextContent(CLUB_2.name);
+  });
+
+  it('removes either club from a club comparison', async () => {
+    mockGetClubComparison.mockResolvedValue({ clubs: [] });
+    renderPage({ mode: 'club-comparison', club1Id: CLUB_1.id, club2Id: CLUB_2.id });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove club 1' }));
+
+    expect(await screen.findByText('Select exactly two different clubs to compare their all-time 100m performance.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove club 1' })).toBeInTheDocument();
+  });
+
   it('shows a retry action when club discovery fails', async () => {
     mockListClubs.mockRejectedValueOnce(new Error('Club service unavailable'));
     renderPage({ mode: 'club-statistics' });
@@ -264,5 +312,13 @@ describe('ComparisonPage', () => {
     const table = await screen.findByRole('table', { name: 'Club comparison metrics' });
     expect(within(table).getByRole('columnheader', { name: 'Bravo Track' })).toBeInTheDocument();
     expect(mockGetClubComparison).toHaveBeenCalledWith(CLUB_1.id, CLUB_2.id);
+  });
+
+  it('uses the multi-club API and renders every selected club', async () => {
+    mockGetClubMultiComparison.mockResolvedValue({ clubs: [clubStatistics, { ...clubStatistics, club: { id: CLUB_2.id, name: CLUB_2.name } }, { ...clubStatistics, club: { id: CLUB_3.id, name: CLUB_3.name } }] });
+    renderPage({ mode: 'club-comparison', club1Id: CLUB_1.id, club2Id: CLUB_2.id, club3Id: CLUB_3.id });
+
+    expect(await screen.findByRole('columnheader', { name: CLUB_3.name })).toBeInTheDocument();
+    expect(mockGetClubMultiComparison).toHaveBeenCalledWith([CLUB_1.id, CLUB_2.id, CLUB_3.id]);
   });
 });

@@ -11,8 +11,8 @@ type StatsMode = 'club' | 'club-comparison' | 'athlete-comparison';
 
 const modeOptions: Array<{ value: StatsMode; label: string }> = [
   { value: 'club', label: 'Club performance' },
-  { value: 'club-comparison', label: 'Club vs club' },
-  { value: 'athlete-comparison', label: 'Athlete vs athlete' },
+  { value: 'club-comparison', label: 'Compare clubs' },
+  { value: 'athlete-comparison', label: 'Compare athletes' },
 ];
 
 function formatMetric(value: number | null) {
@@ -163,9 +163,8 @@ export function PublicStatsPage() {
   const [clubsLoading, setClubsLoading] = useState(true);
   const [clubsError, setClubsError] = useState<string | null>(null);
   const [club1Id, setClub1Id] = useState('');
-  const [club2Id, setClub2Id] = useState('');
-  const [athlete1Id, setAthlete1Id] = useState('');
-  const [athlete2Id, setAthlete2Id] = useState('');
+  const [comparisonClubIds, setComparisonClubIds] = useState<string[]>([]);
+  const [comparisonAthleteIds, setComparisonAthleteIds] = useState<string[]>([]);
   const [details, setDetails] = useState<Record<string, PublicClubStatistics>>({});
   const [loadingIds, setLoadingIds] = useState<string[]>([]);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
@@ -181,7 +180,7 @@ export function PublicStatsPage() {
 
   useEffect(() => {
     const selectedIds = Array.from(new Set(
-      (mode === 'club' ? [club1Id] : [club1Id, club2Id]).filter(Boolean),
+      (mode === 'club' ? [club1Id] : comparisonClubIds).filter(Boolean),
     ));
     const needed = selectedIds.filter((id) => !details[id]);
     if (needed.length === 0) {
@@ -205,30 +204,30 @@ export function PublicStatsPage() {
         }
       })
     return () => { current = false; controller.abort(); };
-  }, [club1Id, club2Id, details, mode]);
+  }, [club1Id, comparisonClubIds, details, mode]);
 
   const club1 = details[club1Id];
-  const club2 = details[club2Id];
-  const athlete1 = club1?.athletes.find((athlete) => athlete.athlete.id === athlete1Id);
-  const athlete2 = club2?.athletes.find((athlete) => athlete.athlete.id === athlete2Id);
+  const comparedClubs = comparisonClubIds.map((id) => details[id]).filter((club): club is PublicClubStatistics => Boolean(club));
+  const comparedAthletes = comparedClubs.flatMap((club) => club.athletes).filter((athlete) => comparisonAthleteIds.includes(athlete.athlete.id));
   const loadingStatistics = loadingIds.length > 0;
   const clubComparison = mode === 'club-comparison';
   const athleteComparison = mode === 'athlete-comparison';
   const modeChange = (value: StatsMode) => {
     setMode(value);
     setClub1Id('');
-    setClub2Id('');
-    setAthlete1Id('');
-    setAthlete2Id('');
+    setComparisonClubIds([]);
+    setComparisonAthleteIds([]);
     setStatisticsError(null);
   };
   const selectClub1 = (value: string) => {
     setClub1Id(value);
-    setAthlete1Id('');
   };
-  const selectClub2 = (value: string) => {
-    setClub2Id(value);
-    setAthlete2Id('');
+  const addComparisonClub = (clubId: string) => {
+    if (clubId) setComparisonClubIds((current) => current.includes(clubId) || current.length === 5 ? current : [...current, clubId]);
+    setComparisonAthleteIds([]);
+  };
+  const addComparisonAthlete = (athleteId: string) => {
+    if (athleteId) setComparisonAthleteIds((current) => current.includes(athleteId) || current.length === 5 ? current : [...current, athleteId]);
   };
 
   return (
@@ -241,10 +240,11 @@ export function PublicStatsPage() {
         <section className={styles.explorer} aria-labelledby="explorer-heading"><div className={styles.explorerHeading}><div><p className={styles.kicker}>Explore</p><h2 id="explorer-heading">Find a performance story</h2></div><p>All statistics are all-time 100m results. Only clubs that publish their results appear here.</p></div>
           <div className={styles.selectors}>
             <div className={styles.selector}><label htmlFor="public-stat-mode">View</label><Select id="public-stat-mode" value={mode} onChange={(event) => modeChange(event.target.value as StatsMode)} options={modeOptions} aria-label="Public statistics view" /></div>
-            <div className={styles.selector}><label htmlFor="public-club-one">{clubComparison || athleteComparison ? 'First club' : 'Club'}</label><Select id="public-club-one" value={club1Id} onChange={(event) => selectClub1(event.target.value)} options={clubOptions(clubs, clubComparison ? club2Id : '')} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading} aria-label="Select first club" /></div>
-            {(clubComparison || athleteComparison) && <div className={styles.selector}><label htmlFor="public-club-two">Second club</label><Select id="public-club-two" value={club2Id} onChange={(event) => selectClub2(event.target.value)} options={clubOptions(clubs, clubComparison ? club1Id : '')} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading} aria-label="Select second club" /></div>}
+            {mode === 'club' ? <div className={styles.selector}><label htmlFor="public-club-one">Club</label><Select id="public-club-one" value={club1Id} onChange={(event) => selectClub1(event.target.value)} options={clubOptions(clubs)} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading} aria-label="Select first club" /></div> : <div className={styles.selector}><label htmlFor="public-club-add">Add clubs (up to 5)</label><Select id="public-club-add" value="" onChange={(event) => addComparisonClub(event.target.value)} options={[{ value: '', label: 'Add a published club...' }, ...clubs.filter((club) => !comparisonClubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading || comparisonClubIds.length === 5} aria-label="Add club to comparison" /></div>}
           </div>
-          {athleteComparison && <div className={styles.selectors}><div className={styles.selector}><label htmlFor="public-athlete-one">First athlete</label><Select id="public-athlete-one" value={athlete1Id} onChange={(event) => setAthlete1Id(event.target.value)} options={[{ value: '', label: club1 ? 'Select an athlete...' : 'Select a club first...' }, ...(club1?.athletes ?? []).map((athlete) => ({ value: athlete.athlete.id, label: athlete.athlete.name }))]} searchable searchPlaceholder="Search club athletes" emptyMessage="No athletes match" disabled={!club1} aria-label="Select first athlete" /></div><div className={styles.selector}><label htmlFor="public-athlete-two">Second athlete</label><Select id="public-athlete-two" value={athlete2Id} onChange={(event) => setAthlete2Id(event.target.value)} options={[{ value: '', label: club2 ? 'Select an athlete...' : 'Select a club first...' }, ...(club2?.athletes ?? []).filter((athlete) => athlete.athlete.id !== athlete1Id).map((athlete) => ({ value: athlete.athlete.id, label: athlete.athlete.name }))]} searchable searchPlaceholder="Search club athletes" emptyMessage="No athletes match" disabled={!club2} aria-label="Select second athlete" /></div></div>}
+          {mode !== 'club' && comparisonClubIds.length > 0 && <ul className={styles.comparisonSelection} aria-label="Selected clubs">{comparisonClubIds.map((id) => <li key={id}>{details[id]?.club.name ?? clubs.find((club) => club.id === id)?.name}<button type="button" aria-label={`Remove ${details[id]?.club.name ?? 'club'}`} onClick={() => { setComparisonClubIds((current) => current.filter((selected) => selected !== id)); setComparisonAthleteIds([]); }}>×</button></li>)}</ul>}
+          {athleteComparison && <div className={styles.selectors}><div className={styles.selector}><label htmlFor="public-athlete-add">Add athletes (up to 5)</label><Select id="public-athlete-add" value="" onChange={(event) => addComparisonAthlete(event.target.value)} options={[{ value: '', label: comparisonClubIds.length ? 'Add an athlete...' : 'Add clubs first...' }, ...comparedClubs.flatMap((club) => club.athletes).filter((athlete) => !comparisonAthleteIds.includes(athlete.athlete.id)).map((athlete) => ({ value: athlete.athlete.id, label: athlete.athlete.name }))]} searchable searchPlaceholder="Search selected club athletes" emptyMessage="No athletes match" disabled={comparisonClubIds.length === 0 || comparisonAthleteIds.length === 5} aria-label="Add athlete to comparison" /></div></div>}
+          {athleteComparison && comparisonAthleteIds.length > 0 && <ul className={styles.comparisonSelection} aria-label="Selected athletes">{comparedAthletes.map((athlete) => <li key={athlete.athlete.id}>{athlete.athlete.name}<button type="button" aria-label={`Remove ${athlete.athlete.name}`} onClick={() => setComparisonAthleteIds((current) => current.filter((selected) => selected !== athlete.athlete.id))}>×</button></li>)}</ul>}
           {clubsError && <p className={styles.error} role="alert">{clubsError}</p>}
           {statisticsError && <p className={styles.error} role="alert">{statisticsError}</p>}
         </section>
@@ -254,10 +254,10 @@ export function PublicStatsPage() {
         {!clubsLoading && !clubsError && clubs.length === 0 && <p className={styles.emptyState}>No clubs have published results yet. Check back after the next time trial.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && !club1 && clubs.length > 0 && <p className={styles.emptyState}>Select a club to open its public performance gallery.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && club1 && <><section className={styles.singleClub}><ClubStatCard statistics={club1} /></section><AthleteGallery athletes={club1.athletes} /></>}
-        {!loadingStatistics && !statisticsError && clubComparison && (!club1 || !club2) && <p className={styles.emptyState}>Select two different clubs to compare their all-time performance.</p>}
-        {!loadingStatistics && !statisticsError && clubComparison && club1 && club2 && <section className={styles.comparisonCards} aria-label="Club comparison"><ClubStatCard statistics={club1} /><ClubStatCard statistics={club2} /></section>}
-        {!loadingStatistics && !statisticsError && athleteComparison && (!athlete1 || !athlete2) && <p className={styles.emptyState}>Select one athlete from each club to place their results side by side.</p>}
-        {!loadingStatistics && !statisticsError && athleteComparison && athlete1 && athlete2 && <section className={styles.comparisonCards} aria-label="Athlete comparison"><AthleteStatCard athlete={athlete1} /><AthleteStatCard athlete={athlete2} /></section>}
+        {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length < 2 && <p className={styles.emptyState}>Select at least two clubs to compare their all-time performance.</p>}
+        {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length >= 2 && <section className={styles.comparisonCards} aria-label="Club comparison">{comparedClubs.map((club) => <ClubStatCard key={club.club.id} statistics={club} />)}</section>}
+        {!loadingStatistics && !statisticsError && athleteComparison && comparedAthletes.length < 2 && <p className={styles.emptyState}>Select at least two athletes to place their results side by side.</p>}
+        {!loadingStatistics && !statisticsError && athleteComparison && comparedAthletes.length >= 2 && <section className={styles.comparisonCards} aria-label="Athlete comparison">{comparedAthletes.map((athlete) => <AthleteStatCard key={athlete.athlete.id} athlete={athlete} />)}</section>}
       </main>
       <footer className={styles.footer}><span>ATHLORA / PUBLIC PERFORMANCE INDEX</span><p>Published by participating clubs.</p></footer>
     </div>

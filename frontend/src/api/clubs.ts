@@ -4,6 +4,7 @@ import type {
   ClubCalendarEvent,
   ClubAthleteLookup,
   ClubComparisonDetail,
+  ClubMultiComparisonDetail,
   ClubJoinRequest,
   ClubPublication,
   ClubStatistics,
@@ -40,6 +41,13 @@ export async function getClubComparison(
 ): Promise<ClubComparisonDetail> {
   const params = new URLSearchParams({ club1Id, club2Id });
   const response = await request<{ data: ClubComparisonDetail }>(`/api/v1/clubs/comparison?${params.toString()}`);
+  return response.data;
+}
+
+export async function getClubMultiComparison(clubIds: string[]): Promise<ClubMultiComparisonDetail> {
+  const params = new URLSearchParams();
+  clubIds.forEach((clubId) => params.append('clubId', clubId));
+  const response = await request<{ data: ClubMultiComparisonDetail }>(`/api/v1/clubs/comparison/multi?${params.toString()}`);
   return response.data;
 }
 

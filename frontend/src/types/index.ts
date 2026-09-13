@@ -109,6 +109,10 @@ export interface ClubComparisonDetail {
   clubs: [ClubStatistics, ClubStatistics];
 }
 
+export interface ClubMultiComparisonDetail {
+  clubs: ClubStatistics[];
+}
+
 export interface PublicClub {
   id: string;
   name: string;
@@ -627,4 +631,8 @@ export interface ComparisonAthleteAggregate {
 
 export interface ComparisonDetail {
   athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate];
+}
+
+export interface MultiComparisonDetail {
+  athletes: ComparisonAthleteAggregate[];
 }

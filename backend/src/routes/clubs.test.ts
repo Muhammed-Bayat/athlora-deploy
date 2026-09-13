@@ -12,6 +12,7 @@ vi.mock('../services/clubs.js', () => ({
   createClub: vi.fn(),
   createJoinRequest: vi.fn(),
   getClubComparison: vi.fn(),
+  getClubMultiComparison: vi.fn(),
   listClubCalendarEvents: vi.fn(),
   getClubPublication: vi.fn(),
   getClubStatistics: vi.fn(),
@@ -114,6 +115,7 @@ describe('club routes', () => {
         populationStandardDeviation: null,
       },
     ] });
+    vi.mocked(clubService.getClubMultiComparison).mockResolvedValue({ clubs: [] });
 
     const athletes = await request(app)
       .get(`/api/v1/clubs/${CLUB_ID}/athletes?q=ari`)
@@ -124,15 +126,20 @@ describe('club routes', () => {
     const comparison = await request(app)
       .get(`/api/v1/clubs/comparison?club1Id=${CLUB_ID}&club2Id=${REQUEST_ID}`)
       .set('Authorization', 'Bearer valid');
+    const multiComparison = await request(app)
+      .get(`/api/v1/clubs/comparison/multi?clubId=${CLUB_ID}&clubId=${REQUEST_ID}`)
+      .set('Authorization', 'Bearer valid');
 
     expect(athletes.status).toBe(200);
     expect(athletes.body).toEqual({ data: [{ id: USER_ID, name: 'Ari Runner', status: 'active' }], meta: { count: 1 } });
     expect(statistics.status).toBe(200);
     expect(statistics.body.data.club).toEqual({ id: CLUB_ID, name: 'Track Club' });
     expect(comparison.status).toBe(200);
+    expect(multiComparison.status).toBe(200);
     expect(clubService.listClubComparisonAthletes).toHaveBeenCalledWith(CLUB_ID, 'ari');
     expect(clubService.getClubStatistics).toHaveBeenCalledWith(CLUB_ID);
     expect(clubService.getClubComparison).toHaveBeenCalledWith(CLUB_ID, REQUEST_ID);
+    expect(clubService.getClubMultiComparison).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID]);
   });
 
   it('returns upcoming events for selected clubs', async () => {

@@ -25,6 +25,7 @@ router.post('/join-requests/:id/withdraw', verifyAuth0Token, resolveLocalApplica
 router.post('/:clubId/join-requests', verifyAuth0Token, resolveLocalApplicationUser, clubs.requestJoin);
 
 router.get('/comparison', verifyAuth0Token, resolveApplicationUser, clubs.comparison);
+router.get('/comparison/multi', verifyAuth0Token, resolveApplicationUser, clubs.multiComparison);
 router.get('/calendar', verifyAuth0Token, resolveApplicationUser, clubs.calendar);
 router.get('/publication', verifyAuth0Token, resolveApplicationUser, clubs.publication);
 router.put(

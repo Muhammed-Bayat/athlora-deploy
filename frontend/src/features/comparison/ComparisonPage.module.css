@@ -99,7 +99,7 @@
 
 .selectorRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: var(--space-4);
 }
 
@@ -155,6 +155,12 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+}
+
+.comparisonTable {
+  min-width: 620px;
+  display: block;
+  overflow-x: auto;
 }
 
 .comparisonTable th,
@@ -255,6 +261,7 @@
   gap: var(--space-2);
 }
 
+.seriesLine,
 .seriesLineA,
 .seriesLineB {
   fill: none;
@@ -271,6 +278,7 @@
   stroke: var(--console-comparison-series-b);
 }
 
+.seriesPoint,
 .seriesPointA,
 .seriesPointB {
   stroke: var(--console-surface-strong);
