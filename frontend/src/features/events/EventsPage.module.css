@@ -144,6 +144,88 @@
   box-shadow: var(--console-shadow);
 }
 
+.calendarScope {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-lg);
+  background: var(--console-surface);
+}
+
+.calendarScope > p,
+.clubPicker > p {
+  margin: 0;
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.scopeToggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: var(--space-1);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--console-control-surface);
+}
+
+.scopeToggle button {
+  min-height: 34px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 3px);
+  padding-inline: var(--space-3);
+  background: transparent;
+  color: var(--console-muted);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.scopeToggle button[aria-pressed='true'] {
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+}
+
+.clubPicker {
+  display: grid;
+  flex: 1;
+  gap: var(--space-2);
+}
+
+.clubPicker > div { display: grid; gap: var(--space-1); }
+.clubPicker label { color: var(--console-teal); font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); }
+
+.clubResults,
+.selectedClubs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.clubResults li,
+.selectedClubs li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-sm);
+  background: var(--console-soft);
+  color: var(--console-ink);
+  font-size: var(--font-size-sm);
+}
+
+.selectedClubs li { border-color: color-mix(in srgb, var(--console-cyan) 40%, var(--console-line)); }
+.selectedClubs button { border: 0; background: transparent; color: var(--console-teal); cursor: pointer; font-size: 1rem; }
+.selectedClubs li > i { width: 8px; height: 8px; border-radius: 50%; background: #ae79e9; }
+.selectedClubs li[data-club-index='1'] > i { background: #ef9a4f; }
+.selectedClubs li[data-club-index='2'] > i { background: #77c990; }
+.selectedClubs li[data-club-index='3'] > i { background: #ee6e98; }
+
 .calendar > header {
   display: flex;
   align-items: center;
@@ -181,7 +263,7 @@
 }
 
 .calendarGrid > button {
-  min-height: 68px;
+  min-height: 116px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -220,21 +302,62 @@
   color: var(--console-selected-text);
 }
 
-.calendarGrid button > i {
-  display: flex;
-  gap: var(--space-1);
+.calendarEvents {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  overflow: hidden;
 }
 
-.calendarGrid button > i > i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--console-cyan);
+.calendarEvent,
+.calendarMore {
+  overflow: hidden;
+  padding: 3px 4px;
+  border-left: 2px solid var(--console-cyan);
+  background: color-mix(in srgb, var(--console-cyan) 12%, transparent);
+  color: inherit;
+  font-size: 0.67rem;
+  line-height: 1.15;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.calendarGrid button > i > i[data-type='training'] {
-  background: var(--console-teal);
+.calendarEvent[data-type='training'] {
+  border-left-color: var(--console-teal);
+  background: color-mix(in srgb, var(--console-teal) 14%, transparent);
 }
+
+.calendarEvent[data-club-index='0'] { border-left-color: #ae79e9; background: color-mix(in srgb, #ae79e9 18%, transparent); }
+.calendarEvent[data-club-index='1'] { border-left-color: #ef9a4f; background: color-mix(in srgb, #ef9a4f 18%, transparent); }
+.calendarEvent[data-club-index='2'] { border-left-color: #77c990; background: color-mix(in srgb, #77c990 18%, transparent); }
+.calendarEvent[data-club-index='3'] { border-left-color: #ee6e98; background: color-mix(in srgb, #ee6e98 18%, transparent); }
+.calendarEvent[data-shared='true'] { border-left-width: 4px; background-image: repeating-linear-gradient(135deg, rgba(138, 233, 242, 0.14) 0 5px, transparent 5px 10px); font-weight: var(--font-weight-bold); }
+
+.calendarEvent b {
+  margin-right: 4px;
+  color: var(--console-teal);
+  font-family: var(--font-family-mono);
+  font-size: 0.6rem;
+}
+
+.calendarMore {
+  border-left-color: transparent;
+  background: transparent;
+  color: var(--console-muted);
+  font-weight: var(--font-weight-bold);
+}
+
+.clubBadge {
+  border: 1px solid rgba(174, 121, 233, 0.45) !important;
+  background: rgba(174, 121, 233, 0.14) !important;
+  color: #d8bcff !important;
+}
+
+.clubBadge[data-club-index='1'] { border-color: rgba(239, 154, 79, 0.45) !important; background: rgba(239, 154, 79, 0.14) !important; color: #ffc68f !important; }
+.clubBadge[data-club-index='2'] { border-color: rgba(119, 201, 144, 0.45) !important; background: rgba(119, 201, 144, 0.14) !important; color: #a8e5b9 !important; }
+.clubBadge[data-club-index='3'] { border-color: rgba(238, 110, 152, 0.45) !important; background: rgba(238, 110, 152, 0.14) !important; color: #ffb7cd !important; }
+.clubBadge[data-shared='true'] { border-style: dashed !important; }
 
 .dayHeading {
   margin-bottom: var(--space-3);
@@ -953,6 +1076,12 @@
   .calendarGrid {
     min-width: 560px;
   }
+
+  .calendarGrid > button {
+    min-height: 100px;
+  }
+
+  .calendarScope { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 620px) {

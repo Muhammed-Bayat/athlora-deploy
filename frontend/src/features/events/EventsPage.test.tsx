@@ -26,6 +26,7 @@ const athleteApi = vi.hoisted(() => ({
   listAthletes: vi.fn(),
 }));
 const venueApi = vi.hoisted(() => ({ searchVenues: vi.fn() }));
+const clubsApi = vi.hoisted(() => ({ listClubs: vi.fn(), listClubCalendarEvents: vi.fn() }));
 const resultApi = vi.hoisted(() => ({
   listResults: vi.fn(),
   overrideResult: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/results', () => resultApi);
 vi.mock('../../api/timeline', () => timelineApi);
 vi.mock('../../api/venues', () => venueApi);
+vi.mock('../../api/clubs', () => clubsApi);
 vi.mock('../../api/fixtures', () => fixturesApi);
 
 const TODAY = '2026-08-16';
@@ -196,12 +198,14 @@ beforeEach(() => {
   fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listGuestFixtures.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'not a guest fixture'));
+  clubsApi.listClubs.mockResolvedValue({ data: [{ id: '88888888-8888-4888-8888-888888888888', workspaceId: '99999999-9999-4999-8999-999999999999', name: 'Rival Track Club', createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' }], meta: { count: 1 } });
+  clubsApi.listClubCalendarEvents.mockResolvedValue({ data: [{ club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: event({ id: '99999999-9999-4999-8999-999999999999', title: 'Rival Relay', date: '2026-08-22' }) }, { club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: city }], meta: { count: 2 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
   return render(
     <CurrentUserProvider user={currentUser}>
-      <MemoryRouter><EventsPage today={TODAY} {...props} /></MemoryRouter>
+      <MemoryRouter><EventsPage today={TODAY} defaultView="list" {...props} /></MemoryRouter>
     </CurrentUserProvider>,
   );
 }
@@ -233,6 +237,41 @@ async function selectDate(user: ReturnType<typeof userEvent.setup>, scope: HTMLE
 }
 
 describe('EventsPage', () => {
+  it('opens with the upcoming-events calendar and displays event details in date cells', async () => {
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Calendar view' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Acceleration Session')).toBeInTheDocument();
+    expect(screen.getByText('TBC')).toBeInTheDocument();
+  });
+
+  it('combines selected club schedules in the calendar', async () => {
+    const user = userEvent.setup();
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    await screen.findByRole('button', { name: 'Club calendars' });
+    await user.click(screen.getByRole('button', { name: 'Club calendars' }));
+    await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888']));
+    const rivalDate = new Date('2026-08-22T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    await user.click(screen.getByRole('button', { name: `${rivalDate}, 1 event` }));
+    expect(screen.getByRole('button', { name: /Rival Relay/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    const sharedDate = new Date('2026-09-01T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    await user.click(screen.getByRole('button', { name: `${sharedDate}, 1 event` }));
+    expect(screen.getByText('Together · Rival Track Club')).toBeInTheDocument();
+  });
+
   it('hands an event id to routed detail navigation', async () => {
     const onOpenEvent = vi.fn();
     const user = userEvent.setup();

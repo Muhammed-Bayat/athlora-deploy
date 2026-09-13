@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const services = vi.hoisted(() => ({ createClub: vi.fn(), createJoinRequest: vi.fn(), getClubComparison: vi.fn(), getClubStatistics: vi.fn(), listClubComparisonAthletes: vi.fn(), listClubJoinRequests: vi.fn(), listClubs: vi.fn(), listMyJoinRequests: vi.fn(), reviewJoinRequest: vi.fn(), withdrawJoinRequest: vi.fn() }));
+const services = vi.hoisted(() => ({ createClub: vi.fn(), createJoinRequest: vi.fn(), getClubComparison: vi.fn(), getClubStatistics: vi.fn(), listClubCalendarEvents: vi.fn(), listClubComparisonAthletes: vi.fn(), listClubJoinRequests: vi.fn(), listClubs: vi.fn(), listMyJoinRequests: vi.fn(), reviewJoinRequest: vi.fn(), withdrawJoinRequest: vi.fn() }));
 const auth = vi.hoisted(() => ({ getApplicationUserContext: vi.fn(() => ({ userId: 'coach-1' })), getLocalApplicationUserContext: vi.fn(() => ({ userId: 'user-1' })) }));
 vi.mock('../services/clubs.js', () => services);
 vi.mock('../middleware/auth.js', () => auth);
@@ -27,5 +27,13 @@ describe('club controllers', () => {
     expect(statistics.json).toHaveBeenCalledWith({ data: { club: { id: 'club-1', name: 'Fast Club' } } });
     expect(services.getClubComparison).toHaveBeenCalledWith('club-1', 'club-2');
     expect(comparison.json).toHaveBeenCalledWith({ data: { clubs: [] } });
+  });
+
+  it('returns selected club calendar events', async () => {
+    services.listClubCalendarEvents.mockResolvedValue([{ club: { id: 'club-1', name: 'Fast Club' }, event: { id: 'event-1' } }]);
+    const calendar = await invoke(clubs.calendar, undefined, undefined, { clubId: ['club-1', 'club-2'] });
+
+    expect(services.listClubCalendarEvents).toHaveBeenCalledWith(['club-1', 'club-2']);
+    expect(calendar.json).toHaveBeenCalledWith({ data: [{ club: { id: 'club-1', name: 'Fast Club' }, event: { id: 'event-1' } }], meta: { count: 1 } });
   });
 });

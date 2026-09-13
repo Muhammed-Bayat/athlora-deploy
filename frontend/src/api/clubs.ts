@@ -1,6 +1,7 @@
 import { request } from './client';
 import type {
   Club,
+  ClubCalendarEvent,
   ClubAthleteLookup,
   ClubComparisonDetail,
   ClubJoinRequest,
@@ -11,6 +12,12 @@ import type {
 export async function listClubs(search = ''): Promise<{ data: Club[]; meta: { count: number } }> {
   const query = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : '';
   return request(`/api/v1/clubs${query}`);
+}
+
+export async function listClubCalendarEvents(clubIds: string[]): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
+  const query = new URLSearchParams();
+  clubIds.forEach((clubId) => query.append('clubId', clubId));
+  return request(`/api/v1/clubs/calendar?${query.toString()}`);
 }
 
 export async function listClubComparisonAthletes(

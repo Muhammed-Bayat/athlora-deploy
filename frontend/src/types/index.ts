@@ -44,6 +44,11 @@ export interface Club {
   updatedAt: string;
 }
 
+export interface ClubCalendarEvent {
+  club: Pick<Club, 'id' | 'name'>;
+  event: AthleticsEvent;
+}
+
 export interface ClubPublication {
   publicResultsEnabled: boolean;
 }
