@@ -3,8 +3,10 @@ import { withTransaction } from '../db/transaction.js';
 import {
   mapClubJoinRequestRow,
   mapClubRow,
+  mapEventRow,
   type ClubJoinRequestRow,
   type ClubRow,
+  type EventRow,
 } from '../db/row-mappers.js';
 import { ApiError } from '../middleware/errors.js';
 import {
@@ -16,6 +18,7 @@ import {
   type ClubJoinRequest,
   type ClubPublication,
   type ClubStatistics,
+  type AthleticsEvent,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 
@@ -29,6 +32,16 @@ interface ClubAthleteLookupRow {
   id: string;
   name: string;
   lifecycle_status: AthleteLifecycleStatus;
+}
+
+interface ClubCalendarEventRow extends EventRow {
+  club_id: string;
+  club_name: string;
+}
+
+export interface ClubCalendarEvent {
+  club: Pick<Club, 'id' | 'name'>;
+  event: AthleticsEvent;
 }
 
 interface ClubStatisticsRow {
@@ -81,6 +94,29 @@ export async function listClubs(search: string | null): Promise<Club[]> {
     [search],
   );
   return result.rows.map(mapClubRow);
+}
+
+export async function listClubCalendarEvents(
+  clubIds: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<ClubCalendarEvent[]> {
+  if (!Array.isArray(clubIds) || clubIds.length === 0 || !clubIds.every(isCanonicalUuid)) {
+    throw new ApiError(422, 'CLUB_CALENDAR_SELECTION_INVALID', 'Select at least one valid club');
+  }
+
+  const result = await executor.query<ClubCalendarEventRow>(
+    `SELECT e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at,
+            c.id AS club_id, c.name AS club_name
+     FROM events e
+     JOIN clubs c ON c.workspace_id = e.workspace_id
+     WHERE c.id = ANY($1::uuid[]) AND e.date >= CURRENT_DATE
+     ORDER BY e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC`,
+    [clubIds],
+  );
+  return result.rows.map((row) => ({
+    club: { id: row.club_id, name: row.club_name },
+    event: mapEventRow(row),
+  }));
 }
 
 export async function getClubPublication(

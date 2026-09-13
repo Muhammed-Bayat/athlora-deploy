@@ -7,6 +7,7 @@ import {
   getClubComparison,
   getClubPublication,
   getClubStatistics,
+  listClubCalendarEvents,
   listClubComparisonAthletes,
   listClubJoinRequests,
   listClubs,
@@ -27,6 +28,14 @@ export const list: RequestHandler = async (req, res, next) => {
     const search = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : null;
     const clubs = await listClubs(search);
     res.json({ data: clubs, meta: { count: clubs.length } });
+  } catch (error) { next(error); }
+};
+
+export const calendar: RequestHandler = async (req, res, next) => {
+  try {
+    const clubIds = Array.isArray(req.query.clubId) ? req.query.clubId : req.query.clubId ? [req.query.clubId] : [];
+    const events = await listClubCalendarEvents(clubIds);
+    res.json({ data: events, meta: { count: events.length } });
   } catch (error) { next(error); }
 };
 

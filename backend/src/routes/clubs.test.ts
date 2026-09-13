@@ -12,6 +12,7 @@ vi.mock('../services/clubs.js', () => ({
   createClub: vi.fn(),
   createJoinRequest: vi.fn(),
   getClubComparison: vi.fn(),
+  listClubCalendarEvents: vi.fn(),
   getClubPublication: vi.fn(),
   getClubStatistics: vi.fn(),
   listClubComparisonAthletes: vi.fn(),
@@ -132,6 +133,18 @@ describe('club routes', () => {
     expect(clubService.listClubComparisonAthletes).toHaveBeenCalledWith(CLUB_ID, 'ari');
     expect(clubService.getClubStatistics).toHaveBeenCalledWith(CLUB_ID);
     expect(clubService.getClubComparison).toHaveBeenCalledWith(CLUB_ID, REQUEST_ID);
+  });
+
+  it('returns upcoming events for selected clubs', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.listClubCalendarEvents).mockResolvedValue([]);
+
+    const response = await request(app)
+      .get(`/api/v1/clubs/calendar?clubId=${CLUB_ID}&clubId=${REQUEST_ID}`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID]);
   });
 
   it('lets a coach view and update the active club publication setting', async () => {
