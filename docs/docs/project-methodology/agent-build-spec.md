@@ -29,7 +29,7 @@ The product is branded **Athlora** ("run the whole season from one place"). The 
 | Backend | Node.js + Express | Hand-written REST API, TypeScript |
 | Database | PostgreSQL | Hosted on Neon or university instance |
 | Auth | Auth0 | Never hand-roll auth |
-| Weather integration | Open-Meteo | No API key required, keep it that way |
+| Weather integration | GraySky | No account, API key, or environment variable; keyless current/daily US-unit data is normalized and cached ten minutes |
 | Offline storage | IndexedDB via Dexie | Offline action queue for create/edit/undo actions |
 | PWA | vite-plugin-pwa | Service worker + manifest for offline shell |
 | Realtime | Socket.IO | Live broadcast of event invalidations |
@@ -334,7 +334,7 @@ POST   /api/v1/events
 GET    /api/v1/events/:id
 PUT    /api/v1/events/:id
 DELETE /api/v1/events/:id
-GET    /api/v1/events/:id/weather        -- proxies Open-Meteo
+GET    /api/v1/events/:id/weather        -- proxies GraySky Free
 
 POST   /api/v1/events/:id/entries        -- create timeline entry
 PATCH  /api/v1/events/:id/entries/:entryId
@@ -460,4 +460,4 @@ The `/docs` Docusaurus site is the living record of the project, not a one-time 
 
 ## AI Declaration
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free].
+The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].

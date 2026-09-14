@@ -31,7 +31,7 @@ Tested development environment: Linux, macOS, or Windows with a current Node.js 
 /e2e        Playwright browser tests
 ```
 
-The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; Open-Meteo provides weather and Nominatim/OpenStreetMap provides opt-in venue lookup through server-side proxies.
+The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; GraySky provides keyless current/daily weather through a ten-minute server cache, and Nominatim/OpenStreetMap provides opt-in venue lookup through server-side proxies. Weather requires no provider account, key, or environment variable.
 
 ## Installation Guide
 
@@ -142,4 +142,4 @@ See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and fixture repair code generation and inline editing used opencode[gpt-5.6-sol]; AI code review was not used for these updates.
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and fixture repair code generation and inline editing used opencode[gpt-5.6-sol]; AI code review was not used for these updates. GraySky migration code/test generation, inline editing, and documentation editing used OpenCode[openai/gpt-6-astra]. No separate AI code-review tool was used for this migration.

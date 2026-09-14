@@ -12,6 +12,7 @@ import type { DashboardSummary } from '../../types';
 import { getCurrentWeather } from '../../api/weather';
 import { ApiError } from '../../api/client';
 import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
+import { timezoneCoordinates } from '../../utils/weatherLocation';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { InstallButton } from '../../components/InstallButton';
@@ -49,7 +50,6 @@ const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
 const THEME_STORAGE_KEY = 'athlora-theme';
 const WEATHER_PREF_KEY = 'athlora-weather-effects';
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
-const WEATHER_GEOCODE_BASE = 'https://geocoding-api.open-meteo.com/v1/search';
 const GEO_CACHE_KEY = 'athlora-geo-coords';
 const GEO_CACHE_TS_KEY = 'athlora-geo-ts';
 const GEO_CACHE_TTL = 10 * 60 * 1000;
@@ -102,9 +102,9 @@ async function checkGeolocationPermission(): Promise<LocationPermission> {
 
 interface LiveWeather {
   label: string;
-  temperature: number;
+  temperature: number | null;
   atmosphere: WeatherAtmosphere;
-  isDay: boolean;
+  isDay: boolean | null;
   source: 'device' | 'timezone';
 }
 
@@ -285,26 +285,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function resolveTimezoneCoordinates(): Promise<Coordinates | null> {
   try {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-    const zoneCity = timezone && !timezone.startsWith('Etc/')
-      ? timezone.split('/').pop()?.replace(/_/g, ' ')
-      : '';
-    if (!zoneCity) return null;
-
-    const params = new URLSearchParams({ name: zoneCity, count: '10', language: 'en', format: 'json' });
-    const response = await fetch(`${WEATHER_GEOCODE_BASE}?${params.toString()}`);
-    if (!response.ok) return null;
-    const data = await response.json() as unknown;
-    if (!isRecord(data) || !Array.isArray(data.results)) return null;
-
-    const results = data.results as unknown[];
-    const match = results.find((result) =>
-      isRecord(result) && result.timezone === timezone &&
-      typeof result.latitude === 'number' && typeof result.longitude === 'number')
-      ?? results.find((result) =>
-        isRecord(result) && typeof result.latitude === 'number' && typeof result.longitude === 'number');
-    if (!isRecord(match) || typeof match.latitude !== 'number' || typeof match.longitude !== 'number') return null;
-    return { latitude: match.latitude, longitude: match.longitude };
+    return timezoneCoordinates(Intl.DateTimeFormat().resolvedOptions().timeZone);
   } catch {
     return null;
   }
@@ -386,25 +367,7 @@ export function CoachConsole() {
     const coords = await resolveDeviceCoordinates(true);
     if (coords) {
       setLocationPermission('granted');
-      void getCurrentWeather(coords.latitude, coords.longitude)
-        .then((data) => {
-          const atmosphere = classifyWeather(data.weatherCode);
-          setLiveWeather({
-            label: weatherLabel(data.weatherCode),
-            temperature: Math.round(data.temperatureC),
-            atmosphere,
-            isDay: data.isDay,
-            source: 'device',
-          });
-          setWeather(() => {
-            const base = atmosphere === 'fog' ? 'fog' : atmosphere === 'rain' ? 'rain' : atmosphere === 'snow' ? 'snow' : atmosphere === 'storm' ? 'storm' : atmosphere === 'cloudy' ? 'cloudy' : atmosphere === 'partly' ? 'partly' : 'clear';
-            return data.isDay ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
-          });
-          setIsNight(!data.isDay);
-          setWeatherPrecipitation(data.precipitationMm);
-          setLiveWeatherError(null);
-        })
-        .catch(() => {});
+      // The permission-state effect loads the cached device coordinates once.
     }
   };
 
@@ -474,17 +437,17 @@ export function CoachConsole() {
           const atmosphere = classifyWeather(data.weatherCode);
           setLiveWeather({
             label: weatherLabel(data.weatherCode),
-            temperature: Math.round(data.temperatureC),
+            temperature: data.temperatureC === null ? null : Math.round(data.temperatureC),
             atmosphere,
             isDay: data.isDay,
             source,
           });
           setWeather(() => {
             const base = atmosphere === 'fog' ? 'fog' : atmosphere === 'rain' ? 'rain' : atmosphere === 'snow' ? 'snow' : atmosphere === 'storm' ? 'storm' : atmosphere === 'cloudy' ? 'cloudy' : atmosphere === 'partly' ? 'partly' : 'clear';
-            return data.isDay ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
+            return data.isDay !== false ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
           });
-          setIsNight(!data.isDay);
-          setWeatherPrecipitation(data.precipitationMm);
+          setIsNight(data.isDay === false);
+          setWeatherPrecipitation(data.precipitationRateMmHr ?? 0);
           setLiveWeatherError(null);
         })
         .catch(reportUnavailableWeather);
@@ -513,7 +476,7 @@ export function CoachConsole() {
   }, [weatherEnabled, locationPermission]);
 
   const liveReadout = liveWeather
-    ? `${liveWeather.label} · ${liveWeather.temperature}°`
+    ? `${liveWeather.label} · ${liveWeather.temperature === null ? '—' : `${liveWeather.temperature}°`}`
     : liveWeatherError
       ? 'Weather unavailable'
       : weatherEnabled
@@ -561,7 +524,7 @@ export function CoachConsole() {
            <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
           <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
            <details ref={weatherMenuRef} className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
-           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{liveWeather && liveWeather.source === 'timezone' && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></div>
+           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{(!liveWeather || liveWeather.source === 'timezone') && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://graysky.net" target="_blank" rel="noopener noreferrer">Weather data by GraySky</a></div>
            <InstallButton />
            <OfflineIndicator />
            <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>

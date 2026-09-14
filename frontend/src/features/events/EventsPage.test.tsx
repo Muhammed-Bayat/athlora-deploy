@@ -181,11 +181,11 @@ beforeEach(() => {
   eventApi.getEventWeather.mockResolvedValue({
     date: city.date,
     timezone: 'Africa/Johannesburg',
-    weatherCode: 2,
+    weatherCode: 'partly-cloudy-day',
     temperatureMinC: 13.4,
     temperatureMaxC: 24.8,
     precipitationProbabilityMaxPercent: 20,
-    windSpeedMaxKmh: 18.1,
+    windSpeedKmh: 18.1,
   });
   eventApi.getEvent.mockResolvedValue(city);
   participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });

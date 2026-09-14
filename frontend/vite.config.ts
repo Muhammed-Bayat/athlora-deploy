@@ -61,6 +61,11 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
         runtimeCaching: [
           {
+            // Live weather uses the server's ten-minute cache, never an unlabelled offline response.
+            urlPattern: /\/api\/v1\/(?:weather\/current|events\/[^/]+\/weather)(?:\?|$)/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /\/api\/v1\/.*/i,
             handler: 'NetworkFirst',
             options: {

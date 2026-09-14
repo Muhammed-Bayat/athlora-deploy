@@ -16,7 +16,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Backend | Node.js + Express (TypeScript) | Small hand-written REST API, shares TS types with the frontend |
 | Database | PostgreSQL | Relational results/log data; UUID PKs enable offline-safe inserts |
 | Auth | Auth0 | Never hand-roll auth; hosted identity + verified JWTs |
-| Weather | Open-Meteo | Keyless REST forecast for event venues |
+| Weather | GraySky | Keyless current/daily forecast normalized to metric units, cached ten minutes |
 | Venue search/maps | Nominatim + OpenStreetMap | Explicit server-proxied venue lookup and read-only attributed map previews; no tile/map library |
 | Offline storage | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
 | PWA | vite-plugin-pwa | Service worker + manifest for offline shell |
@@ -40,7 +40,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Migrations | Checksum-tracked SQL migrations | Creates and evolves the production schema before API startup. | Results history must not depend on manual schema changes; checksum verification detects a changed migration before it damages a season's data. |
 | Authentication | Auth0, `@auth0/auth0-react`, `jose` | Universal Login in the SPA and JWT verification in the API. | Coaches do not need Athlora-managed passwords. Auth0 handles identity flows while the API maps a verified subject to one local coach workspace. |
 | API protection | Helmet, CORS, ownership middleware | Security headers, origin allow-listing, authenticated user resolution, and non-enumerating resource checks. | A coach must never be able to discover or modify another coach's athletes, entries, or results. |
-| Weather | Open-Meteo | Event-day venue forecasts and the coach console's current-weather readout, both proxied by the API. | Wind, rain, and conditions matter when planning or logging athletics events; Open-Meteo provides these without storing a paid-provider API key in the project. |
+| Weather | GraySky Free | Event-day forecasts from up to ten daily records and the console's current-weather readout, both proxied by the API. | No provider account, API key, or environment variable. Shared caching, nullable metrics and safe failure handling support track-side use. |
 | Venue search/maps | Nominatim + OpenStreetMap | Server-side native-fetch venue lookup, existing persisted coordinates, and an iframe/external-link preview. | Avoids shipping provider credentials or a heavyweight interactive map dependency while retaining attribution, keyboard use, mobile layout, and manual coordinates. |
 | Offline storage | IndexedDB via Dexie | Offline action queue for create/edit/undo actions when network is unavailable. | Promise-friendly store with typed transactions, scoped per account/workspace/event/device for offline-first live logging. |
 | PWA | vite-plugin-pwa | Service worker for app shell caching and API response caching. | Installable coach console with offline shell and deterministic queue drain on reconnect. |
@@ -55,7 +55,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - **Dexie**: wraps IndexedDB with a typed, promise API and explicit transactions — the cleanest fit for an offline-first write queue.
 - **Socket.IO**: reliable fallbacks (polling) and rooms make per-event broadcast trivial and resilient.
 - **Chart.js**: batteries-included for line/bar charts without a heavier data-viz framework.
-- **Open-Meteo**: no API key, free rate limits — ideal for a university project with no billing.
+- **GraySky**: no account or key; the keyless endpoint returns US-customary current/daily data, normalized server-side to metric units with ten-minute caching and linked attribution in both weather surfaces.
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
 - **Lazy-loaded R3F landing stage**: one fixed decorative canvas renders the procedural tunnel, stadium, shared track, runner signals, and performance ribbon. It keeps camera state in mutable refs, uses reusable Three vectors/curves, limits DPR, pauses while hidden, and lowers detail on compact displays.
 - **Three.js / React Three Fiber / Drei**: on-demand anatomical body viewer for persistent injury mapping with topology-bound surface heat maps.
@@ -98,4 +98,4 @@ Planned work also includes discipline expansion, role-based authorization refine
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

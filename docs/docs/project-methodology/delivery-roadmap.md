@@ -66,7 +66,7 @@ Key outcomes:
 
 - Coach-owned athlete create, edit, archive, restore, filters, profiles, and 100m performance history.
 - Competition/training event lifecycle, cancellation-as-history-preservation, event list/calendar views, and participant RSVP management.
-- Open-Meteo venue forecasts and authenticated current-weather data for the coach console.
+- Venue forecasts and authenticated current-weather data for the coach console, now migrated to GraySky Free current/daily data.
 
 ### Phase 3: Live 100m Results and Coaching Insight
 
@@ -188,4 +188,4 @@ Every roadmap item is complete only when its implementation and documentation ar
 
 ## AI Declaration
 
-This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoachConsole } from './CoachConsole';
 import { ApiError } from '../../api/client';
 import { WorkspaceContext } from '../auth/WorkspaceContext';
+vi.mock('../../utils/weatherLocation', () => ({ timezoneCoordinates: () => ({ latitude: -26.2041, longitude: 28.0473 }) }));
 
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
 const permissionsQuery = vi.hoisted(() => vi.fn());
@@ -252,13 +253,24 @@ describe('CoachConsole dashboard navigation', () => {
   it('shows current live weather from the resolved device location', async () => {
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
-      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+      humidityPercent: 62, isDay: true, precipitationRateMmHr: 0, weatherCode: 'partly-cloudy-day', windSpeedKmh: 12.4,
     });
 
     renderConsole();
 
     expect(await screen.findByText('Partly cloudy · 25°')).toBeInTheDocument();
     expect(weatherApi.getCurrentWeather).toHaveBeenCalledWith(-26.2041, 28.0473);
+  });
+
+  it('shows degraded current weather without false zero temperatures or night effects', async () => {
+    weatherApi.getCurrentWeather.mockResolvedValue({ timezone: null, temperatureC: null,
+      apparentTemperatureC: null, humidityPercent: null, isDay: null,
+      precipitationRateMmHr: null, weatherCode: 'limited', windSpeedKmh: null });
+    const { container } = renderConsole();
+    expect(await screen.findByText('Weather temporarily unavailable · —')).toBeInTheDocument();
+    expect(container.querySelector('[data-weather]')).toHaveAttribute('data-weather', 'cloudy');
+    expect(container.querySelector('[data-weather-night]')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Weather data by GraySky' })).toHaveAttribute('href', 'https://graysky.net');
   });
 
   it('explains when authentication prevents the live weather request', async () => {
@@ -284,7 +296,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
-      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+      humidityPercent: 50, isDay: true, precipitationRateMmHr: 0, weatherCode: 'clear-day', windSpeedKmh: 10,
     });
 
     renderConsole();
@@ -302,7 +314,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
-      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+      humidityPercent: 62, isDay: true, precipitationRateMmHr: 0, weatherCode: 'partly-cloudy-day', windSpeedKmh: 12.4,
     });
 
     renderConsole();
@@ -320,7 +332,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
-      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+      humidityPercent: 62, isDay: true, precipitationRateMmHr: 0, weatherCode: 'partly-cloudy-day', windSpeedKmh: 12.4,
     });
 
     renderConsole();
@@ -339,7 +351,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
-      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+      humidityPercent: 50, isDay: true, precipitationRateMmHr: 0, weatherCode: 'clear-day', windSpeedKmh: 10,
     });
 
     renderConsole();
@@ -355,7 +367,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
-      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+      humidityPercent: 50, isDay: true, precipitationRateMmHr: 0, weatherCode: 'clear-day', windSpeedKmh: 10,
     });
 
     renderConsole();
@@ -371,7 +383,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 20, apparentTemperatureC: 20,
-      humidityPercent: 50, isDay: true, precipitationMm: 0, weatherCode: 0, windSpeedKmh: 10,
+      humidityPercent: 50, isDay: true, precipitationRateMmHr: 0, weatherCode: 'clear-day', windSpeedKmh: 10,
     });
 
     renderConsole();
@@ -386,7 +398,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1,
-      humidityPercent: 62, isDay: true, precipitationMm: 0, weatherCode: 2, windSpeedKmh: 12.4,
+      humidityPercent: 62, isDay: true, precipitationRateMmHr: 0, weatherCode: 'partly-cloudy-day', windSpeedKmh: 12.4,
     });
 
     renderConsole();
@@ -414,7 +426,7 @@ describe('CoachConsole dashboard navigation', () => {
 
     weatherApi.getCurrentWeather.mockResolvedValue({
       timezone: 'Australia/Sydney', temperatureC: 18, apparentTemperatureC: 17,
-      humidityPercent: 70, isDay: true, precipitationMm: 0, weatherCode: 1, windSpeedKmh: 15,
+      humidityPercent: 70, isDay: true, precipitationRateMmHr: 0, weatherCode: 'mostly-clear-day', windSpeedKmh: 15,
     });
 
     renderConsole();

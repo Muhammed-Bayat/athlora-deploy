@@ -611,8 +611,8 @@
 .weatherOrigin .cloudOne { right: 86px; top: 15px; }
 .weatherOrigin .cloudTwo { right: 178px; top: 43px; width: 78px; height: 22px; opacity: 0.72; transform: translateX(28px) scale(0.78); }
 
-.console[data-weather=clear][data-weather-night=false] .weatherOrigin .sun,
-.console[data-weather=partly][data-weather-night=false] .weatherOrigin .sun { opacity: 1; transform: scale(1); }
+.console[data-weather=clear]:not([data-weather-night=true]) .weatherOrigin .sun,
+.console[data-weather=partly]:not([data-weather-night=true]) .weatherOrigin .sun { opacity: 1; transform: scale(1); }
 
 .console[data-weather-night=true] .weatherOrigin .moon { opacity: 1; transform: translateY(0) scale(1); }
 
@@ -1195,7 +1195,7 @@
   .weatherToggle .weatherToggleLabel { display: none; }
   .weatherToggle { padding: 4px 6px; height: 32px; }
   .themeToggleIcon { display: none; }
-  .weatherOrigin { width: 220px; }
+  .weatherOrigin { width: 220px; overflow-x: clip; }
   .weatherOrigin .sun { right: -22px; }
   .weatherOrigin .moon { right: 3px; }
   .weatherOrigin .cloudOne { right: 52px; }

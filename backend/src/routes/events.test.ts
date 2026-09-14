@@ -47,11 +47,11 @@ beforeEach(() => {
   weatherService.getEventWeatherForecast.mockResolvedValue({
     date: '2026-09-01',
     timezone: 'Africa/Johannesburg',
-    weatherCode: 2,
+    weatherCode: 'partly-cloudy-day',
     temperatureMinC: 13.4,
     temperatureMaxC: 24.8,
     precipitationProbabilityMaxPercent: 20,
-    windSpeedMaxKmh: 18.1,
+    windSpeedKmh: 18.1,
   });
 });
 
@@ -358,7 +358,7 @@ describe('GET /api/v1/events/:id/weather', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({
       date: '2026-09-01',
-      weatherCode: 2,
+      weatherCode: 'partly-cloudy-day',
       temperatureMaxC: 24.8,
     });
     expect(weatherService.getEventWeatherForecast).toHaveBeenCalledWith(USER_ID, EVENT_ID);

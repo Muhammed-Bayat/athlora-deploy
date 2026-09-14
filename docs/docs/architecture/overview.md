@@ -58,7 +58,7 @@ Athlora's product scope is the full athletics meet: track races, hurdles, relays
 ## Backend
 
 - **Routing**: resource routers under `src/routes` matching the database tables.
-- **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` validates the keyless Open-Meteo boundary and `src/services/venues.ts` is the Nominatim provider boundary. Business logic is never buried in route handlers.
+- **Services**: resource services own workspace-scoped PostgreSQL behavior for athletes, events and event participants; `src/services/weather.ts` owns GraySky validation, US-customary-to-metric normalization and shared ten-minute caching, while `src/services/venues.ts` is the Nominatim provider boundary. Business logic is never buried in route handlers.
 - **Database access**: migration `0005_workspace_tenancy.sql` adds workspaces and migration `0006_workspace_roles_and_invitations.sql` limits memberships to coach/assistant, adds hashed expiring invitations, and records membership audit events.
 - **Auth and account lifecycle**: authenticated resource context includes a validated active workspace selected with `X-Workspace-Id`. Central capability middleware grants coaches and assistants shared operational access while retaining coach-only Club membership administration, join-request review, participant-roster changes, and fixture-team withdrawals. The final coach cannot leave, be removed, demoted, or delete their account until another coach remains.
 
@@ -91,7 +91,7 @@ Socket authorization is rechecked on every explicit event subscription. A subscr
 
 ## Implementation status
 
-Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, Open-Meteo forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. The public landing page uses a progressive React Three Fiber stadium-tunnel-to-track experience, while the premium coach console retains the approved visual direction; neither changes service boundaries. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines.
+Implemented in Stage 1: the 100m timing vertical slice, synchronized-auth gating and Auth0-hosted account lifecycle; API-backed roster, athlete performance detail, event lifecycle, forecasts/current weather, assignments, live timeline correction/undo, result overrides, and dashboard aggregates. Weather now uses GraySky Free current/daily data, nullable DTOs, existing condition visuals and linked attribution. The public landing page and premium coach console retain their approved visual direction; service boundaries remain unchanged. The event lifecycle, versioned timeline, audit trail, derived-result boundary, and discipline/unit columns are shared foundations for the remaining athletics-meet disciplines.
 
 Implemented in Stage 2 (partial): offline-first PWA with service worker caching, IndexedDB action queue via Dexie, designated offline logger per event, idempotent batch sync endpoint, and optimistic version conflict detection. The app is installable as a Progressive Web App with offline shell and deterministic queue drain on reconnect. Additional Stage 2 features implemented: workspace switching, coach/assistant role enforcement, squad management, athlete lifecycle (active/inactive/archived), persistent injury records with 3D anatomy mapping, cross-workspace fixtures with RSVP, event helper invitations and offline designation, Socket.IO realtime invalidation, in-app event reminders, fixture notifications, public logger links, club onboarding with join requests, two-athlete comparison, single-athlete progression charts, athlete statistics, and Gemini voice assistant for voice-driven athlete creation.
 
@@ -99,4 +99,4 @@ Quality gates include unit/API integration suites, cross-coach isolation tests, 
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

@@ -60,7 +60,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ## 2. Stage 1 — Basic (Sprint 1 & early Sprint 2)
 
-**Stack:** React + Vite + TypeScript, CSS, Node.js + Express, PostgreSQL (Neon), Auth0, Open-Meteo, Vitest, RTL, Supertest, Gitea Actions, Vercel, Render, Docusaurus + Cloudflare Pages.
+**Stack:** React + Vite + TypeScript, CSS, Node.js + Express, PostgreSQL (Neon), Auth0, GraySky Free, Vitest, RTL, Supertest, Gitea Actions, Vercel, Render, Docusaurus + Cloudflare Pages.
 
 **Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html`, `SDP-Coach-Console.html`, and `Athlora_Premium_Dashboard.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder: Space Grotesk headings, Satoshi body, Space Grotesk mono for results, deep-ink navy + teal/cyan/blue palette). All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
 
@@ -90,7 +90,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 - Event list/calendar views, create/edit/cancel event form
 - Event lifecycle: scheduled → in_progress → completed, with cancellation preserving history
 - Participant RSVP management and event assignments
-- Open-Meteo integration: event-day forecasts and current weather
+- GraySky Free integration: event-day forecasts (up to ten days) and current weather
 - Tests: Supertest for event CRUD, weather error handling
 
 ### 2.4 Live Event Timeline Logging
@@ -245,4 +245,4 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ## AI Declaration
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol].
+The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].

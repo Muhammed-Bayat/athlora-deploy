@@ -2,264 +2,179 @@ import { ApiError } from '../middleware/errors.js';
 import type { CurrentWeather, EventWeatherForecast } from '../types/domain.js';
 import { getEvent } from './events.js';
 
-const FORECAST_DAYS = 16;
-const WEATHER_CODES = new Set([
-  0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67,
-  71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99,
-]);
+interface Forecast {
+  current: CurrentWeather | null;
+  daily: EventWeatherForecast[];
+}
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+const CACHE_MS = 10 * 60_000;
+const MAX_LOCATIONS = 500;
+// Separate injected transports make tests independent without bypassing the cache.
+let caches = new WeakMap<typeof fetch, Map<string, { expiresAt: number; promise: Promise<Forecast> }>>();
+export function clearWeatherCache(): void { caches = new WeakMap(); }
+
+function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
-function invalidResponse(): never {
-  throw new ApiError(502, 'WEATHER_SERVICE_INVALID_RESPONSE', 'The weather service returned invalid data');
+function invalid(): never {
+  throw new ApiError(502, 'WEATHER_SERVICE_INVALID_RESPONSE', 'Weather temporarily unavailable');
 }
-
-function dateEpoch(value: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const time = Date.parse(`${value}T00:00:00.000Z`);
-  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : null;
-}
-
-function validTimezone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'TimeoutError';
-}
-
-function numericArray(value: unknown, length: number): Array<number | null> {
-  if (!Array.isArray(value) || value.length !== length) invalidResponse();
-  if (!value.every((item) =>
-    item === null || (typeof item === 'number' && Number.isFinite(item)))) {
-    invalidResponse();
-  }
-  return value as Array<number | null>;
-}
-
-export async function getEventWeatherForecast(
-  workspaceId: string,
-  eventId: unknown,
-  fetcher: typeof fetch = fetch,
-): Promise<EventWeatherForecast> {
-  const event = await getEvent(workspaceId, eventId);
-  if (event.latitude === null || event.longitude === null) {
-    throw new ApiError(
-      422,
-      'WEATHER_LOCATION_UNAVAILABLE',
-      'Add event coordinates to view a forecast',
-    );
-  }
-
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(event.latitude));
-  url.searchParams.set('longitude', String(event.longitude));
-  url.searchParams.set(
-    'daily',
-    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max',
-  );
-  url.searchParams.set('timezone', 'auto');
-  url.searchParams.set('forecast_days', String(FORECAST_DAYS));
-  url.searchParams.set('temperature_unit', 'celsius');
-  url.searchParams.set('wind_speed_unit', 'kmh');
-
-  let response: Response;
-  try {
-    response = await fetcher(url, { signal: AbortSignal.timeout(5_000) });
-  } catch (error) {
-    if (isTimeout(error)) {
-      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
-    }
-    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
-  }
-  if (!response.ok) {
-    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
-  }
-
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (isTimeout(error)) {
-      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
-    }
-    invalidResponse();
-  }
-  if (!isRecord(body) || typeof body.timezone !== 'string' || !validTimezone(body.timezone) ||
-      !isRecord(body.daily) || !isRecord(body.daily_units)) {
-    invalidResponse();
-  }
-  const daily = body.daily;
-  const units = body.daily_units;
-  if (
-    units.time !== 'iso8601' || units.weather_code !== 'wmo code' ||
-    units.temperature_2m_max !== '°C' || units.temperature_2m_min !== '°C' ||
-    units.precipitation_probability_max !== '%' || units.wind_speed_10m_max !== 'km/h' ||
-    !Array.isArray(daily.time) || daily.time.length === 0 ||
-    !daily.time.every((date) => typeof date === 'string' && dateEpoch(date) !== null)
-  ) {
-    invalidResponse();
-  }
-  const dates = daily.time as string[];
-  if (dates.some((date, index) =>
-    index > 0 && dateEpoch(date)! - dateEpoch(dates[index - 1])! !== 86_400_000)) {
-    invalidResponse();
-  }
-  const length = daily.time.length;
-  const weatherCodes = numericArray(daily.weather_code, length);
-  const maximums = numericArray(daily.temperature_2m_max, length);
-  const minimums = numericArray(daily.temperature_2m_min, length);
-  const precipitation = numericArray(daily.precipitation_probability_max, length);
-  const wind = numericArray(daily.wind_speed_10m_max, length);
-  if (
-    weatherCodes.some((code) => code !== null && (!Number.isInteger(code) || !WEATHER_CODES.has(code))) ||
-    precipitation.some((chance) => chance !== null && (chance < 0 || chance > 100)) ||
-    wind.some((speed) => speed !== null && speed < 0) ||
-    minimums.some((minimum, day) =>
-      minimum !== null && maximums[day] !== null && minimum > maximums[day]!)
-  ) {
-    invalidResponse();
-  }
-  const index = dates.indexOf(event.date);
-  if (index < 0) {
-    const dateFrom = dates[0];
-    const dateTo = dates.at(-1)!;
-    if (event.date < dateFrom || event.date > dateTo) {
-      throw new ApiError(
-        422,
-        'WEATHER_DATE_UNAVAILABLE',
-        'Forecasts are available for events in the next 16 days',
-        { dateFrom, dateTo },
-      );
-    }
-    throw new ApiError(404, 'WEATHER_FORECAST_NOT_FOUND', 'No forecast is available for this event');
-  }
-  const weatherCode = weatherCodes[index];
-  const temperatureMaxC = maximums[index];
-  const temperatureMinC = minimums[index];
-  const precipitationProbability = precipitation[index];
-  const windSpeed = wind[index];
-  if (weatherCode === null || temperatureMaxC === null || temperatureMinC === null) {
-    throw new ApiError(404, 'WEATHER_FORECAST_NOT_FOUND', 'No forecast is available for this event');
-  }
-  if (
-    !Number.isInteger(weatherCode) || !WEATHER_CODES.has(weatherCode) ||
-    temperatureMinC > temperatureMaxC
-  ) {
-    invalidResponse();
-  }
-
-  return {
-    date: event.date,
-    timezone: body.timezone,
-    weatherCode,
-    temperatureMinC,
-    temperatureMaxC,
-    precipitationProbabilityMaxPercent: precipitationProbability,
-    windSpeedMaxKmh: windSpeed,
-  };
-}
-
-function finiteMetric(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) invalidResponse();
+function metric(value: unknown, min = -Infinity, max = Infinity): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) invalid();
   return value;
 }
-
-function finiteMetricRange(value: unknown, minimum: number, maximum: number): number {
-  const metric = finiteMetric(value);
-  if (metric < minimum || metric > maximum) invalidResponse();
-  return metric;
+function condition(value: unknown): string {
+  if (value === null || value === undefined) return 'limited';
+  if (typeof value !== 'string' || !value.trim()) invalid();
+  return value;
+}
+function timezone(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value !== 'string') invalid();
+  try { new Intl.DateTimeFormat('en', { timeZone: value }).format(); } catch { invalid(); }
+  return value;
+}
+function unixTime(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) invalid();
+  const milliseconds = value * 1000;
+  if (!Number.isFinite(milliseconds) || Number.isNaN(new Date(milliseconds).valueOf())) invalid();
+  return milliseconds;
+}
+function localDate(milliseconds: number, zone: string | null): string {
+  if (!zone) return new Date(milliseconds).toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(milliseconds));
+  return ['year', 'month', 'day'].map((key) => parts.find((part) => part.type === key)!.value).join('-');
+}
+function temperature(value: unknown): number | null {
+  const fahrenheit = metric(value, -150, 160);
+  return fahrenheit === null ? null : Math.round((fahrenheit - 32) * 50 / 9) / 10;
+}
+function percentage(value: unknown): number | null {
+  const fraction = metric(value, 0, 1);
+  return fraction === null ? null : Math.round(fraction * 1000) / 10;
+}
+function precipitationRate(value: unknown): number | null {
+  const inchesPerHour = metric(value, 0, 100);
+  return inchesPerHour === null ? null : Math.round(inchesPerHour * 25_400) / 1000;
+}
+function wind(value: unknown): number | null {
+  const milesPerHour = metric(value, 0, 300);
+  return milesPerHour === null ? null : Math.round(milesPerHour * 16.09344) / 10;
 }
 
-export async function getCurrentWeather(
-  latitude: unknown,
-  longitude: unknown,
-  fetcher: typeof fetch = fetch,
-): Promise<CurrentWeather> {
-  if (
-    typeof latitude !== 'number' || !Number.isFinite(latitude) ||
-    typeof longitude !== 'number' || !Number.isFinite(longitude) ||
-    latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180
-  ) {
-    throw new ApiError(
-      422,
-      'WEATHER_COORDINATES_INVALID',
-      'Latitude must be from -90 to 90 and longitude from -180 to 180',
-    );
-  }
-
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(latitude));
-  url.searchParams.set('longitude', String(longitude));
-  url.searchParams.set(
-    'current',
-    'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
-  );
-  url.searchParams.set('timezone', 'auto');
-  url.searchParams.set('forecast_days', '1');
-  url.searchParams.set('temperature_unit', 'celsius');
-  url.searchParams.set('wind_speed_unit', 'kmh');
-
-  let response: Response;
-  try {
-    response = await fetcher(url, { signal: AbortSignal.timeout(5_000) });
-  } catch (error) {
-    if (isTimeout(error)) {
-      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
+export function normalizeGraySky(body: unknown): Forecast {
+  if (!record(body) || body.units !== 'us' || !record(body.forecast)) invalid();
+  const forecast = body.forecast;
+  if (!('currently' in forecast) && !('daily' in forecast)) invalid();
+  const zone = timezone(forecast.timezone);
+  const daily: EventWeatherForecast[] = [];
+  let sourceDays: Record<string, unknown>[] | null = null;
+  if (forecast.daily != null) {
+    if (!record(forecast.daily) || !Array.isArray(forecast.daily.data) || forecast.daily.data.length > 10) invalid();
+    sourceDays = forecast.daily.data;
+    for (const day of sourceDays) {
+      const date = localDate(unixTime(day.time), zone);
+      const minimum = temperature(day.temperatureLow);
+      const maximum = temperature(day.temperatureHigh);
+      if (minimum !== null && maximum !== null && minimum > maximum) invalid();
+      if (daily.some((item) => item.date === date)) invalid();
+      daily.push({ date, timezone: zone, weatherCode: condition(day.icon),
+        temperatureMinC: minimum, temperatureMaxC: maximum,
+        precipitationProbabilityMaxPercent: percentage(day.precipProbability),
+        windSpeedKmh: wind(day.windSpeed) });
     }
-    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
+    daily.sort((a, b) => a.date.localeCompare(b.date));
   }
-  if (!response.ok) {
-    throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'The weather service is temporarily unavailable');
-  }
-
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (isTimeout(error)) {
-      throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'The weather service took too long to respond');
+  let current: CurrentWeather | null = null;
+  if (forecast.currently != null) {
+    if (!record(forecast.currently)) invalid();
+    const data = forecast.currently;
+    const at = unixTime(data.time);
+    const code = condition(data.icon);
+    let isDay: boolean | null = code.endsWith('-day') ? true : code.endsWith('-night') ? false : null;
+    if (isDay === null && sourceDays) {
+      const day = sourceDays.find((item) => localDate(unixTime(item.time), zone) === localDate(at, zone));
+      if (day?.sunriseTime != null && day.sunsetTime != null) {
+        const sunrise = unixTime(day.sunriseTime);
+        const sunset = unixTime(day.sunsetTime);
+        isDay = at >= sunrise && at < sunset;
+      }
     }
-    invalidResponse();
+    current = { timezone: zone, weatherCode: code, isDay,
+      temperatureC: temperature(data.temperature), apparentTemperatureC: temperature(data.apparentTemperature),
+      humidityPercent: percentage(data.humidity),
+      precipitationRateMmHr: precipitationRate(data.precipIntensity), windSpeedKmh: wind(data.windSpeed) };
   }
-  if (!isRecord(body) || typeof body.timezone !== 'string' || !validTimezone(body.timezone) ||
-      !isRecord(body.current_units) || !isRecord(body.current)) {
-    invalidResponse();
-  }
-  const units = body.current_units;
-  if (
-    units.time !== 'iso8601' || units.interval !== 'seconds' ||
-    units.temperature_2m !== '°C' || units.relative_humidity_2m !== '%' ||
-    units.apparent_temperature !== '°C' || units.is_day !== '' ||
-    units.precipitation !== 'mm' || units.weather_code !== 'wmo code' ||
-    units.wind_speed_10m !== 'km/h'
-  ) {
-    invalidResponse();
-  }
-  const current = body.current;
-  if (typeof current.time !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(current.time)) {
-    invalidResponse();
-  }
-  const weatherCode = finiteMetric(current.weather_code);
-  if (!Number.isInteger(weatherCode) || !WEATHER_CODES.has(weatherCode)) invalidResponse();
-  const isDay = current.is_day;
-  if (isDay !== 0 && isDay !== 1) invalidResponse();
+  return { current, daily };
+}
 
-  return {
-    timezone: body.timezone,
-    temperatureC: finiteMetric(current.temperature_2m),
-    apparentTemperatureC: finiteMetric(current.apparent_temperature),
-    humidityPercent: finiteMetricRange(current.relative_humidity_2m, 0, 100),
-    isDay: isDay === 1,
-    precipitationMm: finiteMetricRange(current.precipitation, 0, 500),
-    weatherCode,
-    windSpeedKmh: finiteMetricRange(current.wind_speed_10m, 0, 600),
-  };
+async function load(latitude: unknown, longitude: unknown, fetcher: typeof fetch): Promise<Forecast> {
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
+      typeof longitude !== 'number' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    throw new ApiError(422, 'WEATHER_COORDINATES_INVALID', 'Valid location coordinates are required');
+  }
+  let cache = caches.get(fetcher);
+  if (!cache) { cache = new Map(); caches.set(fetcher, cache); }
+  const key = `${latitude},${longitude}`;
+  const now = Date.now();
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+  for (const [location, entry] of cache) if (entry.expiresAt <= now) cache.delete(location);
+  if (cache.size >= MAX_LOCATIONS) cache.delete(cache.keys().next().value!);
+  const entry = { expiresAt: now + CACHE_MS, promise: Promise.resolve({ current: null, daily: [] } as Forecast) };
+  let failureCooldownMs = 30_000;
+  entry.promise = (async () => {
+    let response: Response;
+    try {
+      const url = new URL('https://graysky.net/api/forecast');
+      url.searchParams.set('lat', String(latitude));
+      url.searchParams.set('lon', String(longitude));
+      response = await fetcher(url,
+        { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
+    } catch (error) {
+      throw new ApiError(error instanceof Error && error.name === 'TimeoutError' ? 504 : 502,
+        error instanceof Error && error.name === 'TimeoutError' ? 'WEATHER_SERVICE_TIMEOUT' : 'WEATHER_SERVICE_UNAVAILABLE', 'Weather temporarily unavailable');
+    }
+    if (!response.ok) {
+      if (response.status === 429 || response.status === 503) {
+        const retryAfter = response.headers.get('Retry-After');
+        const delay = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000
+          : retryAfter ? Date.parse(retryAfter) - Date.now() : NaN;
+        failureCooldownMs = Number.isFinite(delay) ? Math.max(30_000, delay) : CACHE_MS;
+      }
+      throw new ApiError(502, 'WEATHER_SERVICE_UNAVAILABLE', 'Weather temporarily unavailable');
+    }
+    let body: unknown;
+    try { body = await response.json(); } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError(504, 'WEATHER_SERVICE_TIMEOUT', 'Weather temporarily unavailable');
+      invalid();
+    }
+    const normalized = normalizeGraySky(body);
+    entry.expiresAt = Date.now() + CACHE_MS;
+    return normalized;
+  })().catch((error: unknown) => {
+    // A short negative cache prevents render/retry storms during an outage.
+    entry.expiresAt = Date.now() + failureCooldownMs;
+    throw error;
+  });
+  cache.set(key, entry);
+  return entry.promise;
+}
+
+export async function getCurrentWeather(latitude: unknown, longitude: unknown, fetcher: typeof fetch = fetch): Promise<CurrentWeather> {
+  const forecast = await load(latitude, longitude, fetcher);
+  if (!forecast.current) throw new ApiError(404, 'WEATHER_FORECAST_NOT_FOUND', 'Weather temporarily unavailable');
+  return forecast.current;
+}
+
+export async function getEventWeatherForecast(workspaceId: string, eventId: unknown, fetcher: typeof fetch = fetch): Promise<EventWeatherForecast> {
+  const event = await getEvent(workspaceId, eventId);
+  if (event.latitude === null || event.longitude === null) throw new ApiError(422, 'WEATHER_LOCATION_UNAVAILABLE', 'Add event coordinates to view a forecast');
+  const forecast = await load(event.latitude, event.longitude, fetcher);
+  const day = forecast.daily.find((item) => item.date === event.date);
+  if (day) return day;
+  if (!forecast.daily.length) throw new ApiError(404, 'WEATHER_FORECAST_NOT_FOUND', 'No forecast is available for this event');
+  throw new ApiError(422, 'WEATHER_DATE_UNAVAILABLE', 'Forecasts are available for up to the next 10 days',
+    { dateFrom: forecast.daily[0].date, dateTo: forecast.daily.at(-1)!.date });
 }
