@@ -19,8 +19,9 @@ import {
   type AthleteResultHistoryEntry,
   type DashboardSummary,
 } from '../types/domain.js';
-import { isCanonicalUuid, isGregorianDate } from '../validation/primitives.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 import { ApiError } from '../middleware/errors.js';
+import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 const LATEST_ENTRIES_LIMIT = 10;
 const RECENT_RESULTS_LIMIT = 10;
@@ -38,17 +39,12 @@ function utcDateToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function calendarYearBounds(asOfDate: string): [string, string] {
-  if (!isGregorianDate(asOfDate)) throw new Error('Invalid aggregate as-of date');
-  const year = Number(asOfDate.slice(0, 4));
-  return [`${year}-01-01`, `${year + 1}-01-01`];
-}
-
 async function listRecentResults(
   client: DbExecutor,
    workspaceId: string,
   onlyPbs: boolean,
   limit: number,
+  season: SeasonScope,
 ): Promise<AthleteResultHistoryEntry[]> {
   const result = await client.query<AthleteResultHistoryRow>(
     `WITH history AS (
@@ -87,7 +83,8 @@ async function listRecentResults(
            ))
            AND a.workspace_id = $1
          AND r.discipline = $2
-         AND e.status <> 'cancelled'
+          AND e.status <> 'cancelled'
+          AND e.date >= $4::date AND e.date < $5::date
          ${onlyPbs ? 'AND r.is_pb = true' : ''}
      )
      SELECT history.*,
@@ -98,8 +95,8 @@ async function listRecentResults(
               event_created_at DESC,
               event_id DESC,
               athlete_id ASC
-     LIMIT $3`,
-    [workspaceId, DISCIPLINE_100M, limit],
+      LIMIT $3`,
+    [workspaceId, DISCIPLINE_100M, limit, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   return result.rows.map(mapAthleteResultHistoryRow);
 }
@@ -108,9 +105,12 @@ export async function getDashboardSummary(
   workspaceId: string,
   asOfDate = utcDateToday(),
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<DashboardSummary> {
   if (!isCanonicalUuid(workspaceId)) throw notFound();
-  const [yearStart, nextYearStart] = calendarYearBounds(asOfDate);
+  const [yearStart, nextYearStart] = season.selected === 'all'
+    ? ['0001-01-01', '9999-12-31']
+    : [season.startDate!, season.endDate!];
 
   return runTransaction(async (client) => {
     const metricsResult = await client.query<DashboardMetricsRow>(
@@ -296,8 +296,9 @@ export async function getDashboardSummary(
        workspaceId,
       false,
       RECENT_RESULTS_LIMIT,
+      season,
     );
-    const recentPbs = await listRecentResults(client, workspaceId, true, RECENT_PBS_LIMIT);
+    const recentPbs = await listRecentResults(client, workspaceId, true, RECENT_PBS_LIMIT, season);
 
     return {
       state: activeBase ? 'live' : 'summary',

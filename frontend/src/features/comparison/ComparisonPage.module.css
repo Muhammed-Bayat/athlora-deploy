@@ -109,6 +109,53 @@
   gap: var(--space-2);
 }
 
+.selectionEditor {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 480px;
+}
+
+.selectionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.selectionChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 7px 9px 7px 11px;
+  border: 1px solid rgba(138, 233, 242, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(69, 190, 215, 0.1);
+  color: var(--console-ink);
+  font-size: var(--font-size-sm);
+}
+
+.selectionChips button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cyan-200);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.selectionChips button:hover,
+.selectionChips button:focus-visible {
+  background: rgba(138, 233, 242, 0.18);
+  color: var(--ui-white);
+  outline: none;
+}
+
 .selector label,
 .modeSelector label,
 .singleSelector label {

@@ -12,8 +12,8 @@ import {
   RESULT_UNIT_SECONDS,
   type AthleteStatisticsDetail,
 } from '../types/domain.js';
-import { isGregorianDate } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
+import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 const RECENT_RESULTS_PER_TYPE = 10;
 
@@ -25,19 +25,17 @@ function utcDateToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function calendarYearBounds(asOfDate: string): [string, string] {
-  if (!isGregorianDate(asOfDate)) throw new Error('Invalid aggregate as-of date');
-  const year = Number(asOfDate.slice(0, 4));
-  return [`${year}-01-01`, `${year + 1}-01-01`];
-}
-
 export async function getAthleteStatisticsDetail(
   workspaceId: string,
   athleteId: unknown,
   asOfDate = utcDateToday(),
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<AthleteStatisticsDetail> {
-  const [yearStart, nextYearStart] = calendarYearBounds(asOfDate);
+  void asOfDate;
+  const [yearStart, nextYearStart] = season.selected === 'all'
+    ? ['0001-01-01', '9999-12-31']
+    : [season.startDate!, season.endDate!];
 
   return runTransaction(async (client) => {
     const athlete = await getAthlete(workspaceId, athleteId, client);
@@ -170,8 +168,9 @@ export async function getAthleteStatisticsDetail(
                  AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
                WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-             ))
-       ), selected AS (
+              ))
+           AND e.date >= $5::date AND e.date < $6::date
+        ), selected AS (
          (SELECT * FROM history
           WHERE event_type = 'competition'
           ORDER BY event_date DESC, event_time DESC NULLS LAST, event_created_at DESC, event_id DESC
@@ -195,7 +194,7 @@ export async function getAthleteStatisticsDetail(
                 event_time DESC NULLS LAST,
                 event_created_at DESC,
                 event_id DESC`,
-       [athlete.id, workspaceId, DISCIPLINE_100M, RECENT_RESULTS_PER_TYPE],
+        [athlete.id, workspaceId, DISCIPLINE_100M, RECENT_RESULTS_PER_TYPE, yearStart, nextYearStart],
     );
     const history = historyResult.rows.map(mapAthleteResultHistoryRow);
     const statistics = mapAthleteStatisticsRow(statisticsRow);

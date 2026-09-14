@@ -3,6 +3,8 @@ import { getApplicationUserContext, getLocalApplicationUserContext } from '../mi
 import { acceptInvitation, changeMemberRole, createInvitation, leaveWorkspace, listInvitations, listMembers, listWorkspaces, removeMember, resendInvitation, revokeInvitation } from '../services/workspaces.js';
 import { getVerifiedAuth0Context } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
+import { getPool } from '../db/client.js';
+import { listAvailableSeasons } from '../services/seasons.js';
 
 function parameter(value: string | string[] | undefined): string {
   if (typeof value !== 'string') throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -21,6 +23,13 @@ export const listAccessibleWorkspaces: RequestHandler = async (req, res, next) =
   } catch (error) {
     next(error);
   }
+};
+
+export const listSeasons: RequestHandler = async (req, res, next) => {
+  try {
+    const years = await listAvailableSeasons(getPool(), getApplicationUserContext(req).workspaceId);
+    res.json({ data: years, meta: { count: years.length } });
+  } catch (error) { next(error); }
 };
 
 export const listWorkspaceMembers: RequestHandler = async (req, res, next) => { try { const members = await listMembers(parameter(req.params.workspaceId)); res.json({ data: members, meta: { count: members.length } }); } catch (error) { next(error); } };

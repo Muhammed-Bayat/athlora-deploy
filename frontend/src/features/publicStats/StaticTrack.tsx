@@ -64,7 +64,7 @@ function canRenderTrack() {
     && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function StaticTrack() {
+export function StaticTrack({ caption = '100m performance, arranged around the track.' }: { caption?: string }) {
   const [canRender, setCanRender] = useState(canRenderTrack);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function StaticTrack() {
           <StaticTrackWorld />
         </Canvas>
       ) : <div className={styles.trackFallback} aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div>}
-      <figcaption>All-time 100m performance, arranged around the track.</figcaption>
+      <figcaption>{caption}</figcaption>
     </figure>
   );
 }

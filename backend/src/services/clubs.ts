@@ -22,6 +22,7 @@ import {
   type AthleticsEvent,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 interface ClubSummaryRow {
   id: string;
@@ -100,6 +101,7 @@ export async function listClubs(search: string | null): Promise<Club[]> {
 export async function listClubCalendarEvents(
   clubIds: unknown,
   executor: DbExecutor = getPool(),
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<ClubCalendarEvent[]> {
   if (!Array.isArray(clubIds) || clubIds.length === 0 || !clubIds.every(isCanonicalUuid)) {
     throw new ApiError(422, 'CLUB_CALENDAR_SELECTION_INVALID', 'Select at least one valid club');
@@ -110,9 +112,11 @@ export async function listClubCalendarEvents(
             c.id AS club_id, c.name AS club_name
      FROM events e
      JOIN clubs c ON c.workspace_id = e.workspace_id
-     WHERE c.id = ANY($1::uuid[]) AND e.date >= CURRENT_DATE
+      WHERE c.id = ANY($1::uuid[])
+        AND (e.date >= CURRENT_DATE OR $2::date = '0001-01-01'::date)
+        AND e.date >= $2::date AND e.date < $3::date
      ORDER BY e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC`,
-    [clubIds],
+    [clubIds, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   return result.rows.map((row) => ({
     club: { id: row.club_id, name: row.club_name },
@@ -173,6 +177,7 @@ export async function listClubComparisonAthletes(
 export async function getClubStatistics(
   clubId: unknown,
   executor: DbExecutor = getPool(),
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<ClubStatistics> {
   const club = await findClub(clubId, executor);
   const result = await executor.query<ClubStatisticsRow>(
@@ -201,7 +206,8 @@ export async function getClubStatistics(
        JOIN roster a ON a.id = r.athlete_id
        JOIN events e ON e.id = r.event_id
        WHERE r.discipline = $2
-         AND e.status <> 'cancelled'
+          AND e.status <> 'cancelled'
+          AND e.date >= $3::date AND e.date < $4::date
          AND (e.workspace_id = $1 OR EXISTS (
            SELECT 1 FROM event_fixture_workspaces fw
            JOIN event_participants ep ON ep.event_id = fw.event_id
@@ -233,7 +239,7 @@ export async function getClubStatistics(
             ELSE (SELECT stddev_pop(effective_result) FROM valid)
        END AS population_standard_deviation
      FROM effective`,
-    [club.workspaceId, DISCIPLINE_100M],
+    [club.workspaceId, DISCIPLINE_100M, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   const statistics = result.rows[0];
   if (!statistics) throw new Error('Club statistics aggregate query returned no row');
@@ -260,6 +266,7 @@ export async function getClubStatistics(
 export async function getClubComparison(
   club1Id: unknown,
   club2Id: unknown,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<ClubComparisonDetail> {
   if (typeof club1Id !== 'string' || typeof club2Id !== 'string') {
     throw new ApiError(400, 'CLUB_IDS_REQUIRED', 'Exactly two club IDs are required');
@@ -268,12 +275,12 @@ export async function getClubComparison(
     throw new ApiError(400, 'DUPLICATE_CLUB_ID', 'Exactly two distinct club IDs are required');
   }
 
-  const club1 = await getClubStatistics(club1Id);
-  const club2 = await getClubStatistics(club2Id);
+  const club1 = await getClubStatistics(club1Id, undefined, season);
+  const club2 = await getClubStatistics(club2Id, undefined, season);
   return { clubs: [club1, club2] };
 }
 
-export async function getClubMultiComparison(clubIds: unknown): Promise<ClubMultiComparisonDetail> {
+export async function getClubMultiComparison(clubIds: unknown, season: SeasonScope = parseSeasonYear(undefined)): Promise<ClubMultiComparisonDetail> {
   if (!Array.isArray(clubIds)
     || clubIds.length < 2
     || clubIds.length > 5
@@ -281,7 +288,7 @@ export async function getClubMultiComparison(clubIds: unknown): Promise<ClubMult
     || new Set(clubIds).size !== clubIds.length) {
     throw new ApiError(422, 'CLUB_IDS_INVALID', 'Select two to five unique club IDs');
   }
-  return { clubs: await Promise.all(clubIds.map((clubId) => getClubStatistics(clubId))) };
+  return { clubs: await Promise.all(clubIds.map((clubId) => getClubStatistics(clubId, undefined, season))) };
 }
 
 export async function createClub(userId: string, name: string): Promise<Club> {

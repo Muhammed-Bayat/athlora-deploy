@@ -129,10 +129,12 @@ describe('listEvents', () => {
     expect(events).toEqual([eventBody({ status: 'completed' })]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('workspace_id = $1');
-    expect(sql).toContain('type = $2');
-    expect(sql).toContain('status = $3');
+    expect(sql).toContain('date >= $2::date AND date < $3::date');
+    expect(sql).toContain('type = $4');
+    expect(sql).toContain('status = $5');
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
-    expect(parameters).toEqual([USER_ID, 'competition', 'completed']);
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, 'competition', 'completed']);
   });
 
   it('filters by the inclusive date range', async () => {
@@ -141,9 +143,11 @@ describe('listEvents', () => {
     await listEvents(USER_ID, { dateFrom: '2026-08-01', dateTo: '2026-08-31' });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('date >= $2');
-    expect(sql).toContain('date <= $3');
-    expect(parameters).toEqual([USER_ID, '2026-08-01', '2026-08-31']);
+    expect(sql).toContain('date >= $2::date AND date < $3::date');
+    expect(sql).toContain('date >= $4');
+    expect(sql).toContain('date <= $5');
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, '2026-08-01', '2026-08-31']);
   });
 
   it('rejects a malformed coach id without querying', async () => {

@@ -3,7 +3,8 @@ import { getAthlete, updateAthlete, updateAthleteStatus } from '../../api/athlet
 import { getAthleteStatistics } from '../../api/statistics';
 import { listInjuries } from '../../api/injuries';
 import { CompactAnatomy } from '../fitness/CompactAnatomy';
-import { Badge, Button, Card, Modal, Toast } from '../../components';
+import { Badge, Button, Card, Modal, SeasonSelector, Toast } from '../../components';
+import { seasonLabel, seasonQueryValue, useSeasonQueryState } from '../../utils/season';
 import type {
   Athlete,
   AthleteMutationPayload,
@@ -97,6 +98,7 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
 }
 
 export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initialFitnessOpen = false }: AthleteDetailPageProps) {
+  const [season, setSeason] = useSeasonQueryState();
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -142,12 +144,12 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     let current = true;
     setStatisticsLoading(true);
     setStatisticsError(null);
-    void getAthleteStatistics(athleteId)
+    void (seasonQueryValue(season) ? getAthleteStatistics(athleteId, season) : getAthleteStatistics(athleteId))
       .then((value) => { if (current) setStatistics(value); })
       .catch((error: unknown) => { if (current) setStatisticsError(athleteErrorMessage(error)); })
       .finally(() => { if (current) setStatisticsLoading(false); });
     return () => { current = false; };
-  }, [athleteId, statisticsRetry]);
+  }, [athleteId, season, statisticsRetry]);
 
   useEffect(() => {
     let current = true;
@@ -242,6 +244,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
           </div>
         </div>
         <div className={styles.heroActions}>
+          <SeasonSelector value={season} onChange={setSeason} />
           {athlete && (
             <span className={athlete.status === 'archived' ? styles.archivedState : athlete.status === 'inactive' ? styles.inactiveState : styles.activeState}>
               {statusLabel(athlete.status)} athlete
@@ -264,13 +267,13 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         {!statisticsLoading && statistics && (
           <dl className={styles.metrics}>
             <div><dt>Personal best</dt><dd>{statistics.pb === null ? 'No valid result' : format100mSeconds(statistics.pb)}</dd><span>100m PB</span></div>
-            <div><dt>Season best</dt><dd>{statistics.sb === null ? 'No valid result this year' : format100mSeconds(statistics.sb)}</dd><span>Current calendar year</span></div>
-            <div><dt>Valid results</dt><dd>{statistics.resultCounts.currentYear}</dd><span>Current calendar year</span></div>
+            <div><dt>{season === 'all' ? 'All-time best' : 'Season best'}</dt><dd>{statistics.sb === null ? (season === new Date().getUTCFullYear().toString() ? 'No valid result this year' : `No valid result in ${seasonLabel(season)}`) : format100mSeconds(statistics.sb)}</dd><span>{seasonLabel(season)}</span></div>
+            <div><dt>Valid results</dt><dd>{statistics.resultCounts.currentYear}</dd><span>{seasonLabel(season)}</span></div>
           </dl>
         )}
       </section>
 
-      <ProgressionChart athleteId={athleteId} athleteName={displayName} />
+      <ProgressionChart athleteId={athleteId} athleteName={displayName} season={season} />
 
       <Card className={styles.injuryCard}>
         <header><div><p>Fitness overview</p><h2>Active injury map</h2></div></header>

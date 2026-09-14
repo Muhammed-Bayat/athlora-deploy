@@ -132,7 +132,7 @@ describe('club comparison data', () => {
     expect(sql).toContain("fw.role = 'guest'");
     expect(sql).toContain("fw.status = 'accepted'");
     expect(sql).toContain('stddev_pop');
-    expect(parameters).toEqual([WORKSPACE_ID, '100m']);
+    expect(parameters).toEqual([WORKSPACE_ID, '100m', '2026-01-01', '2027-01-01']);
   });
 
   it('returns null population standard deviation for fewer than two valid results', async () => {

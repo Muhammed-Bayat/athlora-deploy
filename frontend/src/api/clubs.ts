@@ -15,9 +15,10 @@ export async function listClubs(search = ''): Promise<{ data: Club[]; meta: { co
   return request(`/api/v1/clubs${query}`);
 }
 
-export async function listClubCalendarEvents(clubIds: string[]): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
+export async function listClubCalendarEvents(clubIds: string[], year?: string): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
   const query = new URLSearchParams();
   clubIds.forEach((clubId) => query.append('clubId', clubId));
+  if (year) query.set('year', year);
   return request(`/api/v1/clubs/calendar?${query.toString()}`);
 }
 
@@ -30,23 +31,26 @@ export async function listClubComparisonAthletes(
   return request(`/api/v1/clubs/${clubId}/athletes${query}`, { signal });
 }
 
-export async function getClubStatistics(clubId: string): Promise<ClubStatistics> {
-  const response = await request<{ data: ClubStatistics }>(`/api/v1/clubs/${clubId}/statistics`);
+export async function getClubStatistics(clubId: string, year?: string): Promise<ClubStatistics> {
+  const response = await request<{ data: ClubStatistics }>(`/api/v1/clubs/${clubId}/statistics${year ? `?year=${encodeURIComponent(year)}` : ''}`);
   return response.data;
 }
 
 export async function getClubComparison(
   club1Id: string,
   club2Id: string,
+  year?: string,
 ): Promise<ClubComparisonDetail> {
   const params = new URLSearchParams({ club1Id, club2Id });
+  if (year) params.set('year', year);
   const response = await request<{ data: ClubComparisonDetail }>(`/api/v1/clubs/comparison?${params.toString()}`);
   return response.data;
 }
 
-export async function getClubMultiComparison(clubIds: string[]): Promise<ClubMultiComparisonDetail> {
+export async function getClubMultiComparison(clubIds: string[], year?: string): Promise<ClubMultiComparisonDetail> {
   const params = new URLSearchParams();
   clubIds.forEach((clubId) => params.append('clubId', clubId));
+  if (year) params.set('year', year);
   const response = await request<{ data: ClubMultiComparisonDetail }>(`/api/v1/clubs/comparison/multi?${params.toString()}`);
   return response.data;
 }

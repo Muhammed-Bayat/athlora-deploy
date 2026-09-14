@@ -128,7 +128,8 @@ describe('GET /api/v1/events', () => {
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toMatch(/workspace_id = \$1/);
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
-    expect(parameters).toEqual([USER_ID]);
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`]);
   });
 
   it('applies type, status, and date range filters', async () => {
@@ -141,11 +142,12 @@ describe('GET /api/v1/events', () => {
 
     expect(response.status).toBe(200);
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toContain('type = $2');
-    expect(sql).toContain('status = $3');
-    expect(sql).toContain('date >= $4');
-    expect(sql).toContain('date <= $5');
-    expect(parameters).toEqual([USER_ID, 'training', 'in_progress', '2026-08-01', '2026-08-31']);
+    expect(sql).toContain('type = $4');
+    expect(sql).toContain('status = $5');
+    expect(sql).toContain('date >= $6');
+    expect(sql).toContain('date <= $7');
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, 'training', 'in_progress', '2026-08-01', '2026-08-31']);
   });
 
   it('rejects an invalid filter value with the validation envelope', async () => {

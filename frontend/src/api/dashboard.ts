@@ -1,6 +1,6 @@
 import type { DashboardSummary } from '../types';
 import { get } from './client';
 
-export async function getDashboardSummary(): Promise<DashboardSummary> {
-  return get<DashboardSummary>('dashboard', 'summary');
+export async function getDashboardSummary(year?: string): Promise<DashboardSummary> {
+  return get<DashboardSummary>('dashboard', `summary${year ? `?year=${encodeURIComponent(year)}` : ''}`);
 }

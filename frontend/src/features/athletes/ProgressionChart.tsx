@@ -4,10 +4,12 @@ import { Button, Card } from '../../components';
 import type { ProgressionDetail, ProgressionEntry } from '../../types';
 import { format100mSeconds, formatDateOnly } from '../../utils/formatting';
 import styles from './ProgressionChart.module.css';
+import { seasonLabel, seasonQueryValue, type SeasonValue } from '../../utils/season';
 
 interface ProgressionChartProps {
   athleteId: string;
   athleteName: string;
+  season?: SeasonValue;
 }
 
 type ViewMode = 'chart' | 'table';
@@ -93,7 +95,7 @@ function ProgressionRow({ entry }: { entry: ProgressionEntry }) {
   );
 }
 
-export function ProgressionChart({ athleteId, athleteName }: ProgressionChartProps) {
+export function ProgressionChart({ athleteId, athleteName, season = 'all' }: ProgressionChartProps) {
   const [progression, setProgression] = useState<ProgressionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
     let current = true;
     setLoading(true);
     setError(null);
-    void getAthleteProgression(athleteId)
+    void (seasonQueryValue(season) ? getAthleteProgression(athleteId, { year: season }) : getAthleteProgression(athleteId))
       .then((value) => {
         if (current) setProgression(value);
       })
@@ -117,7 +119,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
         if (current) setLoading(false);
       });
     return () => { current = false; };
-  }, [athleteId, retryCount]);
+  }, [athleteId, retryCount, season]);
 
   const geometry = useMemo(
     () => (progression ? buildChartGeometry(progression.entries) : null),
@@ -128,8 +130,8 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
     if (!progression) return '';
     const { allTimePb, totalResults, totalValid } = progression.summary;
     const pb = allTimePb !== null ? format100mSeconds(allTimePb) : 'none';
-    return `All-time PB: ${pb} \u00B7 ${totalValid} of ${totalResults} valid`;
-  }, [progression]);
+    return `${season === 'all' ? 'All-time' : seasonLabel(season)} PB: ${pb} \u00B7 ${totalValid} of ${totalResults} valid`;
+  }, [progression, season]);
 
   const handleLoad = useCallback(() => {
     setRetryCount((n) => n + 1);
@@ -138,7 +140,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
   if (loading) {
     return (
       <Card className={styles.card}>
-        <p role="status">Loading all-time 100m progression\u2026</p>
+        <p role="status">Loading {seasonLabel(season)} 100m progression\u2026</p>
       </Card>
     );
   }
@@ -170,7 +172,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
       <header className={styles.header}>
         <div>
           <p className={styles.kicker}>Performance trend</p>
-          <h2 className={styles.heading}>All-time 100m progression</h2>
+          <h2 className={styles.heading}>{season === 'all' ? 'All-time' : seasonLabel(season)} 100m progression</h2>
         </div>
         <Button
           variant="secondary"
@@ -191,7 +193,7 @@ export function ProgressionChart({ athleteId, athleteName }: ProgressionChartPro
 
       <div ref={liveRegionRef} className="sr-only" aria-live="polite">
         {progression.summary.allTimePb !== null
-          ? `All-time personal best: ${format100mSeconds(progression.summary.allTimePb)}`
+          ? `${seasonLabel(season)} personal best: ${format100mSeconds(progression.summary.allTimePb)}`
           : 'No valid personal best recorded'}
       </div>
 

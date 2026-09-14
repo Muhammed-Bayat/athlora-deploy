@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import { ApiError } from '../middleware/errors.js';
-import { getPublicClubStatistics, listPublicClubs } from '../services/publicStatistics.js';
+import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../services/publicStatistics.js';
+import { parseSeasonYear } from '../services/seasons.js';
 
 function parameter(value: string | string[] | undefined): string {
   if (typeof value !== 'string') throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -15,9 +16,27 @@ export const listClubs: RequestHandler = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const listSeasons: RequestHandler = async (_req, res, next) => {
+  try {
+    const years = await listPublicSeasons();
+    res.json({ data: years, meta: { count: years.length } });
+  } catch (error) { next(error); }
+};
+
 export const clubStatistics: RequestHandler = async (req, res, next) => {
   try {
-    const statistics = await getPublicClubStatistics(parameter(req.params.clubId));
+    const statistics = req.query.year === undefined
+      ? await getPublicClubStatistics(parameter(req.params.clubId))
+      : await getPublicClubStatistics(parameter(req.params.clubId), parseSeasonYear(req.query.year));
     res.json({ data: statistics });
+  } catch (error) { next(error); }
+};
+
+export const athleteComparison: RequestHandler = async (req, res, next) => {
+  try {
+    const comparison = req.query.year === undefined
+      ? await getPublicAthleteComparison(req.query.athleteId)
+      : await getPublicAthleteComparison(req.query.athleteId, parseSeasonYear(req.query.year));
+    res.json({ data: comparison });
   } catch (error) { next(error); }
 };

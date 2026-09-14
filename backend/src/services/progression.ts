@@ -9,6 +9,7 @@ import {
   type ProgressionDetail,
 } from '../types/domain.js';
 import { getAthlete } from './athletes.js';
+import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
@@ -21,6 +22,7 @@ interface ProgressionQueryOptions {
   cursor?: string;
   limit?: number;
   type?: string;
+  year?: string;
 }
 
 function parseCursor(cursor: string | undefined): { date: string; time: string; eventId: string } | null {
@@ -39,6 +41,7 @@ export async function getAthleteProgressionDetail(
   athleteId: unknown,
   options: ProgressionQueryOptions = {},
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(options.year),
 ): Promise<ProgressionDetail> {
   const pageSize = Math.min(Math.max(options.limit ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
   const cursor = parseCursor(options.cursor);
@@ -64,6 +67,9 @@ export async function getAthleteProgressionDetail(
     const typeCondition = typeFilter
       ? `AND e.type = $${params.push(typeFilter)}`
       : '';
+    const seasonCondition = season.selected === 'all'
+      ? ''
+      : `AND e.date >= $${params.push(season.startDate!)}::date AND e.date < $${params.push(season.endDate!)}::date`;
 
     const progressionQuery = `
       WITH effective AS (
@@ -103,7 +109,8 @@ export async function getAthleteProgressionDetail(
              WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
            ))
-          AND e.status <> 'cancelled'
+           AND e.status <> 'cancelled'
+           ${seasonCondition}
           ${cursorCondition}
           ${typeCondition}
       ), enriched AS (

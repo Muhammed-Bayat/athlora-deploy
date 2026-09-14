@@ -5,6 +5,7 @@ import * as publicStatisticsService from '../services/publicStatistics.js';
 
 vi.mock('../services/publicStatistics.js', () => ({
   getPublicClubStatistics: vi.fn(),
+  getPublicAthleteComparison: vi.fn(),
   listPublicClubs: vi.fn(),
 }));
 
@@ -44,5 +45,17 @@ describe('public statistics routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.athletes[0]).toEqual(expect.objectContaining({ athlete: { id: '44444444-4444-4444-8444-444444444444', name: 'Ari Runner' }, pb: 10.91 }));
     expect(publicStatisticsService.getPublicClubStatistics).toHaveBeenCalledWith(CLUB_ID);
+  });
+
+  it('compares athletes from distinct published clubs without authentication', async () => {
+    const athleteId = '44444444-4444-4444-8444-444444444444';
+    const otherAthleteId = '55555555-5555-4555-8555-555555555555';
+    vi.mocked(publicStatisticsService.getPublicAthleteComparison).mockResolvedValue({ athletes: [] });
+
+    const response = await request(app).get(`/api/v1/public/statistics/comparison?athleteId=${athleteId}&athleteId=${otherAthleteId}&year=2025`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: { athletes: [] } });
+    expect(publicStatisticsService.getPublicAthleteComparison).toHaveBeenCalledWith([athleteId, otherAthleteId], expect.objectContaining({ selected: 2025 }));
   });
 });

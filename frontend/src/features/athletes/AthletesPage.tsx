@@ -14,7 +14,8 @@ import {
 } from '../../api/geminiLiveSdk';
 import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { GeminiMicrophone } from '../../api/geminiMicrophone';
-import { Button, Card, EmptyState, Modal, Select, Toast } from '../../components';
+import { Button, Card, EmptyState, Modal, SeasonSelector, Select, Toast } from '../../components';
+import { seasonQueryValue, useSeasonQueryState } from '../../utils/season';
 import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
 import { listAthleteInjurySummaries } from '../../api/injuries';
@@ -65,6 +66,7 @@ function statusLabel(status: AthleteStatus): string {
 }
 
 export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoster, initialAthleteId = null, initialFitnessOpen = false }: AthletesPageProps = {}) {
+  const [season, setSeason] = useSeasonQueryState();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,7 +114,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     let current = true;
     setLoading(true);
     setLoadError(null);
-    void listAthletes({ includeArchived: true })
+    void listAthletes({ includeArchived: true, ...(seasonQueryValue(season) ? { year: season } : {}) })
       .then(({ data }) => {
         if (!current) return;
         const next = sorted(data);
@@ -127,7 +129,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     return () => {
       current = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, season]);
   useEffect(() => {
     let current = true;
     setInjuryLoading(true);
@@ -629,6 +631,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
           </label>
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
+          <SeasonSelector value={season} onChange={setSeason} />
           <Select
             id="squad-filter"
             icon="squad"
