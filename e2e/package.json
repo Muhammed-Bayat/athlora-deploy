@@ -8,6 +8,9 @@
     "test:install": "playwright install chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0"
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.55.0",
+    "pg": "^8.13.1",
+    "@types/pg": "^8.11.10"
   }
 }

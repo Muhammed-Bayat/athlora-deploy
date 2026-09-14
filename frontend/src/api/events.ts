@@ -3,6 +3,7 @@ import type {
   ApiList,
   EventListFilters,
   EventMutationPayload,
+  EventWeatherForecast,
 } from '../types';
 import { get, create, update, request } from './client';
 
@@ -15,6 +16,7 @@ export async function listEvents(
   if (filters.status) query.set('status', filters.status);
   if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
   if (filters.dateTo) query.set('dateTo', filters.dateTo);
+  if (filters.year) query.set('year', filters.year);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return request<ApiList<AthleticsEvent>>(`/api/v1/events${suffix}`, { signal });
 }
@@ -38,6 +40,7 @@ export async function cancelEvent(id: string): Promise<AthleticsEvent> {
   return response.data;
 }
 
-export async function getEventWeather(id: string): Promise<unknown> {
-  return request<unknown>(`/api/v1/events/${id}/weather`);
+export async function getEventWeather(id: string, signal?: AbortSignal): Promise<EventWeatherForecast> {
+  const response = await request<{ data: EventWeatherForecast }>(`/api/v1/events/${id}/weather`, { signal });
+  return response.data;
 }

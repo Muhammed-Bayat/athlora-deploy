@@ -26,7 +26,7 @@ import {
 import { isCanonicalUuid } from '../validation/primitives.js';
 
 const TIMELINE_COLUMNS =
-  'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, version, device_id, created_at, updated_at, deleted_at';
+  'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id, created_at, updated_at, deleted_at';
 const TIMELINE_SELECT_COLUMNS = TIMELINE_COLUMNS.split(', ')
   .map((column) => `te.${column}`)
   .join(', ');
@@ -61,8 +61,8 @@ function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function ownedIds(userId: string, ...ids: unknown[]): string[] {
-  if (!isCanonicalUuid(userId) || !ids.every(isCanonicalUuid)) throw notFound();
+function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
+  if (!isCanonicalUuid(workspaceId) || !ids.every(isCanonicalUuid)) throw notFound();
   return ids as string[];
 }
 
@@ -144,7 +144,7 @@ async function recomputePlacings(
   for (const row of result.rows) {
     await client.query(
       `UPDATE results
-       SET placing = $1, updated_at = now()
+       SET "placing" = $1, updated_at = now()
        WHERE event_id = $2 AND athlete_id = $3 AND discipline = $4`,
       [placings.get(row.athlete_id) ?? null, eventId, row.athlete_id, DISCIPLINE_100M],
     );
@@ -194,6 +194,20 @@ async function recomputeResult(
   athleteId: string,
   eventType: EventType,
 ): Promise<void> {
+  const participation = await client.query<{ rsvp_status: string }>(
+    `SELECT rsvp_status FROM event_participants
+     WHERE event_id = $1 AND athlete_id = $2`,
+    [eventId, athleteId],
+  );
+  if (participation.rows[0]?.rsvp_status === 'no') {
+    await client.query(
+      `DELETE FROM results WHERE event_id = $1 AND athlete_id = $2 AND discipline = $3`,
+      [eventId, athleteId, DISCIPLINE_100M],
+    );
+    await recomputePlacings(client, eventId);
+    await recomputeBestFlags(client, athleteId);
+    return;
+  }
   const entries = await client.query<TimelineEntryRow>(
     `SELECT ${TIMELINE_COLUMNS}
      FROM timeline_entries
@@ -204,13 +218,13 @@ async function recomputeResult(
   const derived = deriveTrackTime(entries.rows.map(mapTimelineEntryRow), eventType);
   await client.query(
     `INSERT INTO results
-       (event_id, athlete_id, discipline, outcome, final_result, unit, placing, is_pb, is_sb)
+       (event_id, athlete_id, discipline, outcome, final_result, unit, "placing", is_pb, is_sb)
      VALUES ($1, $2, $3, $4, $5, $6, NULL, false, false)
      ON CONFLICT (event_id, athlete_id, discipline)
      DO UPDATE SET outcome = EXCLUDED.outcome,
                    final_result = EXCLUDED.final_result,
                    unit = EXCLUDED.unit,
-                   placing = NULL,
+                    "placing" = NULL,
                    is_pb = false,
                    is_sb = false,
                    updated_at = now()`,
@@ -227,20 +241,24 @@ async function recomputeResult(
   await recomputeBestFlags(client, athleteId);
 }
 
-export async function recomputeEventResults(
+export async function lockEventResultAthletes(
   client: DbExecutor,
   eventId: string,
-  eventType: EventType,
-): Promise<void> {
+  includePresentParticipants = false,
+): Promise<string[]> {
   const athletes = await client.query<{ athlete_id: string }>(
     `SELECT athlete_id
      FROM timeline_entries
      WHERE event_id = $1 AND discipline = $2
-     UNION
-     SELECT athlete_id
-     FROM results
-     WHERE event_id = $1 AND discipline = $2
-     ORDER BY athlete_id ASC`,
+      UNION
+      SELECT athlete_id
+      FROM results
+      WHERE event_id = $1 AND discipline = $2
+      ${includePresentParticipants ? `UNION
+      SELECT athlete_id
+      FROM event_participants
+      WHERE event_id = $1 AND rsvp_status <> 'no'` : ''}
+      ORDER BY athlete_id ASC`,
     [eventId, DISCIPLINE_100M],
   );
   if (athletes.rows.length > 0) {
@@ -253,16 +271,27 @@ export async function recomputeEventResults(
       [athletes.rows.map((row) => row.athlete_id)],
     );
   }
-  for (const row of athletes.rows) {
-    await recomputeResult(client, eventId, row.athlete_id, eventType);
+  return athletes.rows.map((row) => row.athlete_id);
+}
+
+export async function recomputeEventResults(
+  client: DbExecutor,
+  eventId: string,
+  eventType: EventType,
+  includePresentParticipants = false,
+): Promise<void> {
+  const athleteIds = await lockEventResultAthletes(client, eventId, includePresentParticipants);
+  for (const athleteId of athleteIds) {
+    await recomputeResult(client, eventId, athleteId, eventType);
   }
 }
 
 async function lockOwnedEntry(
   client: DbExecutor,
-  userId: string,
+  workspaceId: string,
   eventId: string,
   entryId: string,
+  allowFixtureAccess = true,
 ): Promise<{ entry: TimelineEntry; eventType: EventType; eventStatus: EventStatus }> {
   const result = await client.query<LockedEntryRow>(
     `SELECT ${TIMELINE_SELECT_COLUMNS},
@@ -271,12 +300,21 @@ async function lockOwnedEntry(
      FROM timeline_entries te
      JOIN events e ON e.id = te.event_id
      JOIN athletes a ON a.id = te.athlete_id
-     WHERE te.id = $1
-       AND te.event_id = $2
-       AND e.created_by = $3
-       AND a.coach_id = $3
-     FOR UPDATE OF e, a, te`,
-    [entryId, eventId, userId],
+      WHERE te.id = $1
+        AND te.event_id = $2
+        AND (
+          (e.workspace_id = $3 AND a.workspace_id = $3)
+           OR ($4::boolean AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
+          ))
+        )
+      FOR UPDATE OF e, a, te`,
+    [entryId, eventId, workspaceId, allowFixtureAccess],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -288,22 +326,51 @@ async function lockOwnedEntry(
 }
 
 export async function listTimelineEntries(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry[]> {
-  const [ownedEventId] = ownedIds(userId, eventId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
+  const fixtureCondition = allowFixtureAccess
+    ? `OR ($3::boolean AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $2
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
+          ))`
+    : '';
   const result = await executor.query<TimelineEntryRow>(
-    `SELECT ${TIMELINE_SELECT_COLUMNS}
+    `SELECT ${TIMELINE_SELECT_COLUMNS},
+              COALESCE(public_logger.logger_name, recorder.name) AS recorder_name,
+              CASE WHEN public_logger.id IS NOT NULL THEN NULLIF(public_logger.logger_club, '') ELSE recorder_workspace.name END AS recorder_club
      FROM timeline_entries te
-     JOIN events e ON e.id = te.event_id
-     JOIN athletes a ON a.id = te.athlete_id
-     WHERE te.event_id = $1
-       AND te.deleted_at IS NULL
-       AND e.created_by = $2
-       AND a.coach_id = $2
-     ORDER BY te.created_at ASC, te.id ASC`,
-    [ownedEventId, userId],
+      JOIN events e ON e.id = te.event_id
+      JOIN athletes a ON a.id = te.athlete_id
+      LEFT JOIN users recorder ON recorder.id = te.recorded_by
+      LEFT JOIN public_logger_sessions public_logger ON public_logger.id = te.public_logger_session_id
+      LEFT JOIN LATERAL (
+        SELECT workspace.name
+        FROM workspace_members membership
+        JOIN workspaces workspace ON workspace.id = membership.workspace_id
+        WHERE membership.user_id = te.recorded_by
+          AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fixture_workspace
+            WHERE fixture_workspace.event_id = e.id AND fixture_workspace.workspace_id = membership.workspace_id
+          )
+        ORDER BY membership.workspace_id
+        LIMIT 1
+      ) recorder_workspace ON true
+       WHERE te.event_id = $1
+        AND te.deleted_at IS NULL
+        AND (
+          (e.workspace_id = $2 AND a.workspace_id = $2)
+          ${fixtureCondition}
+        )
+       ORDER BY te.created_at ASC, te.id ASC`,
+    allowFixtureAccess ? [ownedEventId, workspaceId, true] : [ownedEventId, workspaceId],
   );
   return result.rows.map(mapTimelineEntryRow);
 }
@@ -313,16 +380,32 @@ export async function createTimelineEntry(
   eventId: unknown,
   payload: TimelineEntryCreatePayload,
   runTransaction: TransactionRunner = withTransaction,
+  workspaceId = userId,
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry> {
-  const [ownedEventId] = ownedIds(userId, eventId, payload.athleteId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId, payload.athleteId);
   return runTransaction(async (client) => {
     const locked = await client.query<LockedEventRow>(
       `SELECT e.type, e.status
-       FROM events e
-       JOIN athletes a ON a.id = $2
-       WHERE e.id = $1 AND e.created_by = $3 AND a.coach_id = $3
-       FOR UPDATE OF e, a`,
-      [ownedEventId, payload.athleteId, userId],
+         FROM events e
+         JOIN athletes a ON a.id = $2
+         WHERE e.id = $1 AND (
+          (e.workspace_id = $3 AND a.workspace_id = $3)
+           OR ($4::boolean AND EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = a.id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $3
+              AND (fw.role = 'host' OR (
+                fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+              ))
+           ))
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM event_participants ep
+           WHERE ep.event_id = e.id AND ep.athlete_id = a.id AND ep.rsvp_status = 'no'
+         )
+         FOR UPDATE OF e, a`,
+        [ownedEventId, payload.athleteId, workspaceId, allowFixtureAccess],
     );
     const event = locked.rows[0];
     if (!event) throw notFound();
@@ -354,19 +437,21 @@ export async function createTimelineEntry(
 }
 
 export async function updateTimelineEntry(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   entryId: unknown,
   patch: TimelineEntryPatchPayload,
   runTransaction: TransactionRunner = withTransaction,
+  allowFixtureAccess = true,
 ): Promise<TimelineEntry> {
-  const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
+  const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   return runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
-      userId,
-      ownedEventId,
-      ownedEntryId,
+       workspaceId,
+       ownedEventId,
+       ownedEntryId,
+       allowFixtureAccess,
     );
     if (entry.deletedAt !== null) throw notFound();
     assertLoggingOpen(eventStatus);
@@ -409,19 +494,21 @@ export async function updateTimelineEntry(
 }
 
 export async function removeTimelineEntry(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   entryId: unknown,
   payload: TimelineEntryDeletePayload,
   runTransaction: TransactionRunner = withTransaction,
+  allowFixtureAccess = true,
 ): Promise<void> {
-  const [ownedEventId, ownedEntryId] = ownedIds(userId, eventId, entryId);
+  const [ownedEventId, ownedEntryId] = scopedIds(workspaceId, eventId, entryId);
   await runTransaction(async (client) => {
     const { entry, eventType, eventStatus } = await lockOwnedEntry(
       client,
-      userId,
-      ownedEventId,
-      ownedEntryId,
+       workspaceId,
+       ownedEventId,
+       ownedEntryId,
+       allowFixtureAccess,
     );
     if (entry.deletedAt !== null) {
       if (entry.version === payload.expectedVersion + 1) return;

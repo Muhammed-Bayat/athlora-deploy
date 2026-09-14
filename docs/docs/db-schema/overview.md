@@ -6,33 +6,90 @@ sidebar_position: 1
 
 PostgreSQL 13+. Every table uses UUID primary keys, `created_at`/`updated_at` timestamps, and soft deletes (`deleted_at`) where the app needs "undo" (`timeline_entries`, `results` uses update-in-place with an override trail).
 
+The schema is the shared foundation for Athlora's full athletics-meet scope. The deployed API currently enforces the 100m/seconds contract, but `discipline`, `unit`, attempts, fouls, incidents, and result rows were modelled so subsequent track, relay, jump, throw, and vertical-event contracts can be introduced through coordinated migrations and application changes.
+
 ## Core tables
 
 ```
 users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
-athletes             (id UUID PK, coach_id -> users, name, dob, gender, squad, notes,
-                      archived_at, created_at, updated_at)
-events               (id UUID PK, created_by -> users, type, discipline, title, date, time,
-                      location_name, latitude, longitude, status)
-event_participants   (event_id, athlete_id, rsvp_status)   — PK (event_id, athlete_id)
+clubs                (id UUID PK, workspace_id -> workspaces UNIQUE, name)
+club_join_requests   (id UUID PK, club_id -> clubs, user_id -> users, status, reviewed_by, reviewed_at)
+workspaces           (id UUID PK, name, timezone)
+workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK (workspace_id, user_id)
+workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invited_by, expires_at,
+                       accepted_at, accepted_by, revoked_at, revoked_by)
+workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
+athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, notes,
+                         lifecycle_status, archived_at, status_changed_at, status_changed_by, created_at, updated_at)
+athlete_status_transitions (id UUID PK, workspace_id, athlete_id, from_status, to_status, changed_by, changed_at)
+squads               (id UUID PK, workspace_id -> workspaces, name, archived_at, created_at, updated_at)
+athlete_squads       (workspace_id, athlete_id -> athletes, squad_id -> squads) — PK (athlete_id, squad_id)
+events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
+                        location_name, latitude, longitude, timezone, status, fixture_revision)
+event_fixture_workspaces (event_id, workspace_id, role ('host'|'guest'), status, accepted_revision, contact_email,
+                          joined_by, withdrawn_at, withdrawn_by) — PK (event_id, workspace_id)
+fixture_invitations  (id UUID PK, event_id, target_workspace_id, email, revision, token_hash, status, invited_by,
+                      expires_at, accepted_at, accepted_by, revoked_at, revoked_by)
+fixture_invitation_responses (id UUID PK, invitation_id, revision, workspace_id, response, message, responded_by)
+event_participants   (event_id, athlete_id, participant_workspace_id, rsvp_status) — PK (event_id, athlete_id)
+event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status, flagged_at,
+                                  acknowledged_at, acknowledged_by) — PK (event_id, athlete_id)
+event_helper_invitations (id UUID PK, event_id, secret_hash, human_code, max_cap, status, created_by)
+event_helper_grants  (id UUID PK, invitation_id, event_id, auth0_sub, status, redeemed_at,
+                       is_offline_logger, offline_queue_device_id)
+event_helper_audit_logs (id UUID PK, event_id, invitation_id, action, actor_sub, details)
 timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
                       is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
 results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
-                      is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
-                      — PK (event_id, athlete_id, discipline)
+                       is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
+                       — PK (event_id, athlete_id, discipline)
+sync_action_receipts (action_id UUID PK, event_id, actor_id, device_id, action_type, status,
+                      entry_id, server_version, error_code, processed_at)
+account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
+                       requested_at, updated_at, completed_at)
+athlete_injuries     (id UUID PK, workspace_id -> workspaces, athlete_id -> athletes, body_region, area,
+                       side, severity, notes, occurrence_date, expected_return_date, resolved_date,
+                       resolution_notes, created_by, updated_by, deleted_at, deleted_by)
 ```
+
+### athlete_injuries
+Persistent athlete injury and recovery records.
+
+- `body_region`: `Head & Neck`, `Torso`, `Arm`, `Leg`.
+- `area`: specific anatomical area.
+- `side`: `Left`, `Right`, `Both`, `Center`.
+- `severity`: `Minor`, `Moderate`, `Severe`.
+- `notes`: optional coach notes.
+- `occurrence_date`: date of injury occurrence.
+- `expected_return_date`: expected return date.
+- `resolved_date`: timestamp when resolved.
+- `resolution_notes`: notes recorded upon resolution.
+- `created_by`, `updated_by`, `deleted_by`: user attribution for audit.
+- `deleted_at`: soft deletion timestamp (`NULL` unless soft deleted, preserving historical attribution).
 
 ### timeline_entries
 The append-only live log — the heart of the app.
 
 - `entry_type`: `attempt`, `split`, `penalty`, `note`.
-- `value` + `unit`: seconds for time, metres/cm for distance/height. For the 100m contract the unit is `seconds`.
-- `is_foul`: field-event foul attempts.
+- `value` + `unit`: seconds for time, metres/cm for distance/height. The deployed 100m contract accepts `seconds`; the wider unit model is reserved for later event contracts.
+- `is_foul`: represents a field-event foul attempt. It is stored in the schema but the current 100m API always normalizes it to `false`.
 - `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
 - `note_text`: free-text body for `note` entries.
 - `version`: starts at 1, is required as `expectedVersion` for PATCH/DELETE, and bumps once on each successful mutation. A mismatch is rejected before persistence.
 - `device_id`: originating device for offline merge (Stage 3).
 - `deleted_at`: "undo" is a soft delete, never `DELETE`; normal timeline reads and result derivation exclude tombstones. Repeating the same undo leaves its version and timestamps unchanged.
+
+### squads and athlete_squads
+
+`squads` is the workspace-owned catalogue of managed squad names. Names are case-insensitively unique inside a workspace and squads are archived rather than deleted. `athlete_squads` allows each athlete to belong to zero or more squads, prevents duplicate membership, and carries the workspace key so both foreign keys must resolve within the same workspace.
+
+Migration `0007_workspace_squads.sql` backfills each distinct trimmed nonblank legacy `athletes.squad` value into a squad in that athlete's workspace and creates the matching membership. The old text column remains only for compatibility with pre-migration deployments; application reads and writes use the normalized tables.
+
+### clubs and club_join_requests
+
+`clubs` is the product-facing organization record. Each Club has exactly one backing workspace, retaining established workspace-scoped foreign keys and authorization without moving athlete, event, fixture, or audit history. Migration `0017_clubs.sql` backfills one Club for every existing workspace.
+
+Authenticated users can search every Club and create one pending request per Club. A request is `pending`, `approved`, `rejected`, or `withdrawn`; approval records its coach actor and timestamp, then atomically creates or updates the backing workspace membership with the selected `coach` or `assistant` role.
 
 ### event_participants
 The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
@@ -41,21 +98,36 @@ The assignment set for an event. The composite primary key prevents duplicate ev
 - Existing assignments remain visible if the athlete is later archived, preserving historical participation.
 - RSVP status replacement is idempotent.
 - Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
-- Participant reads join the athlete name, squad and archive state for event detail and live-logger selection.
+- Participant reads aggregate squad names with the athlete name and archive state, so multi-squad membership never duplicates a participant row.
+- `participant_workspace_id` has composite foreign keys to both `(athlete_id, workspace_id)` and `(event_id, workspace_id)` fixture membership. An athlete therefore cannot be assigned to an event unless their workspace is explicitly participating in it.
+
+### fixtures
+
+Every event receives one `host` row in `event_fixture_workspaces`, including historical and newly-created single-workspace events. A guest row is created only after the email-bound invitation has been accepted by a coach in that guest workspace. The invitation token is stored only as a SHA-256 hash; invitation responses are immutable actor-attributed records.
+
+`events.fixture_revision` starts at `1`. A material date/time/venue change or accepted-team change advances it and marks guest teams as requiring reacceptance without removing their roster rows. A participant workspace may be withdrawn, but its participant, timeline, and result rows remain to preserve history.
+
+**Host authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can also view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side.
+
+### athlete lifecycle
+
+`athletes.lifecycle_status` is constrained to `active`, `inactive`, or `archived`. The current transition is recorded on the athlete row for efficient reads; `athlete_status_transitions` preserves every real change with its actor and timestamp. Legacy rows are backfilled as active or archived without fabricating an actor.
+
+Any real transition upserts a pending `event_participant_status_reviews` row for each existing assignment. The `(event_id, athlete_id)` key makes a review item independent per athlete and a later transition resets only that athlete's acknowledgement. Historical participant, timeline, result, squad, and injury data remains untouched.
 
 ### results
 Derived/materialized from `timeline_entries`. Recalculated after every entry change.
 
 - `outcome`: `no_result` | `valid` | `dq` | `dnf` | `dns` — distinguishes no result, a valid finish, and voided outcomes.
-- `final_result`: computed value (best valid field attempt, finishing time). Must be `NULL` for voided outcomes.
+- `final_result`: computed result value. The deployed contract writes a 100m finishing time; the schema and future derivation contracts also support best valid field attempts. It must be `NULL` for voided outcomes.
 - `is_pb` / `is_sb`: derived flags, not manually logged.
 - `manual_override`, `override_reason`, `overridden_by`, `override_at`: coach corrections with an audit trail (who corrected, when, and why).
 
 ## Ownership boundaries
 
-Protected requests resolve the verified Auth0 subject to `users.id` before resource access. Direct ownership is `athletes.coach_id` for athletes and `events.created_by` for events. Timeline entries, participants and results are authorized through both parent relationships: the event must have been created by the current user and the athlete must belong to that user. `recorded_by` and `overridden_by` are audit actors, not ownership fields.
+Protected requests resolve the verified Auth0 subject to an active `workspace_members` row before resource access. `athletes.workspace_id` and `events.workspace_id` are the authorization boundary; dependent resources require their event and athlete to share that workspace. `coach_id`, `created_by`, `recorded_by` and `overridden_by` are audit actors, not ownership fields.
 
-Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. The policy is centralized in `backend/src/services/ownership.ts` so the Stage 2 sharing model can replace it consistently when assistants and cross-coach fixtures are introduced.
+Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. Fixture access is a separate, narrow allow-list: guest workspace queries must match an accepted `event_fixture_workspaces` row plus an `event_participants.participant_workspace_id` row for the requested athlete. No generic ownership query is relaxed for fixtures.
 
 ## Constraints and indexes
 
@@ -66,7 +138,27 @@ Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so 
 - `timeline_entries`: `entry_type`, `incident_type` and `unit` domain checks; `value >= 0` when present; index on `(event_id, athlete_id, discipline)`.
 - `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
 
-The MVP discipline is fixed to 100m only at the API/service boundary (see the API contract) — the database `discipline` column stays free-form `TEXT` so future disciplines can be added by new migrations.
+Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
+
+Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state blocks stale-token synchronization and resource access and schedules idempotent cleanup retries through `next_attempt_at`.
+
+Migration `0005_workspace_tenancy.sql` creates workspaces and membership roles, backfills one UTC workspace per legacy user without changing domain IDs, adds `workspace_id` to athletes/events, and adds optional event timezone overrides. Account departure deletes memberships but retains the local audit user and shared workspace history.
+
+Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer roles to assistants, limits workspace roles to coach/assistant, and adds durable invitations plus membership audit events. Invitation tokens are persisted only as SHA-256 hashes.
+
+Migration `0007_workspace_squads.sql` adds normalized workspace squads and multi-squad athlete memberships, including the legacy text migration and indexes used by roster filters.
+
+Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, current actor/timestamp metadata, transition audit rows, and per-assignment coach-review records.
+
+Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, hashed/versioned invitations and response history, material-change revisions, and composite participant foreign keys that enforce fixture-team roster ownership.
+
+Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
+
+Migration `0017_clubs.sql` adds the Club discovery layer and coach-reviewed membership requests. Existing workspace data is backfilled into Clubs; new users synchronize without receiving an automatic personal workspace and create or request a Club through authenticated onboarding.
+
+**Host authority and shared result authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side. Cancellation preserves an intelligible historical record: placings become null and PB/SB flags clear, but result rows and timeline entries remain. Post-start withdrawal preserves the withdrawn team's results and entries.
+
+The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
 
 The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
 
@@ -76,9 +168,35 @@ Migrations live in `backend/src/db/migrations`, one file per change, sequentiall
 
 ## Current migration
 
-`0001_init.sql` — the full authoritative base schema, followed by `0002_contract_100m.sql` which adds the MVP contract state (athlete archival, result outcomes, override audit timestamp, note storage, domain constraints and indexes). Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+All 21 migrations are tracked in `schema_migrations` (note: two files share the number `0019`):
 
-Status: applied to the Neon development database and tracked in `schema_migrations`. New databases and pending migrations are handled with:
+| Migration | Description |
+|-----------|-------------|
+| `0001_init.sql` | Base schema: users, athletes, events, participants, timeline entries, results |
+| `0002_contract_100m.sql` | 100m contract constraints and lookup indexes |
+| `0003_aggregate_indexes.sql` | Read-path indexes for statistics and dashboard queries |
+| `0004_account_lifecycle.sql` | Durable account-deletion tombstones and retry scheduling |
+| `0005_workspace_tenancy.sql` | Workspaces, memberships, and workspace-scoped foreign keys |
+| `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, hashed invitations, membership audit |
+| `0007_workspace_squads.sql` | Normalized squads and multi-squad athlete memberships |
+| `0008_athlete_lifecycle.sql` | Active/inactive/archived states, transitions, status reviews |
+| `0009_intermediate_fixtures.sql` | Cross-workspace fixture authorization and revision tracking |
+| `0010_fixture_workspace_status_index.sql` | Non-unique fixture workspace status index for multi-guest support |
+| `0011_athlete_injuries.sql` | Persistent injury records with recovery history and audit |
+| `0012_audited_rsvps.sql` | RSVP audit trail for event participant status changes |
+| `0013_in_app_event_reminders.sql` | In-app event reminders and mute preferences |
+| `0014_event_helper_invitations.sql` | Event helper invitations, grants, and audit logs |
+| `0015_optional_injury_dates.sql` | Optional injury occurrence and expected return dates |
+| `0016_public_logger_links.sql` | Public logger links and unauthenticated session support |
+| `0017_clubs.sql` | Clubs and club join requests with coach-reviewed access |
+| `0018_fixture_notifications.sql` | Fixture notification delivery and unread counts |
+| `0019_targeted_fixture_invitations_and_single_membership.sql` | Targeted fixture invitations and single-membership enforcement |
+| `0019_offline_logger_designation.sql` | Designated offline logger per event with transfer protocol |
+| `0020_sync_idempotency.sql` | Idempotent batch sync with action receipts and version conflict detection |
+
+Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+
+Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
 
 ```bash
 cd backend
@@ -91,4 +209,4 @@ An ERD will be drafted from the dev plan's data model and reviewed as a team bef
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra], opencode[gpt-5.6-sol], and opencode[google/gemini-3.5-flash-lite].

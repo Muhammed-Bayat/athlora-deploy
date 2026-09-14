@@ -7,29 +7,40 @@ import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { EventParticipantSummary } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { recomputeEventResults } from './timeline.js';
 import type {
   EventParticipantCreatePayload,
   EventParticipantReplacementPayload,
+  EventParticipantBulkRsvpPayload,
 } from '../validation/payloads.js';
 
 const PARTICIPANT_COLUMNS = `ep.event_id,
        ep.athlete_id,
        ep.rsvp_status,
+       ep.participant_workspace_id,
+       w.name AS participant_workspace_name,
        a.name AS athlete_name,
-       a.squad AS athlete_squad,
-       a.archived_at AS athlete_archived_at`;
+       COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
+        a.archived_at AS athlete_archived_at,
+        a.lifecycle_status AS athlete_lifecycle_status,
+        EXISTS (
+          SELECT 1 FROM event_participant_status_reviews epsr
+          WHERE epsr.event_id = ep.event_id
+            AND epsr.athlete_id = ep.athlete_id
+            AND epsr.acknowledged_at IS NULL
+        ) AS status_review_required`;
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function ownedIds(userId: string, ...ids: unknown[]): string[] {
-  if (!isCanonicalUuid(userId) || !ids.every(isCanonicalUuid)) throw notFound();
+function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
+  if (!isCanonicalUuid(workspaceId) || !ids.every(isCanonicalUuid)) throw notFound();
   return ids as string[];
 }
 
 async function getParticipant(
-  userId: string,
+   workspaceId: string,
   eventId: string,
   athleteId: string,
   executor: DbExecutor,
@@ -38,12 +49,13 @@ async function getParticipant(
     `SELECT ${PARTICIPANT_COLUMNS}
      FROM event_participants ep
      JOIN events e ON e.id = ep.event_id
-     JOIN athletes a ON a.id = ep.athlete_id
+      JOIN athletes a ON a.id = ep.athlete_id
+      LEFT JOIN workspaces w ON w.id = ep.participant_workspace_id
      WHERE ep.event_id = $1
        AND ep.athlete_id = $2
-       AND e.created_by = $3
-       AND a.coach_id = $3`,
-    [eventId, athleteId, userId],
+        AND e.workspace_id = $3
+        AND a.workspace_id = $3`,
+     [eventId, athleteId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -51,39 +63,44 @@ async function getParticipant(
 }
 
 export async function listEventParticipants(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<EventParticipantSummary[]> {
-  const [ownedEventId] = ownedIds(userId, eventId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
   const result = await executor.query<EventParticipantSummaryRow>(
     `SELECT ${PARTICIPANT_COLUMNS}
      FROM event_participants ep
      JOIN events e ON e.id = ep.event_id
-     JOIN athletes a ON a.id = ep.athlete_id
-     WHERE ep.event_id = $1
-       AND e.created_by = $2
-       AND a.coach_id = $2
+      JOIN athletes a ON a.id = ep.athlete_id
+      LEFT JOIN workspaces w ON w.id = ep.participant_workspace_id
+      WHERE ep.event_id = $1
+          AND (e.workspace_id = $2 OR EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+           ))
      ORDER BY lower(a.name) ASC, a.id ASC`,
-    [ownedEventId, userId],
+    [ownedEventId, workspaceId],
   );
   return result.rows.map(mapEventParticipantSummaryRow);
 }
 
 export async function addEventParticipant(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   payload: EventParticipantCreatePayload,
   runTransaction: <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T> = withTransaction,
 ): Promise<EventParticipantSummary> {
-  const [ownedEventId] = ownedIds(userId, eventId, payload.athleteId);
+  const [ownedEventId] = scopedIds(workspaceId, eventId, payload.athleteId);
 
   return runTransaction(async (client) => {
     const athlete = await client.query<{
       archived_at: Date | string | null;
+      lifecycle_status: 'active' | 'inactive' | 'archived';
       already_assigned: boolean;
     }>(
-      `SELECT a.archived_at,
+       `SELECT a.archived_at, a.lifecycle_status,
               EXISTS (
                 SELECT 1
                 FROM event_participants ep
@@ -92,10 +109,10 @@ export async function addEventParticipant(
        FROM events e
        JOIN athletes a ON a.id = $2
        WHERE e.id = $1
-         AND e.created_by = $3
-         AND a.coach_id = $3
+          AND e.workspace_id = $3
+          AND a.workspace_id = $3
        FOR UPDATE OF e, a`,
-      [ownedEventId, payload.athleteId, userId],
+       [ownedEventId, payload.athleteId, workspaceId],
     );
     const ownedAthlete = athlete.rows[0];
     if (!ownedAthlete) throw notFound();
@@ -109,51 +126,87 @@ export async function addEventParticipant(
     if (ownedAthlete.archived_at !== null) {
       throw new ApiError(409, 'ATHLETE_ARCHIVED', 'Archived athletes cannot be assigned to events');
     }
+    if (ownedAthlete.lifecycle_status === 'inactive') {
+      throw new ApiError(409, 'ATHLETE_INACTIVE', 'Inactive athletes cannot be assigned to events');
+    }
 
     const inserted = await client.query(
-      `INSERT INTO event_participants (event_id, athlete_id)
-       VALUES ($1, $2)
+      `INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id)
+       SELECT $1, $2, workspace_id FROM athletes WHERE id = $2
        RETURNING event_id`,
       [ownedEventId, payload.athleteId],
     );
     if (inserted.rows.length === 0) throw notFound();
-    return getParticipant(userId, ownedEventId, payload.athleteId, client);
+    return getParticipant(workspaceId, ownedEventId, payload.athleteId, client);
   });
 }
 
 export async function replaceEventParticipant(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   athleteId: unknown,
   payload: EventParticipantReplacementPayload,
   executor: DbExecutor = getPool(),
+  actorId: string | null = null,
 ): Promise<EventParticipantSummary> {
-  const [ownedEventId, ownedAthleteId] = ownedIds(userId, eventId, athleteId);
+  const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
+  if (actorId) {
+  const previous = await executor.query<{ rsvp_status: string }>(
+    `SELECT ep.rsvp_status FROM event_participants ep JOIN events e ON e.id = ep.event_id JOIN athletes a ON a.id = ep.athlete_id
+     WHERE ep.event_id = $1 AND ep.athlete_id = $2 AND e.workspace_id = $3 AND a.workspace_id = $3 FOR UPDATE`,
+    [ownedEventId, ownedAthleteId, workspaceId],
+  );
+  if (!previous.rows[0]) throw notFound();
+  if (previous.rows[0].rsvp_status !== payload.rsvpStatus) {
+    await executor.query(
+      `INSERT INTO event_participant_rsvp_audit (event_id, athlete_id, previous_status, next_status, changed_by)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [ownedEventId, ownedAthleteId, previous.rows[0].rsvp_status, payload.rsvpStatus, actorId],
+    );
+  }
+  }
   const result = await executor.query<EventParticipantSummaryRow>(
     `UPDATE event_participants ep
-     SET rsvp_status = $1
-     FROM events e, athletes a
+      SET rsvp_status = $1, rsvp_updated_at = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN now() ELSE ep.rsvp_updated_at END, rsvp_updated_by = CASE WHEN ep.rsvp_status IS DISTINCT FROM $1 THEN $5 ELSE ep.rsvp_updated_by END
+      FROM events e, athletes a, workspaces w
      WHERE ep.event_id = $2
        AND ep.athlete_id = $3
-       AND e.id = ep.event_id
-       AND a.id = ep.athlete_id
-       AND e.created_by = $4
-       AND a.coach_id = $4
-     RETURNING ${PARTICIPANT_COLUMNS}`,
-    [payload.rsvpStatus, ownedEventId, ownedAthleteId, userId],
+        AND e.id = ep.event_id
+        AND a.id = ep.athlete_id
+        AND w.id = ep.participant_workspace_id
+         AND e.workspace_id = $4
+         AND a.workspace_id = $4
+      RETURNING ${PARTICIPANT_COLUMNS}`,
+    [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId, actorId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
+  if (payload.rsvpStatus === 'no') {
+    const event = await executor.query<{ type: 'training' | 'competition' }>(
+      `SELECT type FROM events WHERE id = $1`,
+      [ownedEventId],
+    );
+    await recomputeEventResults(executor, ownedEventId, event.rows[0].type);
+  }
   return mapEventParticipantSummaryRow(row);
 }
 
+export async function bulkReplaceEventParticipants(workspaceId: string, eventId: unknown, actorId: string, payload: EventParticipantBulkRsvpPayload): Promise<EventParticipantSummary[]> {
+  const [ownedEventId] = scopedIds(workspaceId, eventId);
+  return withTransaction(async (client) => {
+    const updated: EventParticipantSummary[] = [];
+    for (const item of payload.updates) updated.push(await replaceEventParticipant(workspaceId, ownedEventId, item.athleteId, { rsvpStatus: item.rsvpStatus }, client, actorId));
+    return updated;
+  });
+}
+
 export async function removeEventParticipant(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   athleteId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<void> {
-  const [ownedEventId, ownedAthleteId] = ownedIds(userId, eventId, athleteId);
+  const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
   const result = await executor.query(
     `DELETE FROM event_participants ep
      USING events e, athletes a
@@ -161,10 +214,32 @@ export async function removeEventParticipant(
        AND ep.athlete_id = $2
        AND e.id = ep.event_id
        AND a.id = ep.athlete_id
-       AND e.created_by = $3
-       AND a.coach_id = $3
+        AND e.workspace_id = $3
+        AND a.workspace_id = $3
      RETURNING ep.event_id`,
-    [ownedEventId, ownedAthleteId, userId],
+    [ownedEventId, ownedAthleteId, workspaceId],
   );
   if (result.rows.length === 0) throw notFound();
+}
+
+export async function acknowledgeParticipantStatusReview(
+  workspaceId: string,
+  actorId: string,
+  eventId: unknown,
+  athleteId: unknown,
+  executor: DbExecutor = getPool(),
+): Promise<void> {
+  const [ownedEventId, ownedAthleteId] = scopedIds(workspaceId, eventId, athleteId);
+  if (!isCanonicalUuid(actorId)) throw notFound();
+  await executor.query(
+    `UPDATE event_participant_status_reviews epsr
+     SET acknowledged_at = now(), acknowledged_by = $1
+     FROM events e
+     WHERE epsr.event_id = $2
+       AND epsr.athlete_id = $3
+       AND e.id = epsr.event_id
+       AND e.workspace_id = $4
+       AND epsr.acknowledged_at IS NULL`,
+    [actorId, ownedEventId, ownedAthleteId, workspaceId],
+  );
 }

@@ -1,19 +1,27 @@
 import { ApiError } from '../middleware/errors.js';
 import {
   DISCIPLINE_100M,
+  ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
   EVENT_STATUSES,
   EVENT_TYPES,
   INCIDENT_TYPES,
   RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
+  INJURY_REGIONS,
+  INJURY_SIDES,
+  INJURY_SEVERITIES,
   type Discipline,
+  type AthleteLifecycleStatus,
   type EntryType,
   type EventStatus,
   type EventType,
   type IncidentType,
   type ResultUnit,
   type RsvpStatus,
+  type InjuryRegion,
+  type InjurySide,
+  type InjurySeverity,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -37,7 +45,8 @@ export interface AthleteCreatePayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
@@ -45,14 +54,32 @@ export interface AthleteReplacementPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
 export interface AthleteListQuery {
   includeArchived: boolean;
+  status?: AthleteLifecycleStatus;
   name?: string;
+  squadId?: string;
   squad?: string;
+}
+
+export interface AthleteProgressionQuery {
+  cursor?: string;
+  limit?: number;
+  type?: EventType;
+  year?: string;
+}
+
+export interface AthleteStatusPayload {
+  status: AthleteLifecycleStatus;
+}
+
+export interface ClubPublicationPayload {
+  publicResultsEnabled: boolean;
 }
 
 export interface EventCreatePayload {
@@ -84,6 +111,16 @@ export interface EventListQuery {
   status?: EventStatus;
   dateFrom?: string;
   dateTo?: string;
+  year?: string;
+}
+
+export interface WeatherCurrentQuery {
+  latitude: number;
+  longitude: number;
+}
+
+export interface VenueSearchQuery {
+  q: string;
 }
 
 export interface EventParticipantCreatePayload {
@@ -93,6 +130,7 @@ export interface EventParticipantCreatePayload {
 export interface EventParticipantReplacementPayload {
   rsvpStatus: RsvpStatus;
 }
+export interface EventParticipantBulkRsvpPayload { updates: Array<{ athleteId: string; rsvpStatus: RsvpStatus }>; }
 
 export interface TimelineEntryCreatePayload {
   athleteId: string;
@@ -131,9 +169,24 @@ export interface ResultOverridePayload {
   overrideReason: string | null;
 }
 
-const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squad', 'notes'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'name', 'squad'] as const;
-const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
+export interface FixtureInvitationCreatePayload {
+  targetClubId: string;
+  expiresInDays: number;
+}
+
+export interface FixtureInvitationResponsePayload {
+  response: 'accepted' | 'declined' | 'change_requested';
+  message: string | null;
+}
+
+const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
+const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type', 'year'] as const;
+const ATHLETE_STATUS_FIELDS = ['status'] as const;
+const SQUAD_FIELDS = ['name'] as const;
+const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo', 'year'] as const;
+const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
+const VENUE_SEARCH_QUERY_FIELDS = ['q'] as const;
 const EVENT_FIELDS = [
   'type',
   'discipline',
@@ -167,6 +220,9 @@ const TIMELINE_PATCH_FIELDS = [
 ] as const;
 const TIMELINE_DELETE_FIELDS = ['expectedVersion'] as const;
 const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
+const FIXTURE_INVITATION_CREATE_FIELDS = ['targetClubId', 'expiresInDays'] as const;
+const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
+const CLUB_PUBLICATION_FIELDS = ['publicResultsEnabled'] as const;
 
 type PayloadObject = Record<string, unknown>;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
@@ -199,6 +255,21 @@ function hasOwn(payload: PayloadObject, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, field);
 }
 
+export function parseClubPublicationPayload(input: unknown): ClubPublicationPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, CLUB_PUBLICATION_FIELDS, issues);
+
+  if (!hasOwn(payload, 'publicResultsEnabled')) {
+    issues.push(issue('publicResultsEnabled', 'required', 'Field is required'));
+  } else if (typeof payload.publicResultsEnabled !== 'boolean') {
+    issues.push(issue('publicResultsEnabled', 'invalid_type', 'Expected a boolean'));
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { publicResultsEnabled: payload.publicResultsEnabled as boolean };
+}
+
 export function parseEventParticipantCreatePayload(
   input: unknown,
 ): EventParticipantCreatePayload {
@@ -229,6 +300,21 @@ export function parseEventParticipantReplacementPayload(
 
   if (issues.length > 0) throwValidation(issues);
   return { rsvpStatus };
+}
+
+export function parseEventParticipantBulkRsvpPayload(input: unknown): EventParticipantBulkRsvpPayload {
+  const payload = payloadObject(input); const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ['updates'], issues);
+  if (!Array.isArray(payload.updates) || payload.updates.length === 0 || payload.updates.length > 100) issues.push(issue('updates', 'invalid_value', 'Provide 1 to 100 RSVP updates'));
+  const seen = new Set<string>(); const updates: Array<{ athleteId: string; rsvpStatus: RsvpStatus }> = [];
+  if (Array.isArray(payload.updates)) payload.updates.forEach((value, index) => {
+    const row = payloadObject(value); rejectUnknownFields(row, ['athleteId', 'rsvpStatus'], issues);
+    const athleteId = typeof row.athleteId === 'string' && isCanonicalUuid(row.athleteId) ? row.athleteId : '';
+    if (!athleteId || seen.has(athleteId)) issues.push(issue(`updates.${index}.athleteId`, 'invalid_value', 'Athlete ID must be unique and valid')); else seen.add(athleteId);
+    const rsvpStatus = requiredEnum(row, 'rsvpStatus', RSVP_STATUSES, issues);
+    if (athleteId && rsvpStatus) updates.push({ athleteId, rsvpStatus });
+  });
+  if (issues.length > 0) throwValidation(issues); return { updates };
 }
 
 function rejectUnknownFields(
@@ -277,6 +363,20 @@ function nullableString(
   }
   const normalized = payload[field].trim();
   return normalized.length === 0 ? null : normalized;
+}
+
+function requiredUuidArray(payload: PayloadObject, field: string, issues: ValidationIssue[]): string[] {
+  if (!hasOwn(payload, field)) { issues.push(issue(field, 'required', 'Field is required')); return []; }
+  if (!Array.isArray(payload[field])) { issues.push(issue(field, 'invalid_type', 'Expected an array of canonical UUIDs')); return []; }
+  const values = payload[field];
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  values.forEach((value, index) => {
+    if (!isCanonicalUuid(value)) issues.push(issue(`${field}.${index}`, 'invalid_format', 'Expected a canonical UUID'));
+    else if (seen.has(value)) issues.push(issue(`${field}.${index}`, 'duplicate', 'Squad IDs must be unique'));
+    else { seen.add(value); ids.push(value); }
+  });
+  return ids;
 }
 
 function optionalQueryString(
@@ -434,7 +534,7 @@ function parseAthlete(input: unknown): AthleteCreatePayload {
     name: requiredString(payload, 'name', issues),
     dob: nullableDate(payload, 'dob', issues),
     gender: nullableString(payload, 'gender', issues),
-    squad: nullableString(payload, 'squad', issues),
+    squadIds: requiredUuidArray(payload, 'squadIds', issues),
     notes: nullableString(payload, 'notes', issues),
   };
 
@@ -464,15 +564,66 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   }
 
   const name = optionalQueryString(input, 'name', issues);
-  const squad = optionalQueryString(input, 'squad', issues);
+  const status = optionalQueryEnum(input, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
+  const squadId = optionalQueryString(input, 'squadId', issues);
+  if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
 
   if (issues.length > 0) throwValidation(issues);
 
   return {
     includeArchived,
+    ...(status === undefined ? {} : { status }),
     ...(name === undefined ? {} : { name }),
-    ...(squad === undefined ? {} : { squad }),
+    ...(squadId === undefined ? {} : { squadId }),
   };
+}
+
+export interface PublicLoggerSessionPayload {
+  linkToken: string;
+  name: string;
+  club: string;
+}
+
+export function parseAthleteProgressionQuery(input: Record<string, unknown>): AthleteProgressionQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, ATHLETE_PROGRESSION_QUERY_FIELDS, issues);
+  const cursor = optionalQueryString(input, 'cursor', issues);
+  const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
+  const year = optionalQueryString(input, 'year', issues);
+  let limit: number | undefined;
+  if (hasOwn(input, 'limit')) {
+    const raw = input.limit;
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw) || Number(raw) < 1 || Number(raw) > 200) {
+      issues.push(issue('limit', 'invalid_value', 'Expected an integer from 1 to 200'));
+    } else {
+      limit = Number(raw);
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return {
+    ...(cursor === undefined ? {} : { cursor }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(type === undefined ? {} : { type }),
+    ...(year === undefined ? {} : { year }),
+  };
+}
+
+export function parseAthleteStatusPayload(input: unknown): AthleteStatusPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ATHLETE_STATUS_FIELDS, issues);
+  const status = requiredEnum(payload, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
+  if (issues.length > 0) throwValidation(issues);
+  return { status };
+}
+
+export function parseSquadPayload(input: unknown): { name: string } {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, SQUAD_FIELDS, issues);
+  const name = requiredString(payload, 'name', issues);
+  if (issues.length > 0) throwValidation(issues);
+  return { name };
 }
 
 function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload {
@@ -526,6 +677,7 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
   const status = optionalQueryEnum(input, 'status', EVENT_STATUSES, issues);
   const dateFrom = optionalQueryDate(input, 'dateFrom', issues);
   const dateTo = optionalQueryDate(input, 'dateTo', issues);
+  const year = optionalQueryString(input, 'year', issues);
 
   if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
     issues.push(issue('dateFrom', 'invalid_range', 'dateFrom must not be after dateTo'));
@@ -538,7 +690,47 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
     ...(status === undefined ? {} : { status }),
     ...(dateFrom === undefined ? {} : { dateFrom }),
     ...(dateTo === undefined ? {} : { dateTo }),
+    ...(year === undefined ? {} : { year }),
   };
+}
+
+export function parseWeatherCurrentQuery(input: Record<string, unknown>): WeatherCurrentQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, WEATHER_CURRENT_QUERY_FIELDS, issues);
+
+  const coordinates = new Map<string, number>([
+    ['latitude', 0],
+    ['longitude', 0],
+  ]);
+  for (const [field, range] of [['latitude', 90], ['longitude', 180]] as const) {
+    const value = input[field];
+    if (typeof value !== 'string' || !/^-?\d+(\.\d+)?$/.test(value.trim())) {
+      issues.push(issue(field, 'invalid_format', 'Expected a decimal number'));
+      continue;
+    }
+    const parsed = Number(value);
+    if (!isFiniteNumber(parsed) || Math.abs(parsed) > range) {
+      issues.push(issue(field, 'out_of_range', `Expected a number from ${-range} to ${range}`));
+      continue;
+    }
+    coordinates.set(field, parsed);
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { latitude: coordinates.get('latitude')!, longitude: coordinates.get('longitude')! };
+}
+
+export function parseVenueSearchQuery(input: Record<string, unknown>): VenueSearchQuery {
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(input, VENUE_SEARCH_QUERY_FIELDS, issues);
+  const q = optionalQueryString(input, 'q', issues);
+  if (q === undefined) {
+    if (!issues.some((entry) => entry.path === 'q')) issues.push(issue('q', 'required', 'Query is required'));
+  } else if (q.length > 200) {
+    issues.push(issue('q', 'too_long', 'Query must be 200 characters or fewer'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { q: q! };
 }
 
 function timelineStateIssues(state: TimelineEntryState): ValidationIssue[] {
@@ -692,6 +884,42 @@ export function parseTimelineEntryCreatePayload(input: unknown): TimelineEntryCr
   };
 }
 
+export function parsePublicLoggerSessionPayload(input: unknown): PublicLoggerSessionPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, ['linkToken', 'name', 'club'], issues);
+  const fields = ['linkToken', 'name', 'club'] as const;
+  const values = {} as PublicLoggerSessionPayload;
+  for (const field of fields) {
+    const value = payload[field];
+    if (typeof value !== 'string') issues.push(issue(field, 'required', 'Field is required'));
+    else {
+      const normalized = normalizeRequiredString(value);
+      if (normalized === null) issues.push(issue(field, 'blank', 'Must not be blank'));
+      else if (normalized.length > (field === 'linkToken' ? 200 : 120)) issues.push(issue(field, 'too_long', 'Value is too long'));
+      else values[field] = normalized;
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return values;
+}
+
+export function parsePublicLoggerEntryPayload(input: unknown): TimelineEntryCreatePayload {
+  const entry = parseTimelineEntryCreatePayload(input);
+  const issues: ValidationIssue[] = [];
+  if (entry.entryType !== 'attempt' && entry.entryType !== 'penalty') {
+    issues.push(issue('entryType', 'invalid_value', 'Public loggers can create attempts or incidents only'));
+  }
+  if (entry.entryType === 'attempt' && entry.value === null) {
+    issues.push(issue('value', 'required', 'An attempt requires a race time'));
+  }
+  if (entry.entryType === 'penalty' && entry.incidentType === null) {
+    issues.push(issue('incidentType', 'required', 'An incident requires an incident type'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return entry;
+}
+
 export function parseTimelineEntryPatchPayload(input: unknown): TimelineEntryPatchPayload {
   const payload = payloadObject(input);
   const issues: ValidationIssue[] = [];
@@ -816,4 +1044,240 @@ export function parseResultOverridePayload(input: unknown): ResultOverridePayloa
 
   if (issues.length > 0) throwValidation(issues);
   return { manualOverride, overrideReason };
+}
+
+export function parseFixtureInvitationCreatePayload(input: unknown): FixtureInvitationCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_CREATE_FIELDS, issues);
+  const targetClubId = isCanonicalUuid(payload.targetClubId) ? payload.targetClubId : '';
+  if (!targetClubId) issues.push(issue('targetClubId', 'invalid_format', 'Expected a canonical UUID'));
+  let expiresInDays = 7;
+  if (payload.expiresInDays !== undefined) {
+    if (typeof payload.expiresInDays !== 'number' || !Number.isSafeInteger(payload.expiresInDays) || payload.expiresInDays < 1 || payload.expiresInDays > 30) {
+      issues.push(issue('expiresInDays', 'invalid_value', 'Expected an integer from 1 to 30'));
+    } else {
+      expiresInDays = payload.expiresInDays;
+    }
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { targetClubId, expiresInDays };
+}
+
+export function parseFixtureInvitationResponsePayload(input: unknown): FixtureInvitationResponsePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, FIXTURE_INVITATION_RESPONSE_FIELDS, issues);
+  const response = requiredEnum(
+    payload,
+    'response',
+    ['accepted', 'declined', 'change_requested'] as const,
+    issues,
+  );
+  let message: string | null = null;
+  if (payload.message !== undefined && payload.message !== null) {
+    message = normalizeRequiredString(payload.message);
+    if (message === null) issues.push(issue('message', 'blank', 'Must not be blank'));
+  }
+  if (response === 'change_requested' && message === null) {
+    issues.push(issue('message', 'required', 'A change request needs a message'));
+  }
+  if (response !== 'change_requested' && message !== null) {
+    issues.push(issue('message', 'not_allowed', 'Only change requests may include a message'));
+  }
+  if (issues.length > 0) throwValidation(issues);
+  return { response, message };
+}
+
+export interface InjuryCreatePayload {
+  bodyRegion: InjuryRegion;
+  area: string;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string | null;
+  expectedReturnDate: string | null;
+}
+
+export interface InjuryUpdatePayload {
+  bodyRegion?: InjuryRegion;
+  area?: string;
+  side?: InjurySide;
+  severity?: InjurySeverity;
+  notes?: string | null;
+  occurrenceDate?: string | null;
+  expectedReturnDate?: string | null;
+}
+
+export interface InjuryResolvePayload {
+  resolvedDate?: string | null;
+  resolutionNotes?: string | null;
+}
+
+export interface InjuryListQuery {
+  includeDeleted?: boolean;
+  status?: 'active' | 'resolved' | 'all';
+  severity?: InjurySeverity;
+}
+
+const INJURY_CREATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_UPDATE_FIELDS = ['bodyRegion', 'area', 'side', 'severity', 'notes', 'occurrenceDate', 'expectedReturnDate'] as const;
+const INJURY_RESOLVE_FIELDS = ['resolvedDate', 'resolutionNotes'] as const;
+
+export function parseInjuryCreatePayload(input: unknown): InjuryCreatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_CREATE_FIELDS, issues);
+
+  const bodyRegion = requiredEnum(payload, 'bodyRegion', Object.keys(INJURY_REGIONS) as InjuryRegion[], issues);
+  const area = requiredString(payload, 'area', issues);
+  const side = requiredEnum(payload, 'side', INJURY_SIDES, issues);
+  const severity = requiredEnum(payload, 'severity', INJURY_SEVERITIES, issues);
+  const notes = nullableString(payload, 'notes', issues);
+
+  let occurrenceDate: string | null = null;
+  if (hasOwn(payload, 'occurrenceDate') && payload.occurrenceDate !== null) {
+    if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+    issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+    } else {
+      occurrenceDate = payload.occurrenceDate;
+    }
+  }
+
+  let expectedReturnDate: string | null = null;
+  if (hasOwn(payload, 'expectedReturnDate') && payload.expectedReturnDate !== null) {
+    if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      expectedReturnDate = payload.expectedReturnDate;
+      if (occurrenceDate !== null && expectedReturnDate < occurrenceDate) {
+        issues.push(issue('expectedReturnDate', 'invalid_value', 'Expected return date must be on or after occurrence date'));
+      }
+    }
+  }
+
+  if (bodyRegion && area) {
+    const allowedAreas = INJURY_REGIONS[bodyRegion as InjuryRegion] as readonly string[];
+    if (allowedAreas && !allowedAreas.includes(area)) {
+      issues.push(issue('area', 'invalid_value', `Area "${area}" is not valid for body region "${bodyRegion}"`));
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return {
+    bodyRegion: bodyRegion as InjuryRegion,
+    area,
+    side: side as InjurySide,
+    severity: severity as InjurySeverity,
+    notes,
+    occurrenceDate,
+    expectedReturnDate,
+  };
+}
+
+export function parseInjuryUpdatePayload(input: unknown): InjuryUpdatePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_UPDATE_FIELDS, issues);
+
+  const result: InjuryUpdatePayload = {};
+
+  if (hasOwn(payload, 'bodyRegion')) {
+    if (!isEnumValue(payload.bodyRegion, Object.keys(INJURY_REGIONS))) {
+      issues.push(issue('bodyRegion', 'invalid_value', 'Expected a valid body region'));
+    } else {
+      result.bodyRegion = payload.bodyRegion as InjuryRegion;
+    }
+  }
+
+  if (hasOwn(payload, 'area')) {
+    const norm = normalizeRequiredString(payload.area);
+    if (norm === null) {
+      issues.push(issue('area', 'blank', 'Must not be blank'));
+    } else {
+      result.area = norm;
+    }
+  }
+
+  if (hasOwn(payload, 'side')) {
+    if (!isEnumValue(payload.side, INJURY_SIDES)) {
+      issues.push(issue('side', 'invalid_value', 'Expected a valid side'));
+    } else {
+      result.side = payload.side as InjurySide;
+    }
+  }
+
+  if (hasOwn(payload, 'severity')) {
+    if (!isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+      issues.push(issue('severity', 'invalid_value', 'Expected a valid severity'));
+    } else {
+      result.severity = payload.severity as InjurySeverity;
+    }
+  }
+
+  if (hasOwn(payload, 'notes')) {
+    result.notes = nullableString(payload, 'notes', issues);
+  }
+
+  if (hasOwn(payload, 'occurrenceDate')) {
+    if (payload.occurrenceDate === null) {
+      result.occurrenceDate = null;
+    } else if (typeof payload.occurrenceDate !== 'string' || !isGregorianDate(payload.occurrenceDate)) {
+      issues.push(issue('occurrenceDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD)'));
+    } else {
+      result.occurrenceDate = payload.occurrenceDate;
+    }
+  }
+
+  if (hasOwn(payload, 'expectedReturnDate')) {
+    if (payload.expectedReturnDate === null) {
+      result.expectedReturnDate = null;
+    } else if (typeof payload.expectedReturnDate !== 'string' || !isGregorianDate(payload.expectedReturnDate)) {
+      issues.push(issue('expectedReturnDate', 'invalid_format', 'Expected a Gregorian date (YYYY-MM-DD) or null'));
+    } else {
+      result.expectedReturnDate = payload.expectedReturnDate;
+    }
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return result;
+}
+
+export function parseInjuryResolvePayload(input: unknown): InjuryResolvePayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, INJURY_RESOLVE_FIELDS, issues);
+
+  let resolvedDate: string | null = null;
+  if (hasOwn(payload, 'resolvedDate') && payload.resolvedDate !== null) {
+    if (typeof payload.resolvedDate !== 'string') {
+      issues.push(issue('resolvedDate', 'invalid_type', 'Expected a timestamp string or null'));
+    } else {
+      resolvedDate = payload.resolvedDate;
+    }
+  }
+
+  const resolutionNotes = nullableString(payload, 'resolutionNotes', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { resolvedDate, resolutionNotes };
+}
+
+export function parseInjuryListQuery(input: unknown): InjuryListQuery {
+  const payload = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+  const query: InjuryListQuery = {};
+
+  if (payload.includeDeleted === 'true' || payload.includeDeleted === true) {
+    query.includeDeleted = true;
+  }
+
+  if (payload.status === 'active' || payload.status === 'resolved' || payload.status === 'all') {
+    query.status = payload.status;
+  }
+
+  if (payload.severity && isEnumValue(payload.severity, INJURY_SEVERITIES)) {
+    query.severity = payload.severity as InjurySeverity;
+  }
+
+  return query;
 }

@@ -14,8 +14,10 @@ export async function listAthletes(
   if (filters.includeArchived !== undefined) {
     query.set('includeArchived', String(filters.includeArchived));
   }
+  if (filters.status) query.set('status', filters.status);
   if (filters.name?.trim()) query.set('name', filters.name.trim());
-  if (filters.squad?.trim()) query.set('squad', filters.squad.trim());
+  if (filters.squadId) query.set('squadId', filters.squadId);
+  if (filters.year) query.set('year', filters.year);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return request<ApiList<Athlete>>(`/api/v1/athletes${suffix}`, { signal });
 }
@@ -42,6 +44,14 @@ export async function archiveAthlete(id: string): Promise<Athlete> {
 export async function unarchiveAthlete(id: string): Promise<Athlete> {
   const response = await request<{ data: Athlete }>(`/api/v1/athletes/${id}/unarchive`, {
     method: 'POST',
+  });
+  return response.data;
+}
+
+export async function updateAthleteStatus(id: string, status: Athlete['status']): Promise<Athlete> {
+  const response = await request<{ data: Athlete }>(`/api/v1/athletes/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
   });
   return response.data;
 }

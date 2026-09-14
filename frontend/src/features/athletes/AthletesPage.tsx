@@ -1,52 +1,40 @@
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import {
   archiveAthlete,
   createAthlete,
   listAthletes,
   unarchiveAthlete,
   updateAthlete,
+  updateAthleteStatus,
 } from '../../api/athletes';
-import { ApiError } from '../../api/client';
-import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
-import type { Athlete, AthleteMutationPayload } from '../../types';
+import { createGeminiToken } from '../../api/ai';
+import {
+  AthloraGeminiSession,
+  type GeminiToolHandler,
+} from '../../api/geminiLiveSdk';
+import { GeminiAudioPlayer } from '../../api/geminiAudio';
+import { GeminiMicrophone } from '../../api/geminiMicrophone';
+import { Button, Card, EmptyState, Modal, SeasonSelector, Select, Toast } from '../../components';
+import { seasonQueryValue, useSeasonQueryState } from '../../utils/season';
+import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
+import type { AthleteActiveInjurySummary } from '../../types';
+import { listAthleteInjurySummaries } from '../../api/injuries';
+import { listSquads } from '../../api/squads';
+import { CompactAnatomy } from '../fitness/CompactAnatomy';
+import { AthleteDetailPage } from './AthleteDetailPage';
+import { AthleteForm } from './AthleteForm';
+import { athleteErrorMessage as errorMessage } from './athleteError';
 import styles from './AthletesPage.module.css';
 
-type ArchiveFilter = 'active' | 'archived' | 'all';
+type StatusFilter = AthleteStatus | 'all';
 type Editor = 'new' | Athlete | null;
-
-interface AthleteDraft {
-  name: string;
-  dob: string;
-  gender: string;
-  squad: string;
-  notes: string;
-}
-
-type FieldErrors = Partial<Record<keyof AthleteDraft, string>>;
 
 export interface AthletesPageProps {
   onActiveCountChange?: (count: number) => void;
-}
-
-function draftFor(athlete?: Athlete): AthleteDraft {
-  return {
-    name: athlete?.name ?? '',
-    dob: athlete?.dob ?? '',
-    gender: athlete?.gender ?? '',
-    squad: athlete?.squad ?? '',
-    notes: athlete?.notes ?? '',
-  };
-}
-
-function toPayload(draft: AthleteDraft): AthleteMutationPayload {
-  const nullable = (value: string) => value.trim() || null;
-  return {
-    name: draft.name.trim(),
-    dob: draft.dob || null,
-    gender: nullable(draft.gender),
-    squad: nullable(draft.squad),
-    notes: nullable(draft.notes),
-  };
+  onOpenAthlete?: (athleteId: string, openFitness?: boolean) => void;
+  onBackToRoster?: () => void;
+  initialAthleteId?: string | null;
+  initialFitnessOpen?: boolean;
 }
 
 function sorted(athletes: Athlete[]): Athlete[] {
@@ -73,183 +61,60 @@ function formatDate(value: string | null): string {
   });
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
-    if (error.status === 401) return 'Your session could not be authorized. Please sign in again.';
-    return error.message;
-  }
-  return 'Something went wrong. Please try again.';
+function statusLabel(status: AthleteStatus): string {
+  return status[0].toUpperCase() + status.slice(1);
 }
 
-function validationErrors(error: unknown): FieldErrors {
-  if (!(error instanceof ApiError) || error.code !== 'VALIDATION_ERROR') return {};
-  const issues = error.details.issues;
-  if (!Array.isArray(issues)) return {};
-  const fields: FieldErrors = {};
-  for (const value of issues) {
-    if (typeof value !== 'object' || value === null) continue;
-    const path = 'path' in value ? value.path : undefined;
-    const message = 'message' in value ? value.message : undefined;
-    if (
-      typeof path === 'string' &&
-      typeof message === 'string' &&
-      ['name', 'dob', 'gender', 'squad', 'notes'].includes(path)
-    ) {
-      fields[path as keyof AthleteDraft] ??= message;
-    }
-  }
-  return fields;
-}
-
-interface AthleteFormProps {
-  athlete?: Athlete;
-  onSave: (payload: AthleteMutationPayload) => Promise<void>;
-  onCancel: () => void;
-  onSubmittingChange: (submitting: boolean) => void;
-}
-
-function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: AthleteFormProps) {
-  const [draft, setDraft] = useState(() => draftFor(athlete));
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const nameRef = useRef<HTMLInputElement>(null);
-
-  const setField = <K extends keyof AthleteDraft>(field: K, value: AthleteDraft[K]) => {
-    setDraft((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: undefined }));
-  };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const nextErrors: FieldErrors = {};
-    if (!draft.name.trim()) nextErrors.name = 'Athlete name is required.';
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      nameRef.current?.focus();
-      return;
-    }
-
-    setSubmitting(true);
-    onSubmittingChange(true);
-    setSubmitError(null);
-    try {
-      await onSave(toPayload(draft));
-    } catch (error) {
-      const fields = validationErrors(error);
-      setErrors(fields);
-      setSubmitError(errorMessage(error));
-      if (fields.name) nameRef.current?.focus();
-    } finally {
-      setSubmitting(false);
-      onSubmittingChange(false);
-    }
-  };
-
-  return (
-    <form className={styles.formFields} onSubmit={submit} noValidate>
-      {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
-      <label htmlFor="athlete-name">Athlete name</label>
-      <Input
-        ref={nameRef}
-        id="athlete-name"
-        value={draft.name}
-        onChange={(event) => setField('name', event.target.value)}
-        invalid={Boolean(errors.name)}
-        aria-invalid={Boolean(errors.name)}
-        aria-describedby={errors.name ? 'athlete-name-error' : undefined}
-        required
-        aria-required="true"
-        disabled={submitting}
-      />
-      {errors.name && <span id="athlete-name-error" className={styles.fieldError}>{errors.name}</span>}
-
-      <div className={styles.formRow}>
-        <div>
-          <label htmlFor="athlete-dob">Date of birth <span>Optional</span></label>
-          <Input
-            id="athlete-dob"
-            type="date"
-            value={draft.dob}
-            onChange={(event) => setField('dob', event.target.value)}
-            invalid={Boolean(errors.dob)}
-            aria-invalid={Boolean(errors.dob)}
-            aria-describedby={errors.dob ? 'athlete-dob-error' : undefined}
-            disabled={submitting}
-          />
-          {errors.dob && <span id="athlete-dob-error" className={styles.fieldError}>{errors.dob}</span>}
-        </div>
-        <div>
-          <label htmlFor="athlete-gender">Gender category <span>Optional</span></label>
-          <Input
-            id="athlete-gender"
-            value={draft.gender}
-            onChange={(event) => setField('gender', event.target.value)}
-            invalid={Boolean(errors.gender)}
-            aria-invalid={Boolean(errors.gender)}
-            aria-describedby={errors.gender ? 'athlete-gender-error' : undefined}
-            disabled={submitting}
-          />
-          {errors.gender && <span id="athlete-gender-error" className={styles.fieldError}>{errors.gender}</span>}
-        </div>
-      </div>
-
-      <label htmlFor="athlete-squad">Discipline group / squad <span>Optional</span></label>
-      <Input
-        id="athlete-squad"
-        value={draft.squad}
-        onChange={(event) => setField('squad', event.target.value)}
-        invalid={Boolean(errors.squad)}
-        aria-invalid={Boolean(errors.squad)}
-        aria-describedby={errors.squad ? 'athlete-squad-error' : undefined}
-        disabled={submitting}
-      />
-      {errors.squad && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squad}</span>}
-
-      <label htmlFor="athlete-notes">Coach notes <span>Optional</span></label>
-      <textarea
-        id="athlete-notes"
-        value={draft.notes}
-        onChange={(event) => setField('notes', event.target.value)}
-        aria-invalid={Boolean(errors.notes)}
-        aria-describedby={errors.notes ? 'athlete-notes-error' : undefined}
-        disabled={submitting}
-      />
-      {errors.notes && <span id="athlete-notes-error" className={styles.fieldError}>{errors.notes}</span>}
-
-      <div className={styles.formActions}>
-        <Button variant="secondary" onClick={onCancel} disabled={submitting}>Cancel</Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? 'Saving...' : athlete ? 'Save changes' : 'Add athlete'}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
+export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoster, initialAthleteId = null, initialFitnessOpen = false }: AthletesPageProps = {}) {
+  const [season, setSeason] = useSeasonQueryState();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const [squad, setSquad] = useState('');
-  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
+  const [squadId, setSquadId] = useState('');
+  const [squads, setSquads] = useState<Squad[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Athlete | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(initialAthleteId);
+  const [openFitnessOnLoad, setOpenFitnessOnLoad] = useState(initialFitnessOpen);
+  const [injurySummaries, setInjurySummaries] = useState<Map<string, AthleteActiveInjurySummary>>(new Map());
+  const [injuryLoading, setInjuryLoading] = useState(true);
+  const [injuryError, setInjuryError] = useState<string | null>(null);
+  const [injuryReload, setInjuryReload] = useState(0);
+  const [geminiTesting, setGeminiTesting] = useState(false);
+  const [geminiMessage, setGeminiMessage] = useState('');
+  const [geminiResponse, setGeminiResponse] = useState<string | null>(null);
+  const [geminiConnected, setGeminiConnected] = useState(false);
+  const [geminiListening, setGeminiListening] = useState(false);
+  const [geminiDialogOpen, setGeminiDialogOpen] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const performanceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const returnFocusAthleteId = useRef<string | null>(null);
+  const geminiSessionRef = useRef<AthloraGeminiSession | null>(null);
+  const geminiAudioPlayerRef = useRef<GeminiAudioPlayer | null>(null);
+  const geminiMicrophoneRef = useRef<GeminiMicrophone | null>(null);
+  const sleepPendingRef = useRef(false);
+
+  if (!geminiAudioPlayerRef.current) {
+    geminiAudioPlayerRef.current = new GeminiAudioPlayer();
+  }
+
+  if (!geminiMicrophoneRef.current) {
+    geminiMicrophoneRef.current = new GeminiMicrophone();
+  }
 
   useEffect(() => {
     let current = true;
     setLoading(true);
     setLoadError(null);
-    void listAthletes({ includeArchived: true })
+    void listAthletes({ includeArchived: true, ...(seasonQueryValue(season) ? { year: season } : {}) })
       .then(({ data }) => {
         if (!current) return;
         const next = sorted(data);
@@ -264,13 +129,42 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
     return () => {
       current = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, season]);
+  useEffect(() => {
+    let current = true;
+    setInjuryLoading(true);
+    setInjuryError(null);
+    void listAthleteInjurySummaries()
+      .then((summaries) => {
+        if (current) setInjurySummaries(new Map(summaries.map((summary) => [summary.athleteId, summary])));
+      })
+      .catch((error: unknown) => { if (current) setInjuryError(errorMessage(error)); })
+      .finally(() => { if (current) setInjuryLoading(false); });
+    return () => { current = false; };
+  }, [injuryReload, reloadKey]);
+  useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
+
+  useEffect(() => {
+    return () => {
+      void geminiMicrophoneRef.current?.stop();
+      geminiSessionRef.current?.close();
+      geminiSessionRef.current = null;
+      geminiAudioPlayerRef.current?.close();
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && !loadError) {
-      onActiveCountChange?.(athletes.filter((athlete) => athlete.archivedAt === null).length);
+       onActiveCountChange?.(athletes.filter((athlete) => athlete.status === 'active').length);
     }
   }, [athletes, loadError, loading, onActiveCountChange]);
+
+  useEffect(() => {
+    if (selectedAthleteId !== null || returnFocusAthleteId.current === null) return;
+    const athleteId = returnFocusAthleteId.current;
+    returnFocusAthleteId.current = null;
+    window.setTimeout(() => performanceButtonRefs.current.get(athleteId)?.focus(), 0);
+  }, [selectedAthleteId]);
 
   const storeAthlete = (athlete: Athlete) => {
     setAthletes((current) => {
@@ -281,15 +175,17 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
 
   const activeQuery = deferredQuery.trim().toLowerCase();
   const visible = athletes.filter((athlete) => {
-    const archiveMatches =
-      archiveFilter === 'all' ||
-      (archiveFilter === 'active' ? athlete.archivedAt === null : athlete.archivedAt !== null);
+    const statusMatches = statusFilter === 'all' || athlete.status === statusFilter;
     const queryMatches = !activeQuery || athlete.name.toLowerCase().includes(activeQuery);
-    const squadMatches = !squad || athlete.squad === squad;
-    return archiveMatches && queryMatches && squadMatches;
+    const squadMatches = !squadId || athlete.squads?.some((squad) => squad.id === squadId);
+    return statusMatches && queryMatches && squadMatches;
   });
-  const squads = [...new Set(athletes.map((athlete) => athlete.squad).filter((value): value is string => Boolean(value)))].sort();
-  const hasFilters = Boolean(query || squad || archiveFilter !== 'active');
+  const hasFilters = Boolean(query || squadId || statusFilter !== 'active');
+  const statusCounts = {
+    active: athletes.filter((athlete) => athlete.status === 'active').length,
+    inactive: athletes.filter((athlete) => athlete.status === 'inactive').length,
+    archived: athletes.filter((athlete) => athlete.status === 'archived').length,
+  };
 
   const saveEditor = async (payload: AthleteMutationPayload) => {
     const athlete = editor === 'new'
@@ -332,11 +228,372 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
     }
   };
 
+  const changeStatus = async (athlete: Athlete, status: Extract<AthleteStatus, 'active' | 'inactive'>) => {
+    setPendingId(athlete.id);
+    setActionError(null);
+    try {
+      const updated = await updateAthleteStatus(athlete.id, status);
+      storeAthlete(updated);
+      setNotice(`${updated.name} marked ${status}.`);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   const clearFilters = () => {
     setQuery('');
-    setSquad('');
-    setArchiveFilter('active');
+    setSquadId('');
+    setStatusFilter('active');
   };
+
+  const openAthlete = (athleteId: string, openFitness = false) => {
+    if (onOpenAthlete) {
+      onOpenAthlete(athleteId, openFitness);
+      return;
+    }
+    setOpenFitnessOnLoad(openFitness);
+    setSelectedAthleteId(athleteId);
+  };
+
+  const handleGeminiToolCall: GeminiToolHandler = async (call) => {
+    if (call.name !== 'create_athlete') {
+      throw new Error(`Unknown Gemini tool: ${call.name}`);
+    }
+
+    const args = call.args ?? {};
+
+    const name =
+      typeof args.name === 'string'
+        ? args.name.trim()
+        : '';
+
+    if (!name) {
+      throw new Error('Athlete name is required');
+    }
+
+    const dob =
+      typeof args.dob === 'string'
+        ? args.dob
+        : null;
+
+    const gender =
+      typeof args.gender === 'string'
+        ? args.gender
+        : null;
+
+    const notes =
+      typeof args.notes === 'string'
+        ? args.notes
+        : null;
+
+    const athlete = await createAthlete({
+      name,
+      dob,
+      gender,
+      squadIds: [],
+      notes,
+    });
+
+    storeAthlete(athlete);
+
+    return {
+      success: true,
+      athleteId: athlete.id,
+      athleteName: athlete.name,
+    };
+  };
+
+  const sleepAthlora = async () => {
+    setActionError(null);
+
+    try {
+      sleepPendingRef.current = false;
+
+      /*
+       * Stop capturing and forwarding microphone audio.
+       */
+      await geminiMicrophoneRef.current?.stop();
+
+      /*
+       * The spoken "Going to sleep." response has already
+       * finished by the time this function is called.
+       *
+       * Fully close the playback AudioContext instead of only
+       * clearing queued audio. The next wake/start interaction
+       * will create and unlock a brand-new AudioContext from
+       * that new user gesture, which makes the greeting reliable
+       * after repeated sleep/wake cycles.
+       */
+      geminiAudioPlayerRef.current?.close();
+
+      /*
+       * Close the active Gemini Live session.
+       */
+      geminiSessionRef.current?.close();
+      geminiSessionRef.current = null;
+
+      setGeminiListening(false);
+      setGeminiConnected(false);
+      setGeminiTesting(false);
+      setGeminiResponse('Athlora is sleeping.');
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to put Athlora to sleep.',
+      );
+    }
+  };
+
+  const startGeminiSession = async (): Promise<AthloraGeminiSession> => {
+    const existingSession = geminiSessionRef.current;
+
+    if (existingSession) {
+      return existingSession;
+    }
+
+    const token = await createGeminiToken();
+
+    if (!token) {
+      throw new Error('Gemini did not return a token');
+    }
+
+    const session = new AthloraGeminiSession({
+      token,
+
+      onTurnStart: () => {
+        const microphone = geminiMicrophoneRef.current;
+
+        // Keep the physical microphone open, but stop forwarding
+        // audio before Athlora's voice reaches the speakers.
+        if (microphone?.isActive()) {
+          microphone.pause();
+
+          // Flush Gemini's cached input/VAD state while the mic is
+          // paused. Sending the next PCM chunk reopens the stream.
+          geminiSessionRef.current?.endAudioStream();
+        }
+
+        setGeminiResponse('');
+      },
+
+      onAudio: (audio) => {
+        geminiAudioPlayerRef.current?.playPcm16(audio);
+      },
+
+      onTranscript: (text) => {
+        setGeminiResponse((current) => `${current ?? ''}${text}`);
+      },
+
+      onInterrupted: () => {
+        // Gemini cancelled the current response. Any PCM already
+        // scheduled in the browser is stale and must not keep playing.
+        geminiAudioPlayerRef.current?.clear();
+
+        // If the short sleep acknowledgement was interrupted, still
+        // complete the requested shutdown rather than returning to
+        // hands-free listening.
+        if (sleepPendingRef.current) {
+          void sleepAthlora();
+          return;
+        }
+
+        // The cancelled playback is now silent, so hands-free input
+        // can safely resume immediately.
+        geminiMicrophoneRef.current?.resume();
+      },
+
+      onSleepRequested: () => {
+        /*
+         * Do not close Gemini here. The model still needs to say the
+         * short acknowledgement: "Going to sleep."
+         *
+         * onTurnComplete will wait for that audio to finish and then
+         * shut the assistant down.
+         */
+        sleepPendingRef.current = true;
+      },
+
+      onTurnComplete: () => {
+        void (async () => {
+          // Gemini can finish generating before the final queued
+          // PCM chunk has finished playing in the browser.
+          await geminiAudioPlayerRef.current?.waitUntilIdle();
+
+          if (sleepPendingRef.current) {
+            await sleepAthlora();
+            return;
+          }
+
+          // Resume hands-free input only after Athlora is actually silent.
+          geminiMicrophoneRef.current?.resume();
+        })();
+      },
+
+      onConnected: () => {
+        setGeminiConnected(true);
+      },
+
+      onDisconnected: () => {
+        /*
+         * Ignore a late close event from an older Gemini session.
+         * Without this guard, an old session can finish closing
+         * after a new session has already started and incorrectly
+         * stop the new microphone / mark Athlora disconnected.
+         */
+        if (geminiSessionRef.current !== session) {
+          return;
+        }
+
+        geminiSessionRef.current = null;
+        sleepPendingRef.current = false;
+
+        void geminiMicrophoneRef.current?.stop();
+        setGeminiListening(false);
+        setGeminiConnected(false);
+      },
+
+      onError: (error) => {
+        setActionError(error.message);
+      },
+
+      onToolCall: handleGeminiToolCall,
+    });
+
+    await session.connect();
+
+    geminiSessionRef.current = session;
+
+    return session;
+  };
+
+  const sendGeminiMessage = async () => {
+    const message = geminiMessage.trim();
+
+    if (!message || geminiTesting) {
+      return;
+    }
+
+    setGeminiTesting(true);
+    setActionError(null);
+
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      setGeminiMessage('');
+      geminiMicrophoneRef.current?.pause();
+
+      const response = await session.sendText(message);
+
+      setGeminiResponse(response);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to communicate with Athlora.',
+      );
+    } finally {
+      setGeminiTesting(false);
+    }
+  };
+
+  const startAthloraAssistant = async () => {
+    if (geminiTesting) {
+      return;
+    }
+
+    sleepPendingRef.current = false;
+
+    setGeminiTesting(true);
+    setActionError(null);
+
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      // Re-check the AudioContext immediately before the first reply.
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const greeting = await session.sendText(
+        'Start the assistant now.',
+      );
+
+      setGeminiResponse(greeting);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to start Athlora.',
+      );
+    } finally {
+      setGeminiTesting(false);
+    }
+  };
+
+  const openAthloraAssistant = () => {
+    setGeminiDialogOpen(true);
+    if (!geminiConnected) void startAthloraAssistant();
+  };
+
+  const startGeminiListening = async () => {
+    if (geminiListening) {
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      await geminiAudioPlayerRef.current?.prepare();
+
+      const session = await startGeminiSession();
+
+      await geminiMicrophoneRef.current?.start((audio) => {
+        try {
+          session.sendAudio(audio);
+        } catch (error) {
+          console.error(
+            'Failed to send microphone audio to Athlora:',
+            error,
+          );
+        }
+      });
+
+      setGeminiListening(true);
+    } catch (error) {
+      setGeminiListening(false);
+
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to start the microphone.',
+      );
+    }
+  };
+
+  if (selectedAthleteId) {
+    return (
+      <AthleteDetailPage
+        athleteId={selectedAthleteId}
+        initialFitnessOpen={openFitnessOnLoad}
+        onBack={() => {
+          if (onBackToRoster) {
+            onBackToRoster();
+            return;
+          }
+          returnFocusAthleteId.current = selectedAthleteId;
+          setOpenFitnessOnLoad(false);
+          setSelectedAthleteId(null);
+          setInjuryReload((value) => value + 1);
+        }}
+        onAthleteUpdated={storeAthlete}
+      />
+    );
+  }
 
   return (
     <section aria-labelledby="athletes-heading" aria-busy={loading}>
@@ -347,29 +604,56 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
           <p>{loading ? 'Loading roster...' : `${visible.length} athlete${visible.length === 1 ? '' : 's'} shown`}</p>
         </div>
         <div className={styles.controls}>
+          <button
+            type="button"
+            className={styles.aiTrigger}
+            data-connected={geminiConnected || undefined}
+            aria-label={geminiConnected ? 'Open Athlora AI' : 'Start Athlora AI'}
+            title={geminiConnected ? 'Open Athlora AI' : 'Start Athlora AI'}
+            onClick={openAthloraAssistant}
+            disabled={geminiTesting}
+          >
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs>
+                <linearGradient id="athlora-ai-spark" x1="18" y1="20" x2="82" y2="80" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#4BE9FF" />
+                  <stop offset=".42" stopColor="#4E8DFF" />
+                  <stop offset=".68" stopColor="#C178FF" />
+                  <stop offset="1" stopColor="#FFD0A7" />
+                </linearGradient>
+              </defs>
+              <path d="M50 16C55 38 62 45 84 50 62 55 55 62 50 84 45 62 38 55 16 50 38 45 45 38 50 16Z" fill="url(#athlora-ai-spark)" />
+            </svg>
+          </button>
           <label className={styles.search}>
             <span aria-hidden="true">⌕</span>
             <span className={styles.srOnly}>Search athletes by name</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
           </label>
           <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
+          <SeasonSelector value={season} onChange={setSeason} />
           <Select
             id="squad-filter"
-            value={squad}
-            onChange={(event) => setSquad(event.target.value)}
-            options={[{ value: '', label: 'All squads' }, ...squads.map((value) => ({ value, label: value }))]}
+            icon="squad"
+            value={squadId}
+            onChange={(event) => setSquadId(event.target.value)}
+            options={[{ value: '', label: 'All squads' }, ...squads.map((squad) => ({ value: squad.id, label: `${squad.name}${squad.archivedAt ? ' (archived)' : ''}` }))]}
           />
-          <label className={styles.srOnly} htmlFor="archive-filter">Filter by roster status</label>
+          <label className={styles.srOnly} htmlFor="status-filter">Filter by roster status</label>
           <Select
-            id="archive-filter"
-            value={archiveFilter}
-            onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
+            id="status-filter"
+            icon="status"
+            dotColors={{ active: '#0092BC', inactive: '#D8A642', archived: '#6B8792' }}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             options={[
-              { value: 'active', label: 'Active roster' },
-              { value: 'archived', label: 'Archived' },
-              { value: 'all', label: 'All athletes' },
+              { value: 'active', label: `Active (${statusCounts.active})` },
+              { value: 'inactive', label: `Inactive (${statusCounts.inactive})` },
+              { value: 'archived', label: `Archived (${statusCounts.archived})` },
+              { value: 'all', label: `All athletes (${athletes.length})` },
             ]}
           />
+
           <Button
             ref={addButtonRef}
             onClick={() => setEditor('new')}
@@ -381,7 +665,8 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
       </header>
 
       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
-      {actionError && !archiveTarget && <div className={styles.actionError} role="alert">{actionError}</div>}
+      {actionError && !archiveTarget && !geminiDialogOpen && <div className={styles.actionError} role="alert">{actionError}</div>}
+      {!loading && injuryError && <div className={styles.injuryError} role="alert">Injury summaries are unavailable. <Button variant="ghost" onClick={() => setInjuryReload((value) => value + 1)}>Retry injury summaries</Button></div>}
 
       {loading && (
         <div className={styles.loading} role="status" aria-live="polite">
@@ -401,7 +686,7 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
       {!loading && !loadError && athletes.length === 0 && (
         <div className={styles.emptyPanel}>
           <EmptyState title="No athletes yet" description="Add your first athlete to start building the roster." />
-          <Button onClick={() => setEditor('new')}>Add your first athlete</Button>
+            <Button onClick={() => setEditor('new')}>Add your first athlete</Button>
         </div>
       )}
 
@@ -409,9 +694,11 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
         <div className={styles.emptyPanel}>
           <EmptyState
             title={
-              !query && !squad && archiveFilter === 'active'
+                !query && !squadId && statusFilter === 'active'
                 ? 'No active athletes'
-                : !query && !squad && archiveFilter === 'archived'
+                  : !query && !squadId && statusFilter === 'inactive'
+                   ? 'No inactive athletes'
+                  : !query && !squadId && statusFilter === 'archived'
                   ? 'No archived athletes'
                   : 'No athletes match your filters'
             }
@@ -427,43 +714,110 @@ export function AthletesPage({ onActiveCountChange }: AthletesPageProps = {}) {
             <Card className={styles.card} key={athlete.id}>
               <div className={styles.cardTop}>
                 <span className={styles.avatar} aria-hidden="true">{initials(athlete.name)}</span>
-                <span className={athlete.archivedAt ? styles.archivedBadge : styles.activeBadge}>
-                  {athlete.archivedAt ? 'Archived' : 'Active'}
+                <span className={athlete.status === 'archived' ? styles.archivedBadge : athlete.status === 'inactive' ? styles.inactiveBadge : styles.activeBadge}>
+                  {statusLabel(athlete.status)}
                 </span>
               </div>
               <h2>{athlete.name}</h2>
-              <p className={styles.squad}>{athlete.squad ?? 'No squad assigned'}</p>
+               <p className={styles.squad}>{athlete.squads?.map((squad) => squad.name).join(', ') || 'No squad assigned'}</p>
               <dl className={styles.details}>
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
                 <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>
               </dl>
+              <div className={styles.injurySummary}>
+                {injuryLoading ? <span role="status">Loading injury summary...</span> : injuryError ? <span>Injury summary unavailable</span> : (
+                  <CompactAnatomy
+                    injuries={injurySummaries.get(athlete.id)?.activeInjuries ?? []}
+                    highestSeverity={injurySummaries.get(athlete.id)?.highestSeverity ?? null}
+                    onOpenFitness={() => openAthlete(athlete.id, true)}
+                    disabled={athlete.status === 'archived'}
+                  />
+                )}
+              </div>
               {athlete.notes && <p className={styles.notes}>{athlete.notes}</p>}
               <div className={styles.cardActions}>
                 <Button
+                  ref={(node) => {
+                    if (node) performanceButtonRefs.current.set(athlete.id, node);
+                    else performanceButtonRefs.current.delete(athlete.id);
+                  }}
+                  className={styles.performanceAction}
+                  onClick={() => openAthlete(athlete.id)}
+                  disabled={pendingId !== null}
+                >
+                  View performance
+                </Button>
+                {athlete.status !== 'archived' && <Button
                   variant="secondary"
                   onClick={() => setEditor(athlete)}
                   disabled={pendingId !== null}
                 >
                   Edit
-                </Button>
-                {athlete.archivedAt ? (
+                </Button>}
+                {athlete.status === 'archived' ? (
                   <Button onClick={() => void restore(athlete)} disabled={pendingId !== null}>
                     {pendingId === athlete.id ? 'Restoring...' : 'Restore'}
                   </Button>
                 ) : (
-                  <Button
-                    variant="danger"
-                    onClick={() => setArchiveTarget(athlete)}
-                    disabled={pendingId !== null}
-                  >
-                    Archive
-                  </Button>
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void changeStatus(athlete, athlete.status === 'active' ? 'inactive' : 'active')}
+                      disabled={pendingId !== null}
+                    >
+                      {pendingId === athlete.id ? 'Saving...' : athlete.status === 'active' ? 'Mark inactive' : 'Reactivate'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => setArchiveTarget(athlete)}
+                      disabled={pendingId !== null}
+                    >
+                      Archive
+                    </Button>
+                  </>
                 )}
               </div>
             </Card>
           ))}
         </div>
       )}
+
+      <Modal
+        open={geminiDialogOpen}
+        title="Athlora AI"
+        className={styles.aiModal}
+        onClose={() => {
+          setGeminiDialogOpen(false);
+          setActionError(null);
+        }}
+      >
+        <div className={styles.aiDialog}>
+          <section className={styles.aiResponse} aria-live="polite" aria-busy={geminiTesting}>
+            <p className={styles.aiResponseLabel}>{geminiListening ? 'Listening hands-free' : geminiTesting ? 'Athlora is responding' : 'Athlora'}</p>
+            <p>{geminiResponse || (geminiTesting ? 'Starting Athlora...' : 'Ask Athlora to add an athlete or help with the roster.')}</p>
+          </section>
+
+          <div className={styles.aiActions}>
+            {geminiConnected && !geminiListening && <Button variant="secondary" onClick={() => void startGeminiListening()}>Enable hands-free</Button>}
+            {geminiListening && <span role="status">Listening hands-free</span>}
+          </div>
+
+          {actionError && <p className={styles.formError} role="alert">{actionError}</p>}
+
+          <form className={styles.aiComposer} onSubmit={(event) => { event.preventDefault(); void sendGeminiMessage(); }}>
+            <label className={styles.srOnly} htmlFor="athlora-ai-message">Message Athlora</label>
+            <input
+              id="athlora-ai-message"
+              type="text"
+              value={geminiMessage}
+              onChange={(event) => setGeminiMessage(event.target.value)}
+              placeholder="e.g. Add John Smith"
+              disabled={geminiTesting}
+            />
+            <Button type="submit" disabled={geminiTesting || !geminiMessage.trim()}>{geminiTesting ? 'Sending...' : 'Send'}</Button>
+          </form>
+        </div>
+      </Modal>
 
       <Modal
         open={editor !== null}

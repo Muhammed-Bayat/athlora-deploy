@@ -2,21 +2,63 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { Athlete } from '../../types';
+import type { Athlete, Squad } from '../../types';
 import { AthletesPage } from './AthletesPage';
 
 const athleteApi = vi.hoisted(() => ({
+  getAthlete: vi.fn(),
   listAthletes: vi.fn(),
   createAthlete: vi.fn(),
   updateAthlete: vi.fn(),
   archiveAthlete: vi.fn(),
   unarchiveAthlete: vi.fn(),
 }));
+const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
+const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
+const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
+const geminiApi = vi.hoisted(() => ({ createGeminiToken: vi.fn(), sendText: vi.fn() }));
 
 vi.mock('../../api/athletes', () => athleteApi);
+vi.mock('../../api/statistics', () => statisticsApi);
+vi.mock('../../api/squads', () => squadsApi);
+vi.mock('../../api/injuries', () => injuriesApi);
+vi.mock('../../api/ai', () => ({ createGeminiToken: geminiApi.createGeminiToken }));
+vi.mock('../../api/geminiLiveSdk', () => ({
+  AthloraGeminiSession: class {
+    constructor(private readonly options: { onConnected?: () => void }) {}
+    async connect() { this.options.onConnected?.(); }
+    async sendText(message: string) { return geminiApi.sendText(message); }
+    sendAudio() {}
+    endAudioStream() {}
+    close() {}
+  },
+}));
+vi.mock('../../api/geminiAudio', () => ({
+  GeminiAudioPlayer: class {
+    async prepare() {}
+    playPcm16() {}
+    clear() {}
+    async waitUntilIdle() {}
+    close() {}
+  },
+}));
+vi.mock('../../api/geminiMicrophone', () => ({
+  GeminiMicrophone: class {
+    async start() {}
+    async stop() {}
+    pause() {}
+    resume() {}
+    isActive() { return false; }
+  },
+}));
 
 const ARI_ID = '11111111-1111-4111-8111-111111111111';
 const BEA_ID = '22222222-2222-4222-8222-222222222222';
+const SPRINT_ID = '44444444-4444-4444-8444-444444444444';
+const DEVELOPMENT_ID = '55555555-5555-4555-8555-555555555555';
+function squad(id: string, name: string): Squad {
+  return { id, name, archivedAt: null, createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' };
+}
 
 function athlete(overrides: Partial<Athlete> = {}): Athlete {
   return {
@@ -25,9 +67,12 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2004-02-29',
     gender: 'Open',
-    squad: 'Sprint A',
+    squads: [squad(SPRINT_ID, 'Sprint A')],
     notes: 'Starts focus',
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-16T10:00:00.000Z',
+    statusChangedBy: '33333333-3333-4333-8333-333333333333',
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -40,20 +85,102 @@ const bea = athlete({
   name: 'Bea Fast',
   dob: null,
   gender: null,
-  squad: 'Development',
+  squads: [squad(DEVELOPMENT_ID, 'Development')],
   notes: null,
 });
 const archivedBea = athlete({
   ...bea,
   archivedAt: '2026-08-16T11:00:00.000Z',
+  status: 'archived',
 });
 
 beforeEach(() => {
+  squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(DEVELOPMENT_ID, 'Development')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
+  athleteApi.getAthlete.mockResolvedValue(ari);
+  injuriesApi.listAthleteInjurySummaries.mockResolvedValue([]);
+  injuriesApi.listInjuries.mockResolvedValue([]);
+  geminiApi.createGeminiToken.mockResolvedValue('gemini-token');
+  geminiApi.sendText.mockImplementation(async (message: string) => message === 'Start the assistant now.' ? 'Good Day Coach, who are we adding today?' : `Athlora received: ${message}`);
+  statisticsApi.getAthleteStatistics.mockResolvedValue({
+    athleteId: ARI_ID, discipline: '100m', unit: 'seconds', pb: null, sb: null,
+    resultsCount: 0, latestResult: null, latestOutcome: 'no_result', updatedAt: '2026-08-17T10:00:00.000Z',
+    athlete: { id: ARI_ID, name: ari.name, squadNames: ari.squads?.map((squad) => squad.name) ?? [], archivedAt: null },
+    resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
+    latest: null, recentResults: { competitions: [], training: [] },
+  });
+  statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ARI_ID, name: ari.name, squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
 });
 
 describe('AthletesPage', () => {
+  it('opens Athlora AI from the search controls and sends typed messages in its dialog', async () => {
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+
+    const search = screen.getByRole('textbox', { name: 'Search athletes by name' }).closest('label')!;
+    const trigger = screen.getByRole('button', { name: 'Start Athlora AI' });
+    expect(search.previousElementSibling).toBe(trigger);
+    expect(screen.queryByRole('dialog', { name: 'Athlora AI' })).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
+    expect(await within(dialog).findByText('Good Day Coach, who are we adding today?')).toBeInTheDocument();
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Message Athlora' }), 'Add John Smith');
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+    expect(await within(dialog).findByText('Athlora received: Add John Smith')).toBeInTheDocument();
+    expect(geminiApi.sendText).toHaveBeenNthCalledWith(2, 'Add John Smith');
+  }, 30_000);
+
+  it('renders active injury counts and highest severity without loading Fitness', async () => {
+    injuriesApi.listAthleteInjurySummaries.mockResolvedValueOnce([{
+      athleteId: ARI_ID,
+      activeInjuryCount: 2,
+      highestSeverity: 'Severe',
+      activeInjuries: [
+        { bodyRegion: 'Arm', area: 'Forearm', side: 'Left', severity: 'Minor' },
+        { bodyRegion: 'Arm', area: 'Forearm', side: 'Left', severity: 'Severe' },
+      ],
+    }]);
+
+    render(<AthletesPage />);
+    const heading = await screen.findByRole('heading', { name: 'Ari Runner' });
+    const card = heading.closest('article') ?? heading.parentElement!;
+    expect(within(card).getByText('2 active injuries')).toBeInTheDocument();
+    expect(within(card).getByText('Severe active injury status')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Open Fitness & injury map' })).toBeInTheDocument();
+  });
+
+  it('opens an athlete detail supplied by dashboard navigation', async () => {
+    render(<AthletesPage initialAthleteId={ARI_ID} />);
+
+    expect(await screen.findByText('Personal details')).toBeInTheDocument();
+    expect(athleteApi.getAthlete).toHaveBeenCalledWith(ARI_ID);
+    expect(statisticsApi.getAthleteStatistics).toHaveBeenCalledWith(ARI_ID);
+  });
+
+  it('opens API roster athlete performance and restores focus to the exact roster trigger', async () => {
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+
+    const ariCard = screen.getByRole('heading', { name: 'Ari Runner' }).closest('article')
+      ?? screen.getByRole('heading', { name: 'Ari Runner' }).parentElement!;
+    const ariPerformanceButton = within(ariCard).getByRole('button', { name: 'View performance' });
+    await user.click(ariPerformanceButton);
+    expect(await screen.findByText('Personal details')).toBeInTheDocument();
+    expect(athleteApi.getAthlete).toHaveBeenCalledWith(ARI_ID);
+    await user.click(screen.getByRole('button', { name: 'Back to roster' }));
+    expect(screen.getByRole('heading', { name: 'Athletes' })).toBeInTheDocument();
+    const returnedAriCard = screen.getByRole('heading', { name: 'Ari Runner' }).closest('article')
+      ?? screen.getByRole('heading', { name: 'Ari Runner' }).parentElement!;
+    await waitFor(() => expect(within(returnedAriCard).getByRole('button', { name: 'View performance' })).toHaveFocus());
+    expect(screen.getAllByRole('button', { name: 'View performance' })[1]).not.toHaveFocus();
+    expect(athleteApi.listAthletes).toHaveBeenCalledOnce();
+  });
+
   it('shows an accessible loading state and then renders API athletes', async () => {
     let resolveList!: (value: { data: Athlete[]; meta: { count: number } }) => void;
     athleteApi.listAthletes.mockReturnValue(
@@ -68,7 +195,7 @@ describe('AthletesPage', () => {
     expect(screen.getByRole('button', { name: 'Add athlete' })).toBeDisabled();
     resolveList({ data: [ari], meta: { count: 1 } });
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(screen.getAllByText('Sprint A')).toHaveLength(2);
+    expect(within(screen.getByLabelText('Athlete roster')).getAllByText('Sprint A')).toHaveLength(1);
     expect(screen.queryByText(/personal best/i)).not.toBeInTheDocument();
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
@@ -116,7 +243,7 @@ describe('AthletesPage', () => {
 
     await user.selectOptions(screen.getByLabelText('Filter by roster status'), 'all');
     expect(screen.getByRole('heading', { name: 'Bea Fast' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Filter by squad'), 'Development');
+    await user.selectOptions(screen.getByLabelText('Filter by squad'), DEVELOPMENT_ID);
     expect(screen.queryByRole('heading', { name: 'Ari Runner' })).not.toBeInTheDocument();
     await user.clear(screen.getByRole('textbox', { name: 'Search athletes by name' }));
     await user.type(screen.getByRole('textbox', { name: 'Search athletes by name' }), 'bea');
@@ -138,16 +265,20 @@ describe('AthletesPage', () => {
     expect(athleteApi.createAthlete).not.toHaveBeenCalled();
 
     await user.type(within(dialog).getByLabelText('Athlete name'), '  Casey Quick  ');
-    await user.type(within(dialog).getByLabelText(/gender category/i), 'Open');
-    await user.type(within(dialog).getByLabelText(/discipline group/i), 'Sprint B');
+    const gender = within(dialog).getByRole('button', { name: 'Gender category' });
+    await user.click(gender);
+    const genderMenu = gender.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(genderMenu!).getAllByRole('option')).toHaveLength(2);
+    await user.click(within(genderMenu!).getByRole('option', { name: 'Female' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
     await user.type(within(dialog).getByLabelText(/coach notes/i), '  Acceleration block  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add athlete' }));
 
     await waitFor(() => expect(athleteApi.createAthlete).toHaveBeenCalledWith({
       name: 'Casey Quick',
       dob: null,
-      gender: 'Open',
-      squad: 'Sprint B',
+      gender: 'Female',
+      squadIds: [SPRINT_ID],
       notes: 'Acceleration block',
     }));
     expect(await screen.findByRole('heading', { name: 'Casey Quick' })).toBeInTheDocument();
@@ -172,7 +303,7 @@ describe('AthletesPage', () => {
       name: 'Ari Updated',
       dob: '2004-02-29',
       gender: 'Open',
-      squad: 'Sprint A',
+      squadIds: [SPRINT_ID],
       notes: null,
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
@@ -222,7 +353,7 @@ describe('AthletesPage', () => {
   });
 
   it('requires confirmation before archiving and preserves history in the copy', async () => {
-    const archived = athlete({ archivedAt: '2026-08-16T12:00:00.000Z' });
+    const archived = athlete({ archivedAt: '2026-08-16T12:00:00.000Z', status: 'archived' });
     athleteApi.archiveAthlete.mockResolvedValue(archived);
     const user = userEvent.setup();
     render(<AthletesPage />);
@@ -239,7 +370,7 @@ describe('AthletesPage', () => {
     await waitFor(() => expect(addButton).toHaveFocus());
     await user.selectOptions(screen.getByLabelText('Filter by roster status'), 'archived');
     expect(screen.getByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(screen.getAllByText('Archived')).toHaveLength(2);
+    expect(within(screen.getByLabelText('Athlete roster')).getAllByText('Archived')).toHaveLength(1);
   });
 
   it('keeps the confirmation and roster available when archival fails', async () => {

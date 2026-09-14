@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as results from '../controllers/results.js';
 import { requireEventOwnership, requireResultOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
+import { requireCoach } from '../middleware/capabilities.js';
 import { parseResultOverridePayload } from '../validation/payloads.js';
 
 const router = Router({ mergeParams: true });
@@ -10,6 +11,7 @@ router.get('/:eventId/results', requireEventOwnership('eventId'), results.getEve
 router.put(
   '/:eventId/results/:athleteId',
   validateBody(parseResultOverridePayload),
+  requireCoach(),
   requireResultOwnership,
   results.overrideResult,
 );

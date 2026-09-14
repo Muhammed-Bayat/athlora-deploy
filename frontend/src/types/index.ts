@@ -1,4 +1,4 @@
-export type UserRole = 'coach' | 'assistant' | 'viewer';
+export type UserRole = 'coach' | 'assistant';
 
 export interface User {
   id: string;
@@ -6,8 +6,67 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  consentAcceptedAt: string | null;
+  consentVersion: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  timezone: string;
+  role: UserRole;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'coach' | 'assistant';
+  createdAt: string;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  role: 'coach' | 'assistant';
+  expiresAt: string;
+  createdAt: string;
+  token?: string;
+}
+
+export interface Club {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClubCalendarEvent {
+  club: Pick<Club, 'id' | 'name'>;
+  event: AthleticsEvent;
+}
+
+export interface ClubPublication {
+  publicResultsEnabled: boolean;
+}
+
+export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+export interface ClubJoinRequest {
+  id: string;
+  clubId: string;
+  userId: string;
+  status: ClubJoinRequestStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  clubName?: string;
+  userName?: string;
+  userEmail?: string;
 }
 
 // MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
@@ -18,6 +77,75 @@ export const RESULT_UNIT_SECONDS = 'seconds' as const;
 export type ResultUnit = typeof RESULT_UNIT_SECONDS;
 
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
+export type AthleteStatus = 'active' | 'inactive' | 'archived';
+
+export interface ClubAthleteLookup {
+  id: string;
+  name: string;
+  status: AthleteStatus;
+}
+
+export interface ClubRosterCounts {
+  active: number;
+  inactive: number;
+  archived: number;
+  total: number;
+}
+
+export interface ClubStatistics {
+  club: Pick<Club, 'id' | 'name'>;
+  roster: ClubRosterCounts;
+  distinctAthletesWithValidResults: number;
+  total100mResultCount: number;
+  valid100mResultCount: number;
+  fastestValidTime: number | null;
+  latestValidTime: number | null;
+  averageValidTime: number | null;
+  medianValidTime: number | null;
+  populationStandardDeviation: number | null;
+}
+
+export interface ClubComparisonDetail {
+  clubs: [ClubStatistics, ClubStatistics];
+}
+
+export interface ClubMultiComparisonDetail {
+  clubs: ClubStatistics[];
+}
+
+export interface PublicClub {
+  id: string;
+  name: string;
+}
+
+export interface PublicAthleteStatistics {
+  athlete: { id: string; name: string };
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+}
+
+export interface PublicClubStatistics extends ClubStatistics {
+  athletes: PublicAthleteStatistics[];
+}
+
+export interface PublicAthleteComparisonEntry {
+  date: string;
+  result: number;
+}
+
+export interface PublicAthleteComparisonAthlete extends PublicAthleteStatistics {
+  club: PublicClub;
+  progression: PublicAthleteComparisonEntry[];
+}
+
+export interface PublicAthleteComparison {
+  athletes: PublicAthleteComparisonAthlete[];
+}
 
 export interface Athlete {
   id: string;
@@ -25,8 +153,20 @@ export interface Athlete {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squads?: Squad[];
+  squad?: string | null;
   notes: string | null;
+  archivedAt: string | null;
+  status: AthleteStatus;
+  statusChangedAt: string;
+  statusChangedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Squad {
+  id: string;
+  name: string;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -36,14 +176,18 @@ export interface AthleteMutationPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squad: string | null;
+  squadIds?: string[];
+  squad?: string | null;
   notes: string | null;
 }
 
 export interface AthleteListFilters {
   includeArchived?: boolean;
+  status?: AthleteStatus;
   name?: string;
+  squadId?: string;
   squad?: string;
+  year?: string;
 }
 
 export type EventType = 'competition' | 'training';
@@ -65,6 +209,33 @@ export interface AthleticsEvent {
   updatedAt: string;
 }
 
+export interface EventWeatherForecast {
+  date: string;
+  timezone: string | null;
+  weatherCode: string;
+  temperatureMinC: number | null;
+  temperatureMaxC: number | null;
+  precipitationProbabilityMaxPercent: number | null;
+  windSpeedKmh: number | null;
+}
+
+export interface VenueSearchResult {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface CurrentWeather {
+  timezone: string | null;
+  temperatureC: number | null;
+  apparentTemperatureC: number | null;
+  humidityPercent: number | null;
+  isDay: boolean | null;
+  precipitationRateMmHr: number | null;
+  weatherCode: string;
+  windSpeedKmh: number | null;
+}
+
 export interface EventMutationPayload {
   type: EventType;
   discipline: Discipline;
@@ -82,9 +253,10 @@ export interface EventListFilters {
   status?: EventStatus;
   dateFrom?: string;
   dateTo?: string;
+  year?: string;
 }
 
-export type RsvpStatus = 'pending' | 'yes' | 'no';
+export type RsvpStatus = 'pending' | 'yes' | 'no' | 'maybe';
 
 export interface EventParticipant {
   eventId: string;
@@ -95,12 +267,86 @@ export interface EventParticipant {
 export interface EventParticipantAthleteSummary {
   id: string;
   name: string;
-  squad: string | null;
+  squadNames?: string[];
+  squad?: string | null;
   archivedAt: string | null;
+  status: AthleteStatus;
 }
 
 export interface EventParticipantSummary extends EventParticipant {
+  participantWorkspaceId?: string | null;
+  participantWorkspaceName?: string | null;
   athlete: EventParticipantAthleteSummary;
+  statusReviewRequired: boolean;
+}
+
+export type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
+export type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'withdrawn';
+
+export interface FixtureInvitation {
+  id: string;
+  eventId: string;
+  email: string | null;
+  revision: number;
+  status: FixtureInvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+  targetWorkspaceId: string | null;
+  targetWorkspaceName?: string | null;
+  responseMessage: string | null;
+  respondedAt: string | null;
+  respondedWorkspaceId: string | null;
+  respondedWorkspaceName: string | null;
+  respondedByName: string | null;
+}
+
+export interface IncomingFixtureInvitation extends FixtureInvitation {
+  event: AthleticsEvent;
+}
+
+export interface FixtureTeam {
+  workspaceId: string;
+  workspaceName: string;
+  status: FixtureWorkspaceStatus;
+  acceptedRevision: number;
+  withdrawnAt: string | null;
+}
+
+export interface FixtureDetail {
+  event: AthleticsEvent;
+  revision: number;
+  teamStatus: FixtureWorkspaceStatus;
+  teams: FixtureTeam[];
+}
+
+export interface FixtureTeamRoster {
+  team: FixtureTeam;
+  participants: EventParticipantSummary[];
+}
+
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started' | 'event_coming_up' | 'live_logger_started' | 'event_ended';
+
+export interface FixtureNotification {
+  id: string;
+  eventId: string;
+  invitationId: string | null;
+  kind: FixtureNotificationKind;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  starredAt: string | null;
+  createdAt: string;
+}
+
+export type EventReminderThreshold = 'seven_days' | 'one_day';
+
+export interface EventReminder {
+  id: string;
+  eventId: string;
+  eventVersion: number;
+  threshold: EventReminderThreshold;
+  scheduledFor: string;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export type EntryType = 'attempt' | 'split' | 'penalty' | 'note';
@@ -117,7 +363,10 @@ export interface TimelineEntry {
   isFoul: boolean;
   incidentType: IncidentType;
   noteText: string | null;
-  recordedBy: string;
+  recordedBy: string | null;
+  recorderName?: string | null;
+  recorderClub?: string | null;
+  publicLoggerSessionId?: string | null;
   version: number;
   deviceId: string | null;
   createdAt: string;
@@ -149,6 +398,22 @@ export interface TimelineEntryDeletePayload {
   expectedVersion: number;
 }
 
+export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit?: boolean; canUndo?: boolean };
+
+export interface PublicLoggerLink {
+  id: string;
+  eventId: string;
+  status: 'active' | 'revoked';
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface PublicLoggerSnapshot {
+  event: Pick<AthleticsEvent, 'id' | 'title' | 'status'>;
+  participants: Array<{ athleteId: string; name: string; teamName?: string | null }>;
+  timeline: PublicTimelineEntry[];
+}
+
 export interface Result {
   eventId: string;
   athleteId: string;
@@ -163,7 +428,12 @@ export interface Result {
   overrideReason: string | null;
   overriddenBy: string | null;
   overrideAt: string | null;
+  updatedAt: string;
 }
+
+export type ResultOverridePayload =
+  | { manualOverride: number; overrideReason: string }
+  | { manualOverride: null; overrideReason: null };
 
 export interface AthleteStatistics {
   athleteId: string;
@@ -177,10 +447,56 @@ export interface AthleteStatistics {
   updatedAt: string;
 }
 
+export interface AggregateAthleteIdentity {
+  id: string;
+  name: string;
+  squadNames?: string[];
+  squad?: string | null;
+  archivedAt: string | null;
+}
+
+export interface AggregateEventIdentity {
+  id: string;
+  title: string;
+  type: EventType;
+  discipline: Discipline;
+  date: string;
+  time: string | null;
+  locationName: string | null;
+  status: EventStatus;
+}
+
+export interface AthleteResultHistoryEntry {
+  athlete: AggregateAthleteIdentity;
+  event: AggregateEventIdentity;
+  result: Result;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+}
+
+export interface AthleteResultCounts {
+  allTime: number;
+  currentYear: number;
+  competitionAllTime: number;
+  trainingAllTime: number;
+}
+
+export interface AthleteStatisticsDetail extends AthleteStatistics {
+  athlete: AggregateAthleteIdentity;
+  resultCounts: AthleteResultCounts;
+  latest: AthleteResultHistoryEntry | null;
+  recentResults: {
+    competitions: AthleteResultHistoryEntry[];
+    training: AthleteResultHistoryEntry[];
+  };
+}
+
 export interface RosterSnapshotEntry {
   athleteId: string;
   name: string;
-  squad: string | null;
+  squadNames?: string[];
+  squad?: string | null;
   discipline: Discipline;
   pb: number | null;
 }
@@ -189,18 +505,46 @@ export interface DashboardUpcomingEvent {
   eventId: string;
   title: string;
   type: EventType;
+  discipline: Discipline;
   date: string;
+  time: string | null;
+  locationName: string | null;
   status: EventStatus;
   athleteCount: number;
 }
 
+export interface DashboardTimelineEntry {
+  entry: TimelineEntry;
+  athlete: AggregateAthleteIdentity;
+}
+
+export interface DashboardActiveEvent {
+  event: AggregateEventIdentity;
+  progress: {
+    participantCount: number;
+    athletesWithEntriesCount: number;
+    resolvedResultsCount: number;
+    entryCount: number;
+    completionPercent: number;
+  };
+  latestEntries: DashboardTimelineEntry[];
+}
+
 export interface DashboardSummary {
+  state: 'live' | 'summary';
+  asOfDate: string;
   athletesCount: number;
   activeAthletesCount: number;
+  inactiveAthletesCount: number;
+  archivedAthletesCount: number;
+  statusReviewCount: number;
   upcomingEventCount: number;
   seasonPbs: number;
+  activeEvent: DashboardActiveEvent | null;
   rosterSnapshot: RosterSnapshotEntry[];
   upcomingEvents: DashboardUpcomingEvent[];
+  recentResults: AthleteResultHistoryEntry[];
+  recentPbs: AthleteResultHistoryEntry[];
 }
 
 export interface ApiError {
@@ -214,4 +558,97 @@ export interface ApiError {
 export interface ApiList<T> {
   data: T[];
   meta: { count: number };
+}
+
+export const INJURY_REGIONS = {
+  'Head & Neck': ['Head', 'Neck'],
+  Torso: ['Chest', 'Abdomen / core', 'Pelvis', 'Upper back', 'Lower back'],
+  Arm: ['Shoulder', 'Upper arm', 'Elbow', 'Forearm', 'Wrist', 'Hand'],
+  Leg: ['Hip', 'Thigh', 'Knee', 'Shin / calf', 'Ankle', 'Foot'],
+} as const;
+
+export type InjuryRegion = keyof typeof INJURY_REGIONS;
+export type InjuryArea = (typeof INJURY_REGIONS)[InjuryRegion][number];
+export type InjurySide = 'Left' | 'Right' | 'Both' | 'Center';
+export type InjurySeverity = 'Minor' | 'Moderate' | 'Severe';
+
+export interface Injury {
+  id: string;
+  workspaceId: string;
+  athleteId: string;
+  bodyRegion: InjuryRegion;
+  region: InjuryRegion;
+  area: InjuryArea;
+  side: InjurySide;
+  severity: InjurySeverity;
+  notes: string | null;
+  occurrenceDate: string | null;
+  expectedReturnDate: string | null;
+  resolvedDate: string | null;
+  resolutionNotes: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export interface AthleteActiveInjurySummary {
+  athleteId: string;
+  activeInjuryCount: number;
+  highestSeverity: InjurySeverity;
+  activeInjuries: Array<Pick<Injury, 'bodyRegion' | 'area' | 'side' | 'severity'>>;
+}
+
+export type InjuryDraft = Omit<Injury, 'id' | 'workspaceId' | 'athleteId' | 'resolvedDate' | 'resolutionNotes' | 'createdBy' | 'updatedBy' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'deletedBy'>;
+
+export interface ProgressionEntry {
+  event: AggregateEventIdentity;
+  result: Result;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+  runningPb: number | null;
+  isNewPb: boolean;
+}
+
+export interface ProgressionSummary {
+  allTimePb: number | null;
+  totalResults: number;
+  totalValid: number;
+}
+
+export interface ProgressionPagination {
+  nextCursor: string | null;
+  count: number;
+  total: number;
+}
+
+export interface ProgressionDetail {
+  athlete: AggregateAthleteIdentity;
+  entries: ProgressionEntry[];
+  pagination: ProgressionPagination;
+  summary: ProgressionSummary;
+}
+
+export interface ComparisonAthleteAggregate {
+  athlete: AggregateAthleteIdentity;
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  latestEffectiveOutcome: ResultOutcome;
+  validResultCount: number;
+  totalResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+  progression: ProgressionEntry[];
+}
+
+export interface ComparisonDetail {
+  athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate];
+}
+
+export interface MultiComparisonDetail {
+  athletes: ComparisonAthleteAggregate[];
 }

@@ -4,6 +4,7 @@ import type { EventParticipantSummaryRow } from '../db/row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import {
   addEventParticipant,
+  acknowledgeParticipantStatusReview,
   listEventParticipants,
   removeEventParticipant,
   replaceEventParticipant,
@@ -27,7 +28,7 @@ const participantRow: EventParticipantSummaryRow = {
   athlete_id: ATHLETE_ID,
   rsvp_status: 'pending',
   athlete_name: 'Ari Runner',
-  athlete_squad: 'Sprint',
+  athlete_squad_names: [],
   athlete_archived_at: null,
 };
 
@@ -38,9 +39,10 @@ const participant = {
   athlete: {
     id: ATHLETE_ID,
     name: 'Ari Runner',
-    squad: 'Sprint',
+    squadNames: [],
     archivedAt: null,
   },
+  statusReviewRequired: false,
 };
 
 beforeEach(() => {
@@ -59,6 +61,7 @@ describe('event participant service', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('JOIN events e');
     expect(sql).toContain('JOIN athletes a');
+    expect(sql).not.toContain('ep.participant_workspace_id = $2');
     expect(sql).toContain('ORDER BY lower(a.name) ASC, a.id ASC');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
   });
@@ -116,7 +119,9 @@ describe('event participant service', () => {
     ).resolves.toEqual({ ...participant, rsvpStatus: 'yes' });
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('SET rsvp_status = $1');
-    expect(parameters).toEqual(['yes', EVENT_ID, ATHLETE_ID, USER_ID]);
+    expect(sql).toContain('FROM events e, athletes a, workspaces w');
+    expect(sql).toContain('w.id = ep.participant_workspace_id');
+    expect(parameters).toEqual(['yes', EVENT_ID, ATHLETE_ID, USER_ID, null]);
   });
 
   it('removes only the assignment row', async () => {
@@ -128,6 +133,18 @@ describe('event participant service', () => {
     expect(sql).not.toContain('timeline_entries');
     expect(sql).not.toContain('results');
     expect(parameters).toEqual([EVENT_ID, ATHLETE_ID, USER_ID]);
+  });
+
+  it('acknowledges only the selected athlete review item within the workspace', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      acknowledgeParticipantStatusReview(USER_ID, USER_ID, EVENT_ID, ATHLETE_ID),
+    ).resolves.toBeUndefined();
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('event_participant_status_reviews');
+    expect(sql).toContain('acknowledged_at = now()');
+    expect(parameters).toEqual([USER_ID, EVENT_ID, ATHLETE_ID, USER_ID]);
   });
 
   it('uses generic not-found behavior for malformed and missing assignments', async () => {

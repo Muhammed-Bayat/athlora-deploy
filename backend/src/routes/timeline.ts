@@ -7,6 +7,7 @@ import {
   requireTimelineEntryOwnership,
 } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
+import { requireCoach } from '../middleware/capabilities.js';
 import {
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
@@ -30,6 +31,7 @@ router.post(
 );
 router.patch(
   '/:eventId/entries/:entryId',
+  requireCoach(),
   requireTimelineEntryOwnership,
   validateBody(parseTimelineEntryPatchPayload),
   requireEventLoggingOpen,
@@ -37,6 +39,7 @@ router.patch(
 );
 router.delete(
   '/:eventId/entries/:entryId',
+  requireCoach(),
   requireTimelineEntryOwnership,
   validateBody(parseTimelineEntryDeletePayload),
   timeline.removeTimelineEntry,

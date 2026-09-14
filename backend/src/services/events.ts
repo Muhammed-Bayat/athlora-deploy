@@ -4,7 +4,10 @@ import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { parseSeasonYear } from './seasons.js';
 import { recomputeEventResults } from './timeline.js';
+import { assertFixtureReadyToStart, assertHostWorkspace, markFixtureReacceptanceRequired } from './fixtures.js';
+import { notifyEventComingUp, notifyEventEnded, notifyFixtureStarted, notifyLiveLoggerStarted } from './fixtureNotifications.js';
 import type {
   EventCreatePayload,
   EventListQuery,
@@ -18,8 +21,8 @@ function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
 
-function requireOwnedId(userId: string, eventId: unknown): asserts eventId is string {
-  if (!isCanonicalUuid(userId) || !isCanonicalUuid(eventId)) {
+function requireScopedId(workspaceId: string, eventId: unknown): asserts eventId is string {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(eventId)) {
     throw notFound();
   }
 }
@@ -45,16 +48,25 @@ export function assertValidTransition(from: EventStatus, to: EventStatus): void 
 }
 
 export async function listEvents(
-  userId: string,
+  workspaceId: string,
   query: EventListQuery,
   executor: DbExecutor = getPool(),
 ): Promise<AthleticsEvent[]> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId)) {
     throw notFound();
   }
 
-  const conditions = ['created_by = $1'];
-  const parameters: string[] = [userId];
+  const conditions = [`(workspace_id = $1 OR EXISTS (
+    SELECT 1 FROM event_fixture_workspaces fw
+    WHERE fw.event_id = events.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+      AND fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision
+  ))`];
+  const parameters: string[] = [workspaceId];
+  const season = parseSeasonYear(query.year);
+  if (season.selected !== 'all') {
+    parameters.push(season.startDate!, season.endDate!);
+    conditions.push(`date >= $${parameters.length - 1}::date AND date < $${parameters.length}::date`);
+  }
   if (query.type !== undefined) {
     parameters.push(query.type);
     conditions.push(`type = $${parameters.length}`);
@@ -83,17 +95,21 @@ export async function listEvents(
 }
 
 export async function getEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
      FROM events
-     WHERE id = $1 AND created_by = $2`,
-    [eventId, userId],
+       WHERE id = $1 AND workspace_id = $2 OR (id = $1 AND EXISTS (
+         SELECT 1 FROM event_fixture_workspaces fw
+         WHERE fw.event_id = events.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+           AND fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision
+       ))`,
+    [eventId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -104,16 +120,18 @@ export async function createEvent(
   userId: string,
   payload: EventCreatePayload,
   executor: DbExecutor = getPool(),
+  workspaceId = userId,
 ): Promise<AthleticsEvent> {
-  if (!isCanonicalUuid(userId)) {
+  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(userId)) {
     throw notFound();
   }
 
   const result = await executor.query<EventRow>(
-    `INSERT INTO events (created_by, type, discipline, title, date, time, location_name, latitude, longitude, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO events (workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${EVENT_COLUMNS}`,
     [
+      workspaceId,
       userId,
       payload.type,
       payload.discipline,
@@ -126,32 +144,69 @@ export async function createEvent(
       payload.status,
     ],
   );
-  return mapEventRow(result.rows[0]);
+  const event = mapEventRow(result.rows[0]);
+  await notifyEventComingUp(executor, event.id, workspaceId);
+  return event;
 }
 
 type TransactionRunner = <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T>;
 
 export async function replaceEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   payload: EventReplacementPayload,
   runTransaction: TransactionRunner = withTransaction,
+  actorId?: string,
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   return runTransaction(async (client) => {
-    const current = await client.query<EventRow>(
-      `SELECT ${EVENT_COLUMNS}
+    const current = await client.query<EventRow & { fixture_revision?: number }>(
+      `SELECT ${EVENT_COLUMNS}, fixture_revision
        FROM events
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        FOR UPDATE`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
 
     const currentEvent = mapEventRow(currentRow);
     assertValidTransition(currentEvent.status, payload.status);
+    const materialChange = currentEvent.date !== payload.date ||
+      currentEvent.time !== payload.time ||
+      currentEvent.locationName !== payload.locationName ||
+      currentEvent.latitude !== payload.latitude ||
+      currentEvent.longitude !== payload.longitude;
+    const activeGuestTeams = currentRow.fixture_revision === undefined
+      ? { rows: [] }
+      : await client.query<{ workspace_id: string }>(
+        `SELECT workspace_id FROM event_fixture_workspaces
+         WHERE event_id = $1 AND role = 'guest' AND status <> 'withdrawn'
+         LIMIT 1`,
+        [eventId],
+      );
+    const unresolvedFixtureInvitations = currentRow.fixture_revision === undefined
+      ? { rows: [] }
+      : await client.query(
+        `SELECT 1 FROM fixture_invitations
+         WHERE event_id = $1 AND status NOT IN ('accepted', 'declined', 'revoked')
+         LIMIT 1`,
+        [eventId],
+      );
+    if (activeGuestTeams.rows.length > 0 || unresolvedFixtureInvitations.rows.length > 0) {
+      await assertHostWorkspace(client, eventId as string, workspaceId);
+      if (materialChange && (currentEvent.status !== 'scheduled' || payload.status !== 'scheduled')) {
+        throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture details can only change before the event starts');
+      }
+      if (currentEvent.status === 'scheduled' && payload.status !== 'scheduled') {
+        await assertFixtureReadyToStart(client, eventId as string);
+      }
+      if (materialChange) {
+        if (!actorId || !isCanonicalUuid(actorId)) throw notFound();
+        await markFixtureReacceptanceRequired(client, eventId as string, actorId);
+      }
+    }
 
     const result = await client.query<EventRow>(
       `UPDATE events
@@ -165,7 +220,7 @@ export async function replaceEvent(
            longitude = $8,
            status = $9,
            updated_at = now()
-       WHERE id = $10 AND created_by = $11
+        WHERE id = $10 AND workspace_id = $11
        RETURNING ${EVENT_COLUMNS}`,
       [
         payload.type,
@@ -178,46 +233,69 @@ export async function replaceEvent(
         payload.longitude,
         payload.status,
         eventId,
-        userId,
+         workspaceId,
       ],
     );
     const updated = mapEventRow(result.rows[0]);
+    if (currentEvent.status === 'scheduled' && updated.status === 'in_progress' && currentRow.fixture_revision !== undefined) {
+      await notifyFixtureStarted(client, eventId, currentRow.fixture_revision);
+    }
+    if (currentEvent.status === 'scheduled' && updated.status === 'in_progress') {
+      await notifyLiveLoggerStarted(client, eventId as string, workspaceId);
+    }
+    if (currentEvent.status === 'in_progress' && updated.status === 'completed') {
+      await notifyEventEnded(client, eventId as string, workspaceId);
+    }
     if (
       currentEvent.type !== updated.type ||
       currentEvent.date !== updated.date ||
       currentEvent.time !== updated.time ||
       currentEvent.status !== updated.status
     ) {
-      await recomputeEventResults(client, eventId, updated.type);
+      await recomputeEventResults(
+        client,
+        eventId,
+        updated.type,
+        currentEvent.status !== 'completed' && updated.status === 'completed',
+      );
     }
     return updated;
   });
 }
 
 export async function cancelEvent(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   runTransaction: TransactionRunner = withTransaction,
 ): Promise<AthleticsEvent> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
   return runTransaction(async (client) => {
     const current = await client.query<EventRow>(
       `SELECT ${EVENT_COLUMNS}
        FROM events
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        FOR UPDATE`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
     const currentEvent = mapEventRow(currentRow);
+    const hasGuests = await client.query<{ workspace_id: string }>(
+      `SELECT workspace_id FROM event_fixture_workspaces
+       WHERE event_id = $1 AND role = 'guest' AND status <> 'withdrawn'
+       LIMIT 1`,
+      [eventId as string],
+    );
+    if (hasGuests.rows.length > 0) {
+      await assertHostWorkspace(client, eventId as string, workspaceId);
+    }
     const result = await client.query<EventRow>(
       `UPDATE events
        SET status = 'cancelled',
            updated_at = now()
-       WHERE id = $1 AND created_by = $2
+        WHERE id = $1 AND workspace_id = $2
        RETURNING ${EVENT_COLUMNS}`,
-      [eventId, userId],
+       [eventId, workspaceId],
     );
     const cancelled = mapEventRow(result.rows[0]);
     if (currentEvent.status !== 'cancelled') {
@@ -228,17 +306,23 @@ export async function cancelEvent(
 }
 
 export async function assertEventLoggingOpen(
-  userId: string,
+  workspaceId: string,
   eventId: unknown,
   executor: DbExecutor = getPool(),
 ): Promise<void> {
-  requireOwnedId(userId, eventId);
+  requireScopedId(workspaceId, eventId);
 
   const result = await executor.query<EventRow>(
     `SELECT ${EVENT_COLUMNS}
-     FROM events
-     WHERE id = $1 AND created_by = $2`,
-    [eventId, userId],
+      FROM events e
+       WHERE e.id = $1 AND (
+         e.workspace_id = $2 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         )
+       )`,
+    [eventId, workspaceId],
   );
   const row = result.rows[0];
   if (!row) throw notFound();

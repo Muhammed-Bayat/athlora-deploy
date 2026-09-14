@@ -19,6 +19,9 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const ATHLETE_ID = '33333333-3333-4333-8333-333333333333';
 const ENTRY_ID = '44444444-4444-4444-8444-444444444444';
+const INVITATION_ID = '55555555-5555-4555-8555-555555555555';
+const CLUB_ID = '66666666-6666-4666-8666-666666666666';
+const TARGET_WORKSPACE_ID = '77777777-7777-4777-8777-777777777777';
 const query = vi.fn();
 const release = vi.fn();
 const client = { query, release };
@@ -32,7 +35,10 @@ beforeEach(() => {
     if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
       return { rows: [] };
     }
-    if (sql.includes('SELECT 1')) {
+    if (sql.includes('FROM users u') && sql.includes('workspace_members')) {
+      return synchronizedUser();
+    }
+    if (sql.trimStart().startsWith('SELECT 1')) {
       return { rows: [{ owned: 1 }] };
     }
     if (sql.includes('SELECT athlete_id, discipline')) {
@@ -41,7 +47,7 @@ beforeEach(() => {
     if (sql.includes('SELECT discipline FROM results')) {
       return { rows: [{ discipline: '100m' }] };
     }
-    if (sql.toLowerCase().includes('from events') && !sql.includes('SELECT 1')) {
+    if (sql.toLowerCase().includes('from events')) {
       return { rows: [eventRow()] };
     }
     if (sql.toLowerCase().includes('from athletes') && !sql.includes('SELECT 1')) {
@@ -122,7 +128,6 @@ beforeEach(() => {
         }],
       };
     }
-    }
     return { rows: [] };
   });
 });
@@ -171,7 +176,7 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archived_at: null,
     created_at: new Date('2026-08-01T09:00:00.000Z'),
@@ -278,7 +283,7 @@ describe('athletes', () => {
 });
 
 describe('auth bootstrap', () => {
-  it('synchronizes /auth/me before an application user exists', async () => {
+  it('synchronizes /auth/me without creating a workspace', async () => {
     configureAuth('auth0|new-coach');
     vi.stubGlobal(
       'fetch',
@@ -291,8 +296,9 @@ describe('auth bootstrap', () => {
         }),
       }),
     );
-    query.mockResolvedValueOnce({
-      rows: [
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [
         {
           id: USER_ID,
           auth0_id: 'auth0|new-coach',
@@ -302,8 +308,7 @@ describe('auth bootstrap', () => {
           created_at: new Date('2026-08-14T10:00:00.000Z'),
           updated_at: new Date('2026-08-14T10:00:00.000Z'),
         },
-      ],
-    });
+      ] });
 
     const response = await request(app)
       .put('/api/v1/auth/me')
@@ -311,57 +316,40 @@ describe('auth bootstrap', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ id: USER_ID, auth0Id: 'auth0|new-coach' });
-    expect(query).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0]?.[0]).toContain('INSERT INTO users');
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1]?.[0]).toContain('INSERT INTO users');
     expect(fetch).toHaveBeenCalledWith('https://example.auth0.com/userinfo', {
       headers: { Authorization: 'Bearer bootstrap-token' },
     });
   });
+
+  it('lists no workspaces for a synchronized user awaiting Club onboarding', async () => {
+    configureAuth('auth0|new-coach');
+    query
+      .mockResolvedValueOnce({ rows: [{
+        user_id: USER_ID,
+        auth0_id: 'auth0|new-coach',
+        role: 'coach',
+        deletion_status: null,
+      }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .get('/api/v1/workspaces')
+      .set('Authorization', 'Bearer bootstrap-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0, activeWorkspaceId: '' } });
+  });
 });
 
-describe('owned resource scaffolds', () => {
-  it('keeps every currently scaffolded owned route reachable', async () => {
+describe('owned resource routes', () => {
+  it('keeps representative owned routes reachable', async () => {
     configureAuth();
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 200, false],
-      ['put', `/api/v1/athletes/${ATHLETE_ID}`, { name: 'Ari Runner' }, 501, false],
-      ['delete', `/api/v1/athletes/${ATHLETE_ID}`, undefined, 501, false],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined, 200, false],
-      [
-        'put',
-        `/api/v1/events/${EVENT_ID}`,
-        {
-          type: 'competition',
-          title: 'City Sprint Meet',
-          date: '2026-09-01',
-          status: 'scheduled',
-        },
-        501,
-        false,
-      ],
-      ['delete', `/api/v1/events/${EVENT_ID}`, undefined, 501, false],
-      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 501, false],
-      [
-        'post',
-        `/api/v1/events/${EVENT_ID}/entries`,
-        { athleteId: ATHLETE_ID, entryType: 'attempt', value: 11.2 },
-        201,
-        true,
-      ],
-      [
-        'patch',
-        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
-        { expectedVersion: 1, value: 11.1 },
-        200,
-        true,
-      ],
-      [
-        'delete',
-        `/api/v1/events/${EVENT_ID}/entries/${ENTRY_ID}`,
-        { expectedVersion: 1 },
-        204,
-        true,
-      ],
+      ['get', `/api/v1/events/${EVENT_ID}/weather`, undefined, 422, false],
       ['get', `/api/v1/events/${EVENT_ID}/results`, undefined, 200, false],
       [
         'put',
@@ -374,7 +362,6 @@ describe('owned resource scaffolds', () => {
     const statuses: number[] = [];
 
     for (const [method, path, body, expectedStatus, loggingGuard] of cases) {
-      query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
       if (loggingGuard) {
         query.mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
       }
@@ -382,10 +369,56 @@ describe('owned resource scaffolds', () => {
       if (body !== undefined) testRequest = testRequest.send(body);
       const response = await testRequest;
       statuses.push(response.status);
-      expect(response.status).toBe(expectedStatus);
+      expect(response.status, `${path}: ${JSON.stringify(response.body)}`).toBe(expectedStatus);
     }
 
     expect(statuses).toHaveLength(cases.length);
+  });
+
+  it('creates a fixture invitation from its host workspace', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ type: 'training', discipline: null, status: 'scheduled', fixture_revision: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ workspace_id: TARGET_WORKSPACE_ID, workspace_name: 'Guest Club' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: INVITATION_ID,
+          event_id: EVENT_ID,
+          email: null,
+          revision: 1,
+          status: 'pending',
+          expires_at: new Date('2026-09-01T00:00:00.000Z'),
+          created_at: new Date('2026-08-30T00:00:00.000Z'),
+          target_workspace_id: TARGET_WORKSPACE_ID,
+          target_workspace_name: null,
+          response_message: null,
+          responded_at: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/fixture-invitations`)
+      .set('Authorization', 'Bearer valid')
+      .send({ targetClubId: CLUB_ID });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({
+      id: INVITATION_ID,
+      eventId: EVENT_ID,
+      targetWorkspaceId: TARGET_WORKSPACE_ID,
+      targetWorkspaceName: 'Guest Club',
+      status: 'pending',
+    });
+    expect(response.body.data.token).toBeUndefined();
+    expect(query.mock.calls[3]).toEqual(expect.arrayContaining([
+      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
+      [EVENT_ID, USER_ID],
+    ]));
   });
 });
 
@@ -395,6 +428,7 @@ describe('ownership non-disclosure', () => {
     const cases = [
       ['get', `/api/v1/athletes/${ATHLETE_ID}`, undefined],
       ['get', `/api/v1/events/${EVENT_ID}`, undefined],
+      ['post', `/api/v1/events/${EVENT_ID}/fixture-invitations`, { targetClubId: CLUB_ID }],
       [
         'post',
         `/api/v1/events/${EVENT_ID}/entries`,
@@ -487,10 +521,112 @@ describe('ownership non-disclosure', () => {
 });
 
 describe('event weather', () => {
-  it('is protected before reaching the scaffolded handler', async () => {
+  it('is protected before reaching the weather handler', async () => {
     const response = await request(app).get('/api/v1/events/abc-123/weather');
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('AUTH_NOT_CONFIGURED');
+  });
+});
+
+describe('fixture host-only lifecycle', () => {
+  it('rejects non-host workspace from starting a fixture event', async () => {
+    configureAuth();
+    const eventData = { id: EVENT_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', time: null, location_name: null, latitude: null, longitude: null, status: 'scheduled', created_at: new Date(), updated_at: new Date(), fixture_revision: 1 };
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('FOR UPDATE') && sql.includes('fixture_revision')) return { rows: [eventData] };
+      if (sql.includes('event_fixture_workspaces') && sql.includes("'guest'")) return { rows: [{ workspace_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }] };
+      if (sql.includes('event_fixture_workspaces') && sql.includes("'host'")) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .put(`/api/v1/events/${EVENT_ID}`)
+      .set('Authorization', 'Bearer valid')
+      .send({ type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', status: 'in_progress' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
+  });
+});
+
+describe('fixture host shared results', () => {
+  it('lists fixture results from the host workspace', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [{ '1': 1 }] };
+      if (sql.includes('SELECT r.*') || sql.includes('SELECT * FROM results')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-results`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0 } });
+  });
+
+  it('rejects non-host workspace from listing fixture results', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-results`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
+  });
+});
+
+describe('fixture host shared entries', () => {
+  it('lists fixture entries from the host workspace', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [{ '1': 1 }] };
+      if (sql.includes('timeline_entries')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-entries`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [], meta: { count: 0 } });
+  });
+
+  it('rejects non-host workspace from listing fixture entries', async () => {
+    configureAuth();
+    query.mockImplementation(async (sql: string) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('auth0_id')) return synchronizedUser();
+      if (sql.includes('SELECT 1 FROM events')) return { rows: [{ owned: 1 }] };
+      if (sql.includes('event_fixture_workspaces')) return { rows: [] };
+      return { rows: [] };
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/fixture-entries`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FIXTURE_HOST_ONLY');
   });
 });
 

@@ -1,0 +1,204 @@
+import { getPool, type DbExecutor } from '../db/client.js';
+import { ApiError } from '../middleware/errors.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
+
+export type FixtureNotificationKind = 'fixture_invited' | 'fixture_responded' | 'fixture_reacceptance_required' | 'fixture_started' | 'event_coming_up' | 'live_logger_started' | 'event_ended';
+
+export interface FixtureNotification {
+  id: string;
+  eventId: string;
+  invitationId: string | null;
+  kind: FixtureNotificationKind;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  starredAt: string | null;
+  createdAt: string;
+}
+
+function notFound(): ApiError {
+  return new ApiError(404, 'NOT_FOUND', 'Resource not found');
+}
+
+function timestamp(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function mapNotification(row: {
+  id: string; event_id: string; invitation_id: string | null; kind: FixtureNotificationKind;
+  payload: Record<string, unknown>; read_at: Date | string | null; starred_at: Date | string | null;
+  created_at: Date | string;
+}): FixtureNotification {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    invitationId: row.invitation_id,
+    kind: row.kind,
+    payload: row.payload,
+    readAt: timestamp(row.read_at),
+    starredAt: timestamp(row.starred_at),
+    createdAt: timestamp(row.created_at)!,
+  };
+}
+
+export async function notifyFixtureInvitation(
+  client: DbExecutor, invitationId: string, eventId: string, email: string, targetWorkspaceId: string | null,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
+     SELECT u.id, wm.workspace_id, $2::uuid, $1::uuid, 'fixture_invited', jsonb_build_object('invitationId', $1::uuid), 'fixture:invited:' || ($1::uuid)::text
+     FROM users u JOIN workspace_members wm ON wm.user_id = u.id
+      WHERE ($4::uuid IS NULL AND lower(u.email) = lower($3))
+         OR ($4::uuid IS NOT NULL AND wm.workspace_id = $4 AND wm.role = 'coach')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [invitationId, eventId, email, targetWorkspaceId],
+  );
+}
+
+export async function notifyFixtureReacceptanceRequired(
+  client: DbExecutor, invitationId: string, eventId: string, workspaceId: string,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $2::uuid, $1::uuid, 'fixture_reacceptance_required', jsonb_build_object('invitationId', $1::uuid), 'fixture:reacceptance:' || ($1::uuid)::text
+      FROM workspace_members wm WHERE wm.workspace_id = $3 AND wm.role = 'coach'
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [invitationId, eventId, workspaceId],
+  );
+}
+
+export async function notifyFixtureResponse(
+  client: DbExecutor, eventId: string, invitationId: string, responseId: string, response: string, message: string | null, guestWorkspaceName: string,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, invitation_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, $2::uuid, 'fixture_responded',
+            jsonb_build_object('response', $4::text, 'message', $5::text, 'guestWorkspaceName', $6::text), 'fixture:responded:' || ($3::uuid)::text
+     FROM event_fixture_workspaces fw JOIN workspace_members wm ON wm.workspace_id = fw.workspace_id
+     WHERE fw.event_id = $1 AND fw.role = 'host'
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, invitationId, responseId, response, message, guestWorkspaceName],
+  );
+}
+
+export async function notifyFixtureStarted(client: DbExecutor, eventId: string, revision: number): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'fixture_started',
+            jsonb_build_object('revision', $2::integer),
+            'fixture:started:' || $1::text || ':' || $2::text
+     FROM event_fixture_workspaces fw JOIN workspace_members wm ON wm.workspace_id = fw.workspace_id
+     WHERE fw.event_id = $1::uuid AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = $2::integer
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, revision],
+  );
+}
+
+export async function notifyEventComingUp(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'event_coming_up',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:coming_up:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
+  );
+}
+
+export async function notifyLiveLoggerStarted(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'live_logger_started',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:live_logger_started:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
+  );
+}
+
+export async function notifyEventEnded(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO fixture_notifications (recipient_user_id, workspace_id, event_id, kind, payload, dedupe_key)
+     SELECT wm.user_id, wm.workspace_id, $1::uuid, 'event_ended',
+            jsonb_build_object('eventId', $1::uuid),
+            'event:ended:' || ($1::uuid)::text
+     FROM workspace_members wm
+     WHERE wm.workspace_id = $2::uuid AND wm.role IN ('coach', 'assistant')
+     ON CONFLICT (recipient_user_id, workspace_id, dedupe_key) DO NOTHING`,
+    [eventId, workspaceId],
+  );
+}
+
+export async function listFixtureNotifications(userId: string, workspaceId: string, executor: DbExecutor = getPool()): Promise<FixtureNotification[]> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId)) throw notFound();
+  const result = await executor.query<{
+    id: string; event_id: string; invitation_id: string | null; kind: FixtureNotificationKind;
+    payload: Record<string, unknown>; read_at: Date | string | null; starred_at: Date | string | null;
+    created_at: Date | string;
+  }>(
+    `SELECT id, event_id, invitation_id, kind, payload, read_at, starred_at, created_at
+     FROM fixture_notifications
+     WHERE recipient_user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+     ORDER BY starred_at DESC NULLS LAST, created_at DESC, id DESC`,
+    [userId, workspaceId],
+  );
+  return result.rows.map(mapNotification);
+}
+
+export async function countUnreadFixtureNotifications(userId: string, workspaceId: string, executor: DbExecutor = getPool()): Promise<number> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId)) throw notFound();
+  const result = await executor.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM fixture_notifications
+     WHERE recipient_user_id = $1 AND workspace_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
+    [userId, workspaceId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function markFixtureNotificationRead(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET read_at = COALESCE(read_at, now())
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw notFound();
+}
+
+export async function deleteFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET deleted_at = now()
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND read_at IS NOT NULL AND deleted_at IS NULL
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw new ApiError(409, 'NOT_DELETABLE', 'Notification must be read before deletion');
+}
+
+export async function starFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET starred_at = COALESCE(starred_at, now())
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND deleted_at IS NULL
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw notFound();
+}
+
+export async function unstarFixtureNotification(userId: string, workspaceId: string, notificationId: unknown): Promise<void> {
+  if (!isCanonicalUuid(userId) || !isCanonicalUuid(workspaceId) || !isCanonicalUuid(notificationId)) throw notFound();
+  const result = await getPool().query(
+    `UPDATE fixture_notifications SET starred_at = NULL
+     WHERE id = $1 AND recipient_user_id = $2 AND workspace_id = $3 AND deleted_at IS NULL
+     RETURNING id`,
+    [notificationId, userId, workspaceId],
+  );
+  if (!result.rows[0]) throw notFound();
+}

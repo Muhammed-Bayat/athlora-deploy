@@ -122,7 +122,7 @@ describe('timeline routes', () => {
       incidentType: null,
       noteText: null,
       deviceId: null,
-    });
+    }, undefined, USER_ID);
   });
 
   it('patches through the sparse parsed payload', async () => {

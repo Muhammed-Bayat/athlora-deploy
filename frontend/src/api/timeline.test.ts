@@ -71,8 +71,8 @@ describe('timeline API', () => {
   });
 
   it('patches an entry with the exact method and correction body', async () => {
-    const payload = { expectedVersion: 1, value: 11.1, noteText: 'Corrected from photo finish' };
-    const corrected = { ...entry, value: 11.1, noteText: payload.noteText, version: 2 };
+    const payload = { expectedVersion: 1, value: 11.1 };
+    const corrected = { ...entry, value: 11.1, version: 2 };
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ data: corrected })),
     );

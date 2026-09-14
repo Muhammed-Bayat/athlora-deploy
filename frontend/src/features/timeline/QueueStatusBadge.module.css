@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.pending {
+  background: rgba(0, 135, 158, 0.2);
+  color: var(--color-warning);
+}
+
+.synced {
+  background: rgba(0, 94, 131, 0.2);
+  color: var(--color-success);
+}
+
+.failed {
+  background: rgba(226, 102, 79, 0.2);
+  color: var(--color-danger);
+}

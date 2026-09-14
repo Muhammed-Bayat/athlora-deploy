@@ -1,8 +1,18 @@
 import type { ApiList, User } from '../types';
+import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 let getAccessToken: (() => Promise<string>) | undefined;
 let accessTokenGetterRegistration: symbol | undefined;
+let activeWorkspaceId: string | undefined;
+
+// Try to read a stored token from localStorage on startup
+{
+  const stored = typeof window !== 'undefined' && localStorage.getItem('athlora_access_token');
+  if (stored) {
+    getAccessToken = async () => stored;
+  }
+}
 
 interface ApiData<T> {
   data: T;
@@ -31,6 +41,35 @@ export function setAccessTokenGetter(getter: (() => Promise<string>) | undefined
       accessTokenGetterRegistration = undefined;
     }
   };
+}
+
+// Realtime connections use the same Auth0 token source as HTTP requests.
+export async function getCurrentAccessToken(): Promise<string | undefined> {
+  if (!getAccessToken) return undefined;
+  // Prevent Auth0 background token refresh when offline — avoids 401 cascade.
+  // Uses both navigator.onLine (immediate) and failure tracking (reliable).
+  if (!isDeviceOnline()) return undefined;
+  try {
+    const token = await getAccessToken();
+    recordNetworkSuccess();
+    return token;
+  } catch (error) {
+    // If the error is a network failure, record it so future requests
+    // short-circuit immediately without waiting for Auth0.
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('network') || msg.includes('Network') || msg.includes('fetch') || msg.includes('offline') || msg.includes('Failed to fetch')) {
+      recordNetworkFailure();
+    }
+    throw new ApiError(
+      401,
+      'AUTH_TOKEN_ACQUISITION_FAILED',
+      error instanceof Error ? error.message : 'Failed to acquire access token',
+    );
+  }
+}
+
+export function setActiveWorkspaceId(workspaceId: string | undefined): void {
+  activeWorkspaceId = workspaceId;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,36 +109,16 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const tokenGetter = getAccessToken;
-  let accessToken: string | undefined;
-  if (tokenGetter) {
-    try {
-      accessToken = await tokenGetter();
-    } catch (error) {
-      throw new ApiError(
-        401,
-        'AUTH_TOKEN_ACQUISITION_FAILED',
-        error instanceof Error ? error.message : 'Failed to acquire access token',
-      );
-    }
-  }
-
-  const headers = new Headers(init?.headers);
-  if (!headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  if (accessToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
-
+async function sendRequest<T>(path: string, init: RequestInit | undefined, headers: Headers): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers,
     });
+    recordNetworkSuccess();
   } catch (error) {
+    recordNetworkFailure();
     throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
   }
 
@@ -123,6 +142,56 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return payload as T;
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Short-circuit when offline: avoids Auth0 token refresh failures (401)
+  // and fetch errors. Uses both navigator.onLine and failure tracking.
+  if (!isDeviceOnline()) {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+  }
+
+  const tokenGetter = getAccessToken;
+  // Keep an action in the workspace in which it began while Auth0 obtains its token.
+  const workspaceId = activeWorkspaceId;
+  let accessToken: string | undefined;
+  if (tokenGetter) {
+    try {
+      accessToken = await getCurrentAccessToken();
+    } catch {
+      // Auth0 token refresh failed — almost always means offline.
+      // Convert to NETWORK_ERROR so callers can fall back to cache
+      // instead of seeing a confusing "invalid token" 401.
+      recordNetworkFailure();
+      throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+    }
+  }
+
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  if (workspaceId && !headers.has('X-Workspace-Id')) {
+    headers.set('X-Workspace-Id', workspaceId);
+  }
+
+  return sendRequest<T>(path, init, headers);
+}
+
+export async function requestPublic<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!isDeviceOnline()) {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Device is offline');
+  }
+
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return sendRequest<T>(path, init, headers);
 }
 
 export async function list<T>(resource: string): Promise<ApiList<T>> {

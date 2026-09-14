@@ -1,15 +1,20 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { Athlete, AthleticsEvent, EventParticipantSummary } from '../../types';
+import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } from '../../types';
+import { CurrentUserProvider } from '../auth/CurrentUserProvider';
 import { EventsPage } from './EventsPage';
+import { EventDetailPage } from './EventDetailPage';
 
 const eventApi = vi.hoisted(() => ({
   listEvents: vi.fn(),
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   cancelEvent: vi.fn(),
+  getEvent: vi.fn(),
+  getEventWeather: vi.fn(),
 }));
 const participantApi = vi.hoisted(() => ({
   listEventParticipants: vi.fn(),
@@ -20,10 +25,31 @@ const participantApi = vi.hoisted(() => ({
 const athleteApi = vi.hoisted(() => ({
   listAthletes: vi.fn(),
 }));
+const venueApi = vi.hoisted(() => ({ searchVenues: vi.fn() }));
+const clubsApi = vi.hoisted(() => ({ listClubs: vi.fn(), listClubCalendarEvents: vi.fn() }));
+const resultApi = vi.hoisted(() => ({
+  listResults: vi.fn(),
+  overrideResult: vi.fn(),
+}));
+const timelineApi = vi.hoisted(() => ({
+  listTimelineEntries: vi.fn(),
+}));
+const fixturesApi = vi.hoisted(() => ({
+  listFixtureRosters: vi.fn(),
+  listFixtureInvitations: vi.fn(),
+  listHostedFixtureResults: vi.fn(),
+  listGuestFixtures: vi.fn(),
+  getGuestFixture: vi.fn(),
+}));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
 vi.mock('../../api/athletes', () => athleteApi);
+vi.mock('../../api/results', () => resultApi);
+vi.mock('../../api/timeline', () => timelineApi);
+vi.mock('../../api/venues', () => venueApi);
+vi.mock('../../api/clubs', () => clubsApi);
+vi.mock('../../api/fixtures', () => fixturesApi);
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
@@ -84,9 +110,12 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: null,
     gender: null,
-    squad: 'Sprint',
+    squads: [],
     notes: null,
     archivedAt: null,
+    status: 'active',
+    statusChangedAt: '2026-08-16T10:00:00.000Z',
+    statusChangedBy: '55555555-5555-4555-8555-555555555555',
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -98,18 +127,50 @@ function participant(overrides: Partial<EventParticipantSummary> = {}): EventPar
     eventId: CITY_ID,
     athleteId: ARI_ID,
     rsvpStatus: 'pending',
-    athlete: { id: ARI_ID, name: 'Ari Runner', squad: 'Sprint', archivedAt: null },
+    athlete: { id: ARI_ID, name: 'Ari Runner', squadNames: [], archivedAt: null, status: 'active' },
+    statusReviewRequired: false,
     ...overrides,
   };
 }
 
 const ari = athlete();
-const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squad: null });
+const bea = athlete({ id: BEA_ID, name: 'Bea Sprinter', squads: [] });
 const ariParticipant = participant();
 const beaParticipant = participant({
   athleteId: BEA_ID,
-  athlete: { id: BEA_ID, name: 'Bea Sprinter', squad: null, archivedAt: null },
+  athlete: { id: BEA_ID, name: 'Bea Sprinter', squadNames: [], archivedAt: null, status: 'active' },
 });
+const currentUser: User = {
+  id: '55555555-5555-4555-8555-555555555555',
+  auth0Id: 'auth0|coach-1',
+  name: 'Coach Avery',
+  email: 'coach@example.com',
+  role: 'coach',
+  createdAt: '2026-08-16T10:00:00.000Z',
+  updatedAt: '2026-08-16T10:00:00.000Z',
+  consentAcceptedAt: null,
+  consentVersion: null,
+};
+
+function result(overrides: Partial<Result> = {}): Result {
+  return {
+    eventId: CITY_ID,
+    athleteId: ARI_ID,
+    discipline: '100m',
+    outcome: 'valid',
+    finalResult: 10.45,
+    unit: 'seconds',
+    placing: 1,
+    isPb: false,
+    isSb: false,
+    manualOverride: null,
+    overrideReason: null,
+    overriddenBy: null,
+    overrideAt: null,
+    updatedAt: '2026-08-17T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -117,12 +178,36 @@ beforeEach(() => {
     data: [past, cancelled, city, training],
     meta: { count: 4 },
   });
+  eventApi.getEventWeather.mockResolvedValue({
+    date: city.date,
+    timezone: 'Africa/Johannesburg',
+    weatherCode: 'partly-cloudy-day',
+    temperatureMinC: 13.4,
+    temperatureMaxC: 24.8,
+    precipitationProbabilityMaxPercent: 20,
+    windSpeedKmh: 18.1,
+  });
+  eventApi.getEvent.mockResolvedValue(city);
   participantApi.listEventParticipants.mockResolvedValue({ data: [ariParticipant], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
+  resultApi.listResults.mockResolvedValue({ data: [], meta: { count: 0 } });
+  timelineApi.listTimelineEntries.mockResolvedValue({ data: [], meta: { count: 0 } });
+  venueApi.searchVenues.mockResolvedValue({ data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 } });
+  fixturesApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listFixtureInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.listGuestFixtures.mockResolvedValue({ data: [], meta: { count: 0 } });
+  fixturesApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'not a guest fixture'));
+  clubsApi.listClubs.mockResolvedValue({ data: [{ id: '88888888-8888-4888-8888-888888888888', workspaceId: '99999999-9999-4999-8999-999999999999', name: 'Rival Track Club', createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' }], meta: { count: 1 } });
+  clubsApi.listClubCalendarEvents.mockResolvedValue({ data: [{ club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: event({ id: '99999999-9999-4999-8999-999999999999', title: 'Rival Relay', date: '2026-08-22' }) }, { club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: city }], meta: { count: 2 } });
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
-  return render(<EventsPage today={TODAY} {...props} />);
+  return render(
+    <CurrentUserProvider user={currentUser}>
+      <MemoryRouter><EventsPage today={TODAY} defaultView="list" {...props} /></MemoryRouter>
+    </CurrentUserProvider>,
+  );
 }
 
 async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'City Sprint Meet') {
@@ -130,7 +215,111 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
   return screen.getByRole('dialog', { name: title });
 }
 
+async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement, label: string, option: string | RegExp) {
+  const trigger = await within(scope).findByRole('button', { name: label });
+  await user.click(trigger);
+  const menu = trigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+  expect(menu).toBeInTheDocument();
+  await user.click(within(menu!).getByRole('option', { name: option }));
+  return trigger;
+}
+
+async function selectDate(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement, value: string, label = 'Date') {
+  const trigger = within(scope).getByRole('button', { name: new RegExp(`^${label},`) });
+  await user.click(trigger);
+  const calendar = within(scope).getByRole('dialog', { name: `${label} calendar` });
+  const target = new Date(`${value}T00:00:00`);
+  const current = new Date();
+  const months = (target.getFullYear() - current.getFullYear()) * 12 + target.getMonth() - current.getMonth();
+  const navigation = within(calendar).getByRole('button', { name: months < 0 ? 'Previous month' : 'Next month' });
+  for (let index = 0; index < Math.abs(months); index += 1) await user.click(navigation);
+  await user.click(within(calendar).getByRole('button', { name: `Choose ${target.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` }));
+}
+
 describe('EventsPage', () => {
+  it('opens with the upcoming-events calendar and displays event details in date cells', async () => {
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Calendar view' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Acceleration Session')).toBeInTheDocument();
+    expect(screen.getByText('TBC')).toBeInTheDocument();
+  });
+
+  it('combines selected club schedules in the calendar', async () => {
+    const user = userEvent.setup();
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    await screen.findByRole('button', { name: 'Club calendars' });
+    await user.click(screen.getByRole('button', { name: 'Club calendars' }));
+    await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888']));
+    const rivalDate = new Date('2026-08-22T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    await user.click(screen.getByRole('button', { name: `${rivalDate}, 1 event` }));
+    expect(screen.getByRole('button', { name: /Rival Relay/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    const sharedDate = new Date('2026-09-01T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    await user.click(screen.getByRole('button', { name: `${sharedDate}, 1 event` }));
+    expect(screen.getByText('Together · Rival Track Club')).toBeInTheDocument();
+  });
+
+  it('reloads a selected club calendar for the chosen season and removes it from the combined schedule', async () => {
+    window.history.replaceState({}, '', '/?year=2025');
+    const user = userEvent.setup();
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Club calendars' }));
+    await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(
+      ['88888888-8888-4888-8888-888888888888'],
+      '2025',
+    ));
+    expect(screen.getByText('Showing your schedule alongside 1 selected club.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove Rival Track Club' }));
+
+    expect(screen.queryByLabelText('Selected clubs')).not.toBeInTheDocument();
+    expect(screen.getByText('Search for one or more clubs to combine their upcoming schedules with yours.')).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('hands an event id to routed detail navigation', async () => {
+    const onOpenEvent = vi.fn();
+    const user = userEvent.setup();
+    renderPage({ onOpenEvent });
+
+    await user.click(await screen.findByRole('button', { name: /City Sprint Meet/i }));
+    expect(onOpenEvent).toHaveBeenCalledWith(CITY_ID);
+  });
+
+  it('loads a direct event route and distinguishes a missing event', async () => {
+    const onBack = vi.fn();
+    const { rerender } = render(<CurrentUserProvider user={currentUser}><MemoryRouter><EventDetailPage eventId={CITY_ID} onBack={onBack} /></MemoryRouter></CurrentUserProvider>);
+
+    expect(await screen.findByRole('heading', { name: 'City Sprint Meet' })).toBeInTheDocument();
+    expect(eventApi.getEvent).toHaveBeenCalledWith(CITY_ID);
+
+    eventApi.getEvent.mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'missing'));
+    rerender(<CurrentUserProvider user={currentUser}><MemoryRouter><EventDetailPage eventId="missing" onBack={onBack} /></MemoryRouter></CurrentUserProvider>);
+    expect(await screen.findByRole('heading', { name: 'Event not found' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Back to events' }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
   it('shows loading and then renders upcoming API events in stable order', async () => {
     let resolveList!: (value: { data: AthleticsEvent[]; meta: { count: number } }) => void;
     eventApi.listEvents.mockReturnValue(new Promise((resolve) => { resolveList = resolve; }));
@@ -206,11 +395,10 @@ describe('EventsPage', () => {
     expect(within(dialog).getByText('Event date is required.')).toBeInTheDocument();
 
     await user.type(within(dialog).getByLabelText('Event title'), '  County 100m  ');
-    await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
-    await user.type(within(dialog).getByLabelText(/Time/), '10:15');
+    await selectDate(user, dialog, '2026-09-05');
+    await selectThemedOption(user, dialog, 'Event hour', '10');
+    await selectThemedOption(user, dialog, 'Event minute', '15');
     await user.type(within(dialog).getByLabelText(/Location/), '  North Track  ');
-    await user.type(within(dialog).getByLabelText(/Latitude/), '-26.2');
-    await user.type(within(dialog).getByLabelText(/Longitude/), '28.1');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 
     await waitFor(() => expect(eventApi.createEvent).toHaveBeenCalledWith({
@@ -218,16 +406,68 @@ describe('EventsPage', () => {
       discipline: '100m',
       title: 'County 100m',
       date: '2026-09-05',
-      time: '10:15',
+      time: '10:15:00',
       locationName: 'North Track',
-      latitude: -26.2,
-      longitude: 28.1,
+      latitude: null,
+      longitude: null,
       status: 'scheduled',
     }));
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
-  it('validates coordinate ranges and preserves backend-invalid drafts', async () => {
+  it('uses 24-hour five-minute time wheels and clears an optional event time', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+    const hour = within(dialog).getByRole('button', { name: 'Event hour' });
+    const minute = within(dialog).getByRole('button', { name: 'Event minute' });
+
+    expect(minute).toBeDisabled();
+    await user.click(hour);
+    const hourMenu = hour.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const minuteMenu = minute.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(hourMenu!).getByRole('option', { name: '23' })).toBeInTheDocument();
+    expect(minuteMenu).not.toBeInTheDocument();
+    await user.click(within(hourMenu!).getByRole('option', { name: '18' }));
+    await selectThemedOption(user, dialog, 'Event minute', '35');
+    expect(hour).toHaveTextContent('18');
+    expect(minute).toHaveTextContent('35');
+    await user.click(within(dialog).getByRole('button', { name: 'Clear time' }));
+    expect(hour).toHaveTextContent('HH');
+    expect(minute).toBeDisabled();
+  });
+
+  it('shows a selected venue and keeps the cleared search ready for a replacement', async () => {
+    venueApi.searchVenues
+      .mockResolvedValueOnce({ data: [{ displayName: 'Central Stadium, Johannesburg', latitude: -26.2041, longitude: 28.0473 }], meta: { count: 1 } })
+      .mockResolvedValueOnce({ data: [{ displayName: 'North Track, Pretoria', latitude: -25.7461, longitude: 28.1881 }], meta: { count: 1 } });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+    const lookup = within(dialog).getByLabelText('Venue or address');
+    await user.type(lookup, 'Central Stadium');
+    await waitFor(() => expect(venueApi.searchVenues).toHaveBeenCalledWith('Central Stadium'));
+    const result = await within(dialog).findByRole('button', { name: /Central Stadium, Johannesburg/ });
+    await user.click(result);
+    expect(lookup).toHaveValue('');
+    expect(within(dialog).getByLabelText(/Location/)).toHaveValue('Central Stadium, Johannesburg');
+    expect(within(dialog).getByText(/Search data/)).toHaveTextContent('OpenStreetMap contributors');
+    expect(within(dialog).queryByRole('button', { name: /Central Stadium, Johannesburg/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('No matching venues found.')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('status', { name: /selected venue/i })).toHaveTextContent('Central Stadium, Johannesburg');
+
+    await user.type(lookup, 'North Track');
+    await waitFor(() => expect(venueApi.searchVenues).toHaveBeenLastCalledWith('North Track'));
+    await user.click(await within(dialog).findByRole('button', { name: /North Track, Pretoria/ }));
+    expect(within(dialog).getByRole('status', { name: /selected venue/i })).toHaveTextContent('North Track, Pretoria');
+    expect(within(dialog).getByLabelText(/Location/)).toHaveValue('North Track, Pretoria');
+  });
+
+  it('preserves backend-invalid drafts', async () => {
     eventApi.createEvent.mockRejectedValue(
       new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', {
         issues: [{ path: 'title', code: 'invalid_value', message: 'Title is unavailable' }],
@@ -239,13 +479,7 @@ describe('EventsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add event' }));
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
     await user.type(within(dialog).getByLabelText('Event title'), 'Taken Meet');
-    await user.type(within(dialog).getByLabelText('Date'), '2026-09-05');
-    await user.type(within(dialog).getByLabelText(/Latitude/), '91');
-    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
-    expect(within(dialog).getByText('Latitude must be between -90 and 90.')).toBeInTheDocument();
-    expect(eventApi.createEvent).not.toHaveBeenCalled();
-
-    await user.clear(within(dialog).getByLabelText(/Latitude/));
+    await selectDate(user, dialog, '2026-09-05');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
     expect(await within(dialog).findByText('Title is unavailable')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Event title')).toHaveValue('Taken Meet');
@@ -282,11 +516,78 @@ describe('EventsPage', () => {
     expect(detail).toHaveTextContent('Scheduled');
     expect(detail).toHaveTextContent('100m');
     expect(detail).toHaveTextContent('Central Stadium');
-    expect(await within(detail).findByText('Ari Runner')).toBeInTheDocument();
+    expect(await within(detail).findByText('Partly cloudy')).toBeInTheDocument();
+    expect(eventApi.getEventWeather).toHaveBeenCalledWith(CITY_ID, expect.any(AbortSignal));
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
     expect(detail).toHaveTextContent('Assigned athletes 1');
-    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toHaveValue('pending');
+    expect(within(detail).getByRole('button', { name: 'RSVP for Ari Runner' })).toHaveTextContent('Pending');
     expect(participantApi.listEventParticipants).toHaveBeenCalledWith(CITY_ID);
-    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: false });
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ status: 'active' });
+    expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
+    expect(within(detail).getByTitle(/OpenStreetMap preview/)).toHaveAttribute('src', expect.stringContaining('openstreetmap.org/export/embed.html'));
+    expect(within(detail).getByRole('link', { name: /Open in OpenStreetMap/ })).toHaveAttribute('href', expect.stringContaining('mlat=-26.2041'));
+  });
+
+  it('uses the themed roster filter menu', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    const filter = await selectThemedOption(user, detail, 'Roster filter', 'Attending');
+    expect(filter).toHaveTextContent('Attending');
+    await selectThemedOption(user, detail, 'Roster filter', 'Pending');
+    expect(filter).toHaveTextContent('Pending');
+  });
+
+  it('loads event results and opens the correction modal body', async () => {
+    resultApi.listResults.mockImplementation(async (eventId: string) => ({
+      data: eventId === TRAINING_ID ? [result({ eventId: TRAINING_ID })] : [],
+      meta: { count: eventId === TRAINING_ID ? 1 : 0 },
+    }));
+    participantApi.listEventParticipants.mockImplementation(async (eventId: string) => ({
+      data: [{ ...ariParticipant, eventId }],
+      meta: { count: 1 },
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user, training.title);
+
+    const board = await within(detail).findByRole('list', { name: 'Event results' });
+    expect(within(board).getAllByText('10.45s')).toHaveLength(2);
+    expect(resultApi.listResults).toHaveBeenCalledWith(TRAINING_ID);
+    expect(timelineApi.listTimelineEntries).toHaveBeenCalledWith(TRAINING_ID);
+
+    const correctionTrigger = within(board).getByRole('button', { name: 'Correct time' });
+    await user.click(correctionTrigger);
+    const correction = screen.getByRole('dialog', { name: 'Correct Ari Runner' });
+    expect(within(correction).getByText('Derived value · read only')).toBeInTheDocument();
+    expect(within(correction).getByText('Current effective value')).toBeInTheDocument();
+    expect(within(correction).getByRole('spinbutton', { name: 'Corrected time (seconds)' })).toHaveFocus();
+    expect(within(correction).getByRole('textbox', { name: 'Reason for correction' })).toBeInTheDocument();
+
+    await user.click(within(correction).getByRole('button', { name: 'Back to event' }));
+    await waitFor(() => expect(correctionTrigger).toHaveFocus());
+    expect(screen.getByRole('dialog', { name: training.title })).toBeInTheDocument();
+
+    await user.click(correctionTrigger);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps the result retry control focused while recovering from an API failure', async () => {
+    resultApi.listResults
+      .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
+      .mockResolvedValueOnce({ data: [result()], meta: { count: 1 } });
+    const user = userEvent.setup();
+    renderPage();
+    const detail = await openDetail(user);
+
+    expect(await within(detail).findByText(/Could not reach Athlora/)).toBeInTheDocument();
+    const retry = within(detail).getByRole('button', { name: 'Retry results' });
+    await user.click(retry);
+
+    expect(await within(detail).findByRole('list', { name: 'Event results' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Refresh results' })).toHaveFocus();
   });
 
   it('assigns an active athlete with a pending RSVP', async () => {
@@ -294,14 +595,13 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const candidate = await within(detail).findByLabelText('Assign an active athlete');
-    await user.selectOptions(candidate, BEA_ID);
+    const candidate = await selectThemedOption(user, detail, 'Assign an active athlete', /Bea Sprinter/);
     await user.click(within(detail).getByRole('button', { name: 'Assign athlete' }));
 
     await waitFor(() => expect(participantApi.addEventParticipant).toHaveBeenCalledWith(CITY_ID, BEA_ID));
-    expect(await within(detail).findByLabelText('RSVP for Bea Sprinter')).toHaveValue('pending');
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Bea Sprinter' })).toHaveTextContent('Pending');
     expect(detail).toHaveTextContent('Bea Sprinter assigned with a pending RSVP.');
-    expect(candidate).toHaveValue('');
+    expect(candidate).toHaveTextContent('No active athletes available');
     await waitFor(() => expect(within(detail).getByRole('region', { name: /Assigned athletes/ })).toHaveFocus());
   });
 
@@ -311,13 +611,16 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const candidate = await within(detail).findByLabelText('Assign an active athlete');
+    const candidate = await within(detail).findByRole('button', { name: 'Assign an active athlete' });
 
     expect(candidate).toBeDisabled();
     expect(within(detail).getByRole('button', { name: 'Assign athlete' })).toBeDisabled();
     resolveParticipants({ data: [ariParticipant], meta: { count: 1 } });
     await waitFor(() => expect(candidate).toBeEnabled());
-    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    await user.click(candidate);
+    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
 
   it('replaces RSVP status with the exact participant request', async () => {
@@ -325,11 +628,10 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
-    await user.selectOptions(rsvp, 'yes');
+    const rsvp = await selectThemedOption(user, detail, 'RSVP for Ari Runner', 'Attending');
 
     await waitFor(() => expect(participantApi.updateEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID, 'yes'));
-    expect(rsvp).toHaveValue('yes');
+    expect(rsvp).toHaveTextContent('Attending');
     expect(detail).toHaveTextContent("Ari Runner's RSVP updated to attending.");
     await waitFor(() => expect(rsvp).toHaveFocus());
   });
@@ -339,14 +641,14 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
 
     expect(detail).toHaveTextContent('Existing timeline entries and results will be preserved.');
     expect(within(detail).getByRole('button', { name: 'Keep athlete' })).toHaveFocus();
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
     await waitFor(() => expect(participantApi.removeEventParticipant).toHaveBeenCalledWith(CITY_ID, ARI_ID));
-    expect(within(detail).queryByLabelText('RSVP for Ari Runner')).not.toBeInTheDocument();
+    expect(within(detail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
     expect(detail).toHaveTextContent('Existing timeline entries and results were preserved.');
   });
 
@@ -355,11 +657,10 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    const rsvp = await within(detail).findByLabelText('RSVP for Ari Runner');
-    await user.selectOptions(rsvp, 'yes');
+    const rsvp = await selectThemedOption(user, detail, 'RSVP for Ari Runner', 'Attending');
 
     expect(await within(detail).findByRole('alert')).toHaveTextContent('RSVP changed elsewhere');
-    expect(rsvp).toHaveValue('pending');
+    expect(rsvp).toHaveTextContent('Pending');
   });
 
   it('keeps an assignment when removal fails', async () => {
@@ -367,12 +668,12 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
 
     expect(await within(detail).findByText(/Could not reach Athlora/i)).toBeInTheDocument();
-    expect(within(detail).getByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
     expect(within(detail).getByRole('region', { name: /Remove Ari Runner/ })).toBeInTheDocument();
     await waitFor(() => expect(within(detail).getByRole('button', { name: 'Remove athlete' })).toHaveFocus());
   });
@@ -383,7 +684,7 @@ describe('EventsPage', () => {
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
-    await within(detail).findByLabelText('RSVP for Ari Runner');
+    await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' });
     await user.click(within(detail).getByRole('button', { name: 'Remove Ari Runner from event' }));
     await user.click(within(detail).getByRole('button', { name: 'Remove athlete' }));
 
@@ -396,9 +697,11 @@ describe('EventsPage', () => {
 
   it('retries assignment and active-roster loading independently', async () => {
     participantApi.listEventParticipants
+      .mockResolvedValueOnce({ data: [ariParticipant], meta: { count: 1 } })
       .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
       .mockResolvedValueOnce({ data: [ariParticipant], meta: { count: 1 } });
     athleteApi.listAthletes
+      .mockResolvedValueOnce({ data: [ari, bea], meta: { count: 2 } })
       .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))
       .mockResolvedValueOnce({ data: [ari, bea], meta: { count: 2 } });
     const user = userEvent.setup();
@@ -408,26 +711,29 @@ describe('EventsPage', () => {
     expect(await within(detail).findByText('Unavailable')).toBeInTheDocument();
     await user.click(await within(detail).findByRole('button', { name: 'Retry assignments' }));
     await user.click(within(detail).getByRole('button', { name: 'Retry roster' }));
-    expect(await within(detail).findByLabelText('RSVP for Ari Runner')).toBeInTheDocument();
-    expect(await within(detail).findByLabelText('Assign an active athlete')).toBeInTheDocument();
-    expect(participantApi.listEventParticipants).toHaveBeenCalledTimes(2);
-    expect(athleteApi.listAthletes).toHaveBeenCalledTimes(2);
+    expect(await within(detail).findByRole('button', { name: 'RSVP for Ari Runner' })).toBeInTheDocument();
+    expect(await within(detail).findByRole('button', { name: 'Assign an active athlete' })).toBeInTheDocument();
+    expect(participantApi.listEventParticipants.mock.calls.filter(([eventId]) => eventId === CITY_ID)).toHaveLength(3);
+    expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => filters.includeArchived)).toHaveLength(1);
+    expect(athleteApi.listAthletes.mock.calls.filter(([filters]) => !filters.includeArchived)).toHaveLength(2);
   });
 
   it('keeps archived historical participants visible but out of assignment candidates', async () => {
-    participantApi.listEventParticipants.mockResolvedValueOnce({
-      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z' } })],
+    participantApi.listEventParticipants.mockResolvedValue({
+      data: [participant({ athlete: { ...ariParticipant.athlete, archivedAt: '2026-08-17T10:00:00.000Z', status: 'archived' } })],
       meta: { count: 1 },
     });
-    athleteApi.listAthletes.mockResolvedValueOnce({ data: [bea], meta: { count: 1 } });
+    athleteApi.listAthletes.mockResolvedValue({ data: [bea], meta: { count: 1 } });
     const user = userEvent.setup();
     renderPage();
     const detail = await openDetail(user);
 
-    expect(await within(detail).findByText('Archived')).toBeInTheDocument();
-    const candidate = within(detail).getByLabelText('Assign an active athlete');
-    expect(within(candidate).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
-    expect(within(candidate).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
+    expect(await within(detail).findAllByText('Archived')).toHaveLength(2);
+    const candidate = within(detail).getByRole('button', { name: 'Assign an active athlete' });
+    await user.click(candidate);
+    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
+    expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
 
   it('starts and completes events using full replacement payloads', async () => {
@@ -474,6 +780,28 @@ describe('EventsPage', () => {
     expect(within(updatedDetail).queryByRole('button', { name: /Start|Mark completed|Cancel event/ })).not.toBeInTheDocument();
     await user.click(within(updatedDetail).getByRole('button', { name: 'Close' }));
     expect(screen.getByRole('button', { name: /City Sprint Meet/ })).toHaveTextContent('Cancelled');
+  });
+
+  it('keeps completed and cancelled rosters visible but read-only', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Past' }));
+    const completedDetail = await openDetail(user, past.title);
+    expect(await within(completedDetail).findByRole('heading', { name: /Assigned athletes/ })).toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Assign an active athlete' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Remove Ari Runner from event' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Edit event' })).not.toBeInTheDocument();
+    expect(within(completedDetail).queryByRole('button', { name: 'Cancel event' })).not.toBeInTheDocument();
+    await user.click(within(completedDetail).getByRole('button', { name: 'Close' }));
+
+    await user.click(screen.getByRole('button', { name: 'Upcoming' }));
+    const cancelledDetail = await openDetail(user, cancelled.title);
+    expect(await within(cancelledDetail).findByRole('heading', { name: /Assigned athletes/ })).toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'Assign an active athlete' })).not.toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'RSVP for Ari Runner' })).not.toBeInTheDocument();
+    expect(within(cancelledDetail).queryByRole('button', { name: 'Remove Ari Runner from event' })).not.toBeInTheDocument();
   });
 
   it('keeps confirmation and data intact when lifecycle mutation fails', async () => {
@@ -524,11 +852,11 @@ describe('EventsPage', () => {
     expect(screen.getByRole('button', { name: `${augustTenth}, 1 event` })).toBeInTheDocument();
   });
 
-  it('reports only non-cancelled upcoming events to the console', async () => {
+  it('reports only scheduled upcoming events to the console', async () => {
     const onUpcomingCountChange = vi.fn();
     renderPage({ onUpcomingCountChange });
     await screen.findByRole('button', { name: /City Sprint Meet/ });
 
-    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(2));
+    await waitFor(() => expect(onUpcomingCountChange).toHaveBeenLastCalledWith(1));
   });
 });

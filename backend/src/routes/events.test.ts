@@ -13,8 +13,10 @@ const timelineService = vi.hoisted(() => ({
   removeTimelineEntry: vi.fn(),
   recomputeEventResults: vi.fn(),
 }));
+const weatherService = vi.hoisted(() => ({ getEventWeatherForecast: vi.fn() }));
 
 vi.mock('../services/timeline.js', () => timelineService);
+vi.mock('../services/weather.js', () => weatherService);
 
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(() => 'keyset'),
@@ -42,6 +44,15 @@ beforeEach(() => {
   vi.mocked(withTransaction).mockImplementation(async (operation) =>
     operation({ query } as never),
   );
+  weatherService.getEventWeatherForecast.mockResolvedValue({
+    date: '2026-09-01',
+    timezone: 'Africa/Johannesburg',
+    weatherCode: 'partly-cloudy-day',
+    temperatureMinC: 13.4,
+    temperatureMaxC: 24.8,
+    precipitationProbabilityMaxPercent: 20,
+    windSpeedKmh: 18.1,
+  });
 });
 
 afterEach(() => {
@@ -115,9 +126,10 @@ describe('GET /api/v1/events', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: [eventBody()], meta: { count: 1 } });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toMatch(/created_by = \$1/);
+    expect(sql).toMatch(/workspace_id = \$1/);
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
-    expect(parameters).toEqual([USER_ID]);
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`]);
   });
 
   it('applies type, status, and date range filters', async () => {
@@ -130,11 +142,12 @@ describe('GET /api/v1/events', () => {
 
     expect(response.status).toBe(200);
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toContain('type = $2');
-    expect(sql).toContain('status = $3');
-    expect(sql).toContain('date >= $4');
-    expect(sql).toContain('date <= $5');
-    expect(parameters).toEqual([USER_ID, 'training', 'in_progress', '2026-08-01', '2026-08-31']);
+    expect(sql).toContain('type = $4');
+    expect(sql).toContain('status = $5');
+    expect(sql).toContain('date >= $6');
+    expect(sql).toContain('date <= $7');
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, 'training', 'in_progress', '2026-08-01', '2026-08-31']);
   });
 
   it('rejects an invalid filter value with the validation envelope', async () => {
@@ -210,7 +223,7 @@ describe('POST /api/v1/events', () => {
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO events');
     expect(parameters).toEqual([
-      USER_ID,
+      USER_ID, USER_ID,
       'competition',
       '100m',
       'City Sprint Meet',
@@ -332,6 +345,38 @@ describe('GET /api/v1/events/:id', () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual(resourceNotFound);
     expect(query).toHaveBeenCalledOnce();
+  });
+});
+
+describe('GET /api/v1/events/:id/weather', () => {
+  it('returns the owned event forecast through the stable API envelope', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [{ owned: 1 }] });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/weather`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      date: '2026-09-01',
+      weatherCode: 'partly-cloudy-day',
+      temperatureMaxC: 24.8,
+    });
+    expect(weatherService.getEventWeatherForecast).toHaveBeenCalledWith(USER_ID, EVENT_ID);
+  });
+
+  it('does not contact the weather service for a foreign event', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/weather`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual(resourceNotFound);
+    expect(weatherService.getEventWeatherForecast).not.toHaveBeenCalled();
   });
 });
 
@@ -482,6 +527,7 @@ describe('DELETE /api/v1/events/:id', () => {
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const response = await request(app)
@@ -490,7 +536,7 @@ describe('DELETE /api/v1/events/:id', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('cancelled');
-    const [sql, parameters] = query.mock.calls[3] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[4] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);

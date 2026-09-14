@@ -1,0 +1,397 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.publicationPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.publicationPanel h2 {
+  margin: 0;
+  color: var(--ui-white);
+  font: 700 1.05rem var(--font-display);
+}
+
+.publicationPanel p {
+  max-width: 660px;
+  margin: var(--space-2) 0 0;
+  color: var(--ui-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.publicationEyebrow {
+  color: var(--cyan-200) !important;
+  font: 700 0.69rem var(--font-family-mono) !important;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.publicationAction {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.publicationAction > p {
+  max-width: 180px;
+  margin: 0;
+  text-align: right;
+}
+
+.published,
+.unpublished {
+  padding: 5px 9px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-pill);
+  color: var(--ui-muted);
+  font: 700 0.67rem var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.published {
+  border-color: rgba(138, 233, 242, 0.32);
+  color: var(--cyan-200);
+  background: rgba(69, 190, 215, 0.1);
+  box-shadow: 0 0 16px rgba(69, 190, 215, 0.12);
+}
+
+.publicationError {
+  margin: var(--space-3) 0 0;
+  color: var(--alert);
+}
+
+.heading {
+  margin: 0;
+  color: var(--console-ink);
+}
+
+.subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.modeSelector,
+.singleSelector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 420px;
+}
+
+.selectorRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-4);
+}
+
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.selectionEditor {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 480px;
+}
+
+.selectionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.selectionChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 7px 9px 7px 11px;
+  border: 1px solid rgba(138, 233, 242, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(69, 190, 215, 0.1);
+  color: var(--console-ink);
+  font-size: var(--font-size-sm);
+}
+
+.selectionChips button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cyan-200);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.selectionChips button:hover,
+.selectionChips button:focus-visible {
+  background: rgba(138, 233, 242, 0.18);
+  color: var(--ui-white);
+  outline: none;
+}
+
+.selector label,
+.modeSelector label,
+.singleSelector label {
+  color: var(--console-muted);
+  font: var(--font-weight-bold) 0.75rem var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.metricCard {
+  padding: var(--space-4);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-sm);
+  background: var(--console-surface);
+}
+
+.metricLabel {
+  margin: 0 0 var(--space-2);
+  color: var(--console-muted);
+  font: 600 0.7rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--console-ink);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.metricEmpty {
+  color: var(--console-faint);
+  font-style: italic;
+}
+
+.comparisonTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.comparisonTable {
+  min-width: 620px;
+  display: block;
+  overflow-x: auto;
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--console-line);
+  text-align: left;
+}
+
+.comparisonTable th {
+  background: var(--console-row-surface);
+  font: 600 0.75rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--console-muted);
+}
+
+.comparisonTable td {
+  color: var(--console-ink);
+}
+
+.viewToggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.chartWrap {
+  overflow-x: auto;
+  margin-top: var(--space-4);
+}
+
+.chartHeading {
+  margin: 0 0 var(--space-3);
+  color: var(--console-ink);
+  font: var(--font-weight-bold) var(--font-size-lg)/1.2 var(--font-display);
+  text-align: center;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.axisLabel {
+  fill: var(--console-muted);
+  font: 0.65rem var(--font-family-mono);
+}
+
+.axisTitle {
+  fill: var(--console-faint);
+  font: 600 0.7rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lineHitArea {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  pointer-events: stroke;
+}
+
+.tooltip {
+  pointer-events: none;
+}
+
+.tooltipBox {
+  fill: var(--console-surface-strong);
+  stroke: var(--console-line-strong);
+}
+
+.tooltipText {
+  fill: var(--console-muted);
+  font: 0.625rem var(--font-family-mono);
+}
+
+.tooltipValue {
+  fill: var(--console-ink);
+  font: 600 0.7rem var(--font-family-mono);
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--console-muted);
+  font-size: 0.75rem;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.seriesLine,
+.seriesLineA,
+.seriesLineB {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.seriesLineA {
+  stroke: var(--console-comparison-series-a);
+}
+
+.seriesLineB {
+  stroke: var(--console-comparison-series-b);
+}
+
+.seriesPoint,
+.seriesPointA,
+.seriesPointB {
+  stroke: var(--console-surface-strong);
+  stroke-width: 2;
+}
+
+.seriesPointA {
+  fill: var(--console-comparison-series-a);
+}
+
+.seriesPointB {
+  fill: var(--console-comparison-series-b);
+}
+
+.legendLine {
+  display: inline-block;
+  width: 24px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+}
+
+.legendLineA {
+  background: var(--console-comparison-series-a);
+}
+
+.legendLineB {
+  background: var(--console-comparison-series-b);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--console-line);
+  border-radius: var(--radius-sm);
+  color: var(--console-muted);
+  text-align: center;
+}
+
+.error {
+  color: var(--console-muted);
+}
+
+.error strong {
+  color: var(--console-danger-surface);
+}
+
+.error p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .selectorRow {
+    grid-template-columns: 1fr;
+  }
+
+  .metricsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .legend {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .modeSelector,
+  .singleSelector {
+    max-width: none;
+  }
+}

@@ -1,30 +1,39 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { cancelEvent, createEvent, listEvents, updateEvent } from '../../api/events';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { EventDetailPage } from './EventDetailPage';
+import { createEvent, listEvents, updateEvent } from '../../api/events';
+import { listClubCalendarEvents, listClubs } from '../../api/clubs';
+import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
 import {
   addEventParticipant,
+  acknowledgeParticipantStatusReview,
   listEventParticipants,
   removeEventParticipant,
   updateEventParticipant,
 } from '../../api/participants';
 import { ApiError } from '../../api/client';
-import { Button, Card, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import { Button, Card, DatePicker, EmptyState, Input, Modal, SeasonSelector, Select, Toast } from '../../components';
+import { seasonLabel, seasonQueryValue, useSeasonQueryState } from '../../utils/season';
 import {
   DISCIPLINE_100M,
   type Athlete,
   type AthleticsEvent,
+  type Club,
   type EventParticipantSummary,
   type EventMutationPayload,
   type EventStatus,
   type EventType,
   type RsvpStatus,
+  type VenueSearchResult,
 } from '../../types';
 import styles from './EventsPage.module.css';
+import { useWorkspace } from '../auth/WorkspaceContext';
 
 type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
+type CalendarScope = 'team' | 'combined';
 type Editor = 'new' | AthleticsEvent | null;
-type LifecycleAction = 'start' | 'complete' | 'cancel';
 
 interface EventDraft {
   title: string;
@@ -38,9 +47,14 @@ interface EventDraft {
 
 type FieldErrors = Partial<Record<keyof EventDraft, string>>;
 
+const TIME_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+const TIME_MINUTES = Array.from({ length: 12 }, (_, minute) => String(minute * 5).padStart(2, '0'));
+
 export interface EventsPageProps {
   onUpcomingCountChange?: (count: number) => void;
+  onOpenEvent?: (eventId: string) => void;
   today?: string;
+  defaultView?: EventView;
 }
 
 function localToday(): string {
@@ -100,7 +114,49 @@ function toPayload(
   };
 }
 
-function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
+function timeParts(value: string): { hour: string; minute: string } | null {
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (!match || !TIME_HOURS.includes(match[1])) return null;
+  return { hour: match[1], minute: match[2] };
+}
+
+function EventTimePicker({ value, disabled, invalid, describedBy, onChange }: {
+  value: string;
+  disabled: boolean;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (value: string) => void;
+}) {
+  const current = timeParts(value);
+  const minutes = current && !TIME_MINUTES.includes(current.minute)
+    ? [current.minute, ...TIME_MINUTES]
+    : TIME_MINUTES;
+
+  const selectHour = (hour: string) => {
+    if (!hour) {
+      onChange('');
+      return;
+    }
+    onChange(`${hour}:${current?.minute ?? '00'}:00`);
+  };
+
+  const selectMinute = (minute: string) => {
+    if (!current?.hour || !minute) return;
+    onChange(`${current.hour}:${minute}:00`);
+  };
+
+  return <div className={styles.timePicker} aria-describedby={describedBy}>
+    <span className={styles.timeLabel}>Time <span>Optional</span></span>
+    <div className={styles.timeWheels}>
+      <div className={styles.timeWheel}><span>Hour</span><Select className={styles.timeControl} compact menuPlacement="up" aria-label="Event hour" value={current?.hour ?? ''} onChange={(event) => selectHour(event.target.value)} disabled={disabled} aria-invalid={invalid} options={[{ value: '', label: 'HH' }, ...TIME_HOURS.map((hour) => ({ value: hour, label: hour }))]} /></div>
+      <span aria-hidden="true">:</span>
+      <div className={styles.timeWheel}><span>Minute</span><Select className={styles.timeControl} compact menuPlacement="up" aria-label="Event minute" value={current?.minute ?? ''} onChange={(event) => selectMinute(event.target.value)} disabled={disabled || !current?.hour} aria-invalid={invalid} options={[{ value: '', label: 'MM' }, ...minutes.map((minute) => ({ value: minute, label: minute }))]} /></div>
+    </div>
+    {value && <Button type="button" variant="ghost" onClick={() => onChange('')} disabled={disabled}>Clear time</Button>}
+  </div>;
+}
+
+export function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
   return {
     type: event.type,
     discipline: DISCIPLINE_100M,
@@ -114,7 +170,7 @@ function replacement(event: AthleticsEvent, status: EventStatus): EventMutationP
   };
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
     if (error.status === 401) return 'Your session could not be authorized. Please sign in again.';
@@ -143,19 +199,23 @@ function validationErrors(error: unknown): FieldErrors {
   return fields;
 }
 
-function formattedStatus(status: EventStatus): string {
+export function formattedStatus(status: EventStatus): string {
   return status.replace('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
 
-function formattedType(type: EventType): string {
+export function formattedType(type: EventType): string {
   return type === 'competition' ? 'Competition' : 'Training';
 }
 
 function formattedRsvp(status: RsvpStatus): string {
-  return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : 'pending';
+  return status === 'yes' ? 'attending' : status === 'no' ? 'not attending' : status === 'maybe' ? 'maybe attending' : 'pending';
 }
 
-function formattedDate(date: string, long = false): string {
+function formattedAthleteStatus(status: Athlete['status']): string {
+  return status[0].toUpperCase() + status.slice(1);
+}
+
+export function formattedDate(date: string, long = false): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
     day: 'numeric',
     month: long ? 'long' : 'short',
@@ -191,13 +251,19 @@ interface EventFormProps {
   onSubmittingChange: (submitting: boolean) => void;
 }
 
-function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormProps) {
+export function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormProps) {
   const [draft, setDraft] = useState(() => draftFor(event));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [venueQuery, setVenueQuery] = useState('');
+  const [venueResults, setVenueResults] = useState<VenueSearchResult[]>([]);
+  const [venueSearching, setVenueSearching] = useState(false);
+  const [venueError, setVenueError] = useState<string | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<VenueSearchResult | null>(null);
+  const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLButtonElement>(null);
 
   const setField = <K extends keyof EventDraft>(field: K, value: EventDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -231,6 +297,41 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
     }
   };
 
+  const lookupVenue = async (query: string) => {
+    const request = ++venueRequestRef.current;
+    setVenueSearching(true);
+    setVenueError(null);
+    try {
+      const response = await searchVenues(query);
+      if (request === venueRequestRef.current) setVenueResults(response.data);
+    } catch (error) {
+      if (request === venueRequestRef.current) setVenueError(errorMessage(error));
+    } finally {
+      if (request === venueRequestRef.current) setVenueSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    const query = venueQuery.trim();
+    if (query.length < 2) {
+      setVenueResults([]);
+      setVenueError(null);
+      setVenueSearching(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => { void lookupVenue(query); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [venueQuery]);
+
+  const selectVenue = (venue: VenueSearchResult) => {
+    venueRequestRef.current += 1;
+    setDraft((current) => ({ ...current, locationName: venue.displayName, latitude: String(venue.latitude), longitude: String(venue.longitude) }));
+    setVenueQuery('');
+    setVenueResults([]);
+    setSelectedVenue(venue);
+    setVenueError(null);
+  };
+
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
@@ -251,11 +352,12 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
       />
       {errors.title && <span id="event-title-error" className={styles.fieldError}>{errors.title}</span>}
 
-      <div className={styles.formRow}>
+       <div className={styles.formRow}>
         <div>
           <label htmlFor="event-type">Event type</label>
           <Select
             id="event-type"
+            variant="field"
             value={draft.type}
             onChange={(input) => setField('type', input.target.value as EventType)}
             options={[
@@ -267,46 +369,42 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
         </div>
         <div>
           <label htmlFor="event-date">Date</label>
-          <Input
+          <DatePicker
             ref={dateRef}
             id="event-date"
-            type="date"
             value={draft.date}
-            onChange={(input) => setField('date', input.target.value)}
+            onChange={(value) => setField('date', value)}
             invalid={Boolean(errors.date)}
-            aria-invalid={Boolean(errors.date)}
             aria-describedby={errors.date ? 'event-date-error' : undefined}
             required
-            aria-required="true"
+            aria-label="Date"
             disabled={submitting}
           />
           {errors.date && <span id="event-date-error" className={styles.fieldError}>{errors.date}</span>}
         </div>
-      </div>
+       </div>
 
-      <div className={styles.formRow}>
+       <fieldset className={styles.venueLookup} disabled={submitting}>
+         <legend>Find a venue <span>Optional</span></legend>
+          <p>Start typing to search. Selecting a venue saves its map location for forecasts and directions.</p>
+          <label htmlFor="venue-search" className={styles.srOnly}>Venue or address</label>
+          <div><Input id="venue-search" value={venueQuery} onChange={(input) => setVenueQuery(input.target.value)} placeholder="Venue or address" /><span className={styles.venueSearchState} role="status">{venueSearching ? 'Searching...' : 'Type at least 2 letters'}</span></div>
+          {selectedVenue && <p className={styles.selectedVenue} role="status" aria-label="Selected venue"><strong>Selected venue</strong><span>{selectedVenue.displayName}</span></p>}
+          {venueError && <p className={styles.formError} role="alert">{venueError}</p>}
+          {venueResults.length > 0 && <ul className={styles.venueResults} aria-label="Venue search results">{venueResults.map((venue) => { const key = `${venue.latitude}-${venue.longitude}-${venue.displayName}`; return <li key={key}><button type="button" onClick={() => selectVenue(venue)}><strong>{venue.displayName}</strong><small>Select venue</small></button></li>; })}</ul>}
+          {!venueSearching && !venueError && venueQuery.length >= 2 && venueResults.length === 0 && <p className={styles.venueHint}>No matching venues found.</p>}
+         <p className={styles.attribution}>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>, via Nominatim.</p>
+       </fieldset>
+
+       <div className={styles.formRow}>
         <div>
-          <label htmlFor="event-time">Time <span>Optional</span></label>
-          <Input id="event-time" type="time" step="1" value={draft.time} onChange={(input) => setField('time', input.target.value)} invalid={Boolean(errors.time)} aria-invalid={Boolean(errors.time)} aria-describedby={errors.time ? 'event-time-error' : undefined} disabled={submitting} />
+          <EventTimePicker value={draft.time} onChange={(value) => setField('time', value)} invalid={Boolean(errors.time)} describedBy={errors.time ? 'event-time-error' : undefined} disabled={submitting} />
           {errors.time && <span id="event-time-error" className={styles.fieldError}>{errors.time}</span>}
         </div>
         <div>
           <label htmlFor="event-location">Location <span>Optional</span></label>
           <Input id="event-location" value={draft.locationName} onChange={(input) => setField('locationName', input.target.value)} invalid={Boolean(errors.locationName)} aria-invalid={Boolean(errors.locationName)} aria-describedby={errors.locationName ? 'event-location-error' : undefined} disabled={submitting} />
           {errors.locationName && <span id="event-location-error" className={styles.fieldError}>{errors.locationName}</span>}
-        </div>
-      </div>
-
-      <div className={styles.formRow}>
-        <div>
-          <label htmlFor="event-latitude">Latitude <span>Optional</span></label>
-          <Input id="event-latitude" type="number" step="any" value={draft.latitude} onChange={(input) => setField('latitude', input.target.value)} invalid={Boolean(errors.latitude)} aria-invalid={Boolean(errors.latitude)} aria-describedby={errors.latitude ? 'event-latitude-error' : undefined} disabled={submitting} />
-          {errors.latitude && <span id="event-latitude-error" className={styles.fieldError}>{errors.latitude}</span>}
-        </div>
-        <div>
-          <label htmlFor="event-longitude">Longitude <span>Optional</span></label>
-          <Input id="event-longitude" type="number" step="any" value={draft.longitude} onChange={(input) => setField('longitude', input.target.value)} invalid={Boolean(errors.longitude)} aria-invalid={Boolean(errors.longitude)} aria-describedby={errors.longitude ? 'event-longitude-error' : undefined} disabled={submitting} />
-          {errors.longitude && <span id="event-longitude-error" className={styles.fieldError}>{errors.longitude}</span>}
         </div>
       </div>
 
@@ -318,7 +416,19 @@ function EventForm({ event, onSave, onCancel, onSubmittingChange }: EventFormPro
   );
 }
 
-function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusyChange: (busy: boolean) => void }) {
+export function ParticipantManager({
+  eventId,
+  canEditRoster,
+  onBusyChange,
+  onChanged,
+}: {
+  eventId: string;
+  canEditRoster: boolean;
+  onBusyChange: (busy: boolean) => void;
+  onChanged: () => void;
+}) {
+  const { activeWorkspace } = useWorkspace();
+  const isCoach = activeWorkspace.role === 'coach';
   const [participants, setParticipants] = useState<EventParticipantSummary[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
   const [participantsError, setParticipantsError] = useState<string | null>(null);
@@ -368,7 +478,9 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
     setParticipantsError(null);
     void listEventParticipants(eventId)
       .then(({ data }) => {
-        if (current) setParticipants(sortedParticipants(data));
+        if (current) setParticipants(sortedParticipants(data.filter((participant) =>
+          participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id,
+        )));
       })
       .catch((error: unknown) => {
         if (current) setParticipantsError(errorMessage(error));
@@ -379,15 +491,15 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
     return () => {
       current = false;
     };
-  }, [eventId, participantReloadKey]);
+  }, [activeWorkspace.id, eventId, participantReloadKey]);
 
   useEffect(() => {
     let current = true;
     setAthletesLoading(true);
     setAthletesError(null);
-    void listAthletes({ includeArchived: false })
+    void listAthletes({ status: 'active' })
       .then(({ data }) => {
-        if (current) setAthletes(data.filter((athlete) => athlete.archivedAt === null));
+        if (current) setAthletes(data.filter((athlete) => athlete.status === 'active'));
       })
       .catch((error: unknown) => {
         if (current) setAthletesError(errorMessage(error));
@@ -403,6 +515,8 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
   const candidates = athletes.filter((athlete) =>
     !participants.some((participant) => participant.athleteId === athlete.id),
   );
+  const [rsvpFilter, setRsvpFilter] = useState<RsvpStatus | 'all'>('all');
+  const rsvpCounts = participants.reduce<Record<RsvpStatus, number>>((counts, participant) => ({ ...counts, [participant.rsvpStatus]: counts[participant.rsvpStatus] + 1 }), { pending: 0, yes: 0, no: 0, maybe: 0 });
 
   const assign = async () => {
     if (!candidateId) return;
@@ -414,6 +528,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
       setParticipants((current) => sortedParticipants([...current, participant]));
       setCandidateId('');
       setFeedback(`${participant.athlete.name} assigned with a pending RSVP.`);
+      onChanged();
     } catch (error) {
       setMutationError(errorMessage(error));
     } finally {
@@ -438,6 +553,23 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
     }
   };
 
+  const acknowledgeStatusReview = async (participant: EventParticipantSummary) => {
+    setBusy(`review-${participant.athleteId}`);
+    setMutationError(null);
+    setFeedback(null);
+    try {
+      await acknowledgeParticipantStatusReview(eventId, participant.athleteId);
+      setParticipants((current) => current.map((item) =>
+        item.athleteId === participant.athleteId ? { ...item, statusReviewRequired: false } : item,
+      ));
+      setFeedback(`Status review acknowledged for ${participant.athlete.name}.`);
+    } catch (error) {
+      setMutationError(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const remove = async () => {
     if (!removeTarget) return;
     setBusy(`remove-${removeTarget.athleteId}`);
@@ -448,6 +580,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
       setParticipants((current) => current.filter((item) => item.athleteId !== removeTarget.athleteId));
       setFeedback(`${removeTarget.athlete.name} removed from this event. Existing timeline entries and results were preserved.`);
       setRemoveTarget(null);
+      onChanged();
     } catch (error) {
       setMutationError(errorMessage(error));
     } finally {
@@ -464,6 +597,7 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
     <section ref={sectionRef} className={styles.participants} aria-labelledby="event-participants-heading" aria-busy={participantsLoading || athletesLoading || Boolean(busy)} tabIndex={-1}>
       <header>
         <div><p>Event roster</p><h3 id="event-participants-heading">Assigned athletes <span>{participantsLoading ? '...' : participantsError ? 'Unavailable' : participants.length}</span></h3></div>
+        {!participantsLoading && !participantsError && <div className={styles.rosterFilter}><span>Roster filter</span><Select aria-label="Roster filter" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, { value: 'yes', label: 'Attending' }, { value: 'maybe', label: 'Maybe attending' }, { value: 'pending', label: 'Pending' }, { value: 'no', label: 'Not attending' }]} /></div>}
       </header>
 
       {participantsLoading && <p className={styles.inlineStatus} role="status">Loading assigned athletes...</p>}
@@ -471,33 +605,38 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
       {!participantsLoading && !participantsError && participants.length === 0 && <p className={styles.inlineEmpty}>No athletes are assigned to this event yet.</p>}
       {!participantsLoading && !participantsError && participants.length > 0 && (
         <ul className={styles.participantList}>
-          {participants.map((participant) => {
+          {participants.filter((participant) => rsvpFilter === 'all' || participant.rsvpStatus === rsvpFilter).map((participant) => {
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
+            const ownsParticipant = participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id;
             return <li key={participant.athleteId}>
-              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squad ?? 'No squad assigned'}{participant.athlete.archivedAt && <i>Archived</i>}</small></span>
-              <label className={styles.srOnly} htmlFor={`participant-rsvp-${participant.athleteId}`}>RSVP for {participant.athlete.name}</label>
-              <Select id={`participant-rsvp-${participant.athleteId}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
+              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.participantWorkspaceName && <span> · {participant.participantWorkspaceName}</span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
+                {isCoach && canEditRoster && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
+                <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
                 { value: 'yes', label: 'Attending' },
                 { value: 'no', label: 'Not attending' },
-              ]} disabled={Boolean(busy)} />
-              <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button>
+                { value: 'maybe', label: 'Maybe' },
+                ]} disabled={Boolean(busy)} />
+                {participant.statusReviewRequired && <Button variant="secondary" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void acknowledgeStatusReview(participant); }} disabled={Boolean(busy)}>{busy === `review-${participant.athleteId}` ? 'Acknowledging...' : 'Acknowledge review'}</Button>}
+                <Button variant="ghost" aria-label={`Remove ${participant.athlete.name} from event`} onClick={(event) => { removeTriggerRef.current = event.currentTarget; setMutationError(null); setRemoveTarget(participant); }} disabled={Boolean(busy)}>{participantBusy ? 'Saving...' : 'Remove'}</Button></>}
             </li>;
           })}
         </ul>
       )}
 
-      {removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
+      {!participantsLoading && !participantsError && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
 
-      <div className={styles.assignment}>
-        <label htmlFor="event-athlete-candidate">Assign an active athlete</label>
+      {canEditRoster && removeTarget && <div className={styles.removeConfirmation} role="region" aria-labelledby="participant-removal-copy"><p id="participant-removal-copy">Remove <strong>{removeTarget.athlete.name}</strong> from this event? Existing timeline entries and results will be preserved.</p><div><Button ref={keepAthleteRef} variant="secondary" aria-describedby="participant-removal-copy" onClick={cancelRemoval} disabled={Boolean(busy)}>Keep athlete</Button><Button variant="danger" aria-describedby="participant-removal-copy" onClick={(event) => { operationTriggerRef.current = event.currentTarget; void remove(); }} disabled={Boolean(busy)}>{busy ? 'Removing...' : 'Remove athlete'}</Button></div></div>}
+
+       {isCoach && canEditRoster && <div className={styles.assignment}>
+         <span>Assign an active athlete</span>
         {athletesLoading && <p className={styles.inlineStatus} role="status">Loading active roster...</p>}
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
-        {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
+         {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" aria-label="Assign an active athlete" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
-          ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squad ? ` · ${athlete.squad}` : ''}` })),
+           ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squads?.length ? ` · ${athlete.squads.map((squad) => squad.name).join(', ')}` : ''}` })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
-      </div>
+       </div>}
 
       {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
       {feedback && <p className={styles.participantFeedback} role="status">{feedback}</p>}
@@ -505,25 +644,36 @@ function ParticipantManager({ eventId, onBusyChange }: { eventId: string; onBusy
   );
 }
 
-export function EventsPage({ onUpcomingCountChange, today = localToday() }: EventsPageProps = {}) {
+export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday(), defaultView }: EventsPageProps = {}) {
+  const [season, setSeason] = useSeasonQueryState();
+  const { activeWorkspace } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [dateTab, setDateTab] = useState<DateTab>('upcoming');
-  const [typeFilter, setTypeFilter] = useState<EventType | ''>('');
-  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
-  const [view, setView] = useState<EventView>('list');
+  const [dateTab, setDateTab] = useState<DateTab>(() => searchParams.get('date') === 'past' || searchParams.get('date') === 'all' ? searchParams.get('date') as DateTab : 'upcoming');
+  const [typeFilter, setTypeFilter] = useState<EventType | ''>(() => searchParams.get('type') === 'competition' || searchParams.get('type') === 'training' ? searchParams.get('type') as EventType : '');
+  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>(() => ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventStatus : '');
+  const [view, setView] = useState<EventView>(() => {
+    if (defaultView) return defaultView;
+    return 'calendar';
+  });
+  const [calendarScope, setCalendarScope] = useState<CalendarScope>('team');
+  const [selectedClubs, setSelectedClubs] = useState<Club[]>([]);
+  const [clubSearch, setClubSearch] = useState('');
+  const [clubResults, setClubResults] = useState<Club[]>([]);
+  const [clubEvents, setClubEvents] = useState<{ event: AthleticsEvent; clubId: string; clubName: string }[]>([]);
+  const [clubLoading, setClubLoading] = useState(false);
   const todayDate = new Date(`${today}T00:00:00`);
   const [month, setMonth] = useState(() => new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
-  const [participantBusy, setParticipantBusy] = useState(false);
-  const [confirmation, setConfirmation] = useState<{ eventId: string; action: LifecycleAction } | null>(null);
-  const [lifecycleBusy, setLifecycleBusy] = useState(false);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -531,7 +681,7 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     let current = true;
     setLoading(true);
     setLoadError(null);
-    void listEvents()
+    void (seasonQueryValue(season) ? listEvents({ year: season }) : listEvents())
       .then(({ data }) => {
         if (current) setEvents(sortedEvents(data));
       })
@@ -544,12 +694,52 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     return () => {
       current = false;
     };
-  }, [reloadKey]);
+  }, [activeWorkspace.id, reloadKey, season]);
+
+  useEffect(() => {
+    const query = clubSearch.trim();
+    if (!query) {
+      setClubResults([]);
+      return undefined;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      void listClubs(query)
+        .then(({ data }) => { if (current) setClubResults(data); })
+        .catch(() => { if (current) setClubResults([]); });
+    }, 250);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [clubSearch]);
+
+  useEffect(() => {
+    if (calendarScope !== 'combined' || selectedClubs.length === 0) {
+      setClubEvents([]);
+      setClubLoading(false);
+      return;
+    }
+    let current = true;
+    setClubLoading(true);
+    void (seasonQueryValue(season)
+      ? listClubCalendarEvents(selectedClubs.map((club) => club.id), season)
+      : listClubCalendarEvents(selectedClubs.map((club) => club.id)))
+      .then(({ data }) => {
+        if (current) setClubEvents(data.map(({ event, club }) => ({ event, clubId: club.id, clubName: club.name })));
+      })
+      .catch(() => { if (current) setClubEvents([]); })
+      .finally(() => { if (current) setClubLoading(false); });
+    return () => { current = false; };
+  }, [calendarScope, selectedClubs, season]);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setEditor(null);
+    setNotice(null);
+  }, [activeWorkspace.id]);
 
   useEffect(() => {
     if (!loading && !loadError) {
       onUpcomingCountChange?.(
-        events.filter((event) => event.status !== 'cancelled' && event.date >= today).length,
+        events.filter((event) => event.status === 'scheduled' && event.date >= today).length,
       );
     }
   }, [events, loadError, loading, onUpcomingCountChange, today]);
@@ -558,17 +748,27 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
   };
 
-  const selected = events.find((event) => event.id === selectedId) ?? null;
+  const calendarSource = calendarScope === 'combined'
+    ? Array.from(new Map([...events, ...clubEvents.map(({ event }) => event)].map((event) => [event.id, event])).values())
+    : events;
+  const clubsForEvent = (eventId: string) => clubEvents.filter(({ event }) => event.id === eventId).map(({ clubName }) => clubName);
+  const clubNameForEvent = (eventId: string) => clubsForEvent(eventId).join(', ');
+  const clubColorForEvent = (eventId: string) => {
+    const clubId = clubEvents.find(({ event }) => event.id === eventId)?.clubId;
+    return clubId ? selectedClubs.findIndex((club) => club.id === clubId) % 4 : -1;
+  };
+  const isJointEvent = (eventId: string) => events.some((event) => event.id === eventId) && clubsForEvent(eventId).length > 0;
   const filtered = sortedEvents(
-    events.filter((event) => {
+    calendarSource.filter((event) => {
       const dateMatches = dateTab === 'all' || (dateTab === 'upcoming' ? event.date >= today : event.date < today);
       return dateMatches && (!typeFilter || event.type === typeFilter) && (!statusFilter || event.status === statusFilter);
     }),
     dateTab === 'past',
   );
   const calendarEvents = filtered.filter((event) => event.date === selectedDay);
+  const hasDisplayEvents = calendarSource.length > 0;
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
-  const pending = editorBusy || lifecycleBusy || participantBusy;
+  const pending = editorBusy;
 
   const saveEditor = async (payload: EventMutationPayload) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
@@ -577,42 +777,24 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     setNotice(editor === 'new' ? `${event.title} added to the calendar.` : `${event.title} updated.`);
   };
 
-  const runLifecycle = async () => {
-    if (!confirmation) return;
-    const event = events.find((item) => item.id === confirmation.eventId);
-    if (!event) return;
-    setLifecycleBusy(true);
-    setMutationError(null);
-    try {
-      const nextStatus: EventStatus = confirmation.action === 'start' ? 'in_progress' : 'completed';
-      const updated = confirmation.action === 'cancel'
-        ? await cancelEvent(event.id)
-        : await updateEvent(event.id, replacement(event, nextStatus));
-      storeEvent(updated);
-      setConfirmation(null);
-      setNotice(
-        confirmation.action === 'cancel'
-          ? `${updated.title} cancelled. Its history is preserved.`
-          : confirmation.action === 'start'
-            ? `${updated.title} is now live.`
-            : `${updated.title} marked completed.`,
-      );
-    } catch (error) {
-      setMutationError(errorMessage(error));
-    } finally {
-      setLifecycleBusy(false);
-    }
-  };
-
-  const openConfirmation = (eventId: string, action: LifecycleAction) => {
-    setMutationError(null);
-    setConfirmation({ eventId, action });
-  };
-
   const clearFilters = () => {
     setDateTab('upcoming');
     setTypeFilter('');
     setStatusFilter('');
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('date'); next.delete('type'); next.delete('status');
+      return next;
+    });
+  };
+
+  const updateFilters = (next: { date?: DateTab; type?: EventType | ''; status?: EventStatus | '' }) => {
+    const params = new URLSearchParams(searchParams);
+    const values = { date: dateTab, type: typeFilter, status: statusFilter, ...next };
+    if (values.date === 'upcoming') params.delete('date'); else params.set('date', values.date);
+    if (values.type) params.set('type', values.type); else params.delete('type');
+    if (values.status) params.set('status', values.status); else params.delete('status');
+    setSearchParams(params);
   };
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -627,39 +809,31 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
     return { day: rawDay, current: true, iso };
   });
 
-  const confirmationEvent = confirmation
-    ? events.find((event) => event.id === confirmation.eventId) ?? null
-    : null;
-  const confirmationTitle = confirmation?.action === 'cancel'
-    ? 'Cancel event'
-    : confirmation?.action === 'start'
-      ? 'Start event'
-      : 'Complete event';
-
   return (
     <section aria-labelledby="events-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
         <div>
           <p className={styles.eyebrow}>100m season calendar</p>
           <h1 id="events-heading">Events</h1>
-          <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown`}</p>
+          <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown for ${seasonLabel(season)}`}</p>
         </div>
         <div className={styles.controls}>
+          <SeasonSelector value={season} onChange={setSeason} />
           <div className={styles.segmented} role="group" aria-label="Filter events by date">
             {(['upcoming', 'past', 'all'] as const).map((tab) => (
-              <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => setDateTab(tab)}>
+              <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => { setDateTab(tab); updateFilters({ date: tab }); }}>
                 {tab[0].toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
           <label className={styles.srOnly} htmlFor="event-type-filter">Filter by event type</label>
-          <Select id="event-type-filter" value={typeFilter} onChange={(input) => setTypeFilter(input.target.value as EventType | '')} options={[
+          <Select id="event-type-filter" value={typeFilter} onChange={(input) => { const value = input.target.value as EventType | ''; setTypeFilter(value); updateFilters({ type: value }); }} options={[
             { value: '', label: 'All types' },
             { value: 'competition', label: 'Competition' },
             { value: 'training', label: 'Training' },
           ]} />
           <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
-          <Select id="event-status-filter" value={statusFilter} onChange={(input) => setStatusFilter(input.target.value as EventStatus | '')} options={[
+          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => { const value = input.target.value as EventStatus | ''; setStatusFilter(value); updateFilters({ status: value }); }} options={[
             { value: '', label: 'All statuses' },
             { value: 'scheduled', label: 'Scheduled' },
             { value: 'in_progress', label: 'In progress' },
@@ -670,17 +844,30 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
             <button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button>
             <button type="button" aria-label="Calendar view" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>□</button>
           </div>
-          <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>
+            <Button ref={addButtonRef} onClick={() => setEditor('new')} disabled={loading || Boolean(loadError) || pending}>Add event</Button>
         </div>
       </header>
 
-      {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
+      {view === 'calendar' && <section className={styles.calendarScope} aria-label="Club calendars">
+        <div className={styles.scopeToggle} role="group" aria-label="Calendar scope">
+          <button type="button" aria-pressed={calendarScope === 'team'} onClick={() => setCalendarScope('team')}>My team</button>
+          <button type="button" aria-pressed={calendarScope === 'combined'} onClick={() => setCalendarScope('combined')}>Club calendars</button>
+        </div>
+        {calendarScope === 'team' ? <p>Your events and accepted shared fixtures.</p> : <div className={styles.clubPicker}>
+          <div><label htmlFor="calendar-club-search">Add clubs to the calendar</label><Input id="calendar-club-search" value={clubSearch} onChange={(input) => setClubSearch(input.target.value)} placeholder="Search clubs" /></div>
+          {clubResults.length > 0 && <ul className={styles.clubResults}>{clubResults.filter((club) => club.workspaceId !== activeWorkspace.id && !selectedClubs.some((selected) => selected.id === club.id)).map((club) => <li key={club.id}><span>{club.name}</span><Button variant="ghost" onClick={() => { setSelectedClubs((current) => [...current, club]); setClubSearch(''); setClubResults([]); }}>Add</Button></li>)}</ul>}
+          {selectedClubs.length > 0 && <ul className={styles.selectedClubs} aria-label="Selected clubs">{selectedClubs.map((club, index) => <li data-club-index={index % 4} key={club.id}><i aria-hidden="true" />{club.name}<button type="button" aria-label={`Remove ${club.name}`} onClick={() => setSelectedClubs((current) => current.filter((selected) => selected.id !== club.id))}>×</button></li>)}</ul>}
+          <p>{clubLoading ? 'Loading club calendars...' : selectedClubs.length ? `Showing your schedule alongside ${selectedClubs.length} selected club${selectedClubs.length === 1 ? '' : 's'}.` : 'Search for one or more clubs to combine their upcoming schedules with yours.'}</p>
+        </div>}
+      </section>}
+
+       {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
 
       {loading && <div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading events...</p></div>}
       {!loading && loadError && <div className={styles.loadError} role="alert"><h2>Events unavailable</h2><p>{loadError}</p><Button onClick={() => setReloadKey((value) => value + 1)}>Try again</Button></div>}
-      {!loading && !loadError && events.length === 0 && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
+      {!loading && !loadError && !hasDisplayEvents && calendarScope === 'team' && <div className={styles.emptyPanel}><EmptyState title="No events yet" description="Add your first 100m competition or training session." /><Button onClick={() => setEditor('new')}>Add your first event</Button></div>}
 
-      {!loading && !loadError && events.length > 0 && view === 'calendar' && (
+      {!loading && !loadError && hasDisplayEvents && view === 'calendar' && (
         <div className={styles.calendar}>
           <header>
             <h2>{first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
@@ -691,15 +878,21 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
             {cells.map((cell, index) => {
               const dayEvents = cell.iso ? filtered.filter((event) => event.date === cell.iso) : [];
               const label = cell.current ? `${formattedDate(cell.iso, true)}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : `Outside current month, day ${cell.day}`;
-              return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}><span>{cell.day}</span><i aria-hidden="true">{dayEvents.slice(0, 3).map((event) => <i data-type={event.type} key={event.id} />)}</i></button>;
+              return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}>
+                <span>{cell.day}</span>
+                <span className={styles.calendarEvents} aria-hidden="true">
+                  {dayEvents.slice(0, 2).map((event) => <span className={styles.calendarEvent} data-club-index={clubColorForEvent(event.id) >= 0 ? clubColorForEvent(event.id) : undefined} data-shared={isJointEvent(event.id) || undefined} data-type={event.type} key={event.id}><b>{event.time?.slice(0, 5) ?? 'TBC'}</b>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)} · ` : clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.title}</span>)}
+                  {dayEvents.length > 2 && <span className={styles.calendarMore}>+{dayEvents.length - 2} more</span>}
+                </span>
+              </button>;
             })}
           </div>
         </div>
       )}
 
-      {!loading && !loadError && events.length > 0 && view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formattedDate(selectedDay, true)}</h2>}
+      {!loading && !loadError && hasDisplayEvents && view === 'calendar' && <h2 className={styles.dayHeading}>Events on {formattedDate(selectedDay, true)}</h2>}
 
-      {!loading && !loadError && events.length > 0 && ((view === 'list' && filtered.length === 0) || (view === 'calendar' && calendarEvents.length === 0)) && (
+      {!loading && !loadError && (hasDisplayEvents || calendarScope === 'combined') && ((view === 'list' && filtered.length === 0) || (view === 'calendar' && calendarEvents.length === 0)) && (
         <div className={styles.emptyPanel}>
           <EmptyState title={view === 'calendar' ? 'Nothing scheduled on this day' : 'No events match your filters'} description="Choose another date or adjust the event filters." />
           {hasFilters && <Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
@@ -708,66 +901,70 @@ export function EventsPage({ onUpcomingCountChange, today = localToday() }: Even
 
       {!loading && !loadError && (view === 'list' ? filtered : calendarEvents).length > 0 && (
         <div className={styles.list} aria-label="Event calendar list">
-          {(view === 'list' ? filtered : calendarEvents).map((event) => {
-            const date = new Date(`${event.date}T00:00:00`);
-            return (
-              <Card className={styles.eventCard} key={event.id}>
-                <button type="button" className={styles.eventOpen} onClick={() => setSelectedId(event.id)}>
-                  <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
-                  <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i></span><small>{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
-                  <span aria-hidden="true">›</span>
-                </button>
-              </Card>
-            );
-          })}
+          {view === 'list' ? (
+            // Group events by date for mobile agenda / list view
+            Object.entries(
+              filtered.reduce<Record<string, AthleticsEvent[]>>((groups, event) => {
+                const d = event.date;
+                groups[d] ??= [];
+                groups[d].push(event);
+                return groups;
+              }, {})
+            ).sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate)).map(([dateKey, dateEvents]) => (
+              <div key={dateKey} className={styles.agendaGroup}>
+                <h3 className={styles.agendaDateHeading}>{formattedDate(dateKey, true)}</h3>
+                <div className={styles.agendaGroupEvents}>
+                  {dateEvents.map((event) => {
+                    const date = new Date(`${event.date}T00:00:00`);
+                    return (
+                      <Card className={styles.eventCard} key={event.id}>
+                        <button type="button" className={styles.eventOpen} onClick={() => {
+                          const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+                          if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
+                        }}>
+                          <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
+                          <span className={styles.eventBody}>
+                            <strong>{event.title}</strong>
+                            <span>
+                              <i data-type={event.type}>{formattedType(event.type)}</i>
+                              <i data-status={event.status}>{formattedStatus(event.status)}</i>
+                              {clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}
+                            </span>
+                            <small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small>
+                          </span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            calendarEvents.map((event) => {
+              const date = new Date(`${event.date}T00:00:00`);
+              return (
+                <Card className={styles.eventCard} key={event.id}>
+                    <button type="button" className={styles.eventOpen} onClick={() => {
+                      const detailPath = `/console/events/${event.id}${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+                      if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
+                    }}>
+                    <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
+                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i>{clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}</span><small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </Card>
+              );
+            })
+          )}
         </div>
       )}
-
-      <Modal open={selected !== null && confirmation === null && editor === null} title={selected?.title ?? 'Event detail'} onClose={() => setSelectedId(null)} closeDisabled={participantBusy}>
-        {selected && (
-          <div className={styles.detail}>
-            <div className={styles.detailTags}><span data-type={selected.type}>{formattedType(selected.type)}</span><span data-status={selected.status}>{formattedStatus(selected.status)}</span><span>100m</span></div>
-            <dl className={styles.detailGrid}>
-              <div><dt>Date</dt><dd><time dateTime={selected.date}>{formattedDate(selected.date, true)}</time></dd></div>
-              <div><dt>Time</dt><dd>{selected.time ?? 'Time not set'}</dd></div>
-              <div><dt>Location</dt><dd>{selected.locationName ?? 'Location not set'}</dd></div>
-              <div><dt>Discipline</dt><dd>100m</dd></div>
-            </dl>
-            {(selected.latitude !== null || selected.longitude !== null) && <p className={styles.coordinates}>Coordinates: {selected.latitude ?? 'Not set'}, {selected.longitude ?? 'Not set'}</p>}
-            <ParticipantManager eventId={selected.id} onBusyChange={setParticipantBusy} />
-            <div className={styles.detailActions}>
-              <Button variant="secondary" onClick={() => { setEditor(selected); setSelectedId(null); }} disabled={participantBusy}>Edit event</Button>
-              {selected.status === 'scheduled' && <Button onClick={() => openConfirmation(selected.id, 'start')} disabled={participantBusy}>Start event</Button>}
-              {(selected.status === 'scheduled' || selected.status === 'in_progress') && <Button onClick={() => openConfirmation(selected.id, 'complete')} disabled={participantBusy}>Mark completed</Button>}
-              {selected.status !== 'cancelled' && <Button variant="danger" onClick={() => openConfirmation(selected.id, 'cancel')} disabled={participantBusy}>Cancel event</Button>}
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal open={editor !== null} title={editor === 'new' ? 'Add event' : 'Edit event'} onClose={() => { if (!editorBusy) setEditor(null); }} closeDisabled={editorBusy}>
         {editor && <EventForm key={editor === 'new' ? 'new' : editor.id} event={editor === 'new' ? undefined : editor} onSave={saveEditor} onCancel={() => setEditor(null)} onSubmittingChange={setEditorBusy} />}
       </Modal>
-
-      <Modal open={confirmationEvent !== null} title={confirmationTitle} onClose={() => { if (!lifecycleBusy) { setConfirmation(null); setMutationError(null); } }} closeDisabled={lifecycleBusy}>
-        {confirmationEvent && confirmation && (
-          <div className={styles.confirmation}>
-            <p>
-              {confirmation.action === 'cancel'
-                ? <>Cancel <strong>{confirmationEvent.title}</strong>? The event remains in history. Participant assignments, timeline entries, and results are preserved, but cancelled-event results do not contribute to statistics.</>
-                : confirmation.action === 'start'
-                  ? <>Start <strong>{confirmationEvent.title}</strong>? Live result logging will open for this event.</>
-                  : <>Mark <strong>{confirmationEvent.title}</strong> completed? Live result logging will close.</>}
-            </p>
-            {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
-            <div className={styles.formActions}>
-              <Button variant="secondary" onClick={() => setConfirmation(null)} disabled={lifecycleBusy}>Back</Button>
-              <Button variant={confirmation.action === 'cancel' ? 'danger' : 'primary'} onClick={() => void runLifecycle()} disabled={lifecycleBusy}>
-                {lifecycleBusy ? 'Saving...' : confirmation.action === 'cancel' ? 'Cancel event' : confirmation.action === 'start' ? 'Start event' : 'Mark completed'}
-              </Button>
-            </div>
-          </div>
-        )}
+      <Modal open={selectedId !== null} title={events.find((event) => event.id === selectedId)?.title ?? 'Event detail'} onClose={() => setSelectedId(null)} closeDisabled={detailBusy}>
+        {selectedId && <EventDetailPage eventId={selectedId} initialEvent={events.find((event) => event.id === selectedId)} onEventUpdated={storeEvent} onBusyChange={setDetailBusy} onBack={() => setSelectedId(null)} />}
       </Modal>
     </section>
   );

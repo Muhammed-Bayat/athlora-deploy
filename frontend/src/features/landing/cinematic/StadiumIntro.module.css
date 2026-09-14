@@ -1,0 +1,27 @@
+.scrollCue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 48px;
+  color: rgba(255, 255, 255, .65);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-shadow: none;
+}
+
+.arrow {
+  display: inline-block;
+  font-size: 28px;
+  animation: lapCueBounce 1.6s ease-in-out infinite;
+}
+
+@keyframes lapCueBounce {
+  0%, 100% { transform: translateY(3px); }
+  50% { transform: translateY(-5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow { animation: none; }
+}

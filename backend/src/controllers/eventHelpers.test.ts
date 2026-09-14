@@ -1,0 +1,15 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+const services = vi.hoisted(() => ({ createEventInvitation: vi.fn(), rotateEventInvitation: vi.fn(), updateInvitationStatus: vi.fn(), revokeIndividualGrant: vi.fn(), redeemInvitation: vi.fn(), listEventInvitations: vi.fn(), listEventGrants: vi.fn() }));
+const realtime = vi.hoisted(() => ({ disconnectHelperFromEvent: vi.fn(), notifyEventInvalidated: vi.fn() }));
+vi.mock('../services/eventHelpers.js', () => services);
+vi.mock('../realtime/index.js', () => realtime);
+import * as helpers from './eventHelpers.js';
+function response() { const value = { status: vi.fn(), json: vi.fn() }; value.status.mockReturnValue(value); return value; }
+function request(body: Record<string, unknown> = {}) { return { ip: '127.0.0.1', socket: {}, params: { eventId: 'event-1', invitationId: 'invite-1', grantId: 'grant-1' }, body, auth: { auth0Id: 'auth0|user-1' } }; }
+async function invoke(handler: (req: never, res: never) => Promise<void>, body?: Record<string, unknown>) { const res = response(); await handler(request(body) as never, res as never); return res; }
+describe('event helper controllers', () => {
+  beforeEach(() => { vi.clearAllMocks(); services.createEventInvitation.mockResolvedValue({ invitation: {}, rawSecret: 'secret', humanCode: 'CODE' }); services.rotateEventInvitation.mockResolvedValue({ invitation: {}, rawSecret: 'secret', humanCode: 'CODE' }); services.updateInvitationStatus.mockResolvedValue({}); services.revokeIndividualGrant.mockResolvedValue({ auth0Sub: 'auth0|helper' }); services.redeemInvitation.mockResolvedValue({ eventId: 'event-1', grant: {} }); services.listEventInvitations.mockResolvedValue([]); services.listEventGrants.mockResolvedValue([]); });
+  it('creates, rotates, updates, revokes, redeems, and lists helper access', async () => { await invoke(helpers.handleCreateInvitation, { maxCap: '4' }); await invoke(helpers.handleRotateInvitation); await invoke(helpers.handleUpdateInvitationStatus, { status: 'closed' }); await invoke(helpers.handleRevokeGrant); await invoke(helpers.handleRedeemInvitation, { secret: 'secret' }); await invoke(helpers.handleListInvitations); expect(services.createEventInvitation).toHaveBeenCalledWith('event-1', 'auth0|user-1', 4); expect(realtime.disconnectHelperFromEvent).toHaveBeenCalledWith('auth0|helper', 'event-1'); });
+  it('rejects invalid invitation status and unauthenticated redemption', async () => { const invalid = await invoke(helpers.handleUpdateInvitationStatus, { status: 'wrong' }); expect(invalid.status).toHaveBeenCalledWith(400); const res = response(); await helpers.handleRedeemInvitation({ ...request({ secret: 'secret' }), auth: undefined } as never, res as never); expect(res.status).toHaveBeenCalledWith(401); });
+  it('limits repeated redemption attempts', () => { const next = vi.fn(); const res = response(); for (let attempt = 0; attempt < 10; attempt += 1) helpers.rateLimitRedemption(request() as never, res as never, next); helpers.rateLimitRedemption(request() as never, res as never, next); expect(res.status).toHaveBeenCalledWith(429); });
+});

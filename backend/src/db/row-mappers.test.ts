@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DatabaseMappingError,
   mapApplicationUserContextRow,
+  mapAthleteResultHistoryRow,
   mapAthleteRow,
   mapAthleteStatisticsRow,
+  mapDashboardActiveEventRow,
   mapDashboardMetricsRow,
+  mapDashboardTimelineEntryRow,
   mapDashboardUpcomingEventRow,
   mapEventParticipantRow,
   mapEventParticipantSummaryRow,
@@ -14,9 +17,12 @@ import {
   mapTimelineEntryRow,
   mapUserRow,
   type ApplicationUserContextRow,
+  type AthleteResultHistoryRow,
   type AthleteRow,
   type AthleteStatisticsRow,
+  type DashboardActiveEventRow,
   type DashboardMetricsRow,
+  type DashboardTimelineEntryRow,
   type DashboardUpcomingEventRow,
   type EventParticipantRow,
   type EventParticipantSummaryRow,
@@ -41,6 +47,8 @@ const userRow: UserRow = {
   name: 'Taylor Coach',
   email: 'taylor@example.com',
   role: 'coach',
+  consent_accepted_at: null,
+  consent_version: null,
   created_at: INPUT_TIMESTAMP,
   updated_at: new Date('2026-08-14T08:20:30.123Z'),
 };
@@ -57,9 +65,12 @@ const athleteRow: AthleteRow = {
   name: 'Ari Runner',
   dob: '2004-02-29',
   gender: 'open',
-  squad: 'Senior A',
+  squads: [],
   notes: 'Returning from injury',
   archived_at: null,
+  lifecycle_status: 'active',
+  status_changed_at: INPUT_TIMESTAMP,
+  status_changed_by: USER_ID,
   created_at: INPUT_TIMESTAMP,
   updated_at: INPUT_TIMESTAMP,
 };
@@ -89,7 +100,7 @@ const participantRow: EventParticipantRow = {
 const participantSummaryRow: EventParticipantSummaryRow = {
   ...participantRow,
   athlete_name: 'Ari Runner',
-  athlete_squad: 'Senior A',
+  athlete_squad_names: [],
   athlete_archived_at: null,
 };
 
@@ -144,7 +155,7 @@ const statisticsRow: AthleteStatisticsRow = {
 const rosterRow: RosterSnapshotRow = {
   athlete_id: ATHLETE_ID,
   name: 'Ari Runner',
-  squad: null,
+  squad_names: [],
   discipline: '100m',
   pb: '11.120',
 };
@@ -153,7 +164,10 @@ const upcomingEventRow: DashboardUpcomingEventRow = {
   event_id: EVENT_ID,
   title: 'City Sprint Meet',
   type: 'competition',
+  discipline: '100m',
   date: '2026-09-01',
+  time: '09:30:00',
+  location_name: 'Central Track',
   status: 'scheduled',
   athlete_count: '18',
 };
@@ -161,8 +175,48 @@ const upcomingEventRow: DashboardUpcomingEventRow = {
 const metricsRow: DashboardMetricsRow = {
   athletes_count: '30',
   active_athletes_count: 28,
+  archived_athletes_count: 2,
   upcoming_event_count: '3',
   season_pbs: 7,
+};
+
+const historyRow: AthleteResultHistoryRow = {
+  ...resultRow,
+  athlete_name: 'Ari Runner',
+  athlete_squad_names: [],
+  athlete_archived_at: INPUT_TIMESTAMP,
+  event_title: 'City Sprint Meet',
+  event_type: 'competition',
+  event_discipline: '100m',
+  event_date: '2026-09-01',
+  event_time: '09:30:00',
+  event_location_name: 'Central Track',
+  event_status: 'completed',
+  effective_result: '11.240',
+  effective_outcome: 'valid',
+  counts_towards_statistics: true,
+};
+
+const activeEventRow: DashboardActiveEventRow = {
+  event_id: EVENT_ID,
+  event_title: 'City Sprint Meet',
+  event_type: 'competition',
+  event_discipline: '100m',
+  event_date: '2026-09-01',
+  event_time: '09:30:00',
+  event_location_name: 'Central Track',
+  event_status: 'in_progress',
+  participant_count: '4',
+  athletes_with_entries_count: '3',
+  resolved_results_count: '2',
+  entry_count: '7',
+};
+
+const dashboardTimelineRow: DashboardTimelineEntryRow = {
+  ...timelineRow,
+  athlete_name: 'Ari Runner',
+  athlete_squad_names: [],
+  athlete_archived_at: null,
 };
 
 function changed<Row>(row: Row, values: Record<string, unknown>): Row {
@@ -181,6 +235,8 @@ describe('PostgreSQL row mapping', () => {
       name: 'Taylor Coach',
       email: 'taylor@example.com',
       role: 'coach',
+      consentAcceptedAt: null,
+      consentVersion: null,
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
     });
@@ -191,6 +247,8 @@ describe('PostgreSQL row mapping', () => {
       userId: USER_ID,
       auth0Id: 'auth0|coach-1',
       role: 'assistant',
+      workspaceId: USER_ID,
+      workspaceRole: 'assistant',
     });
   });
 
@@ -201,18 +259,21 @@ describe('PostgreSQL row mapping', () => {
       name: 'Ari Runner',
       dob: '2004-02-29',
       gender: 'open',
-      squad: 'Senior A',
+      squads: [],
       notes: 'Returning from injury',
       archivedAt: null,
+      status: 'active',
+      statusChangedAt: ISO_TIMESTAMP,
+      statusChangedBy: USER_ID,
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
     });
 
     expect(
       mapAthleteRow(
-        changed(athleteRow, { dob: null, gender: null, squad: null, notes: null }),
+        changed(athleteRow, { dob: null, gender: null, squads: [], notes: null }),
       ),
-    ).toMatchObject({ dob: null, gender: null, squad: null, notes: null });
+    ).toMatchObject({ dob: null, gender: null, squads: [], notes: null });
   });
 
   it('serializes a pg-style local DATE without shifting the calendar day', () => {
@@ -281,18 +342,19 @@ describe('PostgreSQL row mapping', () => {
       athlete: {
         id: ATHLETE_ID,
         name: 'Ari Runner',
-        squad: 'Senior A',
+        squadNames: [],
         archivedAt: null,
       },
+      statusReviewRequired: false,
     });
     expect(
       mapEventParticipantSummaryRow(
         changed(participantSummaryRow, {
-          athlete_squad: null,
+          athlete_squad_names: [],
           athlete_archived_at: INPUT_TIMESTAMP,
         }),
       ),
-    ).toMatchObject({ athlete: { squad: null, archivedAt: ISO_TIMESTAMP } });
+    ).toMatchObject({ athlete: { squadNames: [], archivedAt: ISO_TIMESTAMP } });
   });
 
   it('maps a timeline entry row and converts its NUMERIC value', () => {
@@ -400,11 +462,31 @@ describe('PostgreSQL row mapping', () => {
     });
   });
 
+  it('maps athlete history with raw and effective result data', () => {
+    expect(mapAthleteResultHistoryRow(historyRow)).toMatchObject({
+      athlete: {
+        id: ATHLETE_ID,
+        name: 'Ari Runner',
+        squadNames: [],
+        archivedAt: ISO_TIMESTAMP,
+      },
+      event: {
+        id: EVENT_ID,
+        type: 'competition',
+        status: 'completed',
+      },
+      result: { finalResult: 11.24, outcome: 'valid' },
+      effectiveResult: 11.24,
+      effectiveOutcome: 'valid',
+      countsTowardsStatistics: true,
+    });
+  });
+
   it('maps a roster snapshot row with a nullable PB', () => {
     expect(mapRosterSnapshotRow(changed(rosterRow, { pb: null }))).toEqual({
       athleteId: ATHLETE_ID,
       name: 'Ari Runner',
-      squad: null,
+      squadNames: [],
       discipline: '100m',
       pb: null,
     });
@@ -415,7 +497,10 @@ describe('PostgreSQL row mapping', () => {
       eventId: EVENT_ID,
       title: 'City Sprint Meet',
       type: 'competition',
+      discipline: '100m',
       date: '2026-09-01',
+      time: '09:30:00',
+      locationName: 'Central Track',
       status: 'scheduled',
       athleteCount: 18,
     });
@@ -425,8 +510,28 @@ describe('PostgreSQL row mapping', () => {
     expect(mapDashboardMetricsRow(metricsRow)).toEqual({
       athletesCount: 30,
       activeAthletesCount: 28,
+      inactiveAthletesCount: 0,
+      archivedAthletesCount: 2,
+      statusReviewCount: 0,
       upcomingEventCount: 3,
       seasonPbs: 7,
+    });
+  });
+
+  it('maps live dashboard progress and latest-entry identity', () => {
+    expect(mapDashboardActiveEventRow(activeEventRow)).toMatchObject({
+      event: { id: EVENT_ID, status: 'in_progress' },
+      progress: {
+        participantCount: 4,
+        athletesWithEntriesCount: 3,
+        resolvedResultsCount: 2,
+        entryCount: 7,
+        completionPercent: 50,
+      },
+    });
+    expect(mapDashboardTimelineEntryRow(dashboardTimelineRow)).toMatchObject({
+      entry: { id: ENTRY_ID },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
     });
   });
 });
@@ -482,7 +587,7 @@ describe('persisted value validation', () => {
   it('rejects malformed UUIDs and empty persisted strings', () => {
     expectMappingError(() => mapUserRow(changed(userRow, { id: 'not-a-uuid' })));
     expectMappingError(() => mapUserRow(changed(userRow, { auth0_id: '  ' })));
-    expectMappingError(() => mapAthleteRow(changed(athleteRow, { squad: '' })));
+    expectMappingError(() => mapAthleteRow(changed(athleteRow, { squads: [{ id: 'not-a-uuid' }] })));
   });
 
   it('rejects invalid roles, enums, and fixed contract constants', () => {
@@ -491,7 +596,7 @@ describe('persisted value validation', () => {
     expectMappingError(() => mapEventRow(changed(eventRow, { status: 'postponed' })));
     expectMappingError(() => mapEventRow(changed(eventRow, { discipline: '200m' })));
     expectMappingError(() =>
-      mapEventParticipantRow(changed(participantRow, { rsvp_status: 'maybe' })),
+      mapEventParticipantRow(changed(participantRow, { rsvp_status: 'invalid' })),
     );
     expectMappingError(() =>
       mapTimelineEntryRow(changed(timelineRow, { entry_type: 'measurement' })),

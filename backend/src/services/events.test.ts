@@ -26,6 +26,15 @@ vi.mock('./timeline.js', () => ({
   recomputeEventResults: vi.fn(),
 }));
 
+const fixtureNotifications = vi.hoisted(() => ({
+  notifyEventComingUp: vi.fn(),
+  notifyEventEnded: vi.fn(),
+  notifyFixtureStarted: vi.fn(),
+  notifyLiveLoggerStarted: vi.fn(),
+}));
+
+vi.mock('./fixtureNotifications.js', () => fixtureNotifications);
+
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const query = vi.fn();
@@ -119,11 +128,23 @@ describe('listEvents', () => {
 
     expect(events).toEqual([eventBody({ status: 'completed' })]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('created_by = $1');
-    expect(sql).toContain('type = $2');
-    expect(sql).toContain('status = $3');
+    expect(sql).toContain('workspace_id = $1');
+    expect(sql).toContain('date >= $2::date AND date < $3::date');
+    expect(sql).toContain('type = $4');
+    expect(sql).toContain('status = $5');
     expect(sql).toMatch(/ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC/);
-    expect(parameters).toEqual([USER_ID, 'competition', 'completed']);
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, 'competition', 'completed']);
+  });
+
+  it('includes only accepted current-revision shared fixtures alongside owned events', async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await listEvents(USER_ID, {});
+
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("fw.workspace_id = $1 AND fw.role = 'guest'");
+    expect(sql).toContain("fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision");
   });
 
   it('filters by the inclusive date range', async () => {
@@ -132,9 +153,11 @@ describe('listEvents', () => {
     await listEvents(USER_ID, { dateFrom: '2026-08-01', dateTo: '2026-08-31' });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('date >= $2');
-    expect(sql).toContain('date <= $3');
-    expect(parameters).toEqual([USER_ID, '2026-08-01', '2026-08-31']);
+    expect(sql).toContain('date >= $2::date AND date < $3::date');
+    expect(sql).toContain('date >= $4');
+    expect(sql).toContain('date <= $5');
+    const year = new Date().getUTCFullYear();
+    expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, '2026-08-01', '2026-08-31']);
   });
 
   it('rejects a malformed coach id without querying', async () => {
@@ -149,7 +172,7 @@ describe('getEvent', () => {
 
     await expect(getEvent(USER_ID, EVENT_ID)).resolves.toEqual(eventBody());
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE id = $1 AND created_by = $2'),
+      expect.stringContaining('WHERE id = $1 AND workspace_id = $2'),
       [EVENT_ID, USER_ID],
     );
   });
@@ -186,7 +209,7 @@ describe('createEvent', () => {
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('INSERT INTO events');
     expect(parameters).toEqual([
-      USER_ID,
+      USER_ID, USER_ID,
       'competition',
       '100m',
       'City Sprint Meet',
@@ -197,6 +220,24 @@ describe('createEvent', () => {
       null,
       'scheduled',
     ]);
+  });
+
+  it('sends an event_coming_up notification to workspace members', async () => {
+    query.mockResolvedValue({ rows: [eventRow()] });
+
+    await createEvent(USER_ID, {
+      type: 'competition',
+      discipline: '100m',
+      title: 'City Sprint Meet',
+      date: '2026-09-01',
+      time: null,
+      locationName: null,
+      latitude: null,
+      longitude: null,
+      status: 'scheduled',
+    });
+
+    expect(fixtureNotifications.notifyEventComingUp).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
   });
 });
 
@@ -225,7 +266,72 @@ describe('replaceEvent', () => {
     const [updateSql, updateParameters] = query.mock.calls[1] as [string, unknown[]];
     expect(updateSql).toContain('UPDATE events');
     expect(updateParameters[8]).toBe('in_progress');
-    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', false);
+  });
+
+  it('finalizes outcomes for every present participant when completing an event', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', true);
+  });
+
+  it('sends a live_logger_started notification when transitioning from scheduled to in_progress', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+    });
+
+    expect(fixtureNotifications.notifyLiveLoggerStarted).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
+  });
+
+  it('sends an event_ended notification when transitioning from in_progress to completed', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(fixtureNotifications.notifyEventEnded).toHaveBeenCalledWith(expect.anything(), EVENT_ID, USER_ID);
+  });
+
+  it('does not send live_logger_started when not transitioning from scheduled to in_progress', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(fixtureNotifications.notifyLiveLoggerStarted).not.toHaveBeenCalled();
+  });
+
+  it('does not send event_ended when not transitioning from in_progress to completed', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+    });
+
+    expect(fixtureNotifications.notifyEventEnded).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid transition before writing', async () => {
@@ -251,6 +357,24 @@ describe('replaceEvent', () => {
     expect(query).toHaveBeenCalledOnce();
   });
 
+  it('rejects starting a fixture with an unresolved invitation before a guest team joins', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ ...eventRow(), fixture_revision: 1 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] });
+
+    await expect(
+      replaceEvent(USER_ID, EVENT_ID, {
+        type: 'competition', discipline: '100m', title: 'City Sprint Meet', date: '2026-09-01',
+        time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress',
+      }),
+    ).rejects.toMatchObject({ code: 'FIXTURE_INVITATIONS_PENDING' });
+
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE events'), expect.anything());
+  });
+
   it('returns the generic not-found error when no owned row exists', async () => {
     query.mockResolvedValue({ rows: [] });
 
@@ -274,6 +398,7 @@ describe('cancelEvent', () => {
   it('cancels an owned event with an update, never a delete', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
 
     const event = await cancelEvent(USER_ID, EVENT_ID);
@@ -281,11 +406,43 @@ describe('cancelEvent', () => {
     expect(event.status).toBe('cancelled');
     const [lockSql] = query.mock.calls[0] as [string, unknown[]];
     expect(lockSql).toContain('FOR UPDATE');
-    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[2] as [string, unknown[]];
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).not.toContain('DELETE FROM');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
     expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition');
+  });
+
+  it('rejects a non-host workspace when active guest teams exist', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [{ workspace_id: '99999999-9999-9999-8999-999999999999' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(cancelEvent(USER_ID, EVENT_ID)).rejects.toMatchObject({
+      code: 'FIXTURE_HOST_ONLY',
+    });
+    expect(recomputeEventResults).not.toHaveBeenCalled();
+  });
+
+  it('allows the host workspace to cancel when active guest teams exist', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] })
+      .mockResolvedValueOnce({ rows: [{ workspace_id: USER_ID }] })
+      .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
+
+    const event = await cancelEvent(USER_ID, EVENT_ID);
+
+    expect(event.status).toBe('cancelled');
+    const [lockSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(lockSql).toContain('FOR UPDATE');
+    const hasGuestsSql = query.mock.calls[1][0] as string;
+    expect(hasGuestsSql).toContain('role');
+    const hostCheckSql = query.mock.calls[2][0] as string;
+    expect(hostCheckSql).toContain('role');
+    expect(hostCheckSql).toContain("'host'");
+    expect(recomputeEventResults).toHaveBeenCalled();
   });
 
   it('returns the generic not-found error when no owned row exists', async () => {
@@ -300,6 +457,7 @@ describe('assertEventLoggingOpen', () => {
     query.mockResolvedValue({ rows: [eventRow({ status: 'in_progress' })] });
 
     await expect(assertEventLoggingOpen(USER_ID, EVENT_ID)).resolves.toBeUndefined();
+    expect(String(query.mock.calls[0]?.[0])).toContain('event_fixture_workspaces');
   });
 
   it('rejects any non-in-progress status with the status detail', async () => {

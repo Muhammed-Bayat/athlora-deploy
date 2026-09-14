@@ -8,12 +8,14 @@ import {
   replaceEvent,
 } from '../services/events.js';
 import { parseEventListQuery } from '../validation/payloads.js';
+import { getEventWeatherForecast } from '../services/weather.js';
+import { notifyEventInvalidated } from '../realtime/index.js';
 
 export const listEvents: RequestHandler = async (req, res, next) => {
   try {
     const query = parseEventListQuery(req.query as Record<string, unknown>);
-    const { userId } = getApplicationUserContext(req);
-    const events = await listEventsRecords(userId, query);
+    const { workspaceId } = getApplicationUserContext(req);
+    const events = await listEventsRecords(workspaceId, query);
     res.json({ data: events, meta: { count: events.length } });
   } catch (error) {
     next(error);
@@ -22,8 +24,8 @@ export const listEvents: RequestHandler = async (req, res, next) => {
 
 export const getEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await getEventRecord(userId, req.params.id);
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await getEventRecord(workspaceId, req.params.id);
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -32,8 +34,9 @@ export const getEvent: RequestHandler = async (req, res, next) => {
 
 export const createEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await createEventRecord(userId, req.body);
+    const { userId, workspaceId } = getApplicationUserContext(req);
+    const event = await createEventRecord(userId, req.body, undefined, workspaceId);
+    notifyEventInvalidated(event.id, 'event');
     res.status(201).json({ data: event });
   } catch (error) {
     next(error);
@@ -42,8 +45,9 @@ export const createEvent: RequestHandler = async (req, res, next) => {
 
 export const updateEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await replaceEvent(userId, req.params.id, req.body);
+    const { workspaceId, userId } = getApplicationUserContext(req);
+    const event = await replaceEvent(workspaceId, req.params.id, req.body, undefined, userId);
+    notifyEventInvalidated(event.id, 'event');
     res.json({ data: event });
   } catch (error) {
     next(error);
@@ -52,16 +56,21 @@ export const updateEvent: RequestHandler = async (req, res, next) => {
 
 export const deleteEvent: RequestHandler = async (req, res, next) => {
   try {
-    const { userId } = getApplicationUserContext(req);
-    const event = await cancelEventRecord(userId, req.params.id);
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await cancelEventRecord(workspaceId, req.params.id);
+    notifyEventInvalidated(event.id, 'event', 'results');
     res.json({ data: event });
   } catch (error) {
     next(error);
   }
 };
 
-export const getWeather: RequestHandler = (_req, res) => {
-  res.status(501).json({
-    error: { code: 'NOT_IMPLEMENTED', message: 'Weather proxy arrives in Stage 1', details: {} },
-  });
+export const getWeather: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const forecast = await getEventWeatherForecast(workspaceId, req.params.id);
+    res.json({ data: forecast });
+  } catch (error) {
+    next(error);
+  }
 };

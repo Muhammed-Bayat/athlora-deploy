@@ -1,13 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Request, RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
-import {
-  DatabaseMappingError,
-  mapApplicationUserContextRow,
-  type ApplicationUserContextRow,
-} from '../db/row-mappers.js';
 import { ApiError } from './errors.js';
-import type { ApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
+import type { ApplicationUserContext, LocalApplicationUserContext, VerifiedAuth0Context } from '../types/auth.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 
 export function getVerifiedAuth0Context(req: Request): VerifiedAuth0Context {
   if (!req.auth0) {
@@ -25,8 +21,28 @@ export function getApplicationUserContext(req: Request): ApplicationUserContext 
   return req.auth;
 }
 
+export function getLocalApplicationUserContext(req: Request): LocalApplicationUserContext {
+  if (!req.localUser) {
+    throw new ApiError(500, 'AUTH_CONTEXT_MISSING', 'Local application user context is missing');
+  }
+  return req.localUser;
+}
+
 function keyset(domain: string) {
   return createRemoteJWKSet(new URL(`https://${domain}/.well-known/jwks.json`));
+}
+
+export async function verifyAuth0AccessToken(token: string): Promise<VerifiedAuth0Context> {
+  const domain = process.env.AUTH0_DOMAIN;
+  const audience = process.env.AUTH0_AUDIENCE;
+  if (!domain || !audience) throw new Error('Auth0 domain and audience are not configured');
+
+  const { payload } = await jwtVerify(token, keyset(domain), {
+    issuer: `https://${domain}/`,
+    audience,
+  });
+  if (!payload.sub) throw new Error('Token subject is missing');
+  return { auth0Id: payload.sub, accessToken: token };
 }
 
 export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
@@ -53,14 +69,7 @@ export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
   }
 
   try {
-    const { payload } = await jwtVerify(token, keyset(domain), {
-      issuer: `https://${domain}/`,
-      audience,
-    });
-    if (!payload.sub) {
-      throw new Error('Token subject is missing');
-    }
-    req.auth0 = { auth0Id: payload.sub, accessToken: token };
+    req.auth0 = await verifyAuth0AccessToken(token);
     next();
   } catch {
     res.status(401).json({
@@ -71,14 +80,60 @@ export const verifyAuth0Token: RequestHandler = async (req, res, next) => {
 
 export const requireAuth = verifyAuth0Token;
 
+export const resolveLocalApplicationUser: RequestHandler = async (req, _res, next) => {
+  try {
+    const auth0 = getVerifiedAuth0Context(req);
+    const result = await getPool().query<{
+      user_id: string;
+      auth0_id: string;
+      role: LocalApplicationUserContext['role'];
+      deletion_status: string | null;
+    }>(
+      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status
+       FROM users u
+       LEFT JOIN account_deletions d ON d.auth0_id = u.auth0_id
+       WHERE u.auth0_id = $1`,
+      [auth0.auth0Id],
+    );
+    const user = result.rows[0];
+    if (!user) {
+      throw new ApiError(403, 'AUTH_USER_NOT_SYNCHRONIZED', 'Authenticated user is not synchronized', { syncEndpoint: '/api/v1/auth/me' });
+    }
+    if (user.deletion_status) throw new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress');
+    if (!['coach', 'assistant'].includes(user.role)) throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
+    req.localUser = { userId: user.user_id, auth0Id: user.auth0_id, role: user.role };
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const resolveApplicationUser: RequestHandler = async (req, _res, next) => {
   try {
     const auth0 = getVerifiedAuth0Context(req);
-    const result = await getPool().query<ApplicationUserContextRow>(
-      `SELECT id AS user_id, auth0_id, role
-       FROM users
-       WHERE auth0_id = $1`,
-      [auth0.auth0Id],
+    const requestedWorkspaceId = typeof req.header === 'function' ? req.header('X-Workspace-Id') : undefined;
+    if (requestedWorkspaceId !== undefined && !isCanonicalUuid(requestedWorkspaceId)) {
+      next(new ApiError(400, 'WORKSPACE_ID_INVALID', 'Workspace ID must be a UUID'));
+      return;
+    }
+    const result = await getPool().query<{
+      user_id: string;
+      auth0_id: string;
+      role: ApplicationUserContext['role'];
+      deletion_status: string | null;
+      workspace_id: string;
+      workspace_role: ApplicationUserContext['workspaceRole'];
+    }>(
+      `SELECT u.id AS user_id, u.auth0_id, u.role, d.status AS deletion_status,
+              wm.workspace_id, wm.role AS workspace_role
+       FROM users u
+       LEFT JOIN account_deletions d ON d.auth0_id = u.auth0_id
+       JOIN workspace_members wm ON wm.user_id = u.id
+       WHERE u.auth0_id = $1
+         AND ($2::uuid IS NULL OR wm.workspace_id = $2::uuid)
+       ORDER BY wm.created_at, wm.workspace_id
+       LIMIT 1`,
+      [auth0.auth0Id, requestedWorkspaceId ?? null],
     );
     const user = result.rows[0];
 
@@ -93,15 +148,23 @@ export const resolveApplicationUser: RequestHandler = async (req, _res, next) =>
       );
       return;
     }
-
-    try {
-      req.auth = mapApplicationUserContextRow(user);
-    } catch (error) {
-      if (error instanceof DatabaseMappingError) {
-        throw new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid');
-      }
-      throw error;
+    if (user.deletion_status) {
+      next(new ApiError(403, 'ACCOUNT_DELETION_PENDING', 'Account deletion is in progress'));
+      return;
     }
+    if (!['coach', 'assistant'].includes(user.role) ||
+        !['coach', 'assistant'].includes(user.workspace_role ?? user.role)) {
+      next(new ApiError(500, 'AUTH_CONTEXT_INVALID', 'Application user context is invalid'));
+      return;
+    }
+
+    req.auth = {
+      userId: user.user_id,
+      auth0Id: user.auth0_id,
+      role: user.role,
+      workspaceId: user.workspace_id ?? user.user_id,
+      workspaceRole: user.workspace_role ?? user.role,
+    };
     next();
   } catch (error) {
     next(error);

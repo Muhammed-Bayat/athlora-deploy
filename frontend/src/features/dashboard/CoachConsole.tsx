@@ -1,27 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AthletesPage } from '../athletes/AthletesPage';
 import { EventsPage } from '../events/EventsPage';
-import {
-  FIXTURE_TODAY,
-  STATUSES,
-  fixtureAthletes,
-  fixtureEvents,
-  initials,
-  readiness,
-  type Athlete,
-  type ConsoleEvent,
-  type ConsoleView,
-  type WeatherPreset,
-} from './consoleData';
+import { EventDetailPage } from '../events/EventDetailPage';
+import { LiveLoggingPage } from '../timeline/LiveLoggingPage';
+import { AuthPage } from '../auth/AuthPage';
+import { ComparisonPage } from '../comparison/ComparisonPage';
+import { IncomingFixtureInvitations } from '../fixtures/IncomingFixtureInvitations';
+import { FixtureNotifications, type FixtureNotificationCounts } from '../fixtures/FixtureNotifications';
+import type { DashboardSummary } from '../../types';
+import { getCurrentWeather } from '../../api/weather';
+import { ApiError } from '../../api/client';
+import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../utils/weatherConditions';
+import { timezoneCoordinates } from '../../utils/weatherLocation';
+import { DashboardPage } from './DashboardPage';
+import { useWorkspace } from '../auth/WorkspaceContext';
+import { InstallButton } from '../../components/InstallButton';
+import { OfflineIndicator } from '../../components/OfflineIndicator';
+import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
-import dashboard from './DashboardPage.module.css';
 
-type IconName = 'home' | 'athletes' | 'calendar' | 'trend' | 'activity';
+type IconName = 'home' | 'athletes' | 'calendar' | 'activity';
 
 const NAV: ReadonlyArray<{ id: ConsoleView; label: string; shortLabel: string; icon: IconName }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: 'home' },
   { id: 'athletes', label: 'Athletes', shortLabel: 'Athletes', icon: 'athletes' },
+  { id: 'comparison', label: 'Compare', shortLabel: 'Compare', icon: 'activity' },
   { id: 'events', label: 'Events', shortLabel: 'Events', icon: 'calendar' },
+  { id: 'live', label: 'Live Logger', shortLabel: 'Live', icon: 'activity' },
+  { id: 'account', label: 'Account', shortLabel: 'Account', icon: 'athletes' },
 ];
 const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; temperature: number }> = [
   { id: 'clear', label: 'Sunny', temperature: 27 }, { id: 'partly', label: 'Partly cloudy', temperature: 24 },
@@ -32,9 +39,229 @@ const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; tempera
 ];
 const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
+  stats: { title: 'Season Stats', subtitle: 'Teams, athletes, results, and performance trends' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
+  comparison: { title: 'Compare Performance', subtitle: 'Compare athlete progression and all-time club performance' },
   events: { title: 'Events', subtitle: 'Manage 100m competitions and training sessions' },
+  fixtures: { title: 'Events', subtitle: 'Manage shared club events' },
+  live: { title: 'Live Race Logger', subtitle: 'Track-side race logging, incident control, and instant results' },
+  account: { title: 'Account', subtitle: 'Manage security, sign-out, and account deletion' },
 };
+const THEME_STORAGE_KEY = 'athlora-theme';
+const WEATHER_PREF_KEY = 'athlora-weather-effects';
+const WEATHER_REFRESH_MS = 10 * 60 * 1000;
+const GEO_CACHE_KEY = 'athlora-geo-coords';
+const GEO_CACHE_TS_KEY = 'athlora-geo-ts';
+const GEO_CACHE_TTL = 10 * 60 * 1000;
+
+type LocationPermission = 'prompt' | 'granted' | 'denied' | 'unavailable';
+
+function getCachedCoordinates(): Coordinates | null {
+  try {
+    const raw = sessionStorage.getItem(GEO_CACHE_KEY);
+    const tsRaw = sessionStorage.getItem(GEO_CACHE_TS_KEY);
+    if (!raw || !tsRaw) return null;
+    const ts = Number(tsRaw);
+    if (Number.isNaN(ts) || Date.now() - ts > GEO_CACHE_TTL) {
+      sessionStorage.removeItem(GEO_CACHE_KEY);
+      sessionStorage.removeItem(GEO_CACHE_TS_KEY);
+      return null;
+    }
+    const coords = JSON.parse(raw) as unknown;
+    if (!isRecord(coords) || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') return null;
+    return { latitude: coords.latitude, longitude: coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+function setCachedCoordinates(coords: Coordinates): void {
+  try {
+    sessionStorage.setItem(GEO_CACHE_KEY, JSON.stringify(coords));
+    sessionStorage.setItem(GEO_CACHE_TS_KEY, String(Date.now()));
+  } catch { /* Storage is best-effort. */ }
+}
+
+function clearGeoCache(): void {
+  try {
+    sessionStorage.removeItem(GEO_CACHE_KEY);
+    sessionStorage.removeItem(GEO_CACHE_TS_KEY);
+  } catch { /* Storage is best-effort. */ }
+}
+
+async function checkGeolocationPermission(): Promise<LocationPermission> {
+  if (!('geolocation' in navigator) || !window.isSecureContext) return 'unavailable';
+  try {
+    if (!navigator.permissions?.query) return 'unavailable';
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    return status.state as LocationPermission;
+  } catch {
+    return 'unavailable';
+  }
+}
+
+interface LiveWeather {
+  label: string;
+  temperature: number | null;
+  atmosphere: WeatherAtmosphere;
+  isDay: boolean | null;
+  source: 'device' | 'timezone';
+}
+
+interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
+interface Particle {
+  kind: 'rain' | 'snow' | 'spark';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  len: number;
+  alpha: number;
+  size: number;
+  phase: number;
+}
+
+function seededNoise(index: number, salt = 0): number {
+  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function WeatherCanvas({ layers, precipitation, reducedMotion }: { layers: ReadonlyArray<string>; precipitation: number; reducedMotion: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const layersKey = layers.join(',');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || reducedMotion) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0;
+    let height = 0;
+    let rafId = 0;
+
+    const resizeCanvas = () => {
+      const rect = canvas.getBoundingClientRect();
+      width = Math.max(1, rect.width);
+      height = Math.max(1, rect.height);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+
+    const particles: Particle[] = [];
+    const precip = Number(precipitation) || 0;
+
+    if (layersKey.includes('rain')) {
+      const count = Math.min(125, 70 + Math.round(precip * 10));
+      for (let index = 0; index < count; index += 1) {
+        particles.push({
+          kind: 'rain',
+          x: seededNoise(index, 1) * width,
+          y: seededNoise(index, 2) * height,
+          vx: -(38 + seededNoise(index, 3) * 55),
+          vy: 560 + seededNoise(index, 4) * 440,
+          len: 14 + seededNoise(index, 5) * 28,
+          alpha: 0.2 + seededNoise(index, 6) * 0.46,
+          size: 0,
+          phase: 0,
+        });
+      }
+    }
+    if (layersKey.includes('snow')) {
+      for (let index = 0; index < 64; index += 1) {
+        particles.push({
+          kind: 'snow',
+          x: seededNoise(index, 7) * width,
+          y: seededNoise(index, 8) * height,
+          vx: -10 + seededNoise(index, 9) * 20,
+          vy: 30 + seededNoise(index, 10) * 48,
+          len: 0,
+          alpha: 0.28 + seededNoise(index, 12) * 0.5,
+          size: 1.5 + seededNoise(index, 11) * 3.8,
+          phase: seededNoise(index, 13) * Math.PI * 2,
+        });
+      }
+    }
+    if (layersKey.includes('sparks')) {
+      for (let index = 0; index < 42; index += 1) {
+        particles.push({
+          kind: 'spark',
+          x: seededNoise(index, 14) * width,
+          y: seededNoise(index, 15) * height,
+          vx: -(8 + seededNoise(index, 16) * 16),
+          vy: 8 + seededNoise(index, 17) * 18,
+          len: 0,
+          alpha: 0.48 + seededNoise(index, 19) * 0.46,
+          size: 1.05 + seededNoise(index, 18) * 2.45,
+          phase: seededNoise(index, 20) * Math.PI * 2,
+        });
+      }
+    }
+
+    let last = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min(0.034, (now - last) / 1000 || 0.016);
+      last = now;
+      context.clearRect(0, 0, width, height);
+
+      for (const particle of particles) {
+        if (particle.kind === 'rain') {
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 40 || particle.x < -60) { particle.x = Math.random() * width + 50; particle.y = -40; }
+          const slope = particle.vx / particle.vy;
+          context.beginPath();
+          context.moveTo(particle.x, particle.y);
+          context.lineTo(particle.x - slope * particle.len, particle.y - particle.len);
+          context.strokeStyle = `rgba(69, 190, 215, ${particle.alpha})`;
+          context.lineWidth = 1.2;
+          context.stroke();
+        } else if (particle.kind === 'snow') {
+          particle.phase += dt * 0.8;
+          particle.x += (particle.vx + Math.sin(particle.phase) * 13) * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 12) { particle.y = -12; particle.x = Math.random() * width; }
+          if (particle.x < -15) particle.x = width + 10;
+          if (particle.x > width + 15) particle.x = -10;
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          context.fillStyle = `rgba(138, 233, 242, ${particle.alpha})`;
+          context.fill();
+        } else {
+          particle.phase += dt * 0.55;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          if (particle.y > height + 10 || particle.x < -10) { particle.x = width + Math.random() * 80; particle.y = Math.random() * height * 0.42; }
+          const twinkle = 0.72 + Math.sin(particle.phase) * 0.24;
+          context.save();
+          context.shadowBlur = 14;
+          context.shadowColor = 'rgba(69, 190, 215, 0.95)';
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          context.fillStyle = `rgba(69, 190, 215, ${Math.max(0.34, particle.alpha * twinkle)})`;
+          context.fill();
+          context.restore();
+        }
+      }
+      rafId = requestAnimationFrame(frame);
+    };
+    rafId = requestAnimationFrame(frame);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, [layersKey, precipitation, reducedMotion]);
+
+  return <canvas ref={canvasRef} className={styles.weatherCanvas} aria-hidden="true" />;
+}
 
 function ConsoleIcon({ name }: { name: IconName }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -42,7 +269,6 @@ function ConsoleIcon({ name }: { name: IconName }) {
     {name === 'home' && <><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" /></>}
     {name === 'athletes' && <><circle cx="9" cy="7" r="3.2" /><path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6" /><circle cx="17.5" cy="8" r="2.4" /><path d="M15.3 13.2c2.3.3 4.2 2.4 4.2 5.3" /></>}
     {name === 'calendar' && <><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /></>}
-    {name === 'trend' && <><path d="m3 17 6-6 4 4 8-8" /><path d="M15 7h6v6" /></>}
     {name === 'activity' && <path d="M22 12h-4l-3 9L9 3l-3 9H2" />}
   </svg>;
 }
@@ -50,77 +276,274 @@ function ConsoleIcon({ name }: { name: IconName }) {
 function LiveTime({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
-  return compact ? <>{now.toLocaleTimeString('en-GB')}</> : <><time>{now.toLocaleTimeString('en-GB')}</time><span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span></>;
+  return compact ? <>{now.toLocaleTimeString('en-GB')}</> : <><time className={styles.clockTick} key={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time><span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span></>;
 }
 
-interface DashboardViewProps {
-  athletes: Athlete[];
-  events: ConsoleEvent[];
-  navigate: (view: ConsoleView) => void;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function DashboardView({ athletes, events, navigate }: DashboardViewProps) {
-  const upcoming = [...events].filter((event) => event.date >= FIXTURE_TODAY).sort((a, b) => a.date.localeCompare(b.date));
-  const active = athletes.filter((athlete) => athlete.status === 'Active' || athlete.status === 'Peaking').length;
-  const upcoming14 = upcoming.filter((event) => (new Date(`${event.date}T00:00:00`).getTime() - new Date(`${FIXTURE_TODAY}T00:00:00`).getTime()) / 86400000 <= 14);
-  const pbs = athletes.filter((athlete) => athlete.status === 'Peaking').length + 4;
-  const activeReadiness = athletes.length ? Math.round(active / athletes.length * 100) : 0;
-  const metrics = [
-    { icon: 'athletes' as const, value: athletes.length, label: 'Athletes', delta: '+2 this month', context: `${active} active or peaking`, progress: activeReadiness },
-    { icon: 'calendar' as const, value: upcoming14.length, label: 'Next 14 days', delta: `${upcoming14.length} scheduled`, context: upcoming[0] ? `Next: ${upcoming[0].name}` : 'Calendar clear', progress: Math.min(100, upcoming14.length * 18) },
-    { icon: 'trend' as const, value: pbs, label: 'Season PBs', delta: '+1 this week', context: 'Performance momentum', progress: Math.min(100, 55 + pbs * 4) },
-    { icon: 'activity' as const, value: 9, label: 'Sessions this week', delta: 'on plan', context: 'Weekly load tracking', progress: 82 },
-  ];
-  const trend = [3, 4, 2, 5, 4, 6, pbs];
+async function resolveTimezoneCoordinates(): Promise<Coordinates | null> {
+  try {
+    return timezoneCoordinates(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return null;
+  }
+}
 
-  return <section aria-label="Dashboard overview">
-    <div className={dashboard.hero}>
-      <div className={dashboard.heroCopy}><p className={dashboard.kicker}><i />Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, Coach</p><h2>Performance.<br /><span>In motion.</span></h2><p><b>{active} athletes</b> are active or peaking, with <b>{upcoming14.length} events</b> in the next 14 days and <b>{pbs} season PBs</b> on the board.</p><div className={dashboard.heroMeta}><span><small>Local time</small><b><LiveTime compact /></b></span><span><small>Squad readiness</small><b>{activeReadiness}<i>%</i></b></span></div></div>
-      <div className={dashboard.orbit} aria-hidden="true"><i /><i /><i /><span /><span /><span /><p><b>{active}</b> athletes active on today's plan</p></div>
-    </div>
-    <div className={dashboard.metrics}>{metrics.map((metric, index) => <article className={index === 0 ? dashboard.featured : ''} key={metric.label}><header><span><ConsoleIcon name={metric.icon} /></span><small>{metric.delta}</small></header><strong>{metric.value}</strong><h3>{metric.label}</h3><footer><i><i style={{ width: `${metric.progress}%` }} /></i><span>{metric.context}</span></footer></article>)}</div>
-    <div className={dashboard.snapshots}>
-      <section className={dashboard.panel}><header><div><p>Roster intelligence</p><h2>Roster Snapshot</h2></div><button type="button" onClick={() => navigate('athletes')}>View all ›</button></header>{[...athletes].sort((a, b) => Number(b.status === 'Peaking') - Number(a.status === 'Peaking')).slice(0, 5).map((athlete) => <button type="button" className={dashboard.rosterRow} onClick={() => navigate('athletes')} key={athlete.id}><span className={dashboard.avatar}>{initials(athlete.name)}</span><span><b>{athlete.name}</b><small>{athlete.discipline} · {athlete.squad}</small></span><i className={dashboard[`status${athlete.status}`]} title={athlete.status} /><strong>{athlete.pb}</strong></button>)}</section>
-      <section className={dashboard.panel}><header><div><p>Competition calendar</p><h2>Upcoming Events</h2></div><button type="button" onClick={() => navigate('events')}>View all ›</button></header>{upcoming.slice(0, 4).map((event) => { const date = new Date(`${event.date}T00:00:00`); return <button type="button" className={dashboard.eventRow} onClick={() => navigate('events')} key={event.id}><span><b>{date.getDate()}</b><small>{date.toLocaleDateString('en-US', { month: 'short' })}</small></span><span><b>{event.name}</b><small>⌖ {event.location}</small></span></button>; })}</section>
-    </div>
-    <section className={dashboard.performance}><header><div><p>Performance signal</p><h2>Squad PB Trend</h2></div><span>Last 7 weeks</span></header><div className={dashboard.trendLayout}><div className={dashboard.bars}>{trend.map((value, index) => <span key={index}><i style={{ height: `${value / Math.max(...trend) * 100}%` }} /><small>{index === 6 ? 'Now' : `W${index + 1}`}</small></span>)}</div><aside><small>Current momentum</small><b>+{trend.at(-1)! - trend.at(-2)!}</b><p>PB movement versus last week. The squad is carrying positive performance momentum into the next competition block.</p></aside></div></section>
-  </section>;
+async function resolveDeviceCoordinates(force?: boolean): Promise<Coordinates | null> {
+  if (!('geolocation' in navigator) || !window.isSecureContext) return null;
+
+  if (!force) {
+    const cached = getCachedCoordinates();
+    if (cached) return cached;
+
+    const permission = await checkGeolocationPermission();
+    if (permission !== 'granted') return null;
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        setCachedCoordinates(coords);
+        resolve(coords);
+      },
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: GEO_CACHE_TTL },
+    );
+  });
 }
 
 export function CoachConsole() {
-  const [view, setView] = useState<ConsoleView>('dashboard');
-  const [athletes] = useState(() => fixtureAthletes.map((athlete) => ({ ...athlete, history: [...athlete.history] })));
-  const [events] = useState(() => fixtureEvents.map((event) => ({ ...event, athleteIds: [...event.athleteIds] })));
+  const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
+  const location = useLocation();
+  const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
   const [eventUpcomingCount, setEventUpcomingCount] = useState<number | null>(null);
-  const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem('athlora-weather-effects') !== 'off'; } catch { return true; } });
+  const [fixtureNotificationCounts, setFixtureNotificationCounts] = useState<FixtureNotificationCounts>({ events: 0, fixtures: 0, reminders: 0 });
+  const [weatherEnabled, setWeatherEnabled] = useState(() => { try { return localStorage.getItem(WEATHER_PREF_KEY) !== 'off'; } catch { return true; } });
   const [weather, setWeather] = useState<WeatherPreset>('partly');
+  const [isNight, setIsNight] = useState(false);
+  const [weatherPrecipitation, setWeatherPrecipitation] = useState(4);
+  const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const [liveWeatherError, setLiveWeatherError] = useState<string | null>(null);
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>('unavailable');
+  const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
+  const weatherMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const requestedGeoRef = useRef(false);
+  const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
-  const navigate = (next: ConsoleView) => { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem('athlora-weather-effects', next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
-  const counts = Object.fromEntries(STATUSES.map((status) => [status, athletes.filter((athlete) => athlete.status === status).length]));
+  const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
+    : location.pathname.includes('/stats') ? 'stats'
+    : location.pathname.includes('/comparison') ? 'comparison'
+    : location.pathname.includes('/events') ? 'events'
+      : location.pathname.includes('/live') ? 'live'
+        : location.pathname.includes('/account') ? 'account' : 'dashboard';
+  const navigate = (view: ConsoleView, targetId?: string) => {
+    const rootPath = view === 'dashboard' ? '/console' : `/console/${view}`;
+    const search = !targetId && destination === view ? location.search : '';
+    const path = `${targetId ? `${rootPath}/${targetId}` : rootPath}${search}`;
+    if (`${location.pathname}${location.search}` === path) return;
+    routerNavigate(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const updateDashboardCounts = (summary: DashboardSummary) => {
+    setRosterCount(summary.activeAthletesCount);
+    setEventUpcomingCount(summary.upcomingEventCount);
+  };
+  const toggleWeather = () => setWeatherEnabled((enabled) => { const next = !enabled; try { localStorage.setItem(WEATHER_PREF_KEY, next ? 'on' : 'off'); } catch { /* Preference persistence is optional. */ } return next; });
+  const toggleTheme = () => setThemeLight((light) => { const next = !light; try { localStorage.setItem(THEME_STORAGE_KEY, next ? 'light' : 'dark'); } catch { /* Preference persistence is optional. */ } return next; });
 
-  return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-enabled={weatherEnabled}>
-    <div className={styles.weatherScene} aria-hidden="true">{(weather.includes('rain') || weather === 'storm') && Array.from({ length: 36 }, (_, index) => <i className={styles.rain} style={{ left: `${(index * 17) % 101}%`, animationDelay: `${-(index % 13) / 3}s` }} key={index} />)}{weather === 'snow' && Array.from({ length: 30 }, (_, index) => <i className={styles.snow} style={{ left: `${(index * 23) % 101}%`, animationDelay: `${-(index % 11) / 2}s` }} key={index} />)}{weather === 'storm' && <i className={styles.lightning} />}</div>
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (weatherMenuRef.current?.open && !weatherMenuRef.current.contains(event.target as Node)) weatherMenuRef.current.removeAttribute('open');
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, []);
+
+  const optInDeviceLocation = async () => {
+    const coords = await resolveDeviceCoordinates(true);
+    if (coords) {
+      setLocationPermission('granted');
+      // The permission-state effect loads the cached device coordinates once.
+    }
+  };
+
+  const changeWorkspace = (workspaceId: string) => {
+    if (workspaceId === activeWorkspace.id) return;
+    selectWorkspace(workspaceId);
+    routerNavigate('/console');
+    setRosterCount(null);
+    setEventUpcomingCount(null);
+  };
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-light', themeLight);
+    return () => document.documentElement.classList.remove('theme-light');
+  }, [themeLight]);
+
+  useEffect(() => {
+    let current = true;
+    checkGeolocationPermission().then((state) => { if (current) setLocationPermission(state); });
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!weatherEnabled) return;
+    if (locationPermission !== 'prompt') return;
+    if (requestedGeoRef.current) return;
+    requestedGeoRef.current = true;
+    if (!('geolocation' in navigator) || !window.isSecureContext) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        setCachedCoordinates(coords);
+        setLocationPermission('granted');
+      },
+      () => { /* Permission denied or error — weather loading falls back to timezone. */ },
+      { enableHighAccuracy: false, timeout: 5000 },
+    );
+  }, [weatherEnabled, locationPermission]);
+
+  useEffect(() => {
+    if (!weatherEnabled) {
+      clearGeoCache();
+      setLiveWeather(null);
+      setLiveWeatherError(null);
+      return;
+    }
+    let current = true;
+
+    const reportUnavailableWeather = (error?: unknown) => {
+      if (!current) return;
+      setLiveWeather(null);
+      if (error instanceof ApiError && error.status === 401) {
+        setLiveWeatherError('Sign in for live weather.');
+      } else if (locationPermission === 'denied') {
+        setLiveWeatherError('Location access denied. Enable it in your browser settings to see local weather.');
+      } else if (locationPermission === 'unavailable') {
+        setLiveWeatherError('Location services unavailable. Weather uses timezone as a fallback.');
+      } else {
+        setLiveWeatherError('Weather unavailable. Check location permissions or try again.');
+      }
+    };
+
+    const applyLiveWeather = (coords: Coordinates, source: 'device' | 'timezone') => {
+      void getCurrentWeather(coords.latitude, coords.longitude)
+        .then((data) => {
+          if (!current) return;
+          const atmosphere = classifyWeather(data.weatherCode);
+          setLiveWeather({
+            label: weatherLabel(data.weatherCode),
+            temperature: data.temperatureC === null ? null : Math.round(data.temperatureC),
+            atmosphere,
+            isDay: data.isDay,
+            source,
+          });
+          setWeather(() => {
+            const base = atmosphere === 'fog' ? 'fog' : atmosphere === 'rain' ? 'rain' : atmosphere === 'snow' ? 'snow' : atmosphere === 'storm' ? 'storm' : atmosphere === 'cloudy' ? 'cloudy' : atmosphere === 'partly' ? 'partly' : 'clear';
+            return data.isDay !== false ? base : base === 'rain' ? 'night-rain' : base === 'partly' || base === 'clear' ? 'night' : base;
+          });
+          setIsNight(data.isDay === false);
+          setWeatherPrecipitation(data.precipitationRateMmHr ?? 0);
+          setLiveWeatherError(null);
+        })
+        .catch(reportUnavailableWeather);
+    };
+
+    const load = async () => {
+      setLiveWeatherError(null);
+      const deviceCoords = await resolveDeviceCoordinates();
+      if (!current) return;
+      if (deviceCoords) { applyLiveWeather(deviceCoords, 'device'); return; }
+      const zoneCoords = await resolveTimezoneCoordinates();
+      if (!current) return;
+      if (zoneCoords) {
+        applyLiveWeather(zoneCoords, 'timezone');
+      } else {
+        reportUnavailableWeather();
+      }
+    };
+    void load();
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, WEATHER_REFRESH_MS);
+
+    return () => { current = false; window.clearInterval(timer); };
+  }, [weatherEnabled, locationPermission]);
+
+  const liveReadout = liveWeather
+    ? `${liveWeather.label} · ${liveWeather.temperature === null ? '—' : `${liveWeather.temperature}°`}`
+    : liveWeatherError
+      ? 'Weather unavailable'
+      : weatherEnabled
+        ? 'Loading live weather...'
+        : `${weatherMeta.label} · ${weatherMeta.temperature}°`;
+  const readoutSource = liveWeather
+    ? `${liveWeather.label} — current conditions from ${liveWeather.source === 'device' ? 'approximate device location' : 'timezone fallback'}`
+    : liveWeatherError
+      ? liveWeatherError
+      : weatherEnabled
+        ? 'Retrieving current conditions for this device.'
+        : 'Weather effects use the selected local atmosphere preset.';
+
+  const sceneLayers: string[] = [];
+  if (isNight) sceneLayers.push('sparks');
+  if (weather === 'rain' || weather === 'night-rain' || weather === 'storm') sceneLayers.push('rain');
+  if (weather === 'snow') sceneLayers.push('snow');
+
+  return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-night={weatherEnabled && isNight ? true : undefined} data-weather-enabled={weatherEnabled}>
+    <div className={styles.weatherScene} aria-hidden="true">
+      <WeatherCanvas layers={sceneLayers} precipitation={weatherPrecipitation} reducedMotion={reducedMotion} />
+      {weather === 'storm' && <i className={styles.lightning} />}
+    </div>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
-      <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id !== 'dashboard' && <small>{item.id === 'athletes' ? (rosterCount ?? '—') : (eventUpcomingCount ?? '—')}</small>}</button></li>)}</ul></nav>
-      <section className={styles.readiness}><header><span>Squad Readiness</span><b>{readiness(athletes)}%</b></header><div><i style={{ width: `${readiness(athletes)}%` }} /></div>{STATUSES.map((status) => <p key={status}><i className={styles[`status${status}`]} />{status}<b>{counts[status]}</b></p>)}</section>
+      <div className={styles.workspaceSwitcher}>
+        <span>Club</span>
+          <select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
+          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+        </select>
+      </div>
+       <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
+      <section className={styles.readiness} aria-label="Squad readiness">
+        <header><span>Squad readiness</span></header>
+        <p>Active roster<b>{rosterCount ?? '—'}</b></p>
+        <p>Upcoming events<b>{eventUpcomingCount ?? '—'}</b></p>
+      </section>
       <footer><span>C</span><div><b>Coach Console</b><small>Head Coach access</small></div></footer>
     </aside>
     <div className={styles.main}>
       <header className={styles.topbar}>
-        <div className={styles.title}><h1>{PAGE_COPY[view].title}</h1><p>{PAGE_COPY[view].subtitle}</p></div>
+         <div className={styles.title}><h1>{PAGE_COPY[destination].title}</h1><p>{PAGE_COPY[destination].subtitle}</p></div>
         <div className={styles.weatherOrigin} aria-hidden="true"><i className={styles.sun} /><i className={styles.moon} /><i className={styles.cloudOne} /><i className={styles.cloudTwo} /></div>
-        <div className={styles.topControls}>
-          <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather}><span>Weather FX</span><i><i /></i></button>
-          <details className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Fixture presets change atmosphere only. No weather service is contacted.</p></div></details>
-          <div className={styles.weatherReadout} aria-live="polite"><i /><span>{weatherMeta.label} · {weatherMeta.temperature}°</span></div>
+           <div className={styles.topControls}>
+           <FixtureNotifications onCountsChange={setFixtureNotificationCounts} />
+          <button type="button" className={styles.weatherToggle} aria-pressed={weatherEnabled} onClick={toggleWeather} title={weatherEnabled ? 'Turn weather effects off' : 'Turn weather effects on'}><span className={styles.weatherToggleLabel}>Weather FX</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
+           <details ref={weatherMenuRef} className={styles.weatherMenu}><summary aria-label="Preview weather presets">•••</summary><div><header><b>Weather preview</b><small>Visual presets</small></header>{WEATHER_PRESETS.map((preset) => <button type="button" aria-pressed={weather === preset.id} onClick={(event) => { setWeatherEnabled(true); setWeather(preset.id); setIsNight(preset.id === 'night' || preset.id === 'night-rain'); setWeatherPrecipitation(preset.id === 'storm' ? 9 : preset.id === 'night-rain' ? 5 : preset.id === 'rain' ? 4 : 2); (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); }} key={preset.id}>{preset.label}</button>)}<p>Preview presets change atmosphere only. Live conditions follow this device.</p></div></details>
+           <div className={styles.weatherReadout} aria-live="polite" title={readoutSource}><i /><span>{liveReadout}</span>{(!liveWeather || liveWeather.source === 'timezone') && locationPermission === 'prompt' && <button type="button" className={styles.geoOptIn} onClick={optInDeviceLocation} title="Use your device's GPS for more accurate local weather">Use device location</button>}<a href="https://graysky.net" target="_blank" rel="noopener noreferrer">Weather data by GraySky</a></div>
+           <InstallButton />
+           <OfflineIndicator />
+           <button type="button" className={`${styles.themeToggle} ${styles.weatherToggle}`} aria-pressed={themeLight} aria-label={themeLight ? 'Switch to dark theme' : 'Switch to light theme'} onClick={toggleTheme} title={themeLight ? 'Switch to dark mode' : 'Switch to light mode'}><span className={styles.themeToggleIcon} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3.5" /><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M18.5 5.5 17 7M7 17l-1.5 1.5" /></svg></span><span className={styles.weatherToggleLabel}>Light mode</span><span className={styles.weatherToggleTrack} aria-hidden="true"><span className={styles.weatherToggleKnob} /></span></button>
           <div className={styles.clock}><LiveTime /></div>
         </div>
       </header>
-      <main className={styles.content}>{view === 'dashboard' && <DashboardView athletes={athletes} events={events} navigate={navigate} />}{view === 'athletes' && <AthletesPage onActiveCountChange={setRosterCount} />}{view === 'events' && <EventsPage onUpcomingCountChange={setEventUpcomingCount} />}</main>
+      <main className={styles.content}>
+        {location.pathname === '/console' && <><IncomingFixtureInvitations /><DashboardPage key={`dashboard:${activeWorkspace.id}`} onOpenRoster={() => routerNavigate(`/console/athletes${location.search}`)} onOpenAthlete={(id) => routerNavigate(`/console/athletes/${id}${location.search}`)} onOpenEvents={() => routerNavigate(`/console/events${location.search}`)} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} onResumeLogging={(id) => routerNavigate(`/console/live/${id}${location.search}`)} onSummaryLoaded={updateDashboardCounts} /></>}
+        {location.pathname === '/console/stats' && <DashboardPage key={`stats:${activeWorkspace.id}`} onOpenRoster={() => routerNavigate(`/console/athletes${location.search}`)} onOpenAthlete={(id) => routerNavigate(`/console/athletes/${id}${location.search}`)} onOpenEvents={() => routerNavigate(`/console/events${location.search}`)} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} onResumeLogging={(id) => routerNavigate(`/console/live/${id}${location.search}`)} onSummaryLoaded={updateDashboardCounts} />}
+        {location.pathname === '/console/athletes' && <AthletesPage key={`athletes:${activeWorkspace.id}`} onActiveCountChange={setRosterCount} onOpenAthlete={(id, openFitness) => { const params = new URLSearchParams(location.search); if (openFitness) params.set('fitness', '1'); else params.delete('fitness'); routerNavigate(`/console/athletes/${id}${params.size ? `?${params}` : ''}`); }} />}
+        {location.pathname.startsWith('/console/athletes/') && <AthletesPage key={`athletes:${activeWorkspace.id}:${location.pathname}${location.search}`} initialAthleteId={location.pathname.split('/').pop()} initialFitnessOpen={new URLSearchParams(location.search).get('fitness') === '1'} onActiveCountChange={setRosterCount} onBackToRoster={() => { const params = new URLSearchParams(location.search); params.delete('fitness'); routerNavigate(`/console/athletes${params.size ? `?${params}` : ''}`); }} />}
+        {location.pathname === '/console/comparison' && <ComparisonPage key={`comparison:${activeWorkspace.id}`} />}
+        {location.pathname === '/console/events' && <><IncomingFixtureInvitations /><EventsPage key={`events:${activeWorkspace.id}`} onUpcomingCountChange={setEventUpcomingCount} onOpenEvent={(id) => routerNavigate(`/console/events/${id}${location.search}`)} /></>}
+          {location.pathname.startsWith('/console/events/') && <EventDetailPage key={`event:${activeWorkspace.id}:${location.pathname}`} eventId={location.pathname.split('/').pop()!} onBack={() => routerNavigate(`/console/events${location.search}`)} />}
+        {location.pathname === '/console/live' && <LiveLoggingPage key={`live:${activeWorkspace.id}`} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} />}
+        {location.pathname.startsWith('/console/live/') && <LiveLoggingPage key={`live:${activeWorkspace.id}:${location.pathname}`} initialEventId={location.pathname.split('/').pop()} onOpenEvent={(id) => routerNavigate(`/console/live/${id}`)} onBackToEventList={() => routerNavigate('/console/live')} />}
+        {location.pathname === '/console/account' && <AuthPage />}
+      </main>
     </div>
-    <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
+    <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
   </div>;
 }

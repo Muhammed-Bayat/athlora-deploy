@@ -2,82 +2,135 @@
 sidebar_position: 1
 ---
 
-# Frontend (React + Vite + TypeScript)
+# Frontend
 
-The SPA lives in `/frontend`. It talks to the backend API over HTTP/JSON and is the design source of truth for the visual identity.
+The `/frontend` package is the Athlora React single-page application. It is a separate deployment from the Express API and communicates only through authenticated HTTP/JSON requests. The shipped live-logging UI covers 100m; the product roadmap expands it into the full athletics-meet interface.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22 LTS recommended (Node.js 20 or later supported)
 - npm
+- A running backend and Auth0 SPA application for authenticated features
 
-## Install & run
+## Run locally
 
 ```bash
 cd frontend
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-`npm run dev` starts the Vite dev server (default `http://localhost:5173`).
+Vite serves the app at `http://localhost:5173`. Start the backend separately on `http://localhost:4000` before signing in.
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and set the values when they are available:
+`.env.local` is ignored by Git. Set these Vite variables:
 
-```
+```dotenv
 VITE_API_BASE_URL=http://localhost:4000
-VITE_AUTH0_DOMAIN=
-VITE_AUTH0_CLIENT_ID=
-VITE_AUTH0_AUDIENCE=
+VITE_AUTH0_DOMAIN=your-tenant.eu.auth0.com
+VITE_AUTH0_CLIENT_ID=your-spa-client-id
+VITE_AUTH0_AUDIENCE=https://api.example.com
 ```
 
-`VITE_API_BASE_URL` points at the backend (see the backend guide).
+`VITE_*` values are embedded in the browser build. They must contain only public configuration, never Management API credentials or database URLs. In Auth0, register `http://localhost:5173` as an allowed callback URL, logout URL, and web origin.
+
+The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5174` (strict port) with `VITE_API_BASE_URL=http://localhost:4100` and the same `VITE_AUTH0_*` variables — see `getting-started/scripts.md`.
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Dev server with HMR |
-| `npm run build` | Type-check and production build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run typecheck` | `tsc -b` (strict) |
-| `npm run test` | Vitest + React Testing Library, single run |
-| `npm run lint` | ESLint (flat config) |
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the Vite development server with HMR. |
+| `npm run build` | Type-check and create `dist/`. |
+| `npm run preview` | Serve the production build locally. |
+| `npm run typecheck` | Run strict TypeScript project checks. |
+| `npm run test` | Run Vitest and React Testing Library once. |
+| `npm run lint` | Run ESLint. |
 
-## Structure conventions
+## Application structure
 
-- Shared UI primitives live in `src/components` (Button, Input, Select, Card, Badge, Modal, Toast, EmptyState).
-- Feature code lives in `src/features/<feature>` folders, not global pages/forms dirs.
-- All colours, fonts, radii and shadows come from `src/styles/tokens.css` — never hard-code hex values.
-- `src/types` mirrors the backend DTOs (camelCase on the wire). The MVP 100m contract is encoded there: `DISCIPLINE_100M`/`Discipline`, `RESULT_UNIT_SECONDS`/`ResultUnit`, `ResultOutcome`, and the aligned `Athlete`, `TimelineEntry`, `Result`, `EventParticipant`, `AthleteStatistics` and `DashboardSummary` types.
-- `src/api/client.ts` is the shared typed fetch wrapper with per-resource files (`athletes`, `events`, `participants`, `timeline`, `results`, `statistics`, `dashboard`), and `src/components/AsyncBoundary.tsx` renders shared loading/error/empty states for them.
+- `src/features` contains feature-owned UI for landing, authentication, dashboard, athletes, events, live logging, and results.
+- `src/components` contains reusable accessible controls and async states.
+- `src/api` contains the typed fetch client and one module per API resource. It preserves the API error code, message, status, and validation details.
+- `src/types` mirrors the API's camel-case DTOs. The current contract is 100m results in seconds; later contracts will add the units and entry shapes required by track, relays, jumps, throws, and vertical events.
+- `src/styles/tokens.css` contains shared visual tokens. Component and feature styling uses CSS modules.
 
-## Current state
+## Implemented features
 
-- The app shell renders with **Athlora** branding and an ink sidebar. The roster and event-management views are live against the typed API; dashboard content remains staged preview data until its integration issue lands.
-- Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in and sign-out. The shared API client obtains an access token silently and sends it as a bearer token. After authentication, the app calls `PUT /api/v1/auth/me` to synchronize the verified Auth0 profile with the backend user record and withholds authenticated content until that call succeeds; a failed synchronization displays a retry state. Auth0 must be configured through the environment variables above and the tenant must allow the application's callback, logout and web-origin URLs.
-- API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
-- Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Bebas Neue, Inter, Space Mono) load in `index.html`.
-- `src/features/athletes/AthletesPage.tsx` consumes the coach-owned UUID athlete DTO through `src/api/athletes.ts`. It loads active and archived athletes, provides immediate name/squad/archive filters, renders distinct loading/error-retry/empty/filter-empty states, and persists create, full-replacement edit, archive and restore operations. Its reusable form sends only `name`, `dob`, `gender`, `squad` and `notes`, maps backend validation issues inline, and never invents fixture-only bib, status, PB, discipline or history fields.
+- Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
+- API-backed dashboard with summary, live-event, loading, onboarding, and recovery states.
+- Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
+- Event creation, explicit OpenStreetMap venue search/pin-coordinate selection with manual fallback, lifecycle changes, participant RSVP management, results, manual corrections, and event-day GraySky forecasts.
+- Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
+- A responsive coach console with an optional weather-effects display (9 canvas particle presets: rain, snow, sparks, storm lightning, etc.), theme preference, live clock, and current local weather readout.
+- A shell-contained athlete Fitness & Injury Map sub-view with progressive body-region selection, live previews, persistent injury records and resolution, and an on-demand React Three Fiber anatomical body viewer.
+- Gemini Live voice assistant with microphone capture (PCM 16kHz), audio playback (PCM 24kHz), tool calls for athlete creation, interruption handling, and session lifecycle management.
+- Cross-club fixture system: guest fixture management, team roster assignment, RSVP tracking, finish-time recording, result corrections, team withdrawal, fixture notifications with unread badges, and incoming invitation workflows (accept/decline/request changes).
+- Public logger links: coach-created shareable token links allowing external guests to start sessions, view event snapshots, and record results/incidents without Auth0.
+- Offline-first PWA with Dexie/IndexedDB (4-table schema: offlineActions, cachedEvents, cachedParticipants, cachedTimeline), action queue (enqueue/pending/markSynced/markFailed/reset), batch sync engine, event data caching, offline designation guards, and data cleanup.
+- Two-athlete 100m comparison page with dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), and URL-param-driven athlete selection.
+- Single-athlete all-time 100m progression chart with PB milestones, chart/table toggle, cursor-based pagination, and accessibility features.
+- Real-time Socket.IO event subscriptions for live invalidation notifications, with connection state management, deduplication, and workspace-aware authorization.
+- Club discovery and join-request workflow: search clubs, create clubs, send/withdraw/approve/reject join requests, and manage club membership.
+
+The dashboard and other authenticated views wait for `PUT /api/v1/auth/me` to finish successfully. If synchronization fails, the UI provides a retry state instead of showing protected data.
+
+## Canonical console routes
+
+- `/console` — dashboard
+- `/console/athletes` and `/console/athletes/:athleteId` — roster and athlete detail
+- `/console/comparison` — two-athlete 100m comparison
+- `/console/events` and `/console/events/:eventId` — event list and direct-loadable event detail
+- `/console/fixtures` — cross-club fixture management
+- `/console/live` and `/console/live/:eventId` — live logger and selected event
+- `/console/account` — account management
+
+Unauthenticated console visits return to the requested canonical path after Auth0 completes. Event list date, type, and status filters are retained in its query string when opening and returning from detail.
+
+## Testing
+
+Frontend tests cover UI behavior, accessibility interactions, API wrappers, authenticated state, dashboard states, athlete and event workflows, live logging, result corrections, and weather handling. Run them with:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+For browser-level coverage of the full stack, use the [E2E guide](./e2e).
+- The app shell renders with **Athlora** branding and an ink sidebar. The roster, event-management and dashboard views are live against the typed API.
+- Weather presets use paired semantic surface, text, control, status and focus colors across the authenticated console. `night` and `night-rain` keep dashboards, forms, dialogs, badges, result boards, empty states and live-logging controls consistently dark and readable without changing the approved Athlora palette; disabling Weather FX removes the weather theme.
+- The console shell is a premium dark aurora redesign of `Athlora_Premium_Dashboard.html` with a light "Aurora Mist/Ice" toggle (`localStorage` `athlora-theme`, `theme-light` class on `<html>`). The topbar shows a live weather readout for the coach's device location (geolocation with timezone-city fallback, refreshed every 10 minutes while visible) proxied through `GET /api/v1/weather/current`, a weather-effects toggle with an animated scene, and a live clock. Dashboard, Athletes, Events, Live Logger and Account views all consume the same `--console-*` tokens; the mockup dashboard's fabricated numbers are replaced with real aggregate data.
+- Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in, password help and sign-out. After synchronization, the console loads accessible workspaces, restores a validated per-subject selection, sends it centrally as `X-Workspace-Id`, and exposes an accessible sidebar switcher. Switching resets and remounts dashboard, roster, events, and live logger state so similarly named resources cannot leak between workspaces. Account deletion removes the caller's identity and memberships, not shared workspace data.
+- API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Account synchronization failures display the safe API error code and correlation reference so operators can match a failed sign-in to backend logs without collecting credentials. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
+- `src/api/statistics.ts` and `src/api/dashboard.ts` expose the combined athlete statistics/history and dashboard summary resources through DTOs mirrored from the backend. Athlete performance detail consumes the statistics resource directly. The dashboard consumes the stable summary/live aggregate with loading and retry states, active-event progress and latest entries, onboarding, factual roster/event/result/PB panels, and targeted navigation to athlete details, event details and the selected live logger. Summary mode uses the approved signature hero with a live greeting/clock and reduced-motion-aware orbit animation, while every displayed count comes from the aggregate.
+- Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Space Grotesk, Satoshi, Inter — loaded with Space Grotesk as the mono) load in `index.html`. The premium console's `--console-*` namespace (dark aurora default + `html.theme-light` overrides) lives on the shell in `CoachConsole.module.css`.
+- `src/features/athletes/AthletesPage.tsx` consumes the coach-owned UUID athlete DTO through `src/api/athletes.ts`. It loads active, inactive, and archived athletes, provides immediate name/squad/status filters plus status counts and badges, renders distinct loading/error-retry/empty/filter-empty states, and persists create, full-replacement edit, lifecycle transition, archive and restore operations. `AthleteForm` is shared by roster and detail editing; archived athlete profiles are read-only until restored.
+- `AthleteDetailPage` combines the editable API profile with owner-scoped 100m statistics in a performance-first layout: a featured athlete identity panel, PB/calendar-year SB/count KPI strip, compact profile details and keyboard-accessible competition/training history tabs. Full-width result rows keep effective times, overrides, incidents, PB/SB and cancelled/non-scoring states explicit in text. Profile and statistics requests load and retry independently, while opening and returning move focus between the detail heading and the exact originating roster action without adding a routing dependency.
 - Archive confirmation explains that event assignments, timeline entries and results are preserved. Shared modal focus management supports Escape, Tab containment, focus restoration and blocked dismissal during submission; success/error feedback is announced and the responsive card grid collapses for mobile use.
-- `src/features/events/EventsPage.tsx` loads coach-owned 100m events through `src/api/events.ts`, supports list and calendar views with date/type/status filters, and provides distinct loading, retry, empty and filter-empty states. Its reusable create/edit form sends strict full-replacement payloads, displays inline validation, and supports confirmed start, completion and history-preserving cancellation transitions.
-- Event detail uses the participant and active-roster APIs to list current assignments, retain archived historical participants, assign active athletes with pending RSVP status, replace RSVP status, and confirm assignment removal. Participant and roster failures retry independently, persistence blocks modal-changing actions, and removal messaging explains that timeline entries and results remain intact.
-- `src/api/timeline.ts` exposes typed active-list/create/version-aware PATCH/DELETE requests. Correction payloads require `expectedVersion`, limit edits to observation content, and send the DELETE precondition in its JSON body; API tests pin the exact methods and bodies. The live logging UI remains pending.
-- Tests: Vitest + React Testing Library cover the app shell, shared Button, API response/error handling, authenticated synchronization, athlete/event/participant/timeline wrappers, roster workflows, and event loading, filtering, list/calendar, create, edit, validation, detail, lifecycle, assignment, RSVP, removal, failure-retention, async-ordering and keyboard-focus workflows. Runs with `npm run test` (66 tests).
+- `src/features/events/EventsPage.tsx` loads coach-owned 100m events through `src/api/events.ts`, supports list and calendar views with date/type/status filters, and provides distinct loading, retry, empty and filter-empty states. `EventDetailPage.tsx` is a dedicated direct-loadable route with retry/not-found states; create/edit and lifecycle confirmations remain accessible modal overlays.
+- Event detail uses the participant and active-roster APIs to list current assignments, retain inactive/archived historical participants, assign only active athletes with pending RSVP status, replace RSVP status, acknowledge independent lifecycle-review items, and confirm assignment removal. Participant and roster failures retry independently, persistence blocks modal-changing actions, and removal messaging explains that timeline entries and results remain intact.
+- Event detail independently loads its GraySky event-day forecast when both coordinates are present. It shows string conditions, nullable Celsius range, rain chance, daily wind in km/h and available timezone. The existing card includes GraySky attribution. Missing coordinates/unsupported dates are guidance states; failures have an isolated retry. Requests abort when detail closes. The console retains device geolocation and uses an offline representative-city lookup for supported timezone fallbacks; unsupported zones remain unavailable. PWA weather reads are network-only, using the backend cache rather than silently displaying stale offline weather.
+- Event forms search venues only after the coach activates **Search venues**; there is no keystroke autocomplete. Selecting a keyboard-accessible result writes the existing location and coordinate fields, which remain editable as the manual fallback/pin adjustment. `VenuePreview` renders a responsive read-only OpenStreetMap iframe plus required contributor attribution, saved coordinates, and an external map link that remains usable if the iframe cannot load. The client calls only `src/api/venues.ts`; tests mock that Athlora API boundary rather than public OSM.
+- `src/api/timeline.ts` exposes typed active-list/create/version-aware PATCH/DELETE requests. Correction payloads require `expectedVersion`, limit edits to valid entry-type fields, and send the DELETE precondition in its JSON body. `LiveLoggingPage` consumes fresh event detail, assignments and timeline data for finish/incident logging, correction and accessible confirmed undo. It distinguishes stale versions from event-closed conflicts, reloads before continuing, serializes mutations through standings refresh, exits when the event closes, and keeps core track-side logging open when secondary results/history fail. Decimal inputs and controls reflow without horizontal overflow on narrow phones, while modal completion restores focus to the originating action or timeline heading.
+- `src/features/results/EventResultsView.tsx` is shared by event detail and Live Logging. It orders competition finishers by effective time while displaying backend placings (including ties), suppresses placing for training, distinguishes DQ/DNF/DNS from an unrecorded result, groups active false-start/lane penalties, and retains archived or removed athlete identity. Event detail loads these outcomes independently with refresh/retry states and permits time corrections only for materialized results on in-progress/completed events.
+- The athlete Performance view includes an on-demand Fitness & Injury Map sub-view. `src/features/fitness` keeps the progressive region/area/side/severity draft, persistent injury records, verified topology-bound anatomy map and accessibility-first controls separate from the R3F `BodyViewer`. The viewer loads only when Fitness opens, presents the supplied static anatomy on a dark medical stage in both console themes, automatically frames it, supports rotate/zoom/reset, and maps saved/preview injuries directly onto the cyan material surface.
+- Manual correction keeps the timeline-derived outcome/value read-only beside the effective value. Set/update requires a positive hundredth-precision time and a non-blank reason; active audit metadata identifies the synchronized application user and timestamp. Clearing requires confirmation and sends paired nulls. Every successful set/clear re-fetches the complete result board because one override can change other placings and PB/SB flags.
+- Tests: Vitest + React Testing Library cover the app shell and weather-theme state, shared Button, API response/error handling, authenticated synchronization, account API/password/deletion/sign-out/social-provider workflows, public sign-up/password help, athlete/event/participant/timeline/result/aggregate/weather wrappers, event forecast success/unavailable/retry/abort states, fixture invitation workspace recovery and guest-workspace selection, roster status filters/transitions, archived detail read-only behavior, event assignment review acknowledgment, live-logger mutation locking/lifecycle conflicts/stale recovery/entry-type payloads/secondary failures/mobile inputs/modal focus, dashboard onboarding/summary/live/error/navigation modes, signature-hero aggregate values/timer lifecycle and exact destination handoffs, stale live-event recovery, result ordering/ties, training, every incident, partial/history states, overrides, PB/SB, profile editing, set/clear/failure correction paths, persistent Fitness injury selection/preview/resolution, public logger session/entry creation, fixture notification and invitation workflows, two-athlete comparison, athlete progression chart, and offline sync queue behavior. Runs with `npm run test`.
 
 ## Deployment
 
-The frontend is deployed to **Vercel** at:
+The production SPA is deployed to Vercel:
 
 ```text
 https://athlora-deploy.vercel.app
 ```
 
-Vercel builds the `frontend` root from the private GitHub deployment mirror with `npm ci` and `npm run build`, then publishes `dist`. Production and preview environments require the four `VITE_*` variables above; `VITE_API_BASE_URL` is `https://athlora-deploy.onrender.com`.
-
-The production URL must be listed in the Auth0 application's allowed callback URLs, logout URLs, and web origins. Auth0 production sign-in and redirect have been verified.
+Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/`. `frontend/vercel.json` rewrites direct SPA routes, including email invitation links, to `index.html`; retain this file when changing Vercel settings. Configure the same four `VITE_*` values in Vercel and register the production URL in Auth0's callback, logout, and web-origin settings.
 
 ## AI declaration
 
-This document was generated with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

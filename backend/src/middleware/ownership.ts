@@ -10,13 +10,13 @@ import {
   assertTimelineEntryOwnership,
 } from '../services/ownership.js';
 
-type OwnershipCheck = (req: Request, userId: string) => Promise<void>;
+type OwnershipCheck = (req: Request, workspaceId: string) => Promise<void>;
 
 function ownershipGuard(check: OwnershipCheck): RequestHandler {
   return async (req, _res, next) => {
     try {
-      const { userId } = getApplicationUserContext(req);
-      await check(req, userId);
+      const { workspaceId } = getApplicationUserContext(req);
+      await check(req, workspaceId);
       next();
     } catch (error) {
       next(error);
@@ -24,30 +24,30 @@ function ownershipGuard(check: OwnershipCheck): RequestHandler {
   };
 }
 
-export const requireAthleteOwnership = ownershipGuard((req, userId) =>
-  assertAthleteOwnership(userId, req.params.id),
+export const requireAthleteOwnership = ownershipGuard((req, workspaceId) =>
+  assertAthleteOwnership(workspaceId, req.params.id),
 );
 
 export function requireEventOwnership(parameter = 'id'): RequestHandler {
-  return ownershipGuard((req, userId) => assertEventOwnership(userId, req.params[parameter]));
+  return ownershipGuard((req, workspaceId) => assertEventOwnership(workspaceId, req.params[parameter]));
 }
 
-export const requireEventAthleteOwnership = ownershipGuard((req, userId) =>
-  assertEventAthleteOwnership(userId, req.params.eventId, req.body?.athleteId),
+export const requireEventAthleteOwnership = ownershipGuard((req, workspaceId) =>
+  assertEventAthleteOwnership(workspaceId, req.params.eventId, req.body?.athleteId),
 );
 
-export const requireParticipantOwnership = ownershipGuard((req, userId) =>
-  assertParticipantOwnership(userId, req.params.eventId, req.params.athleteId),
+export const requireParticipantOwnership = ownershipGuard((req, workspaceId) =>
+  assertParticipantOwnership(workspaceId, req.params.eventId, req.params.athleteId),
 );
 
-export const requireTimelineEntryOwnership = ownershipGuard((req, userId) =>
-  assertTimelineEntryOwnership(userId, req.params.eventId, req.params.entryId),
+export const requireTimelineEntryOwnership = ownershipGuard((req, workspaceId) =>
+  assertTimelineEntryOwnership(workspaceId, req.params.eventId, req.params.entryId),
 );
 
-export const requireEventLoggingOpen = ownershipGuard((req, userId) =>
-  assertEventLoggingOpen(userId, req.params.eventId),
+export const requireEventLoggingOpen = ownershipGuard((req, workspaceId) =>
+  assertEventLoggingOpen(workspaceId, req.params.eventId),
 );
 
-export const requireResultOwnership = ownershipGuard((req, userId) =>
-  assertResultOwnership(userId, req.params.eventId, req.params.athleteId),
+export const requireResultOwnership = ownershipGuard((req, workspaceId) =>
+  assertResultOwnership(workspaceId, req.params.eventId, req.params.athleteId),
 );
