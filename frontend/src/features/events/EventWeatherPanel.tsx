@@ -14,11 +14,6 @@ function unavailableMessage(error: unknown): string | null {
   return null;
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  return 'Could not load the event forecast. Please try again.';
-}
-
 export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
   const hasCoordinates = event.latitude !== null && event.longitude !== null;
   const [forecast, setForecast] = useState<EventWeatherForecast | null>(null);
@@ -28,19 +23,25 @@ export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!hasCoordinates) return;
+    if (!hasCoordinates) {
+      setForecast(null);
+      setLoading(false);
+      setError(null);
+      setUnavailable(null);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
     setForecast(null);
     setError(null);
     setUnavailable(null);
     void getEventWeather(event.id, controller.signal)
-      .then(setForecast)
+      .then((data) => { if (!controller.signal.aborted) setForecast(data); })
       .catch((requestError: unknown) => {
         if (controller.signal.aborted) return;
         const message = unavailableMessage(requestError);
         if (message) setUnavailable(message);
-        else setError(errorMessage(requestError));
+        else setError('Weather temporarily unavailable. Please try again.');
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -51,7 +52,7 @@ export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
   return (
     <section className={styles.weatherPanel} aria-labelledby="event-weather-heading" aria-busy={loading}>
       <header>
-        <div><p>Open-Meteo forecast</p><h3 id="event-weather-heading">Event-day weather</h3></div>
+        <div><p><a href="https://graysky.net" target="_blank" rel="noopener noreferrer">Weather data by GraySky</a></p><h3 id="event-weather-heading">Event-day weather</h3></div>
         {forecast && <span>{weatherLabel(forecast.weatherCode)}</span>}
       </header>
 
@@ -61,10 +62,10 @@ export function EventWeatherPanel({ event }: { event: AthleticsEvent }) {
       {!loading && error && <div className={styles.inlineError} role="alert"><p>{error}</p><Button variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>Retry forecast</Button></div>}
       {!loading && forecast && (
         <dl className={styles.weatherMetrics}>
-          <div><dt>Temperature</dt><dd>{forecast.temperatureMinC.toFixed(1)}° to {forecast.temperatureMaxC.toFixed(1)}°C</dd></div>
+          <div><dt>Temperature</dt><dd>{forecast.temperatureMinC === null ? '—' : `${forecast.temperatureMinC.toFixed(1)}°`} to {forecast.temperatureMaxC === null ? '—' : `${forecast.temperatureMaxC.toFixed(1)}°C`}</dd></div>
           <div><dt>Rain chance</dt><dd>{forecast.precipitationProbabilityMaxPercent === null ? 'Unavailable' : `${forecast.precipitationProbabilityMaxPercent}%`}</dd></div>
-          <div><dt>Max wind</dt><dd>{forecast.windSpeedMaxKmh === null ? 'Unavailable' : `${forecast.windSpeedMaxKmh.toFixed(1)} km/h`}</dd></div>
-          <div><dt>Timezone</dt><dd>{forecast.timezone.replaceAll('_', ' ')}</dd></div>
+          <div><dt>Wind</dt><dd>{forecast.windSpeedKmh === null ? 'Unavailable' : `${forecast.windSpeedKmh.toFixed(1)} km/h`}</dd></div>
+          <div><dt>Timezone</dt><dd>{forecast.timezone?.replaceAll('_', ' ') ?? 'Unavailable'}</dd></div>
         </dl>
       )}
     </section>

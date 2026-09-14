@@ -8,8 +8,8 @@ const weather: CurrentWeather = {
   apparentTemperatureC: 25.1,
   humidityPercent: 62,
   isDay: true,
-  precipitationMm: 0,
-  weatherCode: 2,
+  precipitationRateMmHr: 0,
+  weatherCode: 'partly-cloudy-day',
   windSpeedKmh: 12.4,
 };
 

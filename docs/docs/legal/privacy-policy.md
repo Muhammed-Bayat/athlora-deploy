@@ -56,7 +56,7 @@ If you use the AI voice assistant, your microphone audio is streamed directly fr
 |---------|---------|-------------|
 | **Auth0** | Authentication | Email, name (handled under Auth0's privacy policy) |
 | **Google Gemini** | AI voice assistant | Microphone audio (direct browser-to-Gemini, not routed through our servers) |
-| **Open-Meteo** | Weather forecasts | Geographic coordinates only (no personal data) |
+| **GraySky** | Weather forecasts | Geographic coordinates (no account identity or Auth0 credentials); cached in server memory for ten minutes |
 | **Nominatim/OSM** | Venue search | Search query text only (no personal data) |
 | **Neon** | Database hosting | All application data (hosted in EU, Frankfurt) |
 | **Vercel** | Frontend hosting | No personal data stored (static files only) |
@@ -97,4 +97,4 @@ For questions about this privacy policy, please contact us through the Athlora a
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The weather-provider disclosure was edited with OpenCode[openai/gpt-6-astra].

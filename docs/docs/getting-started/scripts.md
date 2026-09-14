@@ -89,7 +89,7 @@ Run the authenticated Playwright suite separately using the [E2E guide](./e2e). 
 | Documentation | Cloudflare Pages | `https://athlora-deploy.pages.dev` |
 | Source control and CI | University Gitea | `https://sdp.ms.wits.ac.za/cache-us-outside/athlora` |
 
-Open-Meteo is used server-side for event-day forecasts and current coach-weather data. It requires no API key; provider data is validated and reduced to Athlora's own API response before it reaches the browser.
+GraySky Free is used server-side for current and event-day weather. No provider account, key, or environment variable is required. Current/daily data share a ten-minute coordinate cache with in-flight deduplication and a short failure cooldown. See the weather section of the API contract for nullable DTOs and the live-endpoint verification status.
 ## End-to-end tests (Playwright)
 
 The `/e2e` package drives the full 100m vertical slice against real servers and a real database, on desktop and mobile Chromium, plus an automated accessibility audit.
@@ -138,6 +138,14 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### GraySky migration verification — 2026-09-14
+
+- Frontend: lint passes with 12 existing warnings; strict typecheck/build pass; **530 tests pass, 4 skip**.
+- Backend: lint, strict typecheck and build pass; **568 tests pass, 40 database-gated tests skip**.
+- Documentation: Docusaurus production build passes.
+- Isolated Chromium weather checks with mocked API responses: 390px and 1440px, dark and light themes; current/daily rendering, attribution, no horizontal overflow and no browser exceptions verified. This is separate from the Auth0/database E2E suite.
+- GraySky live verification passed for Johannesburg: `https://graysky.net/api/forecast?lat=-26.2041&lon=28.0473` returned a `200` `forecast` envelope with `units: "us"`. The backend parser tests cover that live shape and its metric conversions; the earlier supplied `/free/v1/forecast/...` path remains unavailable.
+
 The implemented Stage 1 checks pass locally, and the same frontend/backend/docs gates run in Gitea Actions CI on every push/PR. The `e2e` job runs in CI once the Auth0/E2E secrets are configured and skips (with a message) until then:
 
 | Package | Checks | Result |
@@ -155,4 +163,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

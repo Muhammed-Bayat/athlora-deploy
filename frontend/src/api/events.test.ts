@@ -33,11 +33,11 @@ const payload: EventMutationPayload = {
 const forecast: EventWeatherForecast = {
   date: event.date,
   timezone: 'Africa/Johannesburg',
-  weatherCode: 2,
+  weatherCode: 'partly-cloudy-day',
   temperatureMinC: 13.4,
   temperatureMaxC: 24.8,
   precipitationProbabilityMaxPercent: 20,
-  windSpeedMaxKmh: 18.1,
+  windSpeedKmh: 18.1,
 };
 
 afterEach(() => {

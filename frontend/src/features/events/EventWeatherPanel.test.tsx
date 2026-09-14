@@ -27,11 +27,11 @@ const event: AthleticsEvent = {
 const forecast: EventWeatherForecast = {
   date: event.date,
   timezone: 'Africa/Johannesburg',
-  weatherCode: 2,
+  weatherCode: 'partly-cloudy-day',
   temperatureMinC: 13.4,
   temperatureMaxC: 24.8,
   precipitationProbabilityMaxPercent: 20,
-  windSpeedMaxKmh: 18.1,
+  windSpeedKmh: 18.1,
 };
 
 beforeEach(() => {
@@ -40,6 +40,16 @@ beforeEach(() => {
 });
 
 describe('EventWeatherPanel', () => {
+  it.each(['limited', 'unknown-condition'])('renders nullable %s data safely with attribution', async (code) => {
+    vi.mocked(getEventWeather).mockResolvedValue({ ...forecast, weatherCode: code,
+      temperatureMinC: null, temperatureMaxC: null, windSpeedKmh: null,
+      precipitationProbabilityMaxPercent: null, timezone: null });
+    const { container } = render(<EventWeatherPanel event={event} />);
+    expect(await screen.findByText('— to —')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/NaN|undefined|null/);
+    expect(screen.getByRole('link', { name: 'Weather data by GraySky' })).toHaveAttribute('href', 'https://graysky.net');
+    if (code === 'limited') expect(screen.getByText('Weather temporarily unavailable')).toBeInTheDocument();
+  });
   it('loads and renders the event-day forecast independently', async () => {
     render(<EventWeatherPanel event={event} />);
 
@@ -61,11 +71,11 @@ describe('EventWeatherPanel', () => {
 
   it('renders forecast-window no-data as a quiet unavailable state', async () => {
     vi.mocked(getEventWeather).mockRejectedValue(
-      new ApiError(422, 'WEATHER_DATE_UNAVAILABLE', 'Forecasts are available for events in the next 16 days'),
+      new ApiError(422, 'WEATHER_DATE_UNAVAILABLE', 'Forecasts are available for up to the next 10 days'),
     );
     render(<EventWeatherPanel event={event} />);
 
-    expect(await screen.findByText('Forecasts are available for events in the next 16 days')).toBeInTheDocument();
+    expect(await screen.findByText('Forecasts are available for up to the next 10 days')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry forecast' })).not.toBeInTheDocument();
   });
 
@@ -76,7 +86,7 @@ describe('EventWeatherPanel', () => {
     const user = userEvent.setup();
     render(<EventWeatherPanel event={event} />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Weather is unavailable');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Weather temporarily unavailable');
     await user.click(screen.getByRole('button', { name: 'Retry forecast' }));
     expect(await screen.findByText('Partly cloudy')).toBeInTheDocument();
     expect(getEventWeather).toHaveBeenCalledTimes(2);

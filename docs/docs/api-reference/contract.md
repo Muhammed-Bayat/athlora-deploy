@@ -370,7 +370,7 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 | `GET /events` | List the coach's events with optional filters |
 | `POST /events` | Create an event; returns `201` with `{ data: event }` |
 | `GET /events/:id` | Fetch one owned event |
-| `GET /events/:id/weather` | Fetch the owned event's Open-Meteo daily forecast |
+| `GET /events/:id/weather` | Fetch the owned event's GraySky daily forecast |
 | `PUT /events/:id` | Full replacement of mutable fields + status transition |
 | `DELETE /events/:id` | Cancel (sets `status = 'cancelled'`); returns `{ data: event }` |
 
@@ -387,14 +387,14 @@ Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `cre
 
 Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
 
-Event weather is proxied server-side from Open-Meteo without an API key. The provider receives the stored coordinates and returns its venue-local 16-day daily series; Athlora selects the stored event date and exposes only this stable DTO:
+Event weather is proxied server-side from GraySky without a provider account, API key, environment variable, or authentication. The server requests `https://graysky.net/api/forecast?lat={latitude}&lon={longitude}`. The verified response is a `units: "us"` envelope containing `forecast.currently` and `forecast.daily.data`; Athlora selects the stored event date from up to ten daily records and exposes this DTO:
 
 ```
 date, timezone, weatherCode, temperatureMinC, temperatureMaxC,
-precipitationProbabilityMaxPercent (number|null), windSpeedMaxKmh (number|null)
+precipitationProbabilityMaxPercent (number|null), windSpeedKmh (number|null)
 ```
 
-The response is `{ data: forecast }`. Temperatures are Celsius, precipitation probability is percent, wind is km/h, and `weatherCode` is a validated WMO code. Both coordinates are required. Missing coordinates return `422 WEATHER_LOCATION_UNAVAILABLE`; a date outside the provider's local forecast series returns `422 WEATHER_DATE_UNAVAILABLE` with `details: { dateFrom, dateTo }`; a selected day whose required condition/temperature values are not yet available returns `404 WEATHER_FORECAST_NOT_FOUND`. Provider timeout, outage, or malformed data return safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, or `502 WEATHER_SERVICE_INVALID_RESPONSE` errors without exposing provider internals. Authentication and generic non-enumerating event ownership checks run before any provider request.
+The response is `{ data: forecast }`. All metrics and timezone are nullable. GraySky Fahrenheit temperatures are converted to Celsius, fractional rain chance is converted to percent, and daily mph `windSpeed` is converted to `windSpeedKmh` (not labelled maximum wind). `weatherCode` is a string condition identifier. Unknown conditions use the cloudy visual fallback; `limited` is explicitly unavailable/degraded. Missing values remain null rather than zero. Missing coordinates return `422 WEATHER_LOCATION_UNAVAILABLE`; dates outside the returned series receive `422 WEATHER_DATE_UNAVAILABLE` with `{ dateFrom, dateTo }`; no daily coverage receives `404 WEATHER_FORECAST_NOT_FOUND`. Authentication and non-enumerating event ownership checks run before every event read, including cache hits.
 
 **Logging guard:** timeline creation, edits, and the first undo reject writes against an event that is not `in_progress` with `409 EVENT_NOT_IN_PROGRESS` (`details: { status }`). An exact retry of an undo that already succeeded remains a `204` no-op even if the event has since closed; it does not write again.
 
@@ -402,16 +402,20 @@ The response is `{ data: forecast }`. Temperatures are Celsius, precipitation pr
 
 | Method & path | Purpose |
 |---|---|
-| `GET /weather/current?latitude=&longitude=` | Fetch live current conditions from Open-Meteo for the console readout |
+| `GET /weather/current?latitude=&longitude=` | Fetch current GraySky conditions for the console readout |
 
-Current weather is proxied server-side from Open-Meteo without an API key. The provider receives the requested coordinates (never stored) and returns a single local current-condition snapshot; Athlora exposes only this stable DTO.
+Current weather uses the same GraySky request and coordinate cache as daily forecasts. Coordinates are held only in the bounded process-memory cache. Athlora exposes this DTO:
 
 ```
 timezone, temperatureC, apparentTemperatureC, humidityPercent, isDay,
-precipitationMm, weatherCode, windSpeedKmh
+precipitationRateMmHr, weatherCode, windSpeedKmh
 ```
 
-The response is `{ data: weather }`. Temperatures are Celsius, humidity is percent, precipitation is mm, wind is km/h, and `weatherCode` is a validated WMO code. Both query parameters are required, must be decimal numbers, and must fall within latitude `-90..90` and longitude `-180..180`; unknown parameters are rejected with `400 VALIDATION_ERROR`. Provider timeout, outage, or malformed data return the same safe `504 WEATHER_SERVICE_TIMEOUT`, `502 WEATHER_SERVICE_UNAVAILABLE`, or `502 WEATHER_SERVICE_INVALID_RESPONSE` errors as event weather. Authentication runs before any provider request.
+The response is `{ data: weather }`. Numeric metrics, timezone, and `isDay` are nullable. GraySky Fahrenheit `apparentTemperature` maps to Celsius `apparentTemperatureC`; inch/hour `precipIntensity` maps to a **rate in mm/hour**, not accumulation; mph wind maps to km/h. Day/night uses explicit condition suffixes or the matching day's sunrise/sunset, otherwise remains unknown. There is no hourly interpolation. Coordinates must be finite and in latitude `-90..90`, longitude `-180..180`; strict query validation rejects unknown parameters. Timeouts, outages/rate limits, and malformed data return safe `WEATHER_SERVICE_TIMEOUT` (504), `WEATHER_SERVICE_UNAVAILABLE` (502), or `WEATHER_SERVICE_INVALID_RESPONSE` (502) errors. Weather failures never block the surrounding page.
+
+Successful current/daily forecasts share a ten-minute, maximum-500-location process cache with in-flight deduplication. Failures have a 30-second retry cooldown; 429/503 responses respect `Retry-After` (or ten minutes when unspecified). The PWA uses network-only weather routes so an old offline response is not mislabelled as current. The console retains its ten-minute visible-page refresh and device-coordinate permission/cache flow. An offline representative-city lookup supplies approximate timezone fallback for supported zones; unknown/offset-only zones display unavailable. Both weather surfaces link **Weather data by GraySky**. No stale-data or alternative-provider fallback is used. Historical HTML mockups retain their original provider code by explicit user request and are not application runtime modules.
+
+Live verification note (2026-09-14): `https://graysky.net/api/forecast?lat=-26.2041&lon=28.0473` returned `200` with the validated `units: "us"` envelope. The earlier supplied `/free/v1/forecast/...` path returned `404` and is not used.
 
 ### 4.5 Venue search
 
@@ -587,8 +591,8 @@ Every override mutation locks the event/result set and recomputes the whole even
 - `frontend/src/api/timeline.ts` and `LiveLoggingPage` expose the active list, normalized create, version-aware entry-type-valid correction, accessible confirmed undo, finish/incident logging and live standings. Finish/correction inputs use hundredth precision and decimal mobile semantics so displayed 100m times do not hide ranking-significant digits. The logger verifies fresh event status before exposing controls, distinguishes exact stale-version and event-closed conflicts, serializes writes through authoritative standings refresh, and isolates secondary standings/history failures from core logging.
 - Result read/override is live; override writes retain raw derivation and invoke canonical whole-event recomputation. The typed frontend wrapper and shared event-result view present effective competition/training outcomes in event detail and Live Logging, preserve backend tied placings/PB/SB, join active non-void penalties from the timeline, and show partial/historical rows. The correction workflow keeps raw derivation visible, requires a corrected time plus reason, exposes actor/time/reason, confirms paired-null clearing, and re-lists the whole event after mutation.
 - `backend/src/services/statistics.ts` and `dashboard.ts` implement §§4.8-4.9 with owner-scoped effective-result SQL and repeatable-read snapshots. Route/service/mapper tests plus a `TEST_DATABASE_URL`-gated PostgreSQL suite cover empty/populated data, calendar boundaries, overrides, incidents, archives, cancellations, live selection and ownership. The athlete detail UI consumes the mirrored statistics/history contract with independent profile/statistics states and shared profile editing. The coach dashboard consumes the mirrored aggregate directly for deterministic summary/live modes, onboarding, active-event progress/latest entries, historical results/PBs and targeted console navigation.
-- `backend/src/services/weather.ts` implements both §4.3 event-day forecasts and §4.4 current conditions against Open-Meteo, with service and route tests covering the stable DTOs, strict coordinates, provider outages, timeouts and malformed payloads. `frontend/src/api/weather.ts` and the console topbar consume the §4.4 readout contract with a geolocation → timezone-city fallback.
+- `backend/src/services/weather.ts` implements event-day/current GraySky normalization, nullable values, US-customary-to-metric conversion, caching and provider error handling. The existing weather API wrappers and console/event components consume Athlora DTOs with safe condition fallbacks and attribution.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].

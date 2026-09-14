@@ -196,12 +196,12 @@ export interface AthleticsEvent {
 
 export interface EventWeatherForecast {
   date: string;
-  timezone: string;
-  weatherCode: number;
-  temperatureMinC: number;
-  temperatureMaxC: number;
+  timezone: string | null;
+  weatherCode: string;
+  temperatureMinC: number | null;
+  temperatureMaxC: number | null;
   precipitationProbabilityMaxPercent: number | null;
-  windSpeedMaxKmh: number | null;
+  windSpeedKmh: number | null;
 }
 
 export interface VenueSearchResult {
@@ -211,14 +211,14 @@ export interface VenueSearchResult {
 }
 
 export interface CurrentWeather {
-  timezone: string;
-  temperatureC: number;
-  apparentTemperatureC: number;
-  humidityPercent: number;
-  isDay: boolean;
-  precipitationMm: number;
-  weatherCode: number;
-  windSpeedKmh: number;
+  timezone: string | null;
+  temperatureC: number | null;
+  apparentTemperatureC: number | null;
+  humidityPercent: number | null;
+  isDay: boolean | null;
+  precipitationRateMmHr: number | null;
+  weatherCode: string;
+  windSpeedKmh: number | null;
 }
 
 export interface EventMutationPayload {

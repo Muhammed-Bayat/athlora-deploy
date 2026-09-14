@@ -31,8 +31,8 @@ beforeEach(() => {
     apparentTemperatureC: 25.1,
     humidityPercent: 62,
     isDay: true,
-    precipitationMm: 0,
-    weatherCode: 2,
+    precipitationRateMmHr: 0,
+    weatherCode: 'partly-cloudy-day',
     windSpeedKmh: 12.4,
   });
 });
@@ -70,8 +70,8 @@ describe('GET /api/v1/weather/current', () => {
       apparentTemperatureC: 25.1,
       humidityPercent: 62,
       isDay: true,
-      precipitationMm: 0,
-      weatherCode: 2,
+      precipitationRateMmHr: 0,
+      weatherCode: 'partly-cloudy-day',
       windSpeedKmh: 12.4,
     });
     expect(weatherService.getCurrentWeather).toHaveBeenCalledWith(-26.2041, 28.0473);
