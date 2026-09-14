@@ -200,6 +200,18 @@ describe('AthletesPage', () => {
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
 
+  it('reloads the roster without an unsupported year filter for All time', async () => {
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+
+    await user.click(screen.getByRole('button', { name: /^Season:/ }));
+    await user.click(screen.getByRole('option', { name: 'All time' }));
+
+    await waitFor(() => expect(athleteApi.listAthletes).toHaveBeenCalledTimes(2));
+    expect(athleteApi.listAthletes).toHaveBeenLastCalledWith({ includeArchived: true });
+  });
+
   it('shows a load error and retries without losing the page', async () => {
     athleteApi.listAthletes
       .mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline'))

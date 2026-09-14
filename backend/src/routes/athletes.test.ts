@@ -134,6 +134,18 @@ describe('GET /api/v1/athletes', () => {
     expect(sql).not.toMatch(/lifecycle_status <> 'archived'/);
   });
 
+  it('accepts the all-time season query while listing the roster', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [athleteRow()] });
+
+    const response = await request(app)
+      .get('/api/v1/athletes?includeArchived=true&year=all')
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
+  });
+
   it('filters by name and squad ID', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [athleteRow()] });
