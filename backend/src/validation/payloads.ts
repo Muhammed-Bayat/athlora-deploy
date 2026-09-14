@@ -180,7 +180,7 @@ export interface FixtureInvitationResponsePayload {
 }
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId', 'year'] as const;
 const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type', 'year'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
 const SQUAD_FIELDS = ['name'] as const;
@@ -566,10 +566,15 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
   const name = optionalQueryString(input, 'name', issues);
   const status = optionalQueryEnum(input, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
   const squadId = optionalQueryString(input, 'squadId', issues);
+  const year = optionalQueryString(input, 'year', issues);
   if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
+  if (year !== undefined && year !== 'all' && !/^[1-9][0-9]{3}$/.test(year)) {
+    issues.push(issue('year', 'invalid_value', 'Expected "all" or a four-digit Gregorian year'));
+  }
 
   if (issues.length > 0) throwValidation(issues);
 
+  // Roster membership is not season-scoped, but the shared season URL state is valid here.
   return {
     includeArchived,
     ...(status === undefined ? {} : { status }),

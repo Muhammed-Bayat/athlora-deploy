@@ -15,7 +15,7 @@ import {
 import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { GeminiMicrophone } from '../../api/geminiMicrophone';
 import { Button, Card, EmptyState, Modal, SeasonSelector, Select, Toast } from '../../components';
-import { seasonQueryValue, useSeasonQueryState } from '../../utils/season';
+import { useSeasonQueryState } from '../../utils/season';
 import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
 import { listAthleteInjurySummaries } from '../../api/injuries';
@@ -114,7 +114,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     let current = true;
     setLoading(true);
     setLoadError(null);
-    void listAthletes({ includeArchived: true, ...(seasonQueryValue(season) ? { year: season } : {}) })
+    void listAthletes({ includeArchived: true })
       .then(({ data }) => {
         if (!current) return;
         const next = sorted(data);

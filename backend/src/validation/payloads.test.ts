@@ -172,6 +172,10 @@ describe('athlete list queries', () => {
     expect(parseAthleteListQuery({ status: 'inactive' })).toEqual({ includeArchived: false, status: 'inactive' });
   });
 
+  it('accepts the shared all-time season query without filtering the roster', () => {
+    expect(parseAthleteListQuery({ year: 'all' })).toEqual({ includeArchived: false });
+  });
+
   it('rejects unknown, malformed, blank, and non-string query values', () => {
     expectValidationError(
       () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squadId: 5 }),
