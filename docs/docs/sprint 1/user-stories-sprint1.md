@@ -22,10 +22,7 @@ This document defines the comprehensive set of user stories, acceptance criteria
 | **US-008** | Version-Aware Timeline Entry Corrections & Soft-Delete Undo | High | Timeline PATCH/DELETE, Optimistic Concurrency |
 | **US-009** | Automated Result Derivation, Placings, and PB/SB Flagging | High | `resultDerivation.ts`, Materialized `results` table |
 | **US-010** | Coach Manual Result Overrides & Audit Trail | Medium | Results Override API & Audit Columns |
-| **US-011** | Event Results Retrieval via API | High | Results API (`/events/:eventId/results`) |
-| **US-012** | Transactional Event-Level Result Recomputation | High | `resultRecomputation.ts`, Event Lifecycle |
-| **US-013** | Transactional Per-Athlete Result Recomputation on Timeline Mutations | High | `timeline.ts`, `resultRecomputation.ts` |
-| **US-014** | Dashboard Metrics & Roster Snapshot Overview | Medium | Frontend `CoachConsole`, `DashboardPage` |
+| **US-011** | Dashboard Metrics & Roster Snapshot Overview | Medium | Frontend `CoachConsole`, `DashboardPage` |
 
 ---
 
@@ -199,57 +196,7 @@ This document defines the comprehensive set of user stories, acceptance criteria
 
 ---
 
-### US-011: Event Results Retrieval via API
-- **Priority:** High
-- **User Story:** As a coach, I want to retrieve the computed results for a specific event via a dedicated API endpoint, so that I can view each athlete's outcome, final time, placing, PB/SB flags, and any manual overrides in a structured format.
-
-#### Acceptance Criteria (Given/When/Then)
-1. **Given** an event with derived results, **When** I request `GET /events/:eventId/results`, **Then** the API returns a list of all result rows for that event, each containing `outcome`, `finalResult`, `unit`, `placing`, `isPb`, `isSb`, and manual override fields.
-2. **Given** an event where no timeline entries have been logged, **When** I request results, **Then** an empty list is returned with `count: 0`.
-3. **Given** a result with a manual override applied, **When** the result is retrieved, **Then** the `manualOverride`, `overrideReason`, `overriddenBy`, and `overrideAt` fields reflect the override audit trail.
-
-#### User Acceptance Tests (UAT)
-- **UAT-011.1:** Log timeline entries for two athletes in an event, then call `GET /events/:eventId/results`. Verify both result rows are returned with correct `outcome`, `finalResult`, and `placing` values.
-- **UAT-011.2:** Request results for an event with no logged entries. Verify the response is an empty list with `meta.count` of `0`.
-- **UAT-011.3:** Apply a manual override to an athlete's result, then retrieve results via the endpoint. Verify `manualOverride`, `overrideReason`, `overriddenBy`, and `overrideAt` are populated correctly.
-
----
-
-### US-012: Transactional Event-Level Result Recomputation
-- **Priority:** High
-- **User Story:** As a coach, I want event results to be automatically and atomically recomputed whenever I update an event's type, date, time, or status, so that derived placings, PB/SB flags, and outcome values always remain consistent with the current event configuration.
-
-#### Acceptance Criteria (Given/When/Then)
-1. **Given** an event with existing results, **When** I update the event type (e.g. from `training` to `competition`) via `PUT /events/:id`, **Then** all results for that event are recomputed within the same transaction — placings are assigned for competition events and cleared for training events.
-2. **Given** an event with existing results, **When** I cancel the event (`DELETE /events/:id`), **Then** all result placings are set to `null` and PB/SB flags are recalculated across affected athletes' histories within the same transaction.
-3. **Given** an event update that changes the event date, **When** results are recomputed, **Then** PB/SB comparisons use the new event date against the athlete's historical results.
-
-#### User Acceptance Tests (UAT)
-- **UAT-012.1:** Create a training event, log timeline entries, then update the event type to `competition`. Verify that placings are assigned to all valid results after the update.
-- **UAT-012.2:** Create a competition event with results and placings, then cancel the event. Verify all placings are set to `null` and PB/SB flags are recalculated.
-- **UAT-012.3:** Create an event with a future date, log results (setting a PB), then update the event date to a past date. Verify PB/SB flags are recomputed using the new date against historical records.
-
----
-
-### US-013: Transactional Per-Athlete Result Recomputation on Timeline Mutations
-- **Priority:** High
-- **User Story:** As a coach, I want each timeline entry creation, correction, or undo to trigger an atomic recomputation of that athlete's result — including re-deriving the outcome, recalculating event-wide placings, and updating PB/SB flags — so that results are always immediately consistent with the latest timeline data.
-
-#### Acceptance Criteria (Given/When/Then)
-1. **Given** an `in_progress` competition event, **When** I create a new timeline entry for an athlete (`POST /events/:eventId/entries`), **Then** the athlete's result is recomputed: the outcome and final time are re-derived, placings across all athletes in the event are recalculated, and PB/SB flags are updated — all within a single transaction.
-2. **Given** an existing timeline entry, **When** I correct it via `PATCH` with the correct `expectedVersion`, **Then** the athlete's result and event-wide placings are atomically recomputed to reflect the corrected value.
-3. **Given** a timeline entry that has been soft-deleted (undone), **When** the undo is processed, **Then** the athlete's result is recomputed excluding the deleted entry, and event-wide placings and PB/SB flags are updated atomically.
-4. **Given** a training event, **When** timeline entries are created or modified, **Then** result placings are set to `null` for all athletes in the event (training events do not assign placings).
-
-#### User Acceptance Tests (UAT)
-- **UAT-013.1:** In a competition event with two athletes who have existing results, log a new faster attempt for one athlete. Verify that the athlete's result is updated, placings are recalculated for all athletes, and PB/SB flags reflect the new time.
-- **UAT-013.2:** Correct a timeline entry to a slower time using `PATCH` with the correct `expectedVersion`. Verify that the result and all athlete placings in the event are updated accordingly.
-- **UAT-013.3:** Undo (soft-delete) a timeline entry that was the basis of an athlete's result. Verify the result reverts to the next-best entry (or `no_result`), placings are recalculated, and PB/SB flags are updated.
-- **UAT-013.4:** In a training event, create a timeline entry and verify the result is derived but all placings in the event are `null`.
-
----
-
-### US-014: Dashboard Metrics & Roster Snapshot Overview
+### US-011: Dashboard Metrics & Roster Snapshot Overview
 - **Priority:** Medium
 - **User Story:** As a coach, I want a centralized dashboard showing key season metrics (active athletes count, upcoming events, season PBs count) and a roster snapshot, so that I have an immediate high-level view of team status upon logging in.
 
@@ -258,9 +205,9 @@ This document defines the comprehensive set of user stories, acceptance criteria
 2. **Given** dashboard data, **When** rendered, **Then** it presents an upcoming events list (non-cancelled events with date >= today) and an active roster snapshot.
 
 #### User Acceptance Tests (UAT)
-- **UAT-014.1:** Load the dashboard and verify that active athlete counts and upcoming event counts match database records.
-- **UAT-014.2:** Verify that archived athletes are excluded from the roster snapshot and active athlete count.
-- **UAT-014.3:** Verify that upcoming events list displays future non-cancelled fixtures in chronological order.
+- **UAT-011.1:** Load the dashboard and verify that active athlete counts and upcoming event counts match database records.
+- **UAT-011.2:** Verify that archived athletes are excluded from the roster snapshot and active athlete count.
+- **UAT-011.3:** Verify that upcoming events list displays future non-cancelled fixtures in chronological order.
 
 ---
 
