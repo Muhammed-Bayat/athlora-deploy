@@ -6,6 +6,36 @@ import {
   type Session,
 } from '@google/genai';
 
+const DEV = import.meta.env.DEV;
+const GEMINI_OUTPUT_SAMPLE_RATE = '24000';
+
+function debugSession(event: string, details?: Record<string, unknown>): void {
+  if (DEV) {
+    console.info('[Athlora AI]', event, details ?? '');
+  }
+}
+
+function isGeminiPcm24k(mimeType: string | undefined): boolean {
+  if (!mimeType) {
+    return false;
+  }
+
+  const [mediaType, ...parameters] = mimeType
+    .toLowerCase()
+    .split(';')
+    .map((value) => value.trim());
+
+  if (mediaType !== 'audio/pcm') {
+    return false;
+  }
+
+  const rate = parameters
+    .map((parameter) => parameter.split('='))
+    .find(([name]) => name === 'rate')?.[1];
+
+  return rate === undefined || rate === GEMINI_OUTPUT_SAMPLE_RATE;
+}
+
 export interface GeminiFunctionCall {
   id?: string;
   name?: string;
@@ -33,6 +63,8 @@ export interface GeminiLiveSessionOptions {
 
   onConnected?: () => void;
 
+  onReady?: () => void;
+
   onDisconnected?: () => void;
 
   onError?: (error: Error) => void;
@@ -42,6 +74,12 @@ export interface GeminiLiveSessionOptions {
 
 export class AthloraGeminiSession {
   private session: Session | null = null;
+
+  private connecting: Promise<void> | null = null;
+
+  private connectionGeneration = 0;
+
+  private ready = false;
 
   private options: GeminiLiveSessionOptions;
 
@@ -62,140 +100,198 @@ export class AthloraGeminiSession {
   }
 
   async connect(): Promise<void> {
-    if (this.session) {
+    if (this.session && this.ready) {
       return;
     }
 
-    const ai = new GoogleGenAI({
-      apiKey: this.options.token,
+    if (this.connecting) {
+      return this.connecting;
+    }
 
-      httpOptions: {
-        apiVersion: 'v1alpha',
-      },
-    });
+    const generation = ++this.connectionGeneration;
+    const connecting = (async () => {
+      const ai = new GoogleGenAI({
+        apiKey: this.options.token,
 
-    this.session = await ai.live.connect({
-      model: 'gemini-3.1-flash-live-preview',
+        httpOptions: {
+          apiVersion: 'v1alpha',
+        },
+      });
 
-      config: {
-        responseModalities: [
-          Modality.AUDIO,
-        ],
+      debugSession('Gemini connecting');
 
-        outputAudioTranscription: {},
+      const liveSession = await ai.live.connect({
+        model: 'gemini-3.1-flash-live-preview',
 
-        systemInstruction: {
-          parts: [
+        config: {
+          responseModalities: [
+            Modality.AUDIO,
+          ],
+
+          outputAudioTranscription: {},
+
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: 'Sulafat',
+              },
+            },
+          },
+
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  'You are Athlora, the Athlora voice assistant. ' +
+                  'Your current job is to help authorised users add athletes. ' +
+                  'Never invent missing information. ' +
+                  'Before creating an athlete, clearly confirm the athlete details with the user. ' +
+                  'Only call create_athlete after the user explicitly confirms. ' +
+                  'If the user asks you to sleep, go to sleep, switch off, deactivate, stop listening, or otherwise go inactive, call sleep_assistant. ' +
+                  'After sleep_assistant succeeds, say exactly: "Going to sleep." and say nothing else. ' +
+                  'Do not call sleep_assistant for ordinary conversational uses of the word sleep that are not directed at you. ' +
+                  'Keep responses short and conversational. ' +
+                  'VOICE AND SPEAKING STYLE: Speak in a warm, calm, friendly and confident manner. ' +
+                  'Use a natural conversational speaking pace that is slightly slower than normal. ' +
+                  'Do not rush through sentences. Use short natural pauses between important ideas. ' +
+                  'Keep explanations clear and easy to follow. Avoid sounding robotic, overly energetic, dramatic or like an announcer. ' +
+                  'Your voice should feel like a knowledgeable coach speaking directly to an athlete. ' +
+                  'When asked to start the assistant, greet the user by saying exactly: ' +
+                  '"Good Day Coach, who are we adding today?"',
+              },
+            ],
+          },
+
+          tools: [
             {
-              text:
-                'You are Athlora, the Athlora voice assistant. ' +
-                'Your current job is to help authorised users add athletes. ' +
-                'Never invent missing information. ' +
-                'Before creating an athlete, clearly confirm the athlete details with the user. ' +
-                'Only call create_athlete after the user explicitly confirms. ' +
-                'If the user asks you to sleep, go to sleep, switch off, deactivate, stop listening, or otherwise go inactive, call sleep_assistant. ' +
-                'After sleep_assistant succeeds, say exactly: "Going to sleep." and say nothing else. ' +
-                'Do not call sleep_assistant for ordinary conversational uses of the word sleep that are not directed at you. ' +
-                'Keep responses short and conversational. ' +
-                'When asked to start the assistant, greet the user by saying exactly: ' +
-                '"Good Day Coach, who are we adding today?"',
+              functionDeclarations: [
+                {
+                  name: 'create_athlete',
+
+                  description:
+                    'Create a new athlete in Athlora after the user has explicitly confirmed the details.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+
+                    properties: {
+                      name: {
+                        type: Type.STRING,
+                        description:
+                          'The athlete full name.',
+                      },
+
+                      dob: {
+                        type: Type.STRING,
+                        description:
+                          'Optional date of birth in YYYY-MM-DD format.',
+                      },
+
+                      gender: {
+                        type: Type.STRING,
+                        description:
+                          'Optional gender category.',
+                      },
+
+                      notes: {
+                        type: Type.STRING,
+                        description:
+                          'Optional notes about the athlete.',
+                      },
+                    },
+
+                    required: ['name'],
+                  },
+                },
+                {
+                  name: 'sleep_assistant',
+
+                  description:
+                    'Put Athlora to sleep when the user asks the assistant to sleep, switch off, deactivate, stop listening, or otherwise go inactive. After the tool succeeds, reply exactly: "Going to sleep."',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {},
+                  },
+                },
+              ],
             },
           ],
         },
 
-        tools: [
-          {
-            functionDeclarations: [
-              {
-                name: 'create_athlete',
+        callbacks: {
+          onopen: () => {
+            if (generation !== this.connectionGeneration) {
+              return;
+            }
 
-                description:
-                  'Create a new athlete in Athlora after the user has explicitly confirmed the details.',
-
-                parameters: {
-                  type: Type.OBJECT,
-
-                  properties: {
-                    name: {
-                      type: Type.STRING,
-                      description:
-                        'The athlete full name.',
-                    },
-
-                    dob: {
-                      type: Type.STRING,
-                      description:
-                        'Optional date of birth in YYYY-MM-DD format.',
-                    },
-
-                    gender: {
-                      type: Type.STRING,
-                      description:
-                        'Optional gender category.',
-                    },
-
-                    notes: {
-                      type: Type.STRING,
-                      description:
-                        'Optional notes about the athlete.',
-                    },
-                  },
-
-                  required: ['name'],
-                },
-              },
-              {
-                name: 'sleep_assistant',
-
-                description:
-                  'Put Athlora to sleep when the user asks the assistant to sleep, switch off, deactivate, stop listening, or otherwise go inactive. After the tool succeeds, reply exactly: "Going to sleep."',
-
-                parameters: {
-                  type: Type.OBJECT,
-                  properties: {},
-                },
-              },
-            ],
+            debugSession('Gemini transport connected');
+            this.options.onConnected?.();
           },
-        ],
-      },
 
-      callbacks: {
-        onopen: () => {
-          this.options.onConnected?.();
+          onmessage: (message: LiveServerMessage) => {
+            if (generation === this.connectionGeneration) {
+              void this.handleMessage(message);
+            }
+          },
+
+          onerror: (event) => {
+            if (generation !== this.connectionGeneration) {
+              return;
+            }
+
+            const error = new Error(
+              event.message ||
+                'Gemini Live connection error',
+            );
+
+            this.options.onError?.(error);
+
+            this.pendingTurnReject?.(error);
+
+            this.clearPendingTurn();
+          },
+
+          onclose: () => {
+            if (generation !== this.connectionGeneration) {
+              return;
+            }
+
+            this.session = null;
+            this.ready = false;
+            this.receivingTurn = false;
+
+            this.options.onDisconnected?.();
+          },
         },
+      });
 
-        onmessage: (message: LiveServerMessage) => {
-          void this.handleMessage(message);
-        },
+      if (generation !== this.connectionGeneration) {
+        liveSession.close();
+        return;
+      }
 
-        onerror: (event) => {
-          const error = new Error(
-            event.message ||
-              'Gemini Live connection error',
-          );
+      this.session = liveSession;
+      this.ready = true;
+      debugSession('Gemini session ready');
+      this.options.onReady?.();
+    })();
 
-          this.options.onError?.(error);
+    this.connecting = connecting;
 
-          this.pendingTurnReject?.(error);
-
-          this.clearPendingTurn();
-        },
-
-        onclose: () => {
-          this.session = null;
-          this.receivingTurn = false;
-
-          this.options.onDisconnected?.();
-        },
-      },
-    });
+    try {
+      await connecting;
+    } finally {
+      if (this.connecting === connecting) {
+        this.connecting = null;
+      }
+    }
   }
 
   async sendText(
     text: string,
   ): Promise<string> {
-    if (!this.session) {
+    if (!this.session || !this.ready) {
       throw new Error(
         'Gemini Live session is not connected',
       );
@@ -259,9 +355,12 @@ export class AthloraGeminiSession {
   }
 
   close(): void {
+    this.connectionGeneration += 1;
     this.session?.close();
     this.session = null;
+    this.ready = false;
     this.receivingTurn = false;
+    this.connecting = null;
 
     this.clearPendingTurn();
   }
@@ -361,7 +460,7 @@ export class AthloraGeminiSession {
      * Tell the page to clear that playback immediately.
      */
     if (content.interrupted) {
-      console.info('Athlora response interrupted');
+      debugSession('Model interrupted');
 
       const interruptedResponse =
         this.transcript.trim() ||
@@ -405,16 +504,15 @@ export class AthloraGeminiSession {
 
       if (
         inlineData?.data &&
-        (
-          !inlineData.mimeType ||
-          inlineData.mimeType.startsWith(
-            'audio/',
-          )
-        )
+        isGeminiPcm24k(inlineData.mimeType)
       ) {
         this.options.onAudio?.(
           inlineData.data,
         );
+      } else if (inlineData?.data) {
+        debugSession('Ignored non-PCM Gemini audio payload', {
+          mimeType: inlineData.mimeType ?? 'missing',
+        });
       }
     }
 

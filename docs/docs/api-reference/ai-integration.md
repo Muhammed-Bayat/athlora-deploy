@@ -37,6 +37,24 @@ Returns a Gemini API key for the authenticated user. This is a thin proxy that c
 
 The API key is never embedded in the frontend build — it is fetched on demand after authentication.
 
+## Voice and Output Audio
+
+Every Athlora Live session explicitly requests Gemini's **Sulafat** prebuilt voice:
+
+```ts
+speechConfig: {
+  voiceConfig: {
+    prebuiltVoiceConfig: {
+      voiceName: 'Sulafat',
+    },
+  },
+}
+```
+
+The session instructions ask Sulafat for a warm, calm, friendly coach delivery at a natural pace that is slightly slower than normal. Athlora does not alter browser playback speed, so the model voice retains its native pitch and quality.
+
+Gemini output is accepted only as mono signed 16-bit little-endian PCM (`audio/pcm`, 24 kHz). The player decodes complete Base64 chunks into normalized `Float32` samples, queues them in arrival order, and schedules them against one stable audio context. A short gain envelope removes clicks at raw PCM chunk boundaries. Non-PCM, wrong-rate, empty, odd-length, or malformed data is discarded before playback.
+
 ## Frontend Modules
 
 ### AthloraGeminiSession (`geminiLiveSdk.ts`)
@@ -55,6 +73,7 @@ The primary SDK wrapper around `@google/genai`'s Live session. This is the recom
 | `onInterrupted` | `() => void` | Gemini was interrupted by the user |
 | `onSleepRequested` | `() => void` | Gemini called the `sleep_assistant` tool |
 | `onConnected` | `() => void` | WebSocket connected |
+| `onReady` | `() => void` | Live session setup completed and text/audio can be sent |
 | `onDisconnected` | `() => void` | WebSocket closed |
 | `onError` | `(error: Error) => void` | Connection or response error |
 | `onToolCall` | `GeminiToolHandler` | Handles function-tool calls from Gemini |
@@ -63,7 +82,7 @@ The primary SDK wrapper around `@google/genai`'s Live session. This is the recom
 
 | Method | Returns | Description |
 |---|---|---|
-| `connect()` | `Promise<void>` | Opens WebSocket, sends setup, resolves on `setupComplete` |
+| `connect()` | `Promise<void>` | Opens the SDK Live session and resolves when its setup is ready |
 | `sendText(text)` | `Promise<string>` | Sends a text message; resolves with Gemini's transcript response |
 | `sendAudio(base64)` | `void` | Streams a PCM16 audio chunk to Gemini |
 | `endAudioStream()` | `void` | Signals end of an audio stream |
@@ -79,7 +98,7 @@ Queued PCM16 audio playback using the Web Audio API. Gemini outputs audio at 24k
 
 | Method | Description |
 |---|---|
-| `prepare()` | Creates/resumes `AudioContext`, unlocks browser audio with a silent sample |
+| `prepare()` | Creates/resumes `AudioContext` from the coach's user gesture |
 | `playPcm16(base64)` | Decodes and queues a PCM16 chunk for playback at 24kHz |
 | `waitUntilIdle()` | Resolves when all queued chunks have finished playing |
 | `clear()` | Stops and removes all queued sources |
@@ -137,14 +156,16 @@ The SDK version adds: "If the user asks you to sleep, go to sleep, switch off, d
 ## Session Lifecycle
 
 1. Coach opens the voice assistant panel
-2. Frontend fetches a Gemini API key via `POST /ai/gemini-token`
-3. `AthloraGeminiSession.connect()` opens a WebSocket and sends the setup message (model, system instruction, tools)
-4. Gemini responds with `setupComplete`
-5. Coach speaks — `GeminiMicrophone` captures and streams audio chunks
-6. Coach can also type text — `sendText()` sends it as `realtimeInput`
-7. Gemini responds with audio chunks (`onAudio`) and text transcription (`onTranscript`)
-8. When Gemini calls `create_athlete`, the frontend `onToolCall` handler calls `POST /api/v1/athletes` and returns the result
-9. When Gemini calls `sleep_assistant`, the session is closed
+2. The start-button user gesture creates and resumes the playback `AudioContext` before Gemini can produce greeting audio
+3. Frontend fetches a Gemini API key via `POST /ai/gemini-token`
+4. `AthloraGeminiSession.connect()` opens a WebSocket and completes the Live session setup (model, Sulafat voice, system instruction, tools)
+5. Once the session is ready, Athlora requests exactly one greeting for that session
+6. Gemini output is queued and plays through the prepared audio context; the microphone stays available for normal conversation afterwards
+7. Coach speaks — `GeminiMicrophone` captures and streams audio chunks
+8. Coach can also type text — `sendText()` sends it as `realtimeInput`
+9. Gemini responds with audio chunks (`onAudio`) and text transcription (`onTranscript`)
+10. When Gemini calls `create_athlete`, the frontend `onToolCall` handler calls `POST /api/v1/athletes` and returns the result
+11. A Gemini interruption clears scheduled and pending assistant audio before microphone forwarding resumes; sleep closes the session after its acknowledgement finishes
 
 ## Dependencies
 
@@ -154,4 +175,4 @@ The SDK version adds: "If the user asks you to sleep, go to sleep, switch off, d
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra].

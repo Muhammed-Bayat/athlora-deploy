@@ -1,4 +1,6 @@
 const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+const GEMINI_OUTPUT_SAMPLE_RATE = '24000';
+const DEV = import.meta.env.DEV;
 
 const GEMINI_LIVE_URL =
   'wss://generativelanguage.googleapis.com/ws/' +
@@ -52,6 +54,33 @@ export type GeminiAudioHandler = (
   base64Audio: string,
 ) => void;
 
+function debugLegacySession(event: string, details?: Record<string, unknown>): void {
+  if (DEV) {
+    console.info('[Athlora AI]', event, details ?? '');
+  }
+}
+
+function isGeminiPcm24k(mimeType: string | undefined): boolean {
+  if (!mimeType) {
+    return false;
+  }
+
+  const [mediaType, ...parameters] = mimeType
+    .toLowerCase()
+    .split(';')
+    .map((value) => value.trim());
+
+  if (mediaType !== 'audio/pcm') {
+    return false;
+  }
+
+  const rate = parameters
+    .map((parameter) => parameter.split('='))
+    .find(([name]) => name === 'rate')?.[1];
+
+  return rate === undefined || rate === GEMINI_OUTPUT_SAMPLE_RATE;
+}
+
 async function readWebSocketMessage(
   data: string | Blob | ArrayBuffer,
 ): Promise<string> {
@@ -89,15 +118,24 @@ export function connectGeminiLive(
     }, 10_000);
 
     socket.onopen = () => {
+      debugLegacySession('Gemini legacy transport connected');
+
       const setupMessage = {
         setup: {
-  model: `models/${GEMINI_LIVE_MODEL}`,
+          model: `models/${GEMINI_LIVE_MODEL}`,
 
-  generationConfig: {
-    responseModalities: ['AUDIO'],
-  },
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: 'Sulafat',
+                },
+              },
+            },
+          },
 
-  outputAudioTranscription: {},
+          outputAudioTranscription: {},
 
           systemInstruction: {
             parts: [
@@ -108,9 +146,14 @@ export function connectGeminiLive(
                   'Never invent missing information. ' +
                   'Before creating an athlete, clearly confirm the details with the user. ' +
                   'Only use create_athlete after the user explicitly confirms. ' +
-                  'Keep responses short and conversational. ' +
-                  'When you are told to start the assistant, greet the user by saying exactly: ' +
-                  '"Hi, I\'m Athlora. Who are we adding today?"',
+                  'VOICE AND SPEAKING STYLE: Speak in a warm, calm, friendly and confident manner. ' +
+                  'Use a natural conversational speaking pace that is slightly slower than normal. ' +
+                  'Do not rush through sentences. Use short natural pauses between important ideas. ' +
+                  'Keep explanations clear and easy to follow. Avoid sounding robotic, overly energetic, dramatic or like an announcer. ' +
+                  'Your voice should feel like a knowledgeable coach speaking directly to an athlete. ' +
+                   'Keep responses short and conversational. ' +
+                   'When you are told to start the assistant, greet the user by saying exactly: ' +
+                   '"Good Day Coach, who are we adding today?"',
               },
             ],
           },
@@ -301,62 +344,6 @@ export function sendGeminiText(
             JSON.parse(raw) as GeminiServerMessage;
 
           /*
-           * TEMPORARY DEBUGGING
-           *
-           * Keep these logs while we confirm
-           * that Gemini is sending PCM audio.
-           */
-          console.log(
-            'Gemini server content:',
-            {
-              keys: message.serverContent
-                ? Object.keys(
-                    message.serverContent,
-                  )
-                : [],
-
-              modelTurn:
-                message.serverContent
-                  ?.modelTurn,
-
-              transcription:
-                message.serverContent
-                  ?.outputTranscription,
-
-              turnComplete:
-                message.serverContent
-                  ?.turnComplete,
-            },
-          );
-
-          const debugParts =
-            message.serverContent
-              ?.modelTurn?.parts ?? [];
-
-          for (
-            const part of debugParts
-          ) {
-            console.log(
-              'Gemini part:',
-              {
-                hasInlineData:
-                  Boolean(
-                    part.inlineData,
-                  ),
-
-                mimeType:
-                  part.inlineData
-                    ?.mimeType,
-
-                dataLength:
-                  part.inlineData
-                    ?.data?.length ??
-                  0,
-              },
-            );
-          }
-
-          /*
            * Gemini requested an Athlora tool.
            */
           if (
@@ -439,22 +426,15 @@ export function sendGeminiText(
 
             if (
               inlineData?.data &&
-              (
-                !inlineData.mimeType ||
-                inlineData.mimeType.startsWith(
-                  'audio/',
-                )
-              )
+              isGeminiPcm24k(inlineData.mimeType)
             ) {
-              console.log(
-                'Gemini audio chunk received:',
-                inlineData.mimeType,
-                inlineData.data.length,
-              );
-
               handleAudio?.(
                 inlineData.data,
               );
+            } else if (inlineData?.data) {
+              debugLegacySession('Ignored non-PCM Gemini audio payload', {
+                mimeType: inlineData.mimeType ?? 'missing',
+              });
             }
           }
 

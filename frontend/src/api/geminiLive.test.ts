@@ -81,6 +81,8 @@ describe('connectGeminiLive', () => {
     const sent = JSON.parse(mockSocket.send.mock.calls[0][0] as string);
     expect(sent.setup.model).toBe('models/gemini-3.1-flash-live-preview');
     expect(sent.setup.generationConfig.responseModalities).toEqual(['AUDIO']);
+    expect(sent.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Sulafat');
+    expect(sent.setup.systemInstruction.parts[0].text).toContain('slightly slower than normal');
     expect(sent.setup.systemInstruction.parts[0].text).toContain('Athlora');
     expect(sent.setup.tools[0].functionDeclarations[0].name).toBe('create_athlete');
 
@@ -365,7 +367,7 @@ describe('sendGeminiText', () => {
     expect(handleAudio).not.toHaveBeenCalled();
   });
 
-  it('handles inlineData without mimeType as audio', async () => {
+  it('ignores inlineData without a confirmed PCM mimeType', async () => {
     const handleAudio = vi.fn();
     const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'hi', undefined, handleAudio);
 
@@ -377,6 +379,28 @@ describe('sendGeminiText', () => {
     }));
 
     await promise;
-    expect(handleAudio).toHaveBeenCalledWith('chunk');
+    expect(handleAudio).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-PCM and wrong-rate audio payloads', async () => {
+    const handleAudio = vi.fn();
+    const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'hi', undefined, handleAudio);
+
+    mockSocket.triggerMessage(JSON.stringify({
+      serverContent: {
+        modelTurn: {
+          parts: [
+            { inlineData: { data: 'wrong-rate', mimeType: 'audio/pcm;rate=16000' } },
+            { inlineData: { data: 'not-pcm', mimeType: 'audio/wav' } },
+            { inlineData: { data: 'pcm-24k', mimeType: 'audio/pcm;rate=24000' } },
+          ],
+        },
+        turnComplete: true,
+      },
+    }));
+
+    await promise;
+    expect(handleAudio).toHaveBeenCalledOnce();
+    expect(handleAudio).toHaveBeenCalledWith('pcm-24k');
   });
 });

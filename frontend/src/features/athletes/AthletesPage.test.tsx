@@ -16,7 +16,7 @@ const athleteApi = vi.hoisted(() => ({
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
-const geminiApi = vi.hoisted(() => ({ createGeminiToken: vi.fn(), sendText: vi.fn() }));
+const geminiApi = vi.hoisted(() => ({ createGeminiToken: vi.fn(), connect: vi.fn(), sendText: vi.fn() }));
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
@@ -25,8 +25,12 @@ vi.mock('../../api/injuries', () => injuriesApi);
 vi.mock('../../api/ai', () => ({ createGeminiToken: geminiApi.createGeminiToken }));
 vi.mock('../../api/geminiLiveSdk', () => ({
   AthloraGeminiSession: class {
-    constructor(private readonly options: { onConnected?: () => void }) {}
-    async connect() { this.options.onConnected?.(); }
+    constructor(private readonly options: { onConnected?: () => void; onReady?: () => void }) {}
+    async connect() {
+      geminiApi.connect();
+      this.options.onConnected?.();
+      this.options.onReady?.();
+    }
     async sendText(message: string) { return geminiApi.sendText(message); }
     sendAudio() {}
     endAudioStream() {}
@@ -133,6 +137,30 @@ describe('AthletesPage', () => {
     expect(await within(dialog).findByText('Athlora received: Add John Smith')).toBeInTheDocument();
     expect(geminiApi.sendText).toHaveBeenNthCalledWith(2, 'Add John Smith');
   }, 30_000);
+
+  it('creates one greeted session for rapid starts and keeps it when the dialog closes', async () => {
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+
+    const trigger = screen.getByRole('button', { name: 'Start Athlora AI' });
+    await user.dblClick(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
+    expect(await within(dialog).findByText('Good Day Coach, who are we adding today?')).toBeInTheDocument();
+    expect(geminiApi.createGeminiToken).toHaveBeenCalledOnce();
+    expect(geminiApi.connect).toHaveBeenCalledOnce();
+    expect(geminiApi.sendText).toHaveBeenCalledTimes(1);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Athlora AI' })).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Open Athlora AI' }));
+    expect(await screen.findByRole('dialog', { name: 'Athlora AI' })).toBeInTheDocument();
+    expect(geminiApi.createGeminiToken).toHaveBeenCalledOnce();
+    expect(geminiApi.connect).toHaveBeenCalledOnce();
+    expect(geminiApi.sendText).toHaveBeenCalledTimes(1);
+  });
 
   it('renders active injury counts and highest severity without loading Fitness', async () => {
     injuriesApi.listAthleteInjurySummaries.mockResolvedValueOnce([{

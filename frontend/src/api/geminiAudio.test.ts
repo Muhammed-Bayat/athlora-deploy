@@ -14,6 +14,14 @@ function createMockAudioContext(state: AudioContextState = 'running') {
     getChannelData: ReturnType<typeof vi.fn>;
     duration: number;
   }> = [];
+  const gains: Array<{
+    gain: {
+      setValueAtTime: ReturnType<typeof vi.fn>;
+      linearRampToValueAtTime: ReturnType<typeof vi.fn>;
+    };
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  }> = [];
 
   const ctx = {
     state,
@@ -46,9 +54,25 @@ function createMockAudioContext(state: AudioContextState = 'running') {
       sources.push(source);
       return source;
     }),
+    createGain: vi.fn(() => {
+      const gain = {
+        gain: {
+          setValueAtTime: vi.fn(),
+          linearRampToValueAtTime: vi.fn(),
+        },
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      };
+      gains.push(gain);
+      return gain;
+    }),
     _sources: sources,
     _buffers: buffers,
+    _gains: gains,
   };
+  ctx.resume.mockImplementation(async () => {
+    ctx.state = 'running';
+  });
   return ctx;
 }
 
@@ -83,13 +107,12 @@ describe('GeminiAudioPlayer', () => {
       expect(mockCtx.resume).toHaveBeenCalledOnce();
     });
 
-    it('plays a silent unlock buffer', async () => {
+    it('does not create an output source during preparation', async () => {
       const player = createPlayer();
       await player.prepare();
 
-      expect(mockCtx.createBuffer).toHaveBeenCalledWith(1, 1, expect.any(Number));
-      const source = mockCtx._sources[mockCtx._sources.length - 1];
-      expect(source.start).toHaveBeenCalledOnce();
+      expect(mockCtx.createBuffer).not.toHaveBeenCalled();
+      expect(mockCtx.createBufferSource).not.toHaveBeenCalled();
     });
 
     it('is idempotent when context is already running', async () => {
@@ -123,12 +146,15 @@ describe('GeminiAudioPlayer', () => {
   });
 
   describe('playPcm16', () => {
-    it('warns and returns if no context', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('queues audio until a context is prepared', async () => {
       const player = createPlayer();
-      player.playPcm16('base64data');
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
+      player.playPcm16(makeBase64(new Int16Array([16384])));
+
+      expect(mockCtx.createBuffer).not.toHaveBeenCalled();
+
+      await player.prepare();
+
+      expect(mockCtx.createBuffer).toHaveBeenCalledWith(1, 1, 24000);
     });
 
     it('decodes base64 and creates an audio buffer', async () => {
@@ -152,10 +178,21 @@ describe('GeminiAudioPlayer', () => {
       player.playPcm16(base64);
       player.playPcm16(base64);
 
-      const source1 = mockCtx._sources[1];
-      const source2 = mockCtx._sources[2];
+      const source1 = mockCtx._sources[0];
+      const source2 = mockCtx._sources[1];
       expect(source1.start).toHaveBeenCalledOnce();
       expect(source2.start).toHaveBeenCalledOnce();
+    });
+
+    it('fades PCM chunk boundaries to prevent audible clicks', async () => {
+      const player = createPlayer();
+      await player.prepare();
+
+      player.playPcm16(makeBase64(new Int16Array([16384, -16384])));
+
+      const gain = mockCtx._gains[0];
+      expect(gain.gain.setValueAtTime).toHaveBeenCalledTimes(2);
+      expect(gain.gain.linearRampToValueAtTime).toHaveBeenCalledTimes(2);
     });
 
     it('resumes context if suspended', async () => {
@@ -169,17 +206,15 @@ describe('GeminiAudioPlayer', () => {
       expect(mockCtx.resume).toHaveBeenCalled();
     });
 
-    it('warns if context is closed after resume', async () => {
+    it('keeps audio queued if its context closes before playback', async () => {
       mockCtx.state = 'suspended';
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const player = createPlayer();
       await player.prepare();
       mockCtx.state = 'closed';
 
       const pcm16 = new Int16Array([16384]);
       player.playPcm16(makeBase64(pcm16));
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Unable to play Gemini audio'), 'closed');
-      warnSpy.mockRestore();
+      expect(mockCtx._sources).toHaveLength(0);
     });
 
     it('skips zero-length audio', async () => {
@@ -189,6 +224,16 @@ describe('GeminiAudioPlayer', () => {
       player.playPcm16(btoa(''));
     });
 
+    it('ignores malformed Base64 and odd-length PCM chunks', async () => {
+      const player = createPlayer();
+      await player.prepare();
+
+      player.playPcm16('%');
+      player.playPcm16(btoa('x'));
+
+      expect(mockCtx.createBuffer).not.toHaveBeenCalled();
+    });
+
     it('converts Int16 samples to float correctly', async () => {
       const player = createPlayer();
       await player.prepare();
@@ -196,7 +241,7 @@ describe('GeminiAudioPlayer', () => {
       const pcm16 = new Int16Array([32767, -32768, 0]);
       player.playPcm16(makeBase64(pcm16));
 
-      const buffer = mockCtx._buffers[1];
+      const buffer = mockCtx._buffers[0];
       const channel = buffer.getChannelData(0);
       expect(channel[0]).toBeCloseTo(32767 / 32768, 5);
       expect(channel[1]).toBeCloseTo(-1, 5);
@@ -210,7 +255,7 @@ describe('GeminiAudioPlayer', () => {
       const pcm16 = new Int16Array([16384]);
       player.playPcm16(makeBase64(pcm16));
 
-      const source = mockCtx._sources[1];
+      const source = mockCtx._sources[0];
       expect(source.onended).toBeDefined();
 
       const idlePromise = player.waitUntilIdle();
@@ -240,8 +285,8 @@ describe('GeminiAudioPlayer', () => {
       player.playPcm16(base64);
       player.playPcm16(base64);
 
-      const source1 = mockCtx._sources[1];
-      const source2 = mockCtx._sources[2];
+      const source1 = mockCtx._sources[0];
+      const source2 = mockCtx._sources[1];
       player.clear();
 
       expect(source1.stop).toHaveBeenCalled();
@@ -264,6 +309,29 @@ describe('GeminiAudioPlayer', () => {
       const player = createPlayer();
       await player.prepare();
       player.clear();
+    });
+
+    it('invalidates a queued chunk while an AudioContext resumes', async () => {
+      const resumeResolvers: Array<() => void> = [];
+      const player = createPlayer();
+      await player.prepare();
+
+      mockCtx.state = 'suspended';
+      mockCtx.resume.mockImplementation(
+        () => new Promise<void>((resolve) => {
+          resumeResolvers.push(resolve);
+        }),
+      );
+
+      player.playPcm16(makeBase64(new Int16Array([16384])));
+      player.clear();
+
+      mockCtx.state = 'running';
+      resumeResolvers[0]?.();
+      await Promise.resolve();
+
+      // The cancelled PCM must never become a playback source.
+      expect(mockCtx._sources).toHaveLength(0);
     });
   });
 

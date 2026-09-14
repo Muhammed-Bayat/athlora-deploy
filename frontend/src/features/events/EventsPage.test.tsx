@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -691,7 +691,9 @@ describe('EventsPage', () => {
     for (const name of ['Close', 'Edit event', 'Start event', 'Mark completed', 'Cancel event']) {
       expect(within(detail).getByRole('button', { name })).toBeDisabled();
     }
-    resolveRemoval();
+    await act(async () => {
+      resolveRemoval();
+    });
     await waitFor(() => expect(within(detail).getByRole('button', { name: 'Close' })).toBeEnabled());
   });
 
