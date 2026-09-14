@@ -17,6 +17,7 @@ import {
   getClubMultiComparison,
   getClubStatistics,
   listClubComparisonAthletes,
+  listClubCalendarEvents,
   listClubJoinRequests,
   listClubs,
   listMyJoinRequests,
@@ -29,6 +30,7 @@ const CLUB_ID = '22222222-2222-4222-8222-222222222222';
 const WORKSPACE_ID = '33333333-3333-4333-8333-333333333333';
 const REQUEST_ID = '44444444-4444-4444-8444-444444444444';
 const ACTOR_ID = '55555555-5555-5555-8555-555555555555';
+const EVENT_ID = '66666666-6666-4666-8666-666666666666';
 const query = vi.fn();
 
 function poolRow(rows: unknown[] = []) {
@@ -57,6 +59,43 @@ describe('listClubs', () => {
     query.mockResolvedValue(poolRow([]));
     await listClubs(null);
     expect(query.mock.calls[0][1]).toEqual([null]);
+  });
+});
+
+describe('listClubCalendarEvents', () => {
+  it('returns selected clubs upcoming events in the requested season and preserves club attribution', async () => {
+    query.mockResolvedValue(poolRow([{
+      ...{
+        id: EVENT_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Rival Relay',
+        date: '2026-08-22', time: null, location_name: null, latitude: null, longitude: null,
+        status: 'scheduled', created_at: new Date('2026-08-14T10:00:00.000Z'), updated_at: new Date('2026-08-14T10:00:00.000Z'),
+      },
+      club_id: CLUB_ID,
+      club_name: 'Sprinters',
+    }]));
+
+    const calendar = await listClubCalendarEvents([CLUB_ID], undefined, {
+      selected: 2026, startDate: '2026-01-01', endDate: '2027-01-01',
+    });
+
+    expect(calendar).toMatchObject([{ club: { id: CLUB_ID, name: 'Sprinters' }, event: { id: EVENT_ID, title: 'Rival Relay' } }]);
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('c.id = ANY($1::uuid[])');
+    expect(sql).toContain('e.date >= CURRENT_DATE');
+    expect(sql).toContain('e.date >= $2::date AND e.date < $3::date');
+    expect(parameters).toEqual([[CLUB_ID], '2026-01-01', '2027-01-01']);
+  });
+
+  it('rejects an empty or malformed club selection before querying', async () => {
+    await expect(listClubCalendarEvents([])).rejects.toMatchObject({
+      status: 422,
+      code: 'CLUB_CALENDAR_SELECTION_INVALID',
+    });
+    await expect(listClubCalendarEvents(['not-a-uuid'])).rejects.toMatchObject({
+      status: 422,
+      code: 'CLUB_CALENDAR_SELECTION_INVALID',
+    });
+    expect(query).not.toHaveBeenCalled();
   });
 });
 

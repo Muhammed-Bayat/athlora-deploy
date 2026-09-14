@@ -137,6 +137,16 @@ describe('listEvents', () => {
     expect(parameters).toEqual([USER_ID, `${year}-01-01`, `${year + 1}-01-01`, 'competition', 'completed']);
   });
 
+  it('includes only accepted current-revision shared fixtures alongside owned events', async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await listEvents(USER_ID, {});
+
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("fw.workspace_id = $1 AND fw.role = 'guest'");
+    expect(sql).toContain("fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision");
+  });
+
   it('filters by the inclusive date range', async () => {
     query.mockResolvedValue({ rows: [] });
 

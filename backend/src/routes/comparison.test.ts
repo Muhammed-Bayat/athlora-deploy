@@ -137,6 +137,24 @@ describe('comparison API route', () => {
     expect(getTwoAthleteComparison).not.toHaveBeenCalled();
   });
 
+  it('forwards an explicit season scope to the two-athlete service', async () => {
+    query.mockResolvedValueOnce(synchronizedUser());
+    vi.mocked(getTwoAthleteComparison).mockResolvedValue({ athletes: [] } as unknown as ComparisonDetail);
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison?athlete1Id=${ATHLETE_1_ID}&athlete2Id=${ATHLETE_2_ID}&year=2024`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(getTwoAthleteComparison).toHaveBeenCalledWith(
+      USER_ID,
+      ATHLETE_1_ID,
+      ATHLETE_2_ID,
+      undefined,
+      { selected: 2024, startDate: '2024-01-01', endDate: '2025-01-01' },
+    );
+  });
+
   it('returns a multi-athlete comparison for repeated athleteId parameters', async () => {
     const comparison = { athletes: [] };
     query.mockResolvedValueOnce(synchronizedUser());
@@ -161,6 +179,22 @@ describe('comparison API route', () => {
 
     expect(response.status).toBe(200);
     expect(getCrossClubMultiAthleteComparison).toHaveBeenCalledWith([ATHLETE_1_ID, ATHLETE_2_ID]);
+  });
+
+  it('forwards all-time season scope to cross-club multi-athlete comparisons', async () => {
+    query.mockResolvedValueOnce(synchronizedUser());
+    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [] });
+
+    const response = await request(app)
+      .get(`/api/v1/athletes/comparison/multi?athleteId=${ATHLETE_1_ID}&athleteId=${ATHLETE_2_ID}&scope=cross-club&year=all`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(getCrossClubMultiAthleteComparison).toHaveBeenCalledWith(
+      [ATHLETE_1_ID, ATHLETE_2_ID],
+      undefined,
+      { selected: 'all', startDate: null, endDate: null },
+    );
   });
 
   it('rejects unsupported comparison scopes', async () => {
