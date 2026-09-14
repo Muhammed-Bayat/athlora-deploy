@@ -71,11 +71,28 @@ describe('AthloraGeminiSession', () => {
       const config = liveConnect.mock.calls[0][0];
       expect(config.model).toBe('gemini-3.1-flash-live-preview');
       expect(config.config.responseModalities).toEqual(['AUDIO']);
+      expect(config.config.speechConfig).toEqual({
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: 'Sulafat',
+          },
+        },
+      });
       expect(config.config.systemInstruction.parts[0].text).toContain('Athlora');
+      expect(config.config.systemInstruction.parts[0].text).toContain('slightly slower than normal');
       expect(config.config.tools[0].functionDeclarations.map((t: { name: string }) => t.name)).toEqual([
         'create_athlete',
         'sleep_assistant',
       ]);
+    });
+
+    it('fires onReady only after the Live session resolves', async () => {
+      const onReady = vi.fn();
+      const session = createSession({ onReady });
+
+      await session.connect();
+
+      expect(onReady).toHaveBeenCalledOnce();
     });
 
     it('does nothing if already connected (idempotent)', async () => {
@@ -315,6 +332,30 @@ describe('AthloraGeminiSession', () => {
       });
 
       expect(onAudio).not.toHaveBeenCalled();
+    });
+
+    it('forwards only Gemini 24kHz PCM audio', async () => {
+      const onAudio = vi.fn();
+      const session = createSession({ onAudio });
+      await session.connect();
+
+      fireCallback('onmessage',{
+        serverContent: {
+          modelTurn: {
+            parts: [
+              { inlineData: { data: 'pcm-default-rate', mimeType: 'audio/pcm' } },
+              { inlineData: { data: 'pcm-24k', mimeType: 'audio/pcm;rate=24000' } },
+              { inlineData: { data: 'pcm-16k', mimeType: 'audio/pcm;rate=16000' } },
+              { inlineData: { data: 'wav', mimeType: 'audio/wav' } },
+              { inlineData: { data: 'unknown-rate' } },
+            ],
+          },
+        },
+      });
+
+      expect(onAudio).toHaveBeenCalledTimes(2);
+      expect(onAudio).toHaveBeenNthCalledWith(1, 'pcm-default-rate');
+      expect(onAudio).toHaveBeenNthCalledWith(2, 'pcm-24k');
     });
 
     it('resolves pending turn on turnComplete', async () => {
