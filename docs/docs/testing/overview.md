@@ -528,6 +528,14 @@ When adding a new feature, tests should be written in the same session as the im
 
 ---
 
+## 13. Stakeholder feedback
+
+Automated tests are complemented by manual stakeholder and user feedback. During Sprint 2, the client/stakeholder and external users tested the deployed application and completed separate structured forms covering the product experience and improvement opportunities. This supplied feedback on usability and end-to-end workflows, then informed the Sprint bug tracker and product backlog.
+
+The submitted response evidence and form links are retained in [Sprint 2 Stakeholder Feedback](./stakeholder-feedback) and [Sprint 2 User Feedback](./user-feedback). Manual feedback is not a substitute for unit, integration, end-to-end, or accessibility testing; it provides independent product perspectives alongside those automated quality gates.
+
+---
+
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra].
