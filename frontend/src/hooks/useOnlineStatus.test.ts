@@ -4,7 +4,7 @@ import { useOnlineStatus } from './useOnlineStatus';
 
 const networkStatus = vi.hoisted(() => ({
   isDeviceOnline: vi.fn(() => true),
-  onConnectivityChange: vi.fn(() => vi.fn()),
+  onConnectivityChange: vi.fn((() => vi.fn()) as (listener: (online: boolean) => void) => () => void),
   recordNetworkFailure: vi.fn(),
   recordNetworkSuccess: vi.fn(),
 }));

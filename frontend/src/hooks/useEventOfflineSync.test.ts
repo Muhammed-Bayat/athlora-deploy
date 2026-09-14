@@ -47,7 +47,7 @@ describe('useEventOfflineSync', () => {
   });
 
   it('refreshes queue status on mount', async () => {
-    const { result } = renderHook(() => useEventOfflineSync(defaultProps));
+    renderHook(() => useEventOfflineSync(defaultProps));
 
     await act(async () => { /* mount effects run */ });
 
