@@ -546,13 +546,13 @@ describe('getCrossClubAthleteComparison', () => {
         { athlete: { id: ATHLETE_2_ID, name: 'Athlete Two' }, pb: 11.8 },
       ],
     });
-    expect(query.mock.calls[2]?.[1]).toEqual([ATHLETE_1_ID, USER_ID, '100m']);
-    expect(query.mock.calls[4]?.[1]).toEqual([ATHLETE_2_ID, OTHER_WORKSPACE_ID, '100m']);
+    expect(query.mock.calls[2]?.[1]).toEqual([ATHLETE_1_ID, USER_ID, '100m', '2026-01-01', '2027-01-01']);
+    expect(query.mock.calls[4]?.[1]).toEqual([ATHLETE_2_ID, OTHER_WORKSPACE_ID, '100m', '2026-01-01', '2027-01-01']);
   });
 });
 
 describe('getCrossClubMultiAthleteComparison', () => {
-  it('requires every athlete to be from a distinct club workspace', async () => {
+  it('requires athletes from at least two club workspaces', async () => {
     const query = vi.fn().mockResolvedValueOnce({
       rows: [
         { id: ATHLETE_1_ID, workspace_id: USER_ID },
@@ -563,5 +563,20 @@ describe('getCrossClubMultiAthleteComparison', () => {
     await expect(getCrossClubMultiAthleteComparison(
       [ATHLETE_1_ID, ATHLETE_2_ID], runner(query),
     )).rejects.toMatchObject({ code: 'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS' });
+  });
+
+  it('allows multiple athletes from one club when another club is represented', async () => {
+    const thirdAthleteId = '77777777-7777-4777-8777-777777777777';
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [
+        { id: ATHLETE_1_ID, workspace_id: USER_ID },
+        { id: ATHLETE_2_ID, workspace_id: USER_ID },
+        { id: thirdAthleteId, workspace_id: OTHER_WORKSPACE_ID },
+      ] })
+      .mockResolvedValue({ rows: [] });
+
+    await expect(getCrossClubMultiAthleteComparison(
+      [ATHLETE_1_ID, ATHLETE_2_ID, thirdAthleteId], runner(query),
+    )).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

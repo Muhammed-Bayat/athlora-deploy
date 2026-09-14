@@ -42,14 +42,18 @@
 .startLink:hover { border-color: #8ae9f2; transform: translateY(-2px); }
 
 .content { position: relative; z-index: 1; width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 72px 0 100px; }
-.hero { display: grid; grid-template-columns: minmax(0, 0.94fr) minmax(380px, 1.06fr); align-items: center; gap: 48px; min-height: 380px; }
+.hero { display: grid; grid-template-columns: minmax(0, 0.94fr) minmax(380px, 1.06fr); align-items: stretch; gap: 48px; min-height: 430px; }
 .kicker { margin: 0 0 12px; color: #8ae9f2; font: 700 0.69rem var(--font-family-mono); letter-spacing: 0.17em; text-transform: uppercase; }
 .hero h1, .explorerHeading h2, .sectionHeading h2 { margin: 0; color: #f3fdff; font-family: var(--font-display); letter-spacing: -0.065em; }
 .hero h1 { max-width: 580px; font-size: clamp(3.2rem, 6vw, 5.5rem); line-height: 0.91; }
 .hero h1 em { color: #8ae9f2; font-style: normal; text-shadow: 0 0 30px rgba(138, 233, 242, 0.28); }
-.hero > div > p:last-child { max-width: 500px; margin: 24px 0 0; color: #a9c2cb; font-size: 1.02rem; line-height: 1.7; }
+.heroCopy { display: flex; flex-direction: column; justify-content: center; padding-bottom: 20px; }
+.heroCopy > p:last-child { max-width: 500px; margin: 24px 0 0; color: #a9c2cb; font-size: 1.02rem; line-height: 1.7; }
+.heroVisual { display: flex; flex-direction: column; min-width: 0; }
+.seasonControl { align-self: flex-end; width: min(100%, 340px); margin-bottom: -10px; }
+.seasonControl > span { display: block; margin: 0 0 8px 2px; color: #86aab6; font: 700 0.61rem var(--font-family-mono); letter-spacing: 0.12em; text-transform: uppercase; }
 
-.trackFigure { position: relative; min-height: 348px; margin: 0; }
+.trackFigure { position: relative; flex: 1; min-height: 348px; margin: 0; }
 .trackCanvas { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
 .trackFigure figcaption { position: absolute; right: 20px; bottom: 18px; left: 20px; color: #9abac3; font: 700 0.62rem var(--font-family-mono); letter-spacing: 0.1em; text-align: right; text-transform: uppercase; pointer-events: none; }
 .trackFallback { position: absolute; inset: 20% 8%; display: grid; place-items: center; transform: rotate(-7deg); }
@@ -76,6 +80,25 @@
 
 .singleClub { position: relative; margin-top: 38px; }
 .comparisonCards { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 38px; }
+.comparisonPanel { position: relative; margin-top: 38px; padding: 26px; border: 1px solid rgba(138, 233, 242, 0.18); border-radius: 24px; background: linear-gradient(142deg, rgba(9, 42, 58, 0.98), rgba(1, 17, 28, 0.98)); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3); }
+.comparisonToolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.comparisonToolbar h2 { margin: 0; color: #f0fcff; font: 700 clamp(1.3rem, 3vw, 1.9rem) / 1 var(--font-display); letter-spacing: -0.05em; }
+.comparisonToolbar div { display: flex; gap: 6px; }
+.comparisonToolbar button { padding: 8px 12px; border: 1px solid rgba(138, 233, 242, 0.26); border-radius: 999px; background: rgba(3, 31, 44, 0.76); color: #bff5f8; font: 700 0.65rem var(--font-family-mono); cursor: pointer; }
+.comparisonToolbar button[aria-pressed="true"] { border-color: #8ae9f2; background: rgba(30, 148, 167, 0.3); color: #fff; }
+.comparisonChart { display: block; width: 100%; min-height: 260px; overflow: visible; }
+.comparisonChart line { stroke: rgba(138, 233, 242, 0.28); stroke-width: 1; }
+.comparisonChart polyline { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.comparisonChart circle { stroke: #00141f; stroke-width: 2; }
+.chartLegend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 4px; }
+.chartLegend span { display: inline-flex; align-items: center; gap: 7px; color: #d9f7f9; font-size: 0.78rem; }
+.chartLegend i { width: 18px; height: 3px; border-radius: 99px; }
+.chartLegend small { color: #84aebb; font: 600 0.62rem var(--font-family-mono); }
+.tableScroll { overflow-x: auto; }
+.comparisonTable { width: 100%; min-width: 580px; border-collapse: collapse; color: #d9f7f9; font-size: 0.82rem; }
+.comparisonTable th, .comparisonTable td { padding: 12px 14px; border-bottom: 1px solid rgba(138, 233, 242, 0.12); text-align: left; }
+.comparisonTable thead th { color: #8ae9f2; font: 700 0.64rem var(--font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.comparisonTable tbody th { color: #9ebcc5; font-weight: 600; }
 
 .clubCard, .athleteCard { --tilt-x: 0deg; --tilt-y: 0deg; --glow-x: 50%; --glow-y: 50%; position: relative; isolation: isolate; overflow: hidden; border: 1px solid rgba(138, 233, 242, 0.18); background: linear-gradient(142deg, rgba(9, 42, 58, 0.98), rgba(1, 17, 28, 0.98)); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3), 0 0 30px rgba(69, 190, 215, 0.05); transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition: transform 0.18s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
 .clubCard:hover, .athleteCard:hover { border-color: rgba(138, 233, 242, 0.5); box-shadow: inset 0 1px rgba(255, 255, 255, 0.09), 0 28px 75px rgba(0, 0, 0, 0.36), 0 0 48px rgba(69, 190, 215, 0.16); transform: perspective(1100px) translateY(-7px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }
@@ -128,11 +151,15 @@
   .header nav { gap: 13px; font-size: 0.64rem; }
   .header nav > a:first-child { display: none; }
   .hero { grid-template-columns: 1fr; gap: 30px; min-height: 0; }
+  .heroCopy { padding-bottom: 0; }
+  .seasonControl { align-self: stretch; width: 100%; margin-bottom: 0; }
   .trackFigure { min-height: 300px; }
   .explorer { margin-top: 56px; padding: 21px; }
   .explorerHeading, .sectionHeading { display: block; }
   .explorerHeading > p, .sectionHeading > p { margin-top: 14px; text-align: left; }
   .selectors, .selectors + .selectors, .comparisonCards { grid-template-columns: 1fr; }
+  .comparisonPanel { padding: 20px; }
+  .comparisonToolbar { align-items: flex-start; flex-direction: column; }
   .galleryViewport { height: 490px; }
   .gallerySlot { width: min(328px, 78vw); }
   .gallerySlot { --gallery-x: 0px !important; }

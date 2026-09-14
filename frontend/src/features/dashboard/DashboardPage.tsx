@@ -9,6 +9,8 @@ import type {
 } from '../../types';
 import { format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
+import { SeasonSelector } from '../../components';
+import { seasonQueryValue, useSeasonQueryState } from '../../utils/season';
 import styles from './DashboardPage.module.css';
 
 export interface DashboardPageProps {
@@ -122,7 +124,7 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
       <p className={styles.summaryLead}>
         <strong>{summary.activeAthletesCount} of {summary.athletesCount} athlete{summary.athletesCount === 1 ? '' : 's'}</strong> {summary.activeAthletesCount === 1 ? 'is' : 'are'} active,
         with <strong>{summary.upcomingEventCount} upcoming event{summary.upcomingEventCount === 1 ? '' : 's'}</strong> and
-        <strong> {summary.seasonPbs} season PB{summary.seasonPbs === 1 ? '' : 's'}</strong> on the board.
+         <strong> {summary.seasonPbs} season PB{summary.seasonPbs === 1 ? '' : 's'}</strong> on the board.
         {summary.inactiveAthletesCount > 0 && <> <strong>{summary.inactiveAthletesCount} inactive</strong> athlete{summary.inactiveAthletesCount === 1 ? '' : 's'} need roster attention.</>}
       </p>
       <div className={styles.summaryMeta}>
@@ -188,7 +190,7 @@ function ResultRow({ item, onOpenAthlete }: {
   );
 }
 
-function StatRow({ summary }: { summary: DashboardSummary }) {
+function StatRow({ summary, season }: { summary: DashboardSummary; season: string }) {
   const next14 = summary.upcomingEvents.filter((event) => isWithinDays(event.date, summary.asOfDate, 14)).length;
   const stats = [
     {
@@ -211,7 +213,7 @@ function StatRow({ summary }: { summary: DashboardSummary }) {
     },
     {
       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>,
-      label: 'Season PBs',
+       label: season === 'all' ? 'All-time PBs' : `${season} PBs`,
       value: summary.seasonPbs,
       delta: `${summary.recentPbs.length} recent`,
       context: 'Performance momentum',
@@ -365,8 +367,9 @@ function LiveDashboard({ activeEvent, inactiveAthletesCount, statusReviewCount, 
   );
 }
 
-function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, onOpenEvent }: {
+function SummaryDashboard({ summary, season, onOpenRoster, onOpenAthlete, onOpenEvents, onOpenEvent }: {
   summary: DashboardSummary;
+  season: string;
   onOpenRoster: () => void;
   onOpenAthlete: (athleteId: string) => void;
   onOpenEvents: () => void;
@@ -389,7 +392,7 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
         </div>
       </section>
 
-      <StatRow summary={summary} />
+      <StatRow summary={summary} season={season} />
 
       <StatusAttention inactiveAthletesCount={summary.inactiveAthletesCount} statusReviewCount={summary.statusReviewCount} />
 
@@ -437,6 +440,7 @@ function SummaryDashboard({ summary, onOpenRoster, onOpenAthlete, onOpenEvents, 
 }
 
 export function DashboardPage(props: DashboardPageProps) {
+  const [season, setSeason] = useSeasonQueryState();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -450,7 +454,7 @@ export function DashboardPage(props: DashboardPageProps) {
     setLoadError(null);
     setRevealed(false);
 
-    void getDashboardSummary().then((nextSummary) => {
+    void getDashboardSummary(seasonQueryValue(season)).then((nextSummary) => {
       if (!current) return;
       setSummary(nextSummary);
       onSummaryLoadedRef.current?.(nextSummary);
@@ -462,7 +466,7 @@ export function DashboardPage(props: DashboardPageProps) {
     });
 
     return () => { current = false; };
-  }, [reloadKey]);
+  }, [reloadKey, season]);
 
   if (!summary && !loadError) {
     return <section className={styles.dashboard} aria-busy="true"><div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading dashboard...</p></div></section>;
@@ -475,9 +479,10 @@ export function DashboardPage(props: DashboardPageProps) {
   const isLive = summary!.state === 'live' && summary!.activeEvent !== null;
   return (
     <section className={`${styles.dashboard} ${revealed ? styles.revealed : ''}`} aria-label="Dashboard overview">
+      <SeasonSelector value={season} onChange={setSeason} />
       {isLive
         ? <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
-        : <SummaryDashboard summary={summary!} onOpenRoster={props.onOpenRoster} onOpenAthlete={props.onOpenAthlete} onOpenEvents={props.onOpenEvents} onOpenEvent={props.onOpenEvent} />}
+        : <SummaryDashboard summary={summary!} season={season} onOpenRoster={props.onOpenRoster} onOpenAthlete={props.onOpenAthlete} onOpenEvents={props.onOpenEvents} onOpenEvent={props.onOpenEvent} />}
     </section>
   );
 }

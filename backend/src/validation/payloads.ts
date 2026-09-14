@@ -71,6 +71,7 @@ export interface AthleteProgressionQuery {
   cursor?: string;
   limit?: number;
   type?: EventType;
+  year?: string;
 }
 
 export interface AthleteStatusPayload {
@@ -110,6 +111,7 @@ export interface EventListQuery {
   status?: EventStatus;
   dateFrom?: string;
   dateTo?: string;
+  year?: string;
 }
 
 export interface WeatherCurrentQuery {
@@ -179,10 +181,10 @@ export interface FixtureInvitationResponsePayload {
 
 const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId'] as const;
-const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type'] as const;
+const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type', 'year'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
 const SQUAD_FIELDS = ['name'] as const;
-const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo'] as const;
+const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo', 'year'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
 const VENUE_SEARCH_QUERY_FIELDS = ['q'] as const;
 const EVENT_FIELDS = [
@@ -587,6 +589,7 @@ export function parseAthleteProgressionQuery(input: Record<string, unknown>): At
   rejectUnknownFields(input, ATHLETE_PROGRESSION_QUERY_FIELDS, issues);
   const cursor = optionalQueryString(input, 'cursor', issues);
   const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
+  const year = optionalQueryString(input, 'year', issues);
   let limit: number | undefined;
   if (hasOwn(input, 'limit')) {
     const raw = input.limit;
@@ -601,6 +604,7 @@ export function parseAthleteProgressionQuery(input: Record<string, unknown>): At
     ...(cursor === undefined ? {} : { cursor }),
     ...(limit === undefined ? {} : { limit }),
     ...(type === undefined ? {} : { type }),
+    ...(year === undefined ? {} : { year }),
   };
 }
 
@@ -673,6 +677,7 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
   const status = optionalQueryEnum(input, 'status', EVENT_STATUSES, issues);
   const dateFrom = optionalQueryDate(input, 'dateFrom', issues);
   const dateTo = optionalQueryDate(input, 'dateTo', issues);
+  const year = optionalQueryString(input, 'year', issues);
 
   if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
     issues.push(issue('dateFrom', 'invalid_range', 'dateFrom must not be after dateTo'));
@@ -685,6 +690,7 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
     ...(status === undefined ? {} : { status }),
     ...(dateFrom === undefined ? {} : { dateFrom }),
     ...(dateTo === undefined ? {} : { dateTo }),
+    ...(year === undefined ? {} : { year }),
   };
 }
 

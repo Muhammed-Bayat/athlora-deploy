@@ -4,6 +4,7 @@ import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { AthleticsEvent, EventStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { parseSeasonYear } from './seasons.js';
 import { recomputeEventResults } from './timeline.js';
 import { assertFixtureReadyToStart, assertHostWorkspace, markFixtureReacceptanceRequired } from './fixtures.js';
 import { notifyEventComingUp, notifyEventEnded, notifyFixtureStarted, notifyLiveLoggerStarted } from './fixtureNotifications.js';
@@ -61,6 +62,11 @@ export async function listEvents(
       AND fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision
   ))`];
   const parameters: string[] = [workspaceId];
+  const season = parseSeasonYear(query.year);
+  if (season.selected !== 'all') {
+    parameters.push(season.startDate!, season.endDate!);
+    conditions.push(`date >= $${parameters.length - 1}::date AND date < $${parameters.length}::date`);
+  }
   if (query.type !== undefined) {
     parameters.push(query.type);
     conditions.push(`type = $${parameters.length}`);

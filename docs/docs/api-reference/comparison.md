@@ -4,12 +4,16 @@ sidebar_position: 2
 
 # 100m Comparisons
 
-The Compare page supports all-time 100m athlete and club analysis. All responses use effective results: void outcomes are excluded and a positive manual override takes precedence over the recorded final result.
+The Compare page supports calendar-year and all-time 100m athlete and club analysis. All responses use effective results: void outcomes are excluded and a positive manual override takes precedence over the recorded final result.
+
+## Season Scope
+
+All comparison and club-statistics endpoints accept an optional `year` query parameter. Omit it to use the current UTC calendar year, pass a four-digit calendar year such as `2025` for a historical season, or pass `all` for all-time analysis. `GET /api/v1/workspaces/seasons` returns the authenticated workspace's available years plus the current year; public clients can use `GET /api/v1/public/statistics/seasons`.
 
 ## Athlete Comparison
 
 ```
-GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}
+GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}&year=2026
 ```
 
 The default comparison is restricted to two distinct athletes in the caller's club workspace.
@@ -26,7 +30,7 @@ GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}&scope=cross-
 - The response contains only the existing safe comparison identity and performance fields. It never exposes date of birth, notes, injury data, or other private athlete profile fields.
 - The UI requires users to select two clubs first, then search each club's roster by name before selecting the athletes.
 
-Both athlete endpoints return side-by-side all-time 100m PB, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting.
+Both athlete endpoints return side-by-side scoped 100m bests, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting.
 
 ## Club Roster Lookup
 
@@ -48,10 +52,10 @@ This authenticated lookup supports the cross-club athlete selectors. `q` is opti
 ## Club Statistics
 
 ```
-GET /api/v1/clubs/{clubId}/statistics
+GET /api/v1/clubs/{clubId}/statistics?year=2026
 ```
 
-Returns all-time 100m performance for the club's current roster, including:
+Returns the selected season's 100m performance for the club's current roster, including:
 
 - Roster counts for active, inactive, archived, and total athletes.
 - Distinct athletes with valid results.
@@ -65,7 +69,7 @@ Returns all-time 100m performance for the club's current roster, including:
 GET /api/v1/clubs/comparison?club1Id={uuid}&club2Id={uuid}
 ```
 
-Compares exactly two distinct clubs using the same all-time statistics returned by the single-club endpoint. Duplicate club IDs return `400 DUPLICATE_CLUB_ID`; unknown clubs return `404 CLUB_NOT_FOUND`.
+Compares exactly two distinct clubs using the same selected-season statistics returned by the single-club endpoint. Duplicate club IDs return `400 DUPLICATE_CLUB_ID`; unknown clubs return `404 CLUB_NOT_FOUND`.
 
 ## Effective Result Scope
 

@@ -39,6 +39,7 @@ export interface ClubRosterCounts {
 }
 
 export interface ClubStatistics {
+  season?: SeasonScopeMetadata;
   club: Pick<Club, 'id' | 'name'>;
   roster: ClubRosterCounts;
   distinctAthletesWithValidResults: number;
@@ -77,6 +78,20 @@ export interface PublicAthleteStatistics {
 
 export interface PublicClubStatistics extends ClubStatistics {
   athletes: PublicAthleteStatistics[];
+}
+
+export interface PublicAthleteComparisonEntry {
+  date: string;
+  result: number;
+}
+
+export interface PublicAthleteComparisonAthlete extends PublicAthleteStatistics {
+  club: Pick<Club, 'id' | 'name'>;
+  progression: PublicAthleteComparisonEntry[];
+}
+
+export interface PublicAthleteComparison {
+  athletes: PublicAthleteComparisonAthlete[];
 }
 
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
@@ -332,6 +347,7 @@ export interface AthleteResultCounts {
 }
 
 export interface AthleteStatisticsDetail extends AthleteStatistics {
+  season?: SeasonScopeMetadata;
   athlete: AggregateAthleteIdentity;
   resultCounts: AthleteResultCounts;
   latest: AthleteResultHistoryEntry | null;
@@ -380,6 +396,7 @@ export interface DashboardActiveEvent {
 }
 
 export interface DashboardSummary {
+  season?: SeasonScopeMetadata;
   state: 'live' | 'summary';
   asOfDate: string;
   athletesCount: number;
@@ -470,6 +487,7 @@ export interface ProgressionPagination {
 }
 
 export interface ProgressionDetail {
+  season?: SeasonScopeMetadata;
   athlete: AggregateAthleteIdentity;
   entries: ProgressionEntry[];
   pagination: ProgressionPagination;
@@ -490,9 +508,18 @@ export interface ComparisonAthleteAggregate {
 }
 
 export interface ComparisonDetail {
+  season?: SeasonScopeMetadata;
   athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate];
 }
 
 export interface MultiComparisonDetail {
+  season?: SeasonScopeMetadata;
   athletes: ComparisonAthleteAggregate[];
+}
+
+export interface SeasonScopeMetadata {
+  selected: number | 'all';
+  startDate: string | null;
+  endDate: string | null;
+  available: number[];
 }

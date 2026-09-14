@@ -13,7 +13,8 @@ import {
   updateEventParticipant,
 } from '../../api/participants';
 import { ApiError } from '../../api/client';
-import { Button, Card, DatePicker, EmptyState, Input, Modal, Select, Toast } from '../../components';
+import { Button, Card, DatePicker, EmptyState, Input, Modal, SeasonSelector, Select, Toast } from '../../components';
+import { seasonLabel, seasonQueryValue, useSeasonQueryState } from '../../utils/season';
 import {
   DISCIPLINE_100M,
   type Athlete,
@@ -644,6 +645,7 @@ export function ParticipantManager({
 }
 
 export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localToday(), defaultView }: EventsPageProps = {}) {
+  const [season, setSeason] = useSeasonQueryState();
   const { activeWorkspace } = useWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -679,7 +681,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     let current = true;
     setLoading(true);
     setLoadError(null);
-    void listEvents()
+    void (seasonQueryValue(season) ? listEvents({ year: season }) : listEvents())
       .then(({ data }) => {
         if (current) setEvents(sortedEvents(data));
       })
@@ -692,7 +694,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     return () => {
       current = false;
     };
-  }, [activeWorkspace.id, reloadKey]);
+  }, [activeWorkspace.id, reloadKey, season]);
 
   useEffect(() => {
     const query = clubSearch.trim();
@@ -717,14 +719,16 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     }
     let current = true;
     setClubLoading(true);
-    void listClubCalendarEvents(selectedClubs.map((club) => club.id))
+    void (seasonQueryValue(season)
+      ? listClubCalendarEvents(selectedClubs.map((club) => club.id), season)
+      : listClubCalendarEvents(selectedClubs.map((club) => club.id)))
       .then(({ data }) => {
         if (current) setClubEvents(data.map(({ event, club }) => ({ event, clubId: club.id, clubName: club.name })));
       })
       .catch(() => { if (current) setClubEvents([]); })
       .finally(() => { if (current) setClubLoading(false); });
     return () => { current = false; };
-  }, [calendarScope, selectedClubs]);
+  }, [calendarScope, selectedClubs, season]);
 
   useEffect(() => {
     setSelectedId(null);
@@ -777,7 +781,11 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     setDateTab('upcoming');
     setTypeFilter('');
     setStatusFilter('');
-    setSearchParams({});
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('date'); next.delete('type'); next.delete('status');
+      return next;
+    });
   };
 
   const updateFilters = (next: { date?: DateTab; type?: EventType | ''; status?: EventStatus | '' }) => {
@@ -807,9 +815,10 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
         <div>
           <p className={styles.eyebrow}>100m season calendar</p>
           <h1 id="events-heading">Events</h1>
-          <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown`}</p>
+          <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown for ${seasonLabel(season)}`}</p>
         </div>
         <div className={styles.controls}>
+          <SeasonSelector value={season} onChange={setSeason} />
           <div className={styles.segmented} role="group" aria-label="Filter events by date">
             {(['upcoming', 'past', 'all'] as const).map((tab) => (
               <button type="button" key={tab} aria-pressed={dateTab === tab} onClick={() => { setDateTab(tab); updateFilters({ date: tab }); }}>

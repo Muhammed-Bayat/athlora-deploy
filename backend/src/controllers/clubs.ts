@@ -18,6 +18,7 @@ import {
   withdrawJoinRequest,
 } from '../services/clubs.js';
 import { normalizeRequiredString } from '../validation/primitives.js';
+import { parseSeasonYear } from '../services/seasons.js';
 
 function parameter(value: string | string[] | undefined): string {
   if (typeof value !== 'string') throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -35,7 +36,9 @@ export const list: RequestHandler = async (req, res, next) => {
 export const calendar: RequestHandler = async (req, res, next) => {
   try {
     const clubIds = Array.isArray(req.query.clubId) ? req.query.clubId : req.query.clubId ? [req.query.clubId] : [];
-    const events = await listClubCalendarEvents(clubIds);
+    const events = req.query.year === undefined
+      ? await listClubCalendarEvents(clubIds)
+      : await listClubCalendarEvents(clubIds, undefined, parseSeasonYear(req.query.year));
     res.json({ data: events, meta: { count: events.length } });
   } catch (error) { next(error); }
 };
@@ -80,21 +83,27 @@ export const listComparisonAthletes: RequestHandler = async (req, res, next) => 
 
 export const statistics: RequestHandler = async (req, res, next) => {
   try {
-    const clubStatistics = await getClubStatistics(parameter(req.params.clubId));
+    const clubStatistics = req.query.year === undefined
+      ? await getClubStatistics(parameter(req.params.clubId))
+      : await getClubStatistics(parameter(req.params.clubId), undefined, parseSeasonYear(req.query.year));
     res.json({ data: clubStatistics });
   } catch (error) { next(error); }
 };
 
 export const comparison: RequestHandler = async (req, res, next) => {
   try {
-    const clubComparison = await getClubComparison(req.query.club1Id, req.query.club2Id);
+    const clubComparison = req.query.year === undefined
+      ? await getClubComparison(req.query.club1Id, req.query.club2Id)
+      : await getClubComparison(req.query.club1Id, req.query.club2Id, parseSeasonYear(req.query.year));
     res.json({ data: clubComparison });
   } catch (error) { next(error); }
 };
 
 export const multiComparison: RequestHandler = async (req, res, next) => {
   try {
-    const clubComparison = await getClubMultiComparison(req.query.clubId);
+    const clubComparison = req.query.year === undefined
+      ? await getClubMultiComparison(req.query.clubId)
+      : await getClubMultiComparison(req.query.clubId, parseSeasonYear(req.query.year));
     res.json({ data: clubComparison });
   } catch (error) { next(error); }
 };

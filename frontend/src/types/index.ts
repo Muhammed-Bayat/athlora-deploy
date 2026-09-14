@@ -133,6 +133,20 @@ export interface PublicClubStatistics extends ClubStatistics {
   athletes: PublicAthleteStatistics[];
 }
 
+export interface PublicAthleteComparisonEntry {
+  date: string;
+  result: number;
+}
+
+export interface PublicAthleteComparisonAthlete extends PublicAthleteStatistics {
+  club: PublicClub;
+  progression: PublicAthleteComparisonEntry[];
+}
+
+export interface PublicAthleteComparison {
+  athletes: PublicAthleteComparisonAthlete[];
+}
+
 export interface Athlete {
   id: string;
   coachId: string;
@@ -173,6 +187,7 @@ export interface AthleteListFilters {
   name?: string;
   squadId?: string;
   squad?: string;
+  year?: string;
 }
 
 export type EventType = 'competition' | 'training';
@@ -238,6 +253,7 @@ export interface EventListFilters {
   status?: EventStatus;
   dateFrom?: string;
   dateTo?: string;
+  year?: string;
 }
 
 export type RsvpStatus = 'pending' | 'yes' | 'no' | 'maybe';

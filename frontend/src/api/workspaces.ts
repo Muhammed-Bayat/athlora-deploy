@@ -10,6 +10,11 @@ export async function listWorkspaces(): Promise<WorkspaceListResponse> {
   return request<WorkspaceListResponse>('/api/v1/workspaces');
 }
 
+export async function listWorkspaceSeasons(): Promise<number[]> {
+  const response = await request<{ data: number[] }>('/api/v1/workspaces/seasons');
+  return response.data;
+}
+
 export async function leaveCurrentWorkspace(): Promise<void> {
   await request<void>('/api/v1/workspaces/current-membership', { method: 'DELETE' });
 }

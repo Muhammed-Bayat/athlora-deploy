@@ -17,6 +17,7 @@ export async function listAthletes(
   if (filters.status) query.set('status', filters.status);
   if (filters.name?.trim()) query.set('name', filters.name.trim());
   if (filters.squadId) query.set('squadId', filters.squadId);
+  if (filters.year) query.set('year', filters.year);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return request<ApiList<Athlete>>(`/api/v1/athletes${suffix}`, { signal });
 }

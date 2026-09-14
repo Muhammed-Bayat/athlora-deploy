@@ -16,6 +16,7 @@ export async function listEvents(
   if (filters.status) query.set('status', filters.status);
   if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
   if (filters.dateTo) query.set('dateTo', filters.dateTo);
+  if (filters.year) query.set('year', filters.year);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return request<ApiList<AthleticsEvent>>(`/api/v1/events${suffix}`, { signal });
 }

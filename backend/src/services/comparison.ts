@@ -13,6 +13,7 @@ import {
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
+import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 type ReadTransactionRunner = <T>(
   operation: (client: DbExecutor) => Promise<T>,
@@ -71,7 +72,8 @@ const PROGRESSION_SELECT = `
          WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
-       AND e.status <> 'cancelled'
+        AND e.status <> 'cancelled'
+        AND e.date >= $4::date AND e.date < $5::date
   ), enriched AS (
     SELECT *,
            (event_status <> 'cancelled' AND effective_outcome = 'valid')
@@ -138,6 +140,7 @@ async function fetchAthleteAggregate(
   workspaceId: string,
   athleteId: unknown,
   client: DbExecutor,
+  season: SeasonScope,
 ): Promise<ComparisonAthleteAggregate> {
   const athlete = await getAthlete(workspaceId, athleteId, client);
 
@@ -149,6 +152,8 @@ async function fetchAthleteAggregate(
     athlete.id,
     workspaceId,
     DISCIPLINE_100M,
+    season.selected === 'all' ? '0001-01-01' : season.startDate!,
+    season.selected === 'all' ? '9999-12-31' : season.endDate!,
   ]);
 
   const entries = result.rows.map(mapProgressionEntryRow);
@@ -198,6 +203,7 @@ export async function getTwoAthleteComparison(
   athlete1Id: unknown,
   athlete2Id: unknown,
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<ComparisonDetail> {
   if (!athlete1Id || !athlete2Id) throw notFound();
   if (String(athlete1Id) === String(athlete2Id)) {
@@ -205,8 +211,8 @@ export async function getTwoAthleteComparison(
   }
 
   return runTransaction(async (client) => {
-    const athlete1 = await fetchAthleteAggregate(workspaceId, athlete1Id, client);
-    const athlete2 = await fetchAthleteAggregate(workspaceId, athlete2Id, client);
+    const athlete1 = await fetchAthleteAggregate(workspaceId, athlete1Id, client, season);
+    const athlete2 = await fetchAthleteAggregate(workspaceId, athlete2Id, client, season);
 
     return {
       athletes: [athlete1, athlete2],
@@ -218,6 +224,7 @@ export async function getCrossClubAthleteComparison(
   athlete1Id: unknown,
   athlete2Id: unknown,
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<ComparisonDetail> {
   if (!isCanonicalUuid(athlete1Id) || !isCanonicalUuid(athlete2Id)) throw notFound();
   if (athlete1Id === athlete2Id) {
@@ -248,8 +255,8 @@ export async function getCrossClubAthleteComparison(
       );
     }
 
-    const athlete1 = await fetchAthleteAggregate(athlete1WorkspaceId, athlete1Id, client);
-    const athlete2 = await fetchAthleteAggregate(athlete2WorkspaceId, athlete2Id, client);
+    const athlete1 = await fetchAthleteAggregate(athlete1WorkspaceId, athlete1Id, client, season);
+    const athlete2 = await fetchAthleteAggregate(athlete2WorkspaceId, athlete2Id, client, season);
     return { athletes: [athlete1, athlete2] };
   });
 }
@@ -258,16 +265,18 @@ export async function getMultiAthleteComparison(
   workspaceId: string,
   athleteIds: unknown,
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<MultiComparisonDetail> {
   const ids = validateAthleteIds(athleteIds);
   return runTransaction(async (client) => ({
-    athletes: await Promise.all(ids.map((athleteId) => fetchAthleteAggregate(workspaceId, athleteId, client))),
+    athletes: await Promise.all(ids.map((athleteId) => fetchAthleteAggregate(workspaceId, athleteId, client, season))),
   }));
 }
 
 export async function getCrossClubMultiAthleteComparison(
   athleteIds: unknown,
   runTransaction: ReadTransactionRunner = withReadTransaction,
+  season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<MultiComparisonDetail> {
   const ids = validateAthleteIds(athleteIds);
   return runTransaction(async (client) => {
@@ -285,17 +294,17 @@ export async function getCrossClubMultiAthleteComparison(
     );
     const workspaceIds = ids.map((id) => workspacesByAthleteId.get(id));
     if (workspaceIds.some((workspaceId) => !workspaceId)) throw notFound();
-    if (new Set(workspaceIds).size !== ids.length) {
+    if (new Set(workspaceIds).size < 2) {
       throw new ApiError(
         422,
         'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS',
-        'Cross-club comparison requires athletes from distinct club workspaces',
+        'Cross-club comparison requires athletes from at least two club workspaces',
       );
     }
 
     return {
       athletes: await Promise.all(ids.map((athleteId, index) =>
-        fetchAthleteAggregate(workspaceIds[index]!, athleteId, client))),
+        fetchAthleteAggregate(workspaceIds[index]!, athleteId, client, season))),
     };
   });
 }

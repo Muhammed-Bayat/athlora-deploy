@@ -543,7 +543,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ### 4.10 Dashboard data
 
-`GET /api/v1/dashboard/summary` returns one `{ data }` object with the same keys in summary and live modes:
+`GET /api/v1/dashboard/summary?year=2026` returns one `{ data }` object with the same keys in summary and live modes. Omit `year` for the current UTC calendar year, provide a four-digit year for history, or use `year=all` for all-time result aggregates.
 
 ```
 {
@@ -560,7 +560,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 - `athletesCount` counts all owned athletes; `activeAthletesCount`, `inactiveAthletesCount`, and `archivedAthletesCount` make the lifecycle distribution explicit. `rosterSnapshot` includes active athletes only. `statusReviewCount` is the number of unacknowledged per-assignment lifecycle review items. Historical recent result/PB rows retain archived athlete identity.
 - `upcomingEvents` are owned 100m `scheduled` events with `date >= asOfDate`; cancelled, completed, active and legacy non-100m events are not upcoming. Ordering is date/time/creation/ID ascending and `upcomingEventCount` mirrors the array length.
-- `seasonPbs` counts non-cancelled `isPb` rows in the current calendar year. `recentResults` returns ten non-cancelled rows and `recentPbs` returns five non-cancelled PB rows, both in deterministic reverse event order.
+- `seasonPbs` counts non-cancelled `isPb` rows in the selected season. `recentResults` returns ten non-cancelled rows and `recentPbs` returns five non-cancelled PB rows in that same scope, both in deterministic reverse event order.
 - One active event is selected from owned 100m `in_progress` events by date ascending, time ascending with nulls last, creation ascending, then ID ascending. This is a presentation rule; multiple events may remain in progress.
 - A live `activeEvent` contains the event identity, ten latest active timeline entries with athlete identity, and progress over its current participant set: participant count, distinct participants with active entries, resolved participant result count, active participant entry count, and rounded completion percentage. Effective valid/DQ/DNF/DNS outcomes are resolved; `no_result` is unresolved.
 - No active event produces `state: 'summary'` and `activeEvent: null`. All collections remain present as empty arrays and all absent counts are zero, so clients never branch on missing keys.

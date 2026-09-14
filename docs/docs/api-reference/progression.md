@@ -21,6 +21,7 @@ GET /api/v1/athletes/:id/progression
 | `cursor` | string | No | Pagination cursor from previous response |
 | `limit` | number | No | Page size (default 50, max 200) |
 | `type` | `competition` \| `training` | No | Filter by event type |
+| `year` | `YYYY` \| `all` | No | Calendar-year scope. Omit for the current UTC year; use `all` for all recorded results. |
 
 ## Response Shape
 
@@ -106,9 +107,9 @@ GET /api/v1/athletes/:id/progression
 
 | Field | Type | Description |
 |---|---|---|
-| `allTimePb` | number \| null | The athlete's all-time best effective result for 100m |
-| `totalResults` | number | Total number of non-cancelled results |
-| `totalValid` | number | Number of results with `effectiveOutcome = 'valid'` |
+| `allTimePb` | number \| null | The best effective result within the selected progression scope |
+| `totalResults` | number | Total number of non-cancelled results within the selected scope |
+| `totalValid` | number | Number of scoped results with `effectiveOutcome = 'valid'` |
 
 ## Effective Result Logic
 
