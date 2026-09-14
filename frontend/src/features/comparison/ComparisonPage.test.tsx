@@ -163,6 +163,24 @@ describe('ComparisonPage', () => {
     expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(ATHLETE_1.id, ATHLETE_2.id, undefined);
   });
 
+  it('propagates a selected historical season to athlete discovery and comparison', async () => {
+    mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
+    renderPage({ year: '2024', athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
+
+    expect(await screen.findByRole('heading', { name: 'Alice Sprint vs Bob Dash: 2024 100m Progression' })).toBeInTheDocument();
+    expect(mockListAthletes).toHaveBeenCalledWith({ year: '2024' });
+    expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(ATHLETE_1.id, ATHLETE_2.id, undefined, '2024');
+  });
+
+  it('propagates the all-time season to athlete discovery and comparison', async () => {
+    mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
+    renderPage({ year: 'all', athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
+
+    await screen.findByText('Alice Sprint PB');
+    expect(mockListAthletes).toHaveBeenCalledWith({ year: 'all' });
+    expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(ATHLETE_1.id, ATHLETE_2.id, undefined, 'all');
+  });
+
   it('displays the metrics table for athletes', async () => {
     mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
     renderPage({ athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });

@@ -272,6 +272,31 @@ describe('EventsPage', () => {
     expect(screen.getByText('Together · Rival Track Club')).toBeInTheDocument();
   });
 
+  it('reloads a selected club calendar for the chosen season and removes it from the combined schedule', async () => {
+    window.history.replaceState({}, '', '/?year=2025');
+    const user = userEvent.setup();
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Club calendars' }));
+    await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(
+      ['88888888-8888-4888-8888-888888888888'],
+      '2025',
+    ));
+    expect(screen.getByText('Showing your schedule alongside 1 selected club.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove Rival Track Club' }));
+
+    expect(screen.queryByLabelText('Selected clubs')).not.toBeInTheDocument();
+    expect(screen.getByText('Search for one or more clubs to combine their upcoming schedules with yours.')).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
+  });
+
   it('hands an event id to routed detail navigation', async () => {
     const onOpenEvent = vi.fn();
     const user = userEvent.setup();

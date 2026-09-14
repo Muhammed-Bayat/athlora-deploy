@@ -36,4 +36,13 @@ describe('club controllers', () => {
     expect(services.listClubCalendarEvents).toHaveBeenCalledWith(['club-1', 'club-2']);
     expect(calendar.json).toHaveBeenCalledWith({ data: [{ club: { id: 'club-1', name: 'Fast Club' }, event: { id: 'event-1' } }], meta: { count: 1 } });
   });
+  it('passes an explicit calendar season through to the service', async () => {
+    await invoke(clubs.calendar, undefined, undefined, { clubId: ['club-1'], year: '2025' });
+
+    expect(services.listClubCalendarEvents).toHaveBeenCalledWith(
+      ['club-1'],
+      undefined,
+      expect.objectContaining({ selected: 2025, startDate: '2025-01-01', endDate: '2026-01-01' }),
+    );
+  });
 });

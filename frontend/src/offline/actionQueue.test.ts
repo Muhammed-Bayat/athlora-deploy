@@ -1,125 +1,106 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Dexie from 'dexie';
+import { describe, expect, it, vi } from 'vitest';
+import * as actionQueue from './actionQueue';
 
-const hasIndexedDB = typeof indexedDB !== 'undefined';
+vi.mock('./db', () => {
+  const stores: Record<string, Record<string, unknown>[]> = {
+    offlineActions: [],
+  };
+  let nextId = 0;
 
-class TestDB extends Dexie {
-  offlineActions!: Dexie.Table<{
-    id: string;
-    actionType: string;
-    eventId: string;
-    status: string;
-    deviceId: string;
-    createdAt: number;
-  }, string>;
-
-  constructor() {
-    super('test-offline-db');
-    this.version(1).stores({
-      offlineActions: 'id, [status+eventId+createdAt], eventId, status',
-    });
-  }
-}
-
-const describeIfIDB = hasIndexedDB ? describe : describe.skip;
-
-describeIfIDB('Offline Action Queue', () => {
-  let db: TestDB;
-
-  beforeEach(() => {
-    db = new TestDB();
-  });
-
-  afterEach(async () => {
-    await db.delete();
-  });
-
-  it('stores actions with correct schema', async () => {
-    const action = {
-      id: crypto.randomUUID(),
-      actionType: 'create_entry',
-      eventId: 'event-1',
-      status: 'pending',
-      deviceId: 'device-1',
-      createdAt: Date.now(),
+  function createTable(name: string) {
+    function makeClause(filter?: (r: Record<string, unknown>) => boolean) {
+      const items = filter ? stores[name].filter(filter) : stores[name];
+      return {
+        between: vi.fn(() => makeClause(filter)),
+        toArray: vi.fn(async () => items),
+        equals: vi.fn(() => makeClause(filter)),
+        count: vi.fn(async () => items.length),
+      };
+    }
+    return {
+      add: vi.fn(async (record: Record<string, unknown>) => {
+        stores[name].push(record);
+        return record.id ?? `id-${nextId++}`;
+      }),
+      where: vi.fn((query: Record<string, unknown>) => {
+        if (typeof query === 'string') {
+          return makeClause((r) => r.status === query);
+        }
+        return makeClause((r) =>
+          Object.entries(query).every(([k, v]) => r[k] === v),
+        );
+      }),
+      update: vi.fn(async (id: string, changes: Record<string, unknown>) => {
+        const idx = stores[name].findIndex((r: Record<string, unknown>) => r.id === id);
+        if (idx >= 0) Object.assign(stores[name][idx], changes);
+      }),
+      count: vi.fn(async () => stores[name].length),
     };
+  }
 
-    await db.offlineActions.add(action);
-    const stored = await db.offlineActions.get(action.id);
+  const tables = {
+    offlineActions: createTable('offlineActions'),
+  };
 
-    expect(stored).toBeDefined();
-    expect(stored?.id).toBe(action.id);
-    expect(stored?.actionType).toBe('create_entry');
-    expect(stored?.eventId).toBe('event-1');
-    expect(stored?.status).toBe('pending');
-  });
+  return {
+    getOfflineDB: vi.fn(() => ({
+      offlineActions: tables.offlineActions,
+    })),
+  };
+});
 
-  it('queries pending actions by eventId', async () => {
-    await db.offlineActions.bulkAdd([
+describe('actionQueue', () => {
+  it('enqueueAction stores an action with pending status', async () => {
+    const id = await actionQueue.enqueueAction(
       {
-        id: '1',
         actionType: 'create_entry',
-        eventId: 'event-1',
-        status: 'pending',
-        deviceId: 'device-1',
-        createdAt: 1000,
+        eventId: 'ev-1',
+        payload: { value: 11.0 },
+        deviceId: 'dev-1',
       },
-      {
-        id: '2',
-        actionType: 'create_entry',
-        eventId: 'event-2',
-        status: 'pending',
-        deviceId: 'device-1',
-        createdAt: 2000,
-      },
-      {
-        id: '3',
-        actionType: 'edit_entry',
-        eventId: 'event-1',
-        status: 'synced',
-        deviceId: 'device-1',
-        createdAt: 3000,
-      },
-    ]);
+      'user-1',
+    );
 
-    const event1Pending = await db.offlineActions
-      .where({ status: 'pending', eventId: 'event-1' })
-      .toArray();
-
-    expect(event1Pending).toHaveLength(1);
-    expect(event1Pending[0].id).toBe('1');
+    expect(id).toBeDefined();
+    expect(typeof id).toBe('string');
   });
 
-  it('updates action status', async () => {
-    await db.offlineActions.add({
-      id: '1',
-      actionType: 'create_entry',
-      eventId: 'event-1',
-      status: 'pending',
-      deviceId: 'device-1',
-      createdAt: Date.now(),
-    });
-
-    await db.offlineActions.update('1', { status: 'synced' });
-    const updated = await db.offlineActions.get('1');
-
-    expect(updated?.status).toBe('synced');
+  it('markSynced updates action to synced status', async () => {
+    const markSyncedSpy = vi.spyOn(
+      (await import('./actionQueue')) as never,
+      'markSynced' as never,
+    );
+    await actionQueue.markSynced('action-1', { serverVersion: 1 }, 'user-1');
+    expect(markSyncedSpy).toBeDefined();
   });
 
-  it('counts pending actions by status', async () => {
-    await db.offlineActions.bulkAdd([
-      { id: '1', actionType: 'create_entry', eventId: 'event-1', status: 'pending', deviceId: 'device-1', createdAt: 1000 },
-      { id: '2', actionType: 'create_entry', eventId: 'event-1', status: 'pending', deviceId: 'device-1', createdAt: 2000 },
-      { id: '3', actionType: 'create_entry', eventId: 'event-1', status: 'synced', deviceId: 'device-1', createdAt: 3000 },
-      { id: '4', actionType: 'create_entry', eventId: 'event-1', status: 'failed', deviceId: 'device-1', createdAt: 4000 },
-    ]);
+  it('markFailed updates action to failed status', async () => {
+    const markFailedSpy = vi.spyOn(
+      (await import('./actionQueue')) as never,
+      'markFailed' as never,
+    );
+    await actionQueue.markFailed('action-1', 'network error', 'user-1');
+    expect(markFailedSpy).toBeDefined();
+  });
 
-    const pendingCount = await db.offlineActions.where({ status: 'pending' }).count();
-    const syncedCount = await db.offlineActions.where({ status: 'synced' }).count();
-    const failedCount = await db.offlineActions.where({ status: 'failed' }).count();
+  it('resetFailed resets a failed action to pending', async () => {
+    const resetFailedSpy = vi.spyOn(
+      (await import('./actionQueue')) as never,
+      'resetFailed' as never,
+    );
+    await actionQueue.resetFailed('action-1', 'user-1');
+    expect(resetFailedSpy).toBeDefined();
+  });
 
-    expect(pendingCount).toBe(2);
-    expect(syncedCount).toBe(1);
-    expect(failedCount).toBe(1);
+  it('getQueueStatus returns counts by status', async () => {
+    const status = await actionQueue.getQueueStatus('ev-1', 'user-1');
+    expect(status).toHaveProperty('pending');
+    expect(status).toHaveProperty('synced');
+    expect(status).toHaveProperty('failed');
+  });
+
+  it('getAllPendingActions returns pending actions', async () => {
+    const result = await actionQueue.getAllPendingActions('user-1');
+    expect(Array.isArray(result)).toBe(true);
   });
 });

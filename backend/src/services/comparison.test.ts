@@ -190,6 +190,25 @@ describe('getTwoAthleteComparison', () => {
     expect(sql).toContain("fw.status = 'accepted'");
   });
 
+  it('bounds each athlete progression query to the requested season', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [athleteRow({ id: ATHLETE_1_ID })] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [athleteRow({ id: ATHLETE_2_ID })] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await getTwoAthleteComparison(
+      USER_ID,
+      ATHLETE_1_ID,
+      ATHLETE_2_ID,
+      runner(query),
+      { selected: 2024, startDate: '2024-01-01', endDate: '2025-01-01' },
+    );
+
+    expect(query.mock.calls[1]?.[1]).toEqual([ATHLETE_1_ID, USER_ID, '100m', '2024-01-01', '2025-01-01']);
+    expect(query.mock.calls[3]?.[1]).toEqual([ATHLETE_2_ID, USER_ID, '100m', '2024-01-01', '2025-01-01']);
+  });
+
   it('excludes void outcomes from valid count and PB', async () => {
     const a1Row = athleteRow({ id: ATHLETE_1_ID });
     const a2Row = athleteRow({ id: ATHLETE_2_ID, name: 'Athlete Two' });

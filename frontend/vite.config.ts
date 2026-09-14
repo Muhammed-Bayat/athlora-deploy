@@ -127,7 +127,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['json-summary'],
-      exclude: ['dist/**', 'src/test/**', '**/*.test.*', '**/*.config.*'],
+      exclude: ['dist/**', 'dev-dist/**', 'src/test/**', '**/*.test.*', '**/*.config.*'],
     },
   },
 });

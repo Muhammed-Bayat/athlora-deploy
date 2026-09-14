@@ -23,17 +23,20 @@ export function FixturesPage() {
   const [time, setTime] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const selected = fixtures.find((fixture) => fixture.event.id === selectedId) ?? null;
 
   const load = () => {
+    setLoading(true);
     void Promise.all([listGuestFixtures(), listAthletes({ status: 'active' })])
       .then(([fixtureResponse, athleteResponse]) => {
         setFixtures(fixtureResponse.data);
         setAthletes(athleteResponse.data);
         setSelectedId((current) => (current && fixtureResponse.data.some((fixture) => fixture.event.id === current) ? current : (fixtureResponse.data[0]?.event.id ?? null)));
       })
-      .catch((requestError: unknown) => setError(message(requestError)));
+      .catch((requestError: unknown) => setError(message(requestError)))
+      .finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -163,7 +166,9 @@ export function FixturesPage() {
         <span>Manage only this workspace’s roster and results.</span>
       </header>
       {error && <p role="alert">{error}</p>}
-      {fixtures.length === 0 ? (
+      {loading ? (
+        <p role="status">Loading fixtures...</p>
+      ) : fixtures.length === 0 ? (
         <EmptyState title="No accepted fixtures" description="Accepted fixture invitations will appear here." />
       ) : (
         <div>
