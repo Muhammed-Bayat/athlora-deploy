@@ -17,7 +17,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Testing',
-      items: ['testing/overview'],
+      items: ['testing/overview', 'testing/stakeholder-feedback', 'testing/user-feedback'],
     },
     {
       type: 'category',
