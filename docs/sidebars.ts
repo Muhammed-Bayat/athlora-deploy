@@ -59,6 +59,15 @@ const sidebars: SidebarsConfig = {
             'sprints/sprint-1/raw-meeting-transcript',
           ],
         },
+        {
+          type: 'category',
+          label: 'Sprint 2',
+          items: [
+            'sprints/sprint-2/meeting-records',
+            'sprints/sprint-2/client-meetings',
+            'sprints/sprint-2/raw-meeting-transcript',
+          ],
+        },
       ],
     },
     {
