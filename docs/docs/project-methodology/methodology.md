@@ -17,7 +17,7 @@ This approach fits the team because:
 - **Visible flow.** The board shows all work from backlog to completion and prevents work from being lost in chat.
 - **Focused delivery.** The team identifies a Sprint goal and the most valuable ready issues, while retaining flexibility when university commitments or technical dependencies change.
 - **Practical coordination.** Short planning, progress, review, and improvement records create useful evidence without unnecessary ceremony.
-- **Continuous quality.** Pull requests, review, automated checks, documentation, and deployment readiness are required before work reaches `Done`.
+- **Continuous quality.** Authors complete a documented self-review, run applicable automated checks, update documentation, and confirm deployment readiness before work reaches `Done`.
 
 ---
 
@@ -59,18 +59,18 @@ The team uses a **Gitea Projects** board as the single source of truth for all w
 |---|---|
 | **Backlog** | Valid work that has been identified but is not yet scheduled. Cards here are prioritised but not yet committed to. |
 | **To Do** | Work that has been selected for the current cycle. The team has reviewed it, confirmed it is well-defined, and intends to start it soon. |
-| **In Progress** | Someone is actively working on this. There should be a branch and ideally a draft PR linked. |
-| **In Review** | The PR is open and awaiting review. No further code changes should be pushed until review feedback is addressed. |
-| **Done** | The work is merged, applicable tests and CI checks pass, documentation is updated, and the card is complete. |
+| **In Progress** | Someone is actively working on this. There should be a branch and issue link where practical. |
+| **Verification** | The author checks the final diff, runs the applicable local and CI checks, and confirms acceptance criteria before merging. |
+| **Done** | The work is merged, applicable checks pass, documentation is updated, and the card is complete. |
 
 ### 3.2 How Cards Move
 
 ```
-Backlog → To Do → In Progress → In Review → Done
+Backlog → To Do → In Progress → Verification → Done
 ```
 
-- Cards move **left to right** only. A card moves back if, for example, review reveals the work was not ready — but this is uncommon.
-- A card in `In Progress` should always have a linked branch and PR. If someone is blocked, the card stays in `In Progress` and the blockage is flagged to the team.
+- Cards normally move **left to right**. A card may return to `In Progress` when self-review or automated checks reveal that it is not ready.
+- A card in `In Progress` should have a linked branch or issue where practical. If someone is blocked, the card stays in `In Progress` and the blockage is flagged to the team.
 
 ---
 
@@ -110,11 +110,11 @@ A typical work cycle looks like this:
 1. **Plan the Sprint.** The team records a short Sprint goal and selects ready issues from `Backlog` into `To Do`.
 2. **Pull from To Do.** A team member takes a selected card when they have capacity.
 3. **Create a branch.** Following the [git methodology](./git-methodology), they branch off `main` with a descriptive name (e.g., `feature/live-logging-undo`).
-4. **Work on the branch.** If using an agent-assisted session, the agent writes code and commits; the developer creates the branch, pushes, and reviews. If working directly, the developer commits following Conventional Commits.
-5. **Open a PR (early).** Even as a draft. This signals to the team that work is underway and invites early feedback.
-6. **Move to In Review.** When the PR is ready for review, the card moves to `In Review`. At least one team member reviews the diff.
-7. **Address feedback.** If changes are requested, the developer (or agent) pushes fixes to the same branch. The card stays in `In Review`.
-8. **Merge.** Once approved and all CI checks pass, the PR is merged into `main`. Where source code changes, review the Gitea coverage report and its lowest-covered-file list as part of the quality discussion. The card then moves to `Done`.
+4. **Work on the branch.** If using an agent-assisted session, the agent writes code and commits; the developer creates the branch, pushes, and performs the final self-review. If working directly, the developer commits following Conventional Commits.
+5. **Open a PR when ready to merge.** The pull request is the merge record for the work and links the branch to its issue when one exists.
+6. **Move to Verification.** The author reviews the complete diff against the issue and acceptance criteria, runs the applicable checks, and checks the deployment and documentation impact.
+7. **Fix findings.** If self-review or a check finds a defect, the developer (or agent) fixes it on the same branch and repeats verification.
+8. **Merge.** Once the author has completed self-review and required checks pass, the PR is merged into `main`. Where source code changes, review the Gitea coverage report and its lowest-covered-file list as part of the quality discussion. The card then moves to `Done`.
 9. **Review and improve.** At the Sprint checkpoint, the team reviews delivered work and feedback, then records any follow-up work or process improvement.
 
 ---

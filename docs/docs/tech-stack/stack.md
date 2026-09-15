@@ -21,11 +21,10 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 | Offline storage | IndexedDB via Dexie | Promise-friendly store mirroring `timeline_entries` |
 | PWA | vite-plugin-pwa | Service worker + manifest for offline shell |
 | Realtime | Socket.IO | Live broadcast of new/edited entries to event viewers |
-| Charts | Chart.js | PB/SB progression and comparison charts |
-| PDF export (Stage 3) | pdf-lib | Athlete/event results reports |
+| Charts | Native SVG and CSS | PB/SB progression and comparison visualisations without a charting dependency |
 | Unit/component tests | Vitest, React Testing Library | Fast component + pure-logic tests |
 | API tests | Supertest | Endpoint happy paths + validation/error paths |
-| E2E tests | Playwright | Cross-cutting flows, offline sync, multi-device merge |
+| E2E tests | Playwright | Cross-cutting browser flows and accessibility checks |
 | Coverage reports | Vitest V8 coverage | JSON summaries rendered as a short Gitea Actions Markdown table |
 | CI/CD | Gitea Actions | Lint, typecheck, test, build, coverage, and credential-gated E2E jobs on every push/PR |
 | Hosting | Vercel (frontend), Render (backend) | Static SPA hosting + API hosting |
@@ -54,7 +53,6 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 ## Implemented Supporting Libraries
 - **Dexie**: wraps IndexedDB with a typed, promise API and explicit transactions — the cleanest fit for an offline-first write queue.
 - **Socket.IO**: reliable fallbacks (polling) and rooms make per-event broadcast trivial and resilient.
-- **Chart.js**: batteries-included for line/bar charts without a heavier data-viz framework.
 - **GraySky**: no account or key; the keyless endpoint returns US-customary current/daily data, normalized server-side to metric units with ten-minute caching and linked attribution in both weather surfaces.
 - **Auth0**: hosted login (sign up, social, password reset) plus JWT verification middleware; keeps credentials and user data out of our code.
 - **Lazy-loaded R3F landing stage**: one fixed decorative canvas renders the procedural tunnel, stadium, shared track, runner signals, and performance ribbon. It keeps camera state in mutable refs, uses reusable Three vectors/curves, limits DPR, pauses while hidden, and lowers detail on compact displays.
@@ -88,6 +86,8 @@ These tools are in the development plan but are **not** current runtime dependen
 | Stage 3 | `pdf-lib` | Downloadable athlete or event reports. | Exports depend on stable results, public/reporting requirements, and agreed layout. |
 
 Planned work also includes discipline expansion, role-based authorization refinements, shared fixtures enhancement, offline merge rules, public result pages, scheduling, and rule-based coaching summaries. These are product capabilities rather than currently selected packages; their implementation will be documented when their contracts are agreed.
+
+The complete direct-dependency register, including versions, licenses, sources, purposes, and operational notes, is maintained in [Third-party software and services](./third-party).
 
 ## Deliberate Constraints
 

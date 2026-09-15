@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Automatic Testing Practices
 
-Athlora uses a three-tier testing strategy: **unit/component tests** for fast feedback, **integration tests** against a real database for correctness, and **end-to-end tests** that exercise the full stack through a real browser. Every tier runs in CI on every push and pull request.
+Athlora uses a three-tier testing strategy: **unit/component tests** for fast feedback, **integration tests** against a real database for correctness, and **end-to-end tests** that exercise the full stack through a real browser. Frontend, backend, coverage, and documentation checks run on every push and pull request. End-to-end tests run in CI only when the required Auth0 test-account secrets are configured; otherwise the job reports an explicit skip.
 
 ---
 
@@ -58,16 +58,16 @@ The setup file (`src/test/setup.ts`) imports `@testing-library/jest-dom/vitest` 
 
 ### What is tested
 
-The frontend has **62 test files** covering:
+The frontend test inventory is maintained next to its source and covers:
 
-| Category | Count | Examples |
+| Category | Examples |
 |---|---|---|
-| API client wrappers | 21 | `src/api/*.test.ts` — request/response shapes, error handling, auth headers |
-| Feature components | 30 | `src/features/**/*.test.tsx` — dashboard, athletes, events, fixtures, fitness, live logging, comparison, public stats, offline sync |
-| Shared components | 4 | `Button.test.tsx`, `Modal.test.tsx`, `Select.test.tsx`, `AsyncBoundary.test.tsx` |
-| Hooks and utilities | 4 | `useLocalStorage`, `formatting`, `auth0`, `syncEngine` |
-| Pure logic | 4 | `anatomySurfaceMap`, `resultPresentation`, `trackMath`, `introTimeline` |
-| App shell | 1 | `App.test.tsx` |
+| API client wrappers | `src/api/*.test.ts` — request/response shapes, error handling, auth headers |
+| Feature components | `src/features/**/*.test.tsx` — dashboard, athletes, events, fixtures, fitness, live logging, comparison, public stats, offline sync |
+| Shared components | `Button.test.tsx`, `Modal.test.tsx`, `Select.test.tsx`, `AsyncBoundary.test.tsx` |
+| Hooks and utilities | `useLocalStorage`, `useEventOfflineSync`, `formatting`, `auth0`, `syncEngine` |
+| Pure logic | `anatomySurfaceMap`, `resultPresentation`, `trackMath`, `introTimeline` |
+| App shell | `App.test.tsx` |
 
 ### Patterns
 
@@ -126,16 +126,16 @@ No custom test environment — tests run in the default Node.js environment. Unl
 
 ### What is tested
 
-The backend has **56 unit test files** across:
+The backend unit-test inventory is maintained next to the source and covers:
 
-| Area | Files | What they cover |
+| Area | What they cover |
 |---|---|---|
-| Routes | `routes/*.test.ts` | Request validation, response shapes, status codes, auth headers |
-| Services | `services/*.test.ts` | Business logic, SQL query construction, result derivation |
-| Middleware | `middleware/*.test.ts` | Auth verification, ownership checks, error handling |
-| Validation | `validation/payloads.test.ts` | Exhaustive schema validation with exact error shape assertions |
-| DB utilities | `db/*.test.ts` | Row mapping, migration checksum verification |
-| Realtime | `realtime/*.test.ts` | Socket.IO subscription authorization and broadcast |
+| Routes | `routes/*.test.ts` — request validation, response shapes, status codes, auth headers |
+| Services | `services/*.test.ts` — business logic, SQL query construction, result derivation |
+| Middleware | `middleware/*.test.ts` — auth verification, ownership checks, error handling |
+| Validation | `validation/payloads.test.ts` — exhaustive schema validation with exact error shape assertions |
+| DB utilities | `db/*.test.ts` — row mapping, migration checksum verification |
+| Realtime | `realtime/*.test.ts` — Socket.IO subscription authorization and broadcast |
 
 ### Patterns
 
@@ -185,7 +185,7 @@ Set `TEST_DATABASE_URL` to enable them. Use a **disposable database** because th
 
 ### What is tested
 
-The backend has **8 integration test files** covering:
+The backend has **9 integration test files** covering:
 
 | File | Coverage |
 |---|---|
@@ -197,6 +197,7 @@ The backend has **8 integration test files** covering:
 | `services/aggregates.integration.test.ts` | Statistics boundaries, archival/cancellation rules, dashboard modes |
 | `services/authorization.integration.test.ts` | Two-coach isolation for athletes, events, participants, timeline, statistics |
 | `services/injuries.integration.test.ts` | Injury CRUD persistence |
+| `services/accounts.integration.test.ts` | Account lifecycle and workspace persistence |
 
 ### Setup
 
@@ -404,7 +405,7 @@ npm run test:coverage --prefix backend    # → backend/coverage/coverage-summar
 
 The `scripts/generate-coverage-report.mjs` script reads both JSON summaries and generates a Markdown table combining frontend and backend **line**, **branch**, and **function** coverage. In CI it writes to `GITEA_STEP_SUMMARY` (or `GITHUB_STEP_SUMMARY`), printing a short Markdown table visible in the job summary.
 
-Coverage is **informational** — it makes gaps visible but does not enforce a threshold until the team agrees on a baseline.
+Coverage is **informational** — it makes gaps visible but does not enforce a threshold. A coverage report is reviewed as part of the author's documented pre-merge self-review for source-code changes.
 
 ---
 
@@ -418,7 +419,7 @@ The Gitea Actions workflow (`.gitea/workflows/ci.yml`) runs on every push and pu
 | `backend` | Install → Lint → Typecheck → Test → Build |
 | `coverage` | Install both → Generate frontend coverage → Generate backend coverage → Generate quality report |
 | `docs` | Install → Build |
-| `e2e` | Provision PostgreSQL on port `55432` → Install all deps → Install Chromium → Run Playwright (when secrets are configured) |
+| `e2e` | Provision PostgreSQL on port `55432` → Install all deps → Install Chromium → Run Playwright when Auth0/E2E secrets are configured; otherwise emit an explicit skip message |
 
 ### E2E job details
 
@@ -515,7 +516,7 @@ When adding a new feature, tests should be written in the same session as the im
 - [ ] Frontend: RTL test per new component covering render + primary interaction
 - [ ] Cross-cutting flows (login, live logging, offline sync): Playwright E2E added incrementally
 - [ ] Accessibility: axe-core audit covers any new page or major view
-- [ ] No task is "done" without its corresponding tests passing in CI
+- [ ] No task is "done" without its applicable automated checks passing; authenticated E2E checks additionally require configured repository secrets
 
 ### Guidelines
 
@@ -530,7 +531,7 @@ When adding a new feature, tests should be written in the same session as the im
 
 ## 13. Stakeholder feedback
 
-Automated tests are complemented by manual stakeholder and user feedback. During Sprint 2, the client/stakeholder and external users tested the deployed application and completed separate structured forms covering the product experience and improvement opportunities. This supplied feedback on usability and end-to-end workflows, then informed the Sprint bug tracker and product backlog.
+Automated tests are complemented by manual stakeholder and user feedback. During Sprint 2, the client/stakeholder and users tested the deployed application and completed separate structured forms covering the product experience and improvement opportunities. The response evidence is retained with the Sprint records; feedback-to-issue/PR linkage is recorded only where that link is available.
 
 The submitted response evidence and form links are retained in [Sprint 2 Stakeholder Feedback](./stakeholder-feedback) and [Sprint 2 User Feedback](./user-feedback). Manual feedback is not a substitute for unit, integration, end-to-end, or accessibility testing; it provides independent product perspectives alongside those automated quality gates.
 

@@ -115,7 +115,7 @@ If an agent suggests a different library for something already listed here, **de
 
 ## 5. Database Schema (authoritative — agents must not invent alternate table/column names)
 
-The original 6-table MVP schema is shown below. The current production schema has grown to 21 migrations (see `docs/db-schema/overview.md` for the full migration history and current table listing). Agents extending the schema must follow the conventions below and check the current schema before adding tables or columns.
+The original 6-table MVP schema is shown below. The current production schema has grown to 26 SQL migration files (see `docs/db-schema/overview.md` for the full migration history and current table listing). Agents extending the schema must follow the conventions below and check the current schema before adding tables or columns.
 
 ```sql
 -- users: mirrors Auth0 identity, adds app-level role

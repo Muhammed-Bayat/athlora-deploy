@@ -4,209 +4,501 @@ sidebar_position: 1
 
 # Database schema
 
-PostgreSQL 13+. Every table uses UUID primary keys, `created_at`/`updated_at` timestamps, and soft deletes (`deleted_at`) where the app needs "undo" (`timeline_entries`, `results` uses update-in-place with an override trail).
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0024_public_club_statistics.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
-The schema is the shared foundation for Athlora's full athletics-meet scope. The deployed API currently enforces the 100m/seconds contract, but `discipline`, `unit`, attempts, fouls, incidents, and result rows were modelled so subsequent track, relay, jump, throw, and vertical-event contracts can be introduced through coordinated migrations and application changes.
+PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
-## Core tables
+## Entity relationship diagram
 
+The diagram below reflects the schema documented on this page. Open the [SVG ERD](/img/erd.svg) for a zoomable version or download the [PNG ERD](/img/erd.png) for tools that do not support SVG.
+
+<img src="/img/erd.svg" alt="Athlora database entity relationship diagram" />
+
+## Relationship summary
+
+- A `club` maps one-to-one to a `workspace`.
+- A `workspace` has one or more `workspace_members`, but a user can belong to only one workspace.
+- Athletes, events, squads, injuries, reminders, and notifications are workspace-scoped.
+- Events own fixture participation, invitations, participants, live-log entries, results, helpers, public logger links, and offline-sync receipts.
+- `timeline_entries` are created by exactly one actor: either an authenticated `users` row or a `public_logger_sessions` row.
+- Results are materialized from the timeline and are unique per event, athlete, and discipline.
+
+## Final relational schema
+
+### Identity, workspace, and club tables
+
+```text
+users
+  id UUID PK DEFAULT gen_random_uuid()
+  auth0_id TEXT UQ NOT NULL
+  name TEXT NOT NULL
+  email TEXT UQ NOT NULL
+  role TEXT NOT NULL DEFAULT 'coach' CHECK ('coach', 'assistant')
+  consent_accepted_at TIMESTAMPTZ NULL
+  consent_version TEXT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+workspaces
+  id UUID PK DEFAULT gen_random_uuid()
+  name TEXT NOT NULL
+  timezone TEXT NOT NULL DEFAULT 'UTC'
+    CHECK (IANA-style region/city value or 'UTC')
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+workspace_members
+  workspace_id UUID PK, FK -> workspaces.id ON DELETE CASCADE
+  user_id UUID PK, FK -> users.id ON DELETE CASCADE, UQ
+  role TEXT NOT NULL DEFAULT 'coach' CHECK ('coach', 'assistant')
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+workspace_invitations
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  email TEXT NOT NULL
+  role TEXT NOT NULL CHECK ('coach', 'assistant')
+  token_hash TEXT UQ NOT NULL
+  invited_by UUID FK -> users.id
+  expires_at TIMESTAMPTZ NOT NULL
+  accepted_at TIMESTAMPTZ NULL
+  accepted_by UUID FK -> users.id NULL
+  revoked_at TIMESTAMPTZ NULL
+  revoked_by UUID FK -> users.id NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+workspace_membership_audit
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  user_id UUID FK -> users.id NULL
+  actor_id UUID FK -> users.id NULL
+  invitation_id UUID FK -> workspace_invitations.id NULL
+  action TEXT NOT NULL CHECK ('invited', 'resent', 'accepted', 'revoked', 'removed', 'role_changed')
+  role TEXT NULL CHECK ('coach', 'assistant')
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+clubs
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE, UQ
+  name TEXT NOT NULL
+  public_results_enabled BOOLEAN NOT NULL DEFAULT false
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+club_join_requests
+  id UUID PK DEFAULT gen_random_uuid()
+  club_id UUID FK -> clubs.id ON DELETE CASCADE
+  user_id UUID FK -> users.id ON DELETE CASCADE
+  status TEXT NOT NULL DEFAULT 'pending' CHECK ('pending', 'approved', 'rejected', 'withdrawn')
+  reviewed_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  reviewed_at TIMESTAMPTZ NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  CHECK: reviewed_at is present exactly for approved/rejected requests
+  UQ partial: one pending request per (club_id, user_id)
+
+account_deletions
+  auth0_id TEXT PK
+  status TEXT NOT NULL CHECK ('pending', 'failed', 'completed')
+  attempts INTEGER NOT NULL DEFAULT 0
+  next_attempt_at TIMESTAMPTZ NULL
+  last_error TEXT NULL
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  completed_at TIMESTAMPTZ NULL
 ```
-users                (id UUID PK, auth0_id UNIQUE, name, email UNIQUE, role)
-clubs                (id UUID PK, workspace_id -> workspaces UNIQUE, name)
-club_join_requests   (id UUID PK, club_id -> clubs, user_id -> users, status, reviewed_by, reviewed_at)
-workspaces           (id UUID PK, name, timezone)
-workspace_members    (workspace_id -> workspaces, user_id -> users, role) — PK (workspace_id, user_id)
-workspace_invitations (id UUID PK, workspace_id, email, role, token_hash, invited_by, expires_at,
-                       accepted_at, accepted_by, revoked_at, revoked_by)
-workspace_membership_audit (id UUID PK, workspace_id, user_id, actor_id, invitation_id, action, role)
-athletes             (id UUID PK, workspace_id -> workspaces, coach_id -> users, name, dob, gender, notes,
-                         lifecycle_status, archived_at, status_changed_at, status_changed_by, created_at, updated_at)
-athlete_status_transitions (id UUID PK, workspace_id, athlete_id, from_status, to_status, changed_by, changed_at)
-squads               (id UUID PK, workspace_id -> workspaces, name, archived_at, created_at, updated_at)
-athlete_squads       (workspace_id, athlete_id -> athletes, squad_id -> squads) — PK (athlete_id, squad_id)
-events               (id UUID PK, workspace_id -> workspaces, created_by -> users, type, discipline, title, date, time,
-                        location_name, latitude, longitude, timezone, status, fixture_revision)
-event_fixture_workspaces (event_id, workspace_id, role ('host'|'guest'), status, accepted_revision, contact_email,
-                          joined_by, withdrawn_at, withdrawn_by) — PK (event_id, workspace_id)
-fixture_invitations  (id UUID PK, event_id, target_workspace_id, email, revision, token_hash, status, invited_by,
-                      expires_at, accepted_at, accepted_by, revoked_at, revoked_by)
-fixture_invitation_responses (id UUID PK, invitation_id, revision, workspace_id, response, message, responded_by)
-event_participants   (event_id, athlete_id, participant_workspace_id, rsvp_status) — PK (event_id, athlete_id)
-event_participant_status_reviews (event_id, athlete_id, transition_id, lifecycle_status, flagged_at,
-                                  acknowledged_at, acknowledged_by) — PK (event_id, athlete_id)
-event_helper_invitations (id UUID PK, event_id, secret_hash, human_code, max_cap, status, created_by)
-event_helper_grants  (id UUID PK, invitation_id, event_id, auth0_sub, status, redeemed_at,
-                       is_offline_logger, offline_queue_device_id)
-event_helper_audit_logs (id UUID PK, event_id, invitation_id, action, actor_sub, details)
-timeline_entries     (id UUID PK, event_id, athlete_id, discipline, entry_type, value, unit,
-                      is_foul, incident_type, note_text, recorded_by, version, device_id, deleted_at)
-results              (event_id, athlete_id, discipline, outcome, final_result, unit, placing,
-                       is_pb, is_sb, manual_override, override_reason, overridden_by, override_at)
-                       — PK (event_id, athlete_id, discipline)
-sync_action_receipts (action_id UUID PK, event_id, actor_id, device_id, action_type, status,
-                      entry_id, server_version, error_code, processed_at)
-account_deletions    (auth0_id TEXT PK, status, attempts, next_attempt_at, last_error,
-                       requested_at, updated_at, completed_at)
-athlete_injuries     (id UUID PK, workspace_id -> workspaces, athlete_id -> athletes, body_region, area,
-                       side, severity, notes, occurrence_date, expected_return_date, resolved_date,
-                       resolution_notes, created_by, updated_by, deleted_at, deleted_by)
+
+### Athletes, squads, lifecycle, and injuries
+
+```text
+athletes
+  id UUID PK DEFAULT gen_random_uuid()
+  coach_id UUID FK -> users.id
+  workspace_id UUID FK -> workspaces.id NOT NULL
+  name TEXT NOT NULL
+  dob DATE NULL
+  gender TEXT NULL
+  squad TEXT NULL                         -- legacy compatibility field
+  notes TEXT NULL
+  archived_at TIMESTAMPTZ NULL
+  lifecycle_status TEXT NOT NULL DEFAULT 'active'
+    CHECK ('active', 'inactive', 'archived')
+  status_changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  status_changed_by UUID FK -> users.id NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ (id, workspace_id)                   -- composite target for workspace-safe FKs
+
+squads
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  name TEXT NOT NULL CHECK (trim(name) <> '')
+  archived_at TIMESTAMPTZ NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ index (workspace_id, lower(name))
+  UQ (id, workspace_id)                   -- composite target for workspace-safe FKs
+
+athlete_squads
+  athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
+  squad_id UUID PK, FK -> squads.id ON DELETE RESTRICT
+  workspace_id UUID NOT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  FK (athlete_id, workspace_id) -> athletes(id, workspace_id) ON DELETE CASCADE
+  FK (squad_id, workspace_id) -> squads(id, workspace_id) ON DELETE RESTRICT
+
+athlete_status_transitions
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  athlete_id UUID NOT NULL
+  from_status TEXT NULL CHECK ('active', 'inactive', 'archived')
+  to_status TEXT NOT NULL CHECK ('active', 'inactive', 'archived')
+  changed_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  FK (athlete_id, workspace_id) -> athletes(id, workspace_id) ON DELETE CASCADE
+
+athlete_injuries
+  id UUID PK DEFAULT gen_random_uuid()
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  athlete_id UUID NOT NULL
+  body_region TEXT NOT NULL CHECK ('Head & Neck', 'Torso', 'Arm', 'Leg')
+  area TEXT NOT NULL
+  side TEXT NOT NULL CHECK ('Left', 'Right', 'Both', 'Center')
+  severity TEXT NOT NULL CHECK ('Minor', 'Moderate', 'Severe')
+  notes TEXT NULL
+  occurrence_date DATE NULL
+  expected_return_date DATE NULL
+  resolved_date TIMESTAMPTZ NULL
+  resolution_notes TEXT NULL
+  created_by UUID FK -> users.id
+  updated_by UUID FK -> users.id NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  deleted_at TIMESTAMPTZ NULL
+  deleted_by UUID FK -> users.id NULL
+  FK (athlete_id, workspace_id) -> athletes(id, workspace_id) ON DELETE CASCADE
+  CHECK: when occurrence_date is present, expected return and resolution cannot precede it
 ```
 
-### athlete_injuries
-Persistent athlete injury and recovery records.
+### Events, fixtures, participants, and RSVP audit
 
-- `body_region`: `Head & Neck`, `Torso`, `Arm`, `Leg`.
-- `area`: specific anatomical area.
-- `side`: `Left`, `Right`, `Both`, `Center`.
-- `severity`: `Minor`, `Moderate`, `Severe`.
-- `notes`: optional coach notes.
-- `occurrence_date`: date of injury occurrence.
-- `expected_return_date`: expected return date.
-- `resolved_date`: timestamp when resolved.
-- `resolution_notes`: notes recorded upon resolution.
-- `created_by`, `updated_by`, `deleted_by`: user attribution for audit.
-- `deleted_at`: soft deletion timestamp (`NULL` unless soft deleted, preserving historical attribution).
+```text
+events
+  id UUID PK DEFAULT gen_random_uuid()
+  created_by UUID FK -> users.id
+  workspace_id UUID FK -> workspaces.id NOT NULL
+  type TEXT NOT NULL CHECK ('competition', 'training')
+  discipline TEXT NULL
+  title TEXT NOT NULL
+  date DATE NOT NULL
+  time TIME NULL
+  location_name TEXT NULL
+  latitude NUMERIC(9,6) NULL
+  longitude NUMERIC(9,6) NULL
+  timezone TEXT NULL
+  status TEXT NOT NULL DEFAULT 'scheduled'
+    CHECK ('scheduled', 'in_progress', 'completed', 'cancelled')
+  fixture_revision INTEGER NOT NULL DEFAULT 1 CHECK (> 0)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
-### timeline_entries
-The append-only live log — the heart of the app.
+event_fixture_workspaces
+  event_id UUID PK, FK -> events.id ON DELETE CASCADE
+  workspace_id UUID PK, FK -> workspaces.id ON DELETE RESTRICT
+  role TEXT NOT NULL CHECK ('host', 'guest')
+  status TEXT NOT NULL DEFAULT 'accepted'
+    CHECK ('accepted', 'reacceptance_required', 'withdrawn')
+  accepted_revision INTEGER NOT NULL DEFAULT 1 CHECK (> 0)
+  contact_email TEXT NULL
+  joined_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  withdrawn_at TIMESTAMPTZ NULL
+  withdrawn_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  CHECK: hosts have no contact email; guests require one
+  UQ partial: one host per event
 
-- `entry_type`: `attempt`, `split`, `penalty`, `note`.
-- `value` + `unit`: seconds for time, metres/cm for distance/height. The deployed 100m contract accepts `seconds`; the wider unit model is reserved for later event contracts.
-- `is_foul`: represents a field-event foul attempt. It is stored in the schema but the current 100m API always normalizes it to `false`.
-- `incident_type`: `false_start`, `dq`, `dnf`, `dns`, `lane_infringement`.
-- `note_text`: free-text body for `note` entries.
-- `version`: starts at 1, is required as `expectedVersion` for PATCH/DELETE, and bumps once on each successful mutation. A mismatch is rejected before persistence.
-- `device_id`: originating device for offline merge (Stage 3).
-- `deleted_at`: "undo" is a soft delete, never `DELETE`; normal timeline reads and result derivation exclude tombstones. Repeating the same undo leaves its version and timestamps unchanged.
+fixture_invitations
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  target_workspace_id UUID FK -> workspaces.id ON DELETE RESTRICT, NULL
+  email TEXT NULL                          -- legacy email invitations; targeted invitations need no email
+  revision INTEGER NOT NULL CHECK (> 0)
+  token_hash TEXT UQ NOT NULL
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK ('pending', 'accepted', 'declined', 'change_requested', 'revoked')
+  invited_by UUID FK -> users.id ON DELETE RESTRICT
+  expires_at TIMESTAMPTZ NOT NULL
+  accepted_at TIMESTAMPTZ NULL
+  accepted_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  revoked_at TIMESTAMPTZ NULL
+  revoked_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  CHECK: accepted_at exists exactly when status is accepted
+  CHECK: revoked_at exists exactly when status is revoked
 
-### squads and athlete_squads
+fixture_invitation_responses
+  id UUID PK DEFAULT gen_random_uuid()
+  invitation_id UUID FK -> fixture_invitations.id ON DELETE CASCADE
+  revision INTEGER NOT NULL CHECK (> 0)
+  workspace_id UUID FK -> workspaces.id ON DELETE RESTRICT, NULL
+  response TEXT NOT NULL CHECK ('accepted', 'declined', 'change_requested')
+  message TEXT NULL
+  responded_by UUID FK -> users.id ON DELETE RESTRICT
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  CHECK: message exists exactly when response is change_requested
 
-`squads` is the workspace-owned catalogue of managed squad names. Names are case-insensitively unique inside a workspace and squads are archived rather than deleted. `athlete_squads` allows each athlete to belong to zero or more squads, prevents duplicate membership, and carries the workspace key so both foreign keys must resolve within the same workspace.
+event_participants
+  event_id UUID PK, FK -> events.id
+  athlete_id UUID PK, FK -> athletes.id
+  participant_workspace_id UUID NOT NULL
+  rsvp_status TEXT NOT NULL DEFAULT 'pending' CHECK ('pending', 'yes', 'no', 'maybe')
+  rsvp_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  rsvp_updated_by UUID FK -> users.id NULL
+  FK (athlete_id, participant_workspace_id) -> athletes(id, workspace_id) ON DELETE RESTRICT
+  FK (event_id, participant_workspace_id) -> event_fixture_workspaces(event_id, workspace_id) ON DELETE RESTRICT
 
-Migration `0007_workspace_squads.sql` backfills each distinct trimmed nonblank legacy `athletes.squad` value into a squad in that athlete's workspace and creates the matching membership. The old text column remains only for compatibility with pre-migration deployments; application reads and writes use the normalized tables.
+event_participant_rsvp_audit
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID NOT NULL                  -- intentionally no declared FK
+  athlete_id UUID NOT NULL                -- intentionally no declared FK
+  previous_status TEXT NOT NULL
+  next_status TEXT NOT NULL
+  changed_by UUID FK -> users.id
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  batch_id UUID NULL
 
-### clubs and club_join_requests
+event_participant_status_reviews
+  event_id UUID PK, FK -> events.id ON DELETE CASCADE
+  athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
+  transition_id UUID FK -> athlete_status_transitions.id ON DELETE CASCADE
+  lifecycle_status TEXT NOT NULL CHECK ('active', 'inactive', 'archived')
+  flagged_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  acknowledged_at TIMESTAMPTZ NULL
+  acknowledged_by UUID FK -> users.id ON DELETE SET NULL, NULL
+```
 
-`clubs` is the product-facing organization record. Each Club has exactly one backing workspace, retaining established workspace-scoped foreign keys and authorization without moving athlete, event, fixture, or audit history. Migration `0017_clubs.sql` backfills one Club for every existing workspace.
+### Live logging, results, helpers, and offline synchronization
 
-Authenticated users can search every Club and create one pending request per Club. A request is `pending`, `approved`, `rejected`, or `withdrawn`; approval records its coach actor and timestamp, then atomically creates or updates the backing workspace membership with the selected `coach` or `assistant` role.
+```text
+event_helper_invitations
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  secret_hash TEXT NOT NULL
+  human_code TEXT UQ NOT NULL
+  max_cap INTEGER NOT NULL DEFAULT 10 CHECK (1..50)
+  status TEXT NOT NULL DEFAULT 'active' CHECK ('active', 'closed', 'revoked')
+  created_by TEXT NOT NULL                 -- Auth0 subject, not a users FK
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
-### event_participants
-The assignment set for an event. The composite primary key prevents duplicate event/athlete rows and `rsvp_status` defaults to `pending`.
+event_helper_grants
+  id UUID PK DEFAULT gen_random_uuid()
+  invitation_id UUID FK -> event_helper_invitations.id ON DELETE CASCADE
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  auth0_sub TEXT NOT NULL
+  status TEXT NOT NULL DEFAULT 'active' CHECK ('active', 'revoked')
+  redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  is_offline_logger BOOLEAN NOT NULL DEFAULT false
+  offline_queue_device_id TEXT NULL
+  UQ (event_id, auth0_sub)
+  UQ partial: one active offline logger per event
 
-- New assignments require an active athlete owned by the event's coach.
-- Existing assignments remain visible if the athlete is later archived, preserving historical participation.
-- RSVP status replacement is idempotent.
-- Removing an assignment deletes only this join row; timeline entries and results reference the event and athlete directly and remain intact.
-- Participant reads aggregate squad names with the athlete name and archive state, so multi-squad membership never duplicates a participant row.
-- `participant_workspace_id` has composite foreign keys to both `(athlete_id, workspace_id)` and `(event_id, workspace_id)` fixture membership. An athlete therefore cannot be assigned to an event unless their workspace is explicitly participating in it.
+event_helper_audit_logs
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  invitation_id UUID FK -> event_helper_invitations.id ON DELETE SET NULL, NULL
+  action TEXT NOT NULL
+  actor_sub TEXT NOT NULL
+  details JSONB NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
-### fixtures
+public_logger_links
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  token_hash TEXT UQ NOT NULL
+  status TEXT NOT NULL DEFAULT 'active' CHECK ('active', 'revoked')
+  created_by UUID FK -> users.id
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  revoked_at TIMESTAMPTZ NULL
 
-Every event receives one `host` row in `event_fixture_workspaces`, including historical and newly-created single-workspace events. A guest row is created only after the email-bound invitation has been accepted by a coach in that guest workspace. The invitation token is stored only as a SHA-256 hash; invitation responses are immutable actor-attributed records.
+public_logger_sessions
+  id UUID PK DEFAULT gen_random_uuid()
+  link_id UUID FK -> public_logger_links.id ON DELETE CASCADE
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  token_hash TEXT UQ NOT NULL
+  logger_name TEXT NOT NULL
+  logger_club TEXT NOT NULL
+  expires_at TIMESTAMPTZ NOT NULL
+  offline_device_id TEXT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ (id, event_id)                        -- target for timeline composite FK
 
-`events.fixture_revision` starts at `1`. A material date/time/venue change or accepted-team change advances it and marks guest teams as requiring reacceptance without removing their roster rows. A participant workspace may be withdrawn, but its participant, timeline, and result rows remain to preserve history.
+timeline_entries
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id
+  athlete_id UUID FK -> athletes.id
+  discipline TEXT NOT NULL
+  entry_type TEXT NOT NULL CHECK ('attempt', 'split', 'penalty', 'note')
+  value NUMERIC NULL CHECK (value >= 0 when present)
+  unit TEXT NULL CHECK ('seconds', 'metres', 'cm')
+  is_foul BOOLEAN NOT NULL DEFAULT false
+  incident_type TEXT NULL CHECK ('false_start', 'dq', 'dnf', 'dns', 'lane_infringement')
+  recorded_by UUID FK -> users.id NULL
+  public_logger_session_id UUID NULL
+  note_text TEXT NULL
+  version INTEGER NOT NULL DEFAULT 1
+  device_id TEXT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  deleted_at TIMESTAMPTZ NULL
+  FK (public_logger_session_id, event_id) -> public_logger_sessions(id, event_id)
+  CHECK: exactly one actor is present: recorded_by XOR public_logger_session_id
 
-**Host authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can also view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side.
+results
+  event_id UUID PK, FK -> events.id
+  athlete_id UUID PK, FK -> athletes.id
+  discipline TEXT PK
+  outcome TEXT NOT NULL DEFAULT 'no_result' CHECK ('no_result', 'valid', 'dq', 'dnf', 'dns')
+  final_result NUMERIC NULL CHECK (>= 0 when present)
+  unit TEXT NULL
+  placing INTEGER NULL CHECK (> 0 when present)
+  is_pb BOOLEAN NOT NULL DEFAULT false
+  is_sb BOOLEAN NOT NULL DEFAULT false
+  manual_override NUMERIC NULL CHECK (>= 0 when present)
+  override_reason TEXT NULL
+  overridden_by UUID FK -> users.id NULL
+  override_at TIMESTAMPTZ NULL
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  CHECK: dq/dnf/dns have no final_result
+  CHECK: valid has final_result
+  CHECK: no_result has no final_result
 
-### athlete lifecycle
+sync_action_receipts
+  action_id UUID PK
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  actor_id UUID FK -> users.id
+  device_id TEXT NOT NULL
+  action_type TEXT NOT NULL
+  status TEXT NOT NULL CHECK ('accepted', 'rejected', 'duplicate')
+  entry_id UUID NULL
+  server_version INTEGER NULL
+  error_code TEXT NULL
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
-`athletes.lifecycle_status` is constrained to `active`, `inactive`, or `archived`. The current transition is recorded on the athlete row for efficient reads; `athlete_status_transitions` preserves every real change with its actor and timestamp. Legacy rows are backfilled as active or archived without fabricating an actor.
+public_sync_action_receipts
+  action_id UUID PK
+  session_id UUID FK -> public_logger_sessions.id ON DELETE CASCADE
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  device_id TEXT NOT NULL
+  action_type TEXT NOT NULL
+  status TEXT NOT NULL CHECK ('accepted', 'rejected', 'duplicate')
+  entry_id UUID NULL
+  server_version INTEGER NULL
+  error_code TEXT NULL
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
-Any real transition upserts a pending `event_participant_status_reviews` row for each existing assignment. The `(event_id, athlete_id)` key makes a review item independent per athlete and a later transition resets only that athlete's acknowledgement. Historical participant, timeline, result, squad, and injury data remains untouched.
+public_sync_conflict_log
+  id UUID PK DEFAULT gen_random_uuid()
+  action_id UUID NOT NULL
+  session_id UUID FK -> public_logger_sessions.id ON DELETE CASCADE
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  entry_id UUID NOT NULL
+  overwritten_version INTEGER NOT NULL
+  overwritten_value NUMERIC NULL
+  overwritten_incident TEXT NULL
+  overwritten_note TEXT NULL
+  winning_action_id UUID NOT NULL
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT now()
+```
 
-### results
-Derived/materialized from `timeline_entries`. Recalculated after every entry change.
+### Notifications and reminders
 
-- `outcome`: `no_result` | `valid` | `dq` | `dnf` | `dns` — distinguishes no result, a valid finish, and voided outcomes.
-- `final_result`: computed result value. The deployed contract writes a 100m finishing time; the schema and future derivation contracts also support best valid field attempts. It must be `NULL` for voided outcomes.
-- `is_pb` / `is_sb`: derived flags, not manually logged.
-- `manual_override`, `override_reason`, `overridden_by`, `override_at`: coach corrections with an audit trail (who corrected, when, and why).
+```text
+fixture_notifications
+  id UUID PK DEFAULT gen_random_uuid()
+  recipient_user_id UUID FK -> users.id ON DELETE CASCADE
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  invitation_id UUID FK -> fixture_invitations.id ON DELETE SET NULL, NULL
+  kind TEXT NOT NULL CHECK (
+    'fixture_invited', 'fixture_responded', 'fixture_reacceptance_required',
+    'fixture_started', 'event_coming_up', 'live_logger_started', 'event_ended'
+  )
+  payload JSONB NOT NULL DEFAULT '{}'
+  dedupe_key TEXT NOT NULL
+  read_at TIMESTAMPTZ NULL
+  starred_at TIMESTAMPTZ NULL
+  deleted_at TIMESTAMPTZ NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ (recipient_user_id, workspace_id, dedupe_key)
 
-## Ownership boundaries
+event_reminders
+  id UUID PK DEFAULT gen_random_uuid()
+  user_id UUID FK -> users.id
+  workspace_id UUID FK -> workspaces.id
+  event_id UUID FK -> events.id
+  event_version INTEGER NOT NULL DEFAULT 1
+  threshold TEXT NOT NULL CHECK ('seven_days', 'one_day')
+  scheduled_for TIMESTAMPTZ NOT NULL
+  read_at TIMESTAMPTZ NULL
+  invalidated_at TIMESTAMPTZ NULL
+  invalidated_reason TEXT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ (user_id, event_id, event_version, threshold)
 
-Protected requests resolve the verified Auth0 subject to an active `workspace_members` row before resource access. `athletes.workspace_id` and `events.workspace_id` are the authorization boundary; dependent resources require their event and athlete to share that workspace. `coach_id`, `created_by`, `recorded_by` and `overridden_by` are audit actors, not ownership fields.
+event_reminder_mutes
+  user_id UUID PK, FK -> users.id
+  workspace_id UUID PK, FK -> workspaces.id
+  event_id UUID PK, FK -> events.id
+  muted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+```
 
-Ownership checks use owner-scoped queries and deliberately return the same generic `NOT_FOUND` response when an identifier is malformed, missing, attached to the wrong parent or belongs to another coach. This avoids revealing another coach's resource IDs. Fixture access is a separate, narrow allow-list: guest workspace queries must match an accepted `event_fixture_workspaces` row plus an `event_participants.participant_workspace_id` row for the requested athlete. No generic ownership query is relaxed for fixtures.
+## Important indexes and database automation
 
-## Constraints and indexes
+- Roster lookup: `athletes(workspace_id, lifecycle_status, lower(name))`.
+- Event lookup: `events(created_by, status, date, time, created_at, id)` and `(status, date)`.
+- Active event feed: `timeline_entries(event_id, created_at DESC, id DESC)` where `deleted_at IS NULL`.
+- Result statistics: `results(athlete_id, discipline, event_id)`.
+- RSVP audit: `event_participant_rsvp_audit(event_id, athlete_id, changed_at DESC)`.
+- Unread reminders and notifications use partial indexes excluding read/invalidated or deleted rows.
+- A database trigger creates one host `event_fixture_workspaces` record whenever an `events` row is inserted.
 
-Migration `0002_contract_100m.sql` adds CHECK constraints and lookup indexes so invalid state cannot be written:
+## Migration inventory
 
-- `events`: `status` in `scheduled`/`in_progress`/`completed`/`cancelled`; `type` in `competition`/`training`; indexes on `(created_by)` and `(status, date)`.
-- `event_participants`: `rsvp_status` in `pending`/`yes`/`no`; index on `(athlete_id)`.
-- `timeline_entries`: `entry_type`, `incident_type` and `unit` domain checks; `value >= 0` when present; index on `(event_id, athlete_id, discipline)`.
-- `results`: `outcome` domain check; `final_result >= 0`, `manual_override >= 0`, `placing > 0`; and outcome/value shape rules — voided outcomes (`dq`/`dnf`/`dns`) must not carry a `final_result`, `valid` finishes must, and `no_result` must not.
-
-Migration `0003_aggregate_indexes.sql` adds the read-path indexes used by statistics and dashboard queries: `results(athlete_id, discipline, event_id)`, the full owner/status/event ordering on `events`, and a partial active-entry index on `timeline_entries(event_id, created_at DESC, id DESC) WHERE deleted_at IS NULL`.
-
-Migration `0004_account_lifecycle.sql` adds a durable account-deletion tombstone keyed by Auth0 subject. Its `pending`/`failed`/`completed` state blocks stale-token synchronization and resource access and schedules idempotent cleanup retries through `next_attempt_at`.
-
-Migration `0005_workspace_tenancy.sql` creates workspaces and membership roles, backfills one UTC workspace per legacy user without changing domain IDs, adds `workspace_id` to athletes/events, and adds optional event timezone overrides. Account departure deletes memberships but retains the local audit user and shared workspace history.
-
-Migration `0006_workspace_roles_and_invitations.sql` converts legacy viewer roles to assistants, limits workspace roles to coach/assistant, and adds durable invitations plus membership audit events. Invitation tokens are persisted only as SHA-256 hashes.
-
-Migration `0007_workspace_squads.sql` adds normalized workspace squads and multi-squad athlete memberships, including the legacy text migration and indexes used by roster filters.
-
-Migration `0008_athlete_lifecycle.sql` adds authoritative athlete states, current actor/timestamp metadata, transition audit rows, and per-assignment coach-review records.
-
-Migration `0009_intermediate_fixtures.sql` adds fixture workspace membership, hashed/versioned invitations and response history, material-change revisions, and composite participant foreign keys that enforce fixture-team roster ownership.
-
-Migration `0010_fixture_workspace_status_index.sql` makes the fixture workspace status index non-unique so the host and any number of guest workspaces can independently share valid statuses such as `accepted`.
-
-Migration `0017_clubs.sql` adds the Club discovery layer and coach-reviewed membership requests. Existing workspace data is backfilled into Clubs; new users synchronize without receiving an automatic personal workspace and create or request a Club through authenticated onboarding.
-
-**Host authority and shared result authority.** Only the host workspace can start, complete, cancel, or materially edit a fixture event. The host can view all participating teams' timeline entries and results, and correct any participant's result. Guest workspaces can only manage their own roster, timeline entries, and results. Team-scoped correction enforces that coaches may override only their own participating athletes; foreign-team result corrections are denied server-side. Cancellation preserves an intelligible historical record: placings become null and PB/SB flags clear, but result rows and timeline entries remain. Post-start withdrawal preserves the withdrawn team's results and entries.
-
-The current API contract is fixed to 100m only at the API/service boundary (see the API contract). That is the first delivered discipline, not the product limit: `discipline` remains free-form `TEXT` so the full athletics event set can be added with explicit migrations and contracts.
-
-The event status **lifecycle** (forward-only transitions, `cancelled` terminal, logging open only while `in_progress`) is enforced by `backend/src/services/events.ts` rather than the schema: the CHECK constraint only pins the value set, so the state machine can evolve without a migration.
-
-## Migration conventions
-
-Migrations live in `backend/src/db/migrations`, one file per change, sequentially numbered. Never edit a migration after it has been merged — write a new one. From `backend`, run `npm run db:migrate`; applied names and checksums are recorded in `schema_migrations`.
-
-## Current migration
-
-All 21 migrations are tracked in `schema_migrations` (note: two files share the number `0019`):
-
-| Migration | Description |
-|-----------|-------------|
-| `0001_init.sql` | Base schema: users, athletes, events, participants, timeline entries, results |
-| `0002_contract_100m.sql` | 100m contract constraints and lookup indexes |
-| `0003_aggregate_indexes.sql` | Read-path indexes for statistics and dashboard queries |
-| `0004_account_lifecycle.sql` | Durable account-deletion tombstones and retry scheduling |
-| `0005_workspace_tenancy.sql` | Workspaces, memberships, and workspace-scoped foreign keys |
-| `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, hashed invitations, membership audit |
-| `0007_workspace_squads.sql` | Normalized squads and multi-squad athlete memberships |
-| `0008_athlete_lifecycle.sql` | Active/inactive/archived states, transitions, status reviews |
-| `0009_intermediate_fixtures.sql` | Cross-workspace fixture authorization and revision tracking |
-| `0010_fixture_workspace_status_index.sql` | Non-unique fixture workspace status index for multi-guest support |
-| `0011_athlete_injuries.sql` | Persistent injury records with recovery history and audit |
-| `0012_audited_rsvps.sql` | RSVP audit trail for event participant status changes |
-| `0013_in_app_event_reminders.sql` | In-app event reminders and mute preferences |
+| Migration | Final schema change |
+|---|---|
+| `0001_init.sql` | Base identity, athlete, event, participant, timeline, and result tables |
+| `0002_contract_100m.sql` | 100m constraints, outcome fields, archive and note columns |
+| `0003_aggregate_indexes.sql` | Statistics and dashboard lookup indexes |
+| `0004_account_lifecycle.sql` | Account-deletion tombstone |
+| `0005_workspace_tenancy.sql` | Workspaces and workspace-scoped athletes/events |
+| `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, invitations, membership audit |
+| `0007_workspace_squads.sql` | Squads and normalized athlete memberships |
+| `0008_athlete_lifecycle.sql` | Athlete states, transition audit, participant reviews |
+| `0009_intermediate_fixtures.sql` | Fixture workspaces, invitations, responses, participant workspace ownership |
+| `0010_fixture_workspace_status_index.sql` | Non-unique fixture status index |
+| `0011_athlete_injuries.sql` | Injury records |
+| `0012_audited_rsvps.sql` | RSVP `maybe` state, attribution, and audit table |
+| `0013_in_app_event_reminders.sql` | Event reminders and reminder mutes |
 | `0014_event_helper_invitations.sql` | Event helper invitations, grants, and audit logs |
-| `0015_optional_injury_dates.sql` | Optional injury occurrence and expected return dates |
-| `0016_public_logger_links.sql` | Public logger links and unauthenticated session support |
-| `0017_clubs.sql` | Clubs and club join requests with coach-reviewed access |
-| `0018_fixture_notifications.sql` | Fixture notification delivery and unread counts |
-| `0019_targeted_fixture_invitations_and_single_membership.sql` | Targeted fixture invitations and single-membership enforcement |
-| `0019_offline_logger_designation.sql` | Designated offline logger per event with transfer protocol |
-| `0020_sync_idempotency.sql` | Idempotent batch sync with action receipts and version conflict detection |
+| `0015_optional_injury_dates.sql` | Nullable injury occurrence date |
+| `0016_public_logger_links.sql` | Public logger links/sessions and timeline actor XOR relationship |
+| `0017_clubs.sql` | Clubs and club join requests |
+| `0018_fixture_notifications.sql` | In-app fixture notifications |
+| `0019_targeted_fixture_invitations_and_single_membership.sql` | Targeted invitations and one-workspace-per-user constraint |
+| `0019_offline_logger_designation.sql` | Offline helper logger designation |
+| `0020_sync_idempotency.sql` | Authenticated offline-sync receipts |
+| `0021_user_consent.sql` | User consent fields |
+| `0022_notification_star_delete.sql` | Notification star and soft-delete state |
+| `0022_public_logger_offline_sync.sql` | Public logger sync receipts and conflict log |
+| `0023_event_lifecycle_notifications.sql` | Additional notification kinds |
+| `0024_public_club_statistics.sql` | Club public-results setting |
 
-Table and column names are fixed by the build spec (Section 5) and shared with the frontend types and API contracts. Never rename them without flagging to the team and updating the spec first.
+## Schema maintenance
 
-Pending migrations are checksum-tracked and applied by the normal migration command or production startup:
-
-```bash
-cd backend
-npm run db:migrate
-```
-
-## ERD
-
-An ERD will be drafted from the dev plan's data model and reviewed as a team before further migrations are written.
+Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a migration after it has been applied. Add a new migration for every schema change, then update this reference in the same change so the ERD source remains current.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra], opencode[gpt-5.6-sol], and opencode[google/gemini-3.5-flash-lite].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra].
