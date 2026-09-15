@@ -10,7 +10,7 @@ PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types be
 
 ## Entity relationship diagram
 
-The diagram below reflects the schema documented on this page. Open the [SVG ERD](/img/erd.svg) for a zoomable version or download the [PNG ERD](/img/erd.png) for tools that do not support SVG.
+The diagram below reflects the schema documented on this page. Open the [SVG ERD](/img/erd.svg) for a zoomable version.
 
 <img src="/img/erd.svg" alt="Athlora database entity relationship diagram" />
 
