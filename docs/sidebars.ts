@@ -22,7 +22,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Architecture',
-       items: ['architecture/overview', 'architecture/offline-sync', 'tech-stack/stack', 'tech-stack/third-party'],
+       items: ['architecture/overview', 'architecture/anatomy-surface-map', 'architecture/offline-sync', 'tech-stack/stack', 'tech-stack/third-party'],
     },
     {
       type: 'category',
@@ -66,6 +66,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'sprints/sprint-2/meeting-records',
             'sprints/sprint-2/client-meetings',
+            'sprints/sprint-2/user-stories',
             'sprints/sprint-2/raw-meeting-transcript',
           ],
         },
