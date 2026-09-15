@@ -92,8 +92,11 @@ The status is `403`. Missing and invalid tokens retain the standard `401 UNAUTHO
 |---|---|---|
 | `PUT /auth/me` | Verified Auth0 JWT | Fetches the Auth0 profile and creates or updates the local application user; returns `{ data: User }`. It is the only application-user endpoint that does not require a pre-existing local user. |
 | `POST /auth/me/password-ticket` | Verified JWT + synchronized user | Creates an Auth0-hosted password-change ticket; returns `201` with `{ data: { url } }`. |
+| `POST /auth/me/consent` | Verified JWT | Records acceptance of the current consent version. |
 | `DELETE /auth/me` | Verified JWT | Starts permanent deletion of the verified Auth0 identity and removes its memberships; shared workspace data and attribution remain. Returns `202` with `{ data: { status: 'pending' } }`. A durable deletion tombstone blocks later synchronization and resource access. |
 | `GET /workspaces` | Verified JWT + synchronized user | Lists accessible workspaces and returns `meta.activeWorkspaceId`. |
+| `GET /workspaces/seasons` | Verified JWT + synchronized user | Lists seasons available in the active workspace. |
+| `DELETE /workspaces/current-membership` | Verified JWT + synchronized user | Leaves the active workspace when the membership can safely be removed. |
 | `GET /workspaces/:workspaceId/members` | Coach membership | Lists workspace members. |
 | `PATCH /workspaces/:workspaceId/members/:userId` | Coach membership | Changes a member between `coach` and `assistant`; cannot demote the final coach. |
 | `DELETE /workspaces/:workspaceId/members/:userId` | Coach membership | Removes a member; cannot remove the final coach. |
@@ -171,9 +174,14 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 |---|---|
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=` | Compare two athletes side by side |
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=&scope=cross-club` | Compare two athletes from distinct clubs |
+| `GET /athletes/comparison/multi?athleteIds=` | Compare multiple selected athletes |
 | `GET /clubs/:clubId/athletes?q=` | Search a club's non-archived roster for comparison selection |
 | `GET /clubs/:clubId/statistics` | Get all-time 100m club roster statistics |
 | `GET /clubs/comparison?club1Id=&club2Id=` | Compare all-time 100m statistics for two clubs |
+| `GET /clubs/comparison/multi?clubIds=` | Compare multiple clubs' 100m statistics |
+| `GET /clubs/calendar` | Get events for selected accessible clubs' shared calendar |
+| `GET /clubs/publication` | Read the active club's public-results setting |
+| `PUT /clubs/publication` | Update the active club's public-results setting (coach only) |
 
 The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
@@ -196,8 +204,11 @@ Coaches create shareable, token-authenticated links that let external guests log
 | `POST /public/logger/sessions` | Start a public logging session; body `{ linkToken, name, club }` |
 | `GET /public/logger/events/:eventId` | Get a read-only event snapshot (participants, timeline, standings) |
 | `POST /public/logger/events/:eventId/entries` | Create a timeline entry through the public logger |
+| `PATCH /public/logger/events/:eventId/entries/:entryId` | Correct an entry created through the public logger; requires the session header and expected version |
+| `DELETE /public/logger/events/:eventId/entries/:entryId` | Undo an entry through the public logger; requires the session header and expected version |
+| `POST /public/logger/sync/batch` | Drain up to 50 queued public-logger actions for one event/device |
 
-The public session token is sent in the `X-Public-Logger-Session` header. Session state is tracked server-side and returned to the guest on reconnection.
+The standard public logger endpoints use the `X-Public-Logger-Session` header. The batch sync endpoint uses `Authorization: Bearer <public-session-token>` and accepts `{ eventId, deviceId, actions }`. Session state is tracked server-side and returned to the guest on reconnection.
 
 ### 3.6 Event helpers and offline designation
 
@@ -238,10 +249,23 @@ Fixture-related notifications (invitations, reacceptance, responses) are deliver
 | `GET /notifications` | List fixture notifications for the user |
 | `GET /notifications/unread-count` | Get the count of unread notifications |
 | `POST /notifications/:notificationId/read` | Mark a notification as read |
+| `POST /notifications/:notificationId/star` | Star a notification |
+| `POST /notifications/:notificationId/unstar` | Remove a notification star |
+| `DELETE /notifications/:notificationId` | Soft-delete a notification from the recipient's inbox |
 
 Notifications include `fixture_started`, `fixture_invited`, `fixture_reacceptance_required`, and invitation-response kinds. The notification bell in the console topbar polls unread count and renders a dropdown.
 
-### 3.8 AI integration
+### 3.8a Event reminders
+
+| Method & path | Purpose |
+|---|---|
+| `GET /reminders` | List the caller's in-app event reminders |
+| `GET /reminders/unread-count` | Get the unread reminder count |
+| `POST /reminders/:reminderId/read` | Mark a reminder as read |
+
+Reminders are in-app records generated for upcoming events. They are not push, email, or device notifications.
+
+### 3.9 AI integration
 
 The Gemini voice assistant provides real-time, voice-driven athlete management. The frontend captures microphone audio, streams it to Google Gemini through a WebSocket, and receives audio responses and tool-call results (e.g. creating an athlete).
 
@@ -251,7 +275,7 @@ The Gemini voice assistant provides real-time, voice-driven athlete management. 
 
 The token is exchanged by the frontend SDK (`@google/genai`) to establish a `BidiGenerateContentConstrained` WebSocket session. The backend does not relay audio; the browser streams directly to Gemini's endpoint. Tool calls are intercepted by the frontend and sent to the existing Athlora API.
 
-### 3.9 Athlete progression
+### 3.10 Athlete progression
 
 | Method & path | Purpose |
 |---|---|
@@ -259,13 +283,26 @@ The token is exchanged by the frontend SDK (`@google/genai`) to establish a `Bid
 
 Query parameters: `cursor` (pagination token), `limit` (page size, default 50, max 200), `type` (`competition` or `training` filter). Returns chronological entries with effective result/outcome (incorporating manual overrides), a running PB indicator, and a summary of all-time PB and total result counts.
 
-### 3.10 Offline sync
+### 3.11 Offline sync
 
 | Method & path | Purpose |
 |---|---|
 | `POST /sync/batch` | Process a batch of offline queue actions |
 
 The batch endpoint accepts an array of actions (`create_entry`, `edit_entry`, `undo_entry`) with per-action expected versions and client timestamps. Each action is processed idempotently; duplicate action IDs are detected and returned as `duplicate`. Rejected actions include the rejection code. A `recomputedResults` flag indicates whether the server recomputed results after the batch. The server stores a receipt per action for conflict resolution on subsequent drains.
+
+### 3.12 Public statistics
+
+The publication owner controls public club-result visibility through `GET|PUT /clubs/publication`. When a club has enabled publication, the following unauthenticated, read-only endpoints are available:
+
+| Method & path | Purpose |
+|---|---|
+| `GET /public/statistics/seasons` | List publicly available seasons |
+| `GET /public/statistics/clubs` | Search clubs with published results |
+| `GET /public/statistics/clubs/:clubId` | Get published club 100m statistics |
+| `GET /public/statistics/comparison` | Compare published athlete performance |
+
+The dedicated [public statistics reference](./public-statistics) defines its request parameters and visibility rules.
 
 ## 4. DTOs
 

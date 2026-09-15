@@ -68,7 +68,7 @@ src/controllers   HTTP request and response handling
 src/services      coach-scoped persistence and business logic (28 modules)
 src/middleware    authentication, ownership, capabilities, validation, errors, notImplemented
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations (21 files), row mappers, and transactions
+src/db            pg client, migrations (26 SQL files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 

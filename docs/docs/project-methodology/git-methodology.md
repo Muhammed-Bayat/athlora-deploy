@@ -79,9 +79,9 @@ We use **GitHub Flow** — simple, fast, and well-suited to a small team shippin
    chore/upgrade-node
    ```
 4. **The agent commits; the developer branches and pushes.** In agent-driven sessions, the agent creates every commit on the branch — following the Conventional Commits format and adding the required `Assisted-by:` footer — while the developer's only Git responsibilities are creating the branch, pushing it, and reviewing/merging the PR (see "Agent-Assisted Workflow" below).
-5. **Open a Pull Request (PR) early** — even as a draft. This invites feedback before you've gone too far in the wrong direction.
-6. **Get at least one review** before merging. 
-7. **Once approved and passing checks (tests/build), merge into `main`.**
+5. **Open a Pull Request (PR) when the change is ready to merge.** Use it as the merge record and link it to the tracked work where applicable.
+6. **Complete an author self-review before merging.** Review the complete diff, confirm the acceptance criteria, run the applicable tests/build checks, and verify documentation changes.
+7. **Once self-review is complete and checks pass, merge into `main`.**
 8. **Deploy from `main`** right after merging, or as part of your CI/CD pipeline.
 9. **Delete the branch** after merging to keep the repo tidy.
 
@@ -91,10 +91,10 @@ In an agent-assisted session the division of labor is fixed, so there is only ev
 
 | Who | Does |
 |---|---|
-| **Developer** | Creates the branch off `main`, pushes the branch, opens the PR, reviews the diff, and merges the PR once approved and green. |
+| **Developer** | Creates the branch off `main`, pushes the branch, opens the PR, performs the final self-review, and merges the PR once checks are green. |
 | **Agent** | Writes all code and creates all commits on the branch, using Conventional Commits and adding an `Assisted-by:` footer to every commit where it generated code. |
 
-Repeat the cycle whenever review feedback needs landing: the developer asks the agent to make changes, the agent edits and commits on the same branch, and the developer pushes again.
+Repeat the cycle whenever self-review or automated checks identify a change: the developer asks the agent to make changes, the agent edits and commits on the same branch, and the developer repeats verification.
 
 ---
 
@@ -164,7 +164,7 @@ git merge origin/main
 # Push and open a PR on Gitea
 git push -u origin feature/short-description
 
-# After PR approval → squash & merge on Gitea → delete branch
+# After self-review and passing checks → squash & merge on Gitea → delete branch
 
 # Tag a release (on main, after merging)
 git tag -a v1.2.0 -m "Release 1.2.0"
