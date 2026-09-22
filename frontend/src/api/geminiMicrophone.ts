@@ -1,9 +1,13 @@
 const GEMINI_INPUT_SAMPLE_RATE = 16_000;
 const BUFFER_SIZE = 512;
+const VOICE_ACTIVITY_RMS_THRESHOLD = 0.015;
+const VOICE_ACTIVITY_DEBOUNCE_MS = 300;
 
 export type GeminiMicrophoneChunkHandler = (
   base64Audio: string,
 ) => void;
+
+export type GeminiMicrophoneVoiceActivityHandler = () => void;
 
 export class GeminiMicrophone {
   private stream: MediaStream | null = null;
@@ -23,14 +27,18 @@ export class GeminiMicrophone {
 
   private paused = false;
 
+  private lastVoiceActivityAt: number | null = null;
+
   async start(
     onAudioChunk: GeminiMicrophoneChunkHandler,
+    onVoiceActivity?: GeminiMicrophoneVoiceActivityHandler,
   ): Promise<void> {
     if (this.stream) {
       return;
     }
 
     this.paused = false;
+    this.lastVoiceActivityAt = null;
 
     this.stream =
       await navigator.mediaDevices.getUserMedia({
@@ -98,10 +106,14 @@ export class GeminiMicrophone {
         return;
       }
 
-      const input =
-        event.inputBuffer.getChannelData(
-          0,
-        );
+       const input =
+         event.inputBuffer.getChannelData(
+           0,
+         );
+
+       if (this.hasVoiceActivity(input)) {
+         onVoiceActivity?.();
+       }
 
       const pcm16 =
         this.float32ToPcm16(input);
@@ -143,6 +155,7 @@ export class GeminiMicrophone {
 
   async stop(): Promise<void> {
     this.paused = false;
+    this.lastVoiceActivityAt = null;
 
     if (this.processor) {
       this.processor.onaudioprocess =
@@ -208,6 +221,28 @@ export class GeminiMicrophone {
     }
 
     return output;
+  }
+
+  private hasVoiceActivity(input: Float32Array): boolean {
+    if (input.length === 0) {
+      return false;
+    }
+
+    let sumOfSquares = 0;
+
+    for (const sample of input) {
+      sumOfSquares += sample * sample;
+    }
+
+    const rms = Math.sqrt(sumOfSquares / input.length);
+    const now = Date.now();
+
+    if (rms < VOICE_ACTIVITY_RMS_THRESHOLD || (this.lastVoiceActivityAt !== null && now - this.lastVoiceActivityAt < VOICE_ACTIVITY_DEBOUNCE_MS)) {
+      return false;
+    }
+
+    this.lastVoiceActivityAt = now;
+    return true;
   }
 
   private pcm16ToBase64(

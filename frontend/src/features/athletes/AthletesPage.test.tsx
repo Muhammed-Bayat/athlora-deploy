@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { Athlete, Squad } from '../../types';
 import { AthletesPage } from './AthletesPage';
@@ -16,7 +16,15 @@ const athleteApi = vi.hoisted(() => ({
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
-const geminiApi = vi.hoisted(() => ({ createGeminiToken: vi.fn(), connect: vi.fn(), sendText: vi.fn() }));
+const geminiApi = vi.hoisted(() => ({
+  createGeminiToken: vi.fn(),
+  connect: vi.fn(),
+  sendText: vi.fn(),
+  close: vi.fn(),
+  microphoneStop: vi.fn(),
+  audioClose: vi.fn(),
+  voiceActivity: undefined as (() => void) | undefined,
+}));
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
@@ -34,7 +42,7 @@ vi.mock('../../api/geminiLiveSdk', () => ({
     async sendText(message: string) { return geminiApi.sendText(message); }
     sendAudio() {}
     endAudioStream() {}
-    close() {}
+    close() { geminiApi.close(); }
   },
 }));
 vi.mock('../../api/geminiAudio', () => ({
@@ -43,13 +51,13 @@ vi.mock('../../api/geminiAudio', () => ({
     playPcm16() {}
     clear() {}
     async waitUntilIdle() {}
-    close() {}
+    close() { geminiApi.audioClose(); }
   },
 }));
 vi.mock('../../api/geminiMicrophone', () => ({
   GeminiMicrophone: class {
-    async start() {}
-    async stop() {}
+    async start(_onAudio?: (audio: string) => void, onVoiceActivity?: () => void) { geminiApi.voiceActivity = onVoiceActivity; }
+    async stop() { geminiApi.microphoneStop(); }
     pause() {}
     resume() {}
     isActive() { return false; }
@@ -117,6 +125,10 @@ beforeEach(() => {
   statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ARI_ID, name: ari.name, squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('AthletesPage', () => {
   it('opens Athlora AI from the search controls and sends typed messages in its dialog', async () => {
     const user = userEvent.setup();
@@ -131,6 +143,7 @@ describe('AthletesPage', () => {
     await user.click(trigger);
     const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
     expect(await within(dialog).findByText('Good Day Coach, who are we adding today?')).toBeInTheDocument();
+    expect(within(dialog).getByText('Say "Athlora, go to sleep" to end hands-free listening. Athlora also sleeps after 60 seconds of inactivity.')).toBeInTheDocument();
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Message Athlora' }), 'Add John Smith');
     await user.click(within(dialog).getByRole('button', { name: 'Send' }));
@@ -160,6 +173,55 @@ describe('AthletesPage', () => {
     expect(geminiApi.createGeminiToken).toHaveBeenCalledOnce();
     expect(geminiApi.connect).toHaveBeenCalledOnce();
     expect(geminiApi.sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it('sleeps after 60 seconds of inactivity and releases every AI resource', async () => {
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+    vi.useFakeTimers();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Athlora AI' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => vi.advanceTimersByTime(60_000));
+    await act(async () => {});
+
+    expect(geminiApi.microphoneStop).toHaveBeenCalledOnce();
+    expect(geminiApi.audioClose).toHaveBeenCalledOnce();
+    expect(geminiApi.close).toHaveBeenCalledOnce();
+    expect(screen.getByText('Athlora is sleeping.')).toBeInTheDocument();
+  });
+
+  it('resets the inactivity timer after typed and audible hands-free input', async () => {
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+    vi.useFakeTimers();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Athlora AI' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const dialog = screen.getByRole('dialog', { name: 'Athlora AI' });
+    act(() => vi.advanceTimersByTime(59_000));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Message Athlora' }), { target: { value: 'Hello' } });
+    act(() => vi.advanceTimersByTime(59_000));
+    expect(geminiApi.close).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enable hands-free' }));
+    geminiApi.voiceActivity?.();
+    act(() => vi.advanceTimersByTime(59_000));
+    expect(geminiApi.close).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1_000));
+    await act(async () => {});
+    expect(geminiApi.close).toHaveBeenCalledOnce();
   });
 
   it('renders active injury counts and highest severity without loading Fitness', async () => {

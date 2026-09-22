@@ -29,6 +29,7 @@ import styles from './AthletesPage.module.css';
 type StatusFilter = AthleteStatus | 'all';
 type Editor = 'new' | Athlete | null;
 const DEV = import.meta.env.DEV;
+const ASSISTANT_INACTIVITY_MS = 60_000;
 
 function debugAthlora(event: string): void {
   if (DEV) {
@@ -111,6 +112,8 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const greetedGeminiSessionRef = useRef<AthloraGeminiSession | null>(null);
   const geminiAssistantStartingRef = useRef(false);
   const sleepPendingRef = useRef(false);
+  const assistantInactivityTimeoutRef = useRef<number | null>(null);
+  const assistantActivityGenerationRef = useRef(0);
 
   if (!geminiAudioPlayerRef.current) {
     geminiAudioPlayerRef.current = new GeminiAudioPlayer();
@@ -156,6 +159,10 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
 
   useEffect(() => {
     return () => {
+      assistantActivityGenerationRef.current += 1;
+      if (assistantInactivityTimeoutRef.current !== null) {
+        window.clearTimeout(assistantInactivityTimeoutRef.current);
+      }
       void geminiMicrophoneRef.current?.stop();
       geminiSessionRef.current?.close();
       geminiSessionRef.current = null;
@@ -317,10 +324,20 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     };
   };
 
+  const clearAssistantInactivityTimer = () => {
+    assistantActivityGenerationRef.current += 1;
+
+    if (assistantInactivityTimeoutRef.current !== null) {
+      window.clearTimeout(assistantInactivityTimeoutRef.current);
+      assistantInactivityTimeoutRef.current = null;
+    }
+  };
+
   const sleepAthlora = async () => {
     setActionError(null);
 
     try {
+      clearAssistantInactivityTimer();
       sleepPendingRef.current = false;
 
       /*
@@ -359,6 +376,24 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           : 'Failed to put Athlora to sleep.',
       );
     }
+  };
+
+  const resetAssistantInactivityTimer = () => {
+    if (!geminiSessionRef.current) {
+      return;
+    }
+
+    clearAssistantInactivityTimer();
+    const generation = assistantActivityGenerationRef.current;
+
+    assistantInactivityTimeoutRef.current = window.setTimeout(() => {
+      if (generation !== assistantActivityGenerationRef.current || !geminiSessionRef.current) {
+        return;
+      }
+
+      assistantInactivityTimeoutRef.current = null;
+      void sleepAthlora();
+    }, ASSISTANT_INACTIVITY_MS);
   };
 
   const startGeminiSession = async (): Promise<AthloraGeminiSession> => {
@@ -432,6 +467,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
            * onTurnComplete will wait for that audio to finish and then
            * shut the assistant down.
            */
+          clearAssistantInactivityTimer();
           sleepPendingRef.current = true;
         },
 
@@ -458,6 +494,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
         onReady: () => {
           geminiSessionRef.current = session;
           setGeminiConnected(true);
+          resetAssistantInactivityTimer();
         },
 
         onDisconnected: () => {
@@ -474,6 +511,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
           geminiSessionRef.current = null;
           greetedGeminiSessionRef.current = null;
           sleepPendingRef.current = false;
+          clearAssistantInactivityTimer();
 
           void geminiMicrophoneRef.current?.stop();
           setGeminiListening(false);
@@ -481,6 +519,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
         },
 
         onError: (error) => {
+          clearAssistantInactivityTimer();
           setActionError(error.message);
         },
 
@@ -514,6 +553,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
 
     setGeminiTesting(true);
     setActionError(null);
+    resetAssistantInactivityTimer();
 
     try {
       await geminiAudioPlayerRef.current?.prepare();
@@ -606,11 +646,13 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
             error,
           );
         }
-      });
+      }, resetAssistantInactivityTimer);
 
       setGeminiListening(true);
+      resetAssistantInactivityTimer();
     } catch (error) {
       setGeminiListening(false);
+      clearAssistantInactivityTimer();
 
       setActionError(
         error instanceof Error
@@ -847,6 +889,8 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
             {geminiListening && <span role="status">Listening hands-free</span>}
           </div>
 
+          <p className={styles.aiHelp}>Say &quot;Athlora, go to sleep&quot; to end hands-free listening. Athlora also sleeps after 60 seconds of inactivity.</p>
+
           {actionError && <p className={styles.formError} role="alert">{actionError}</p>}
 
           <form className={styles.aiComposer} onSubmit={(event) => { event.preventDefault(); void sendGeminiMessage(); }}>
@@ -855,7 +899,10 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
               id="athlora-ai-message"
               type="text"
               value={geminiMessage}
-              onChange={(event) => setGeminiMessage(event.target.value)}
+              onChange={(event) => {
+                setGeminiMessage(event.target.value);
+                resetAssistantInactivityTimer();
+              }}
               placeholder="e.g. Add John Smith"
               disabled={geminiTesting}
             />
