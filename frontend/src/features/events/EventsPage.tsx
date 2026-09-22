@@ -228,10 +228,12 @@ function sortedEvents(events: AthleticsEvent[], descending = false): AthleticsEv
   return [...events].sort((left, right) => {
     const date = left.date.localeCompare(right.date);
     if (date !== 0) return date * direction;
-    const leftTime = left.time ?? '99:99:99';
-    const rightTime = right.time ?? '99:99:99';
-    const time = leftTime.localeCompare(rightTime);
-    if (time !== 0) return time * direction;
+    if (left.time === null || right.time === null) {
+      if (left.time !== right.time) return left.time === null ? 1 : -1;
+    } else {
+      const time = left.time.localeCompare(right.time);
+      if (time !== 0) return time * direction;
+    }
     const created = left.createdAt.localeCompare(right.createdAt);
     return created !== 0 ? created * direction : left.id.localeCompare(right.id) * direction;
   });
@@ -910,7 +912,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
                 groups[d].push(event);
                 return groups;
               }, {})
-            ).sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate)).map(([dateKey, dateEvents]) => (
+            ).sort(([leftDate], [rightDate]) => (dateTab === 'past' ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate))).map(([dateKey, dateEvents]) => (
               <div key={dateKey} className={styles.agendaGroup}>
                 <h3 className={styles.agendaDateHeading}>{formattedDate(dateKey, true)}</h3>
                 <div className={styles.agendaGroupEvents}>

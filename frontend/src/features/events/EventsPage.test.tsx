@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
-import { EventsPage } from './EventsPage';
+import { EventsPage, formattedDate } from './EventsPage';
 import { EventDetailPage } from './EventDetailPage';
 
 const eventApi = vi.hoisted(() => ({
@@ -334,6 +334,70 @@ describe('EventsPage', () => {
       expect.stringContaining('Acceleration Session'),
       expect.stringContaining('City Sprint Meet'),
       expect.stringContaining('Cancelled Invitational'),
+    ]);
+  });
+
+  it('orders completed and cancelled past events newest first with stable same-day ordering', async () => {
+    const user = userEvent.setup();
+    eventApi.listEvents.mockResolvedValueOnce({
+      data: [
+        event({ id: '99999999-9999-4999-8999-999999999999', title: 'No-Time Completed', date: '2026-08-14', time: null, status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: '88888888-8888-4888-8888-888888888888', title: 'Earlier Completed', date: '2026-08-14', time: '09:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: '77777777-7777-4777-8777-777777777777', title: 'Later Completed', date: '2026-08-14', time: '17:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: '66666666-6666-4666-8666-666666666666', title: 'Later Created Tie', date: '2026-08-14', time: '08:00:00', status: 'completed', createdAt: '2026-08-02T10:00:00.000Z' }),
+        event({ id: '55555555-5555-4555-8555-555555555555', title: 'Earlier Created Tie', date: '2026-08-14', time: '08:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', title: 'Later Id Tie', date: '2026-08-14', time: '07:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', title: 'Earlier Id Tie', date: '2026-08-14', time: '07:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', title: 'Newer Cancelled', date: '2026-08-15', time: '12:00:00', status: 'cancelled', createdAt: '2026-08-01T10:00:00.000Z' }),
+        event({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', title: 'Older Completed', date: '2026-08-13', time: '10:00:00', status: 'completed', createdAt: '2026-08-01T10:00:00.000Z' }),
+      ],
+      meta: { count: 9 },
+    });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Past' }));
+    const cards = await screen.findAllByRole('button', { name: /Newer Cancelled|Later Completed|Earlier Completed|Later Created Tie|Earlier Created Tie|Later Id Tie|Earlier Id Tie|No-Time Completed|Older Completed/ });
+    expect(cards.map((card) => card.querySelector('strong')?.textContent)).toEqual([
+      'Newer Cancelled',
+      'Later Completed',
+      'Earlier Completed',
+      'Later Created Tie',
+      'Earlier Created Tie',
+      'Later Id Tie',
+      'Earlier Id Tie',
+      'No-Time Completed',
+      'Older Completed',
+    ]);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      formattedDate('2026-08-15', true),
+      formattedDate('2026-08-14', true),
+      formattedDate('2026-08-13', true),
+    ]);
+  });
+
+  it('uses the same past-event ordering for a selected calendar day', async () => {
+    const user = userEvent.setup();
+    eventApi.listEvents.mockResolvedValueOnce({
+      data: [
+        event({ id: '99999999-9999-4999-8999-999999999999', title: 'No-Time Completed', date: '2026-08-14', time: null, status: 'completed' }),
+        event({ id: '88888888-8888-4888-8888-888888888888', title: 'Earlier Completed', date: '2026-08-14', time: '09:00:00', status: 'completed' }),
+        event({ id: '77777777-7777-4777-8777-777777777777', title: 'Later Cancelled', date: '2026-08-14', time: '17:00:00', status: 'cancelled' }),
+      ],
+      meta: { count: 3 },
+    });
+    renderPage();
+
+    await screen.findByText('No events match your filters');
+    await user.click(screen.getByRole('button', { name: 'Past' }));
+    await user.click(screen.getByRole('button', { name: 'Calendar view' }));
+    const date = formattedDate('2026-08-14', true);
+    await user.click(screen.getByRole('button', { name: `${date}, 3 events` }));
+
+    const cards = screen.getAllByRole('button', { name: /Later Cancelled|Earlier Completed|No-Time Completed/ });
+    expect(cards.map((card) => card.querySelector('strong')?.textContent)).toEqual([
+      'Later Cancelled',
+      'Earlier Completed',
+      'No-Time Completed',
     ]);
   });
 
