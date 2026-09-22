@@ -80,25 +80,30 @@
 
 .singleClub { position: relative; margin-top: 38px; }
 .comparisonCards { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 38px; }
-.comparisonPanel { position: relative; margin-top: 38px; padding: 26px; border: 1px solid rgba(138, 233, 242, 0.18); border-radius: 24px; background: linear-gradient(142deg, rgba(9, 42, 58, 0.98), rgba(1, 17, 28, 0.98)); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3); }
+.comparisonPanel { position: relative; margin-top: 38px; padding: 26px; border: 1px solid var(--chart-tooltip-border); border-radius: 24px; background: var(--chart-tooltip-surface); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3); }
 .comparisonToolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
-.comparisonToolbar h2 { margin: 0; color: #f0fcff; font: 700 clamp(1.3rem, 3vw, 1.9rem) / 1 var(--font-display); letter-spacing: -0.05em; }
+.comparisonToolbar h2 { margin: 0; color: var(--chart-tooltip-text); font: 700 clamp(1.3rem, 3vw, 1.9rem) / 1 var(--font-display); letter-spacing: -0.05em; }
 .comparisonToolbar div { display: flex; gap: 6px; }
-.comparisonToolbar button { padding: 8px 12px; border: 1px solid rgba(138, 233, 242, 0.26); border-radius: 999px; background: rgba(3, 31, 44, 0.76); color: #bff5f8; font: 700 0.65rem var(--font-family-mono); cursor: pointer; }
-.comparisonToolbar button[aria-pressed="true"] { border-color: #8ae9f2; background: rgba(30, 148, 167, 0.3); color: #fff; }
+.comparisonToolbar button { padding: 8px 12px; border: 1px solid var(--chart-tooltip-border); border-radius: 999px; background: transparent; color: var(--chart-tooltip-muted); font: 700 0.65rem var(--font-family-mono); cursor: pointer; }
+.comparisonToolbar button[aria-pressed="true"] { border-color: var(--chart-series-1); background: color-mix(in srgb, var(--chart-series-1) 18%, transparent); color: var(--chart-tooltip-text); }
 .comparisonChart { display: block; width: 100%; min-height: 260px; overflow: visible; }
-.comparisonChart line { stroke: rgba(138, 233, 242, 0.28); stroke-width: 1; }
+.comparisonChart line { stroke: var(--chart-axis); stroke-width: 1; }
 .comparisonChart polyline { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
-.comparisonChart circle { stroke: #00141f; stroke-width: 2; }
+.comparisonChart circle { stroke: var(--chart-tooltip-surface); stroke-width: 2; }
+.comparisonChart circle:focus-visible { stroke: var(--chart-focus); stroke-width: 3; outline: none; }
 .chartLegend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 4px; }
-.chartLegend span { display: inline-flex; align-items: center; gap: 7px; color: #d9f7f9; font-size: 0.78rem; }
-.chartLegend i { width: 18px; height: 3px; border-radius: 99px; }
-.chartLegend small { color: #84aebb; font: 600 0.62rem var(--font-family-mono); }
+.chartLegend span { display: inline-flex; align-items: center; gap: 7px; color: var(--chart-tooltip-text); font-size: 0.78rem; }
+.legendMarker { width: 24px; height: 6px; flex: none; }
+.legendMarker line { stroke-width: 3; stroke-linecap: round; }
+.chartLegend small { color: var(--chart-tooltip-muted); font: 600 0.62rem var(--font-family-mono); }
+.chartTooltip { pointer-events: none; }
+.chartTooltip rect { fill: var(--chart-tooltip-surface); stroke: var(--chart-tooltip-border); }
+.chartTooltip text { fill: var(--chart-tooltip-text); font: 0.66rem var(--font-family-mono); }
 .tableScroll { overflow-x: auto; }
-.comparisonTable { width: 100%; min-width: 580px; border-collapse: collapse; color: #d9f7f9; font-size: 0.82rem; }
-.comparisonTable th, .comparisonTable td { padding: 12px 14px; border-bottom: 1px solid rgba(138, 233, 242, 0.12); text-align: left; }
-.comparisonTable thead th { color: #8ae9f2; font: 700 0.64rem var(--font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; }
-.comparisonTable tbody th { color: #9ebcc5; font-weight: 600; }
+.comparisonTable { width: 100%; min-width: 580px; border-collapse: collapse; color: var(--chart-tooltip-text); font-size: 0.82rem; }
+.comparisonTable th, .comparisonTable td { padding: 12px 14px; border-bottom: 1px solid var(--chart-grid); text-align: left; }
+.comparisonTable thead th { color: var(--chart-series-1); font: 700 0.64rem var(--font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.comparisonTable tbody th { color: var(--chart-tooltip-muted); font-weight: 600; }
 
 .clubCard, .athleteCard { --tilt-x: 0deg; --tilt-y: 0deg; --glow-x: 50%; --glow-y: 50%; position: relative; isolation: isolate; overflow: hidden; border: 1px solid rgba(138, 233, 242, 0.18); background: linear-gradient(142deg, rgba(9, 42, 58, 0.98), rgba(1, 17, 28, 0.98)); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3), 0 0 30px rgba(69, 190, 215, 0.05); transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition: transform 0.18s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
 .clubCard:hover, .athleteCard:hover { border-color: rgba(138, 233, 242, 0.5); box-shadow: inset 0 1px rgba(255, 255, 255, 0.09), 0 28px 75px rgba(0, 0, 0, 0.36), 0 0 48px rgba(69, 190, 215, 0.16); transform: perspective(1100px) translateY(-7px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }

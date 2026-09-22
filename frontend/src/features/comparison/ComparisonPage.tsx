@@ -25,6 +25,7 @@ import type {
   ProgressionEntry,
 } from '../../types';
 import { format100mSeconds, formatDateOnly } from '../../utils/formatting';
+import { chartSeriesById } from '../../utils/chartSeries';
 import styles from './ComparisonPage.module.css';
 import { useWorkspace } from '../auth/WorkspaceContext';
 
@@ -38,7 +39,6 @@ type ViewMode = 'chart' | 'table';
 type ComparisonMode = 'athlete-club' | 'athlete-cross-club' | 'club-statistics' | 'club-comparison';
 type ChartPoint = { x: number; y: number; entry: ProgressionEntry; athleteIndex: number };
 const MAX_COMPARISON_ITEMS = 5;
-const SERIES_COLORS = ['var(--console-comparison-series-a)', 'var(--console-comparison-series-b)', '#bb8af5', '#f0b45e', '#78d69a'];
 
 interface ChartGeometry {
   series: ChartPoint[][];
@@ -179,11 +179,10 @@ function ComparisonChart({ comparison, season }: { comparison: MultiComparisonDe
     () => buildComparisonChartGeometry(comparison.athletes),
     [comparison],
   );
-  const athleteColors = useMemo(() => new Map(
-    [...comparison.athletes]
-      .sort((left, right) => left.athlete.id.localeCompare(right.athlete.id))
-      .map((athlete, index) => [athlete.athlete.id, SERIES_COLORS[index]]),
-  ), [comparison.athletes]);
+  const seriesByAthleteId = useMemo(
+    () => chartSeriesById(comparison.athletes.map((athlete) => athlete.athlete.id)),
+    [comparison.athletes],
+  );
 
   if (!geometry) {
     return <p className={styles.empty}>None of the selected athletes has a valid 100m result to chart.</p>;
@@ -268,11 +267,11 @@ function ComparisonChart({ comparison, season }: { comparison: MultiComparisonDe
             {athleteSeries.length > 1 && (
               <>
                 <polyline
-                  data-series={`athlete-${athleteIndex + 1}`}
-                  data-series-color={athleteColors.get(comparison.athletes[athleteIndex].athlete.id)}
+                  data-series={seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.label}
+                  data-series-color={seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.color}
                   points={athleteSeries.map((point) => `${point.x},${point.y}`).join(' ')}
                   className={styles.seriesLine}
-                  style={{ stroke: athleteColors.get(comparison.athletes[athleteIndex].athlete.id) }}
+                  style={{ stroke: seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.color, strokeDasharray: seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.dashArray }}
                 />
                 <polyline
                   data-testid={`comparison-line-hit-area-${athleteIndex + 1}`}
@@ -295,16 +294,16 @@ function ComparisonChart({ comparison, season }: { comparison: MultiComparisonDe
                 cy={point.y}
                 r={4.5}
                 className={styles.seriesPoint}
-                style={{ fill: athleteColors.get(comparison.athletes[athleteIndex].athlete.id) }}
+                style={{ fill: seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.color }}
                 tabIndex={0}
                 role="img"
-                aria-label={`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}
+                aria-label={`${seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.label}: ${comparison.athletes[athleteIndex].athlete.name}, ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}
                 onPointerEnter={() => setHoveredPoint(point)}
                 onPointerLeave={() => setHoveredPoint(null)}
                 onFocus={() => setHoveredPoint(point)}
                 onBlur={() => setHoveredPoint(null)}
               >
-                <title>{`${comparison.athletes[athleteIndex].athlete.name}: ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}</title>
+                  <title>{`${seriesByAthleteId.get(comparison.athletes[athleteIndex].athlete.id)!.label}: ${comparison.athletes[athleteIndex].athlete.name}, ${format100mSeconds(point.entry.effectiveResult!)} on ${formatDateOnly(point.entry.event.date)}`}</title>
               </circle>
             ))}
           </g>
@@ -316,7 +315,7 @@ function ComparisonChart({ comparison, season }: { comparison: MultiComparisonDe
             transform={`translate(${Math.min(hoveredPoint.x + 12, SVG_WIDTH - 190)} ${Math.max(hoveredPoint.y - 42, SVG_PADDING.top)})`}
           >
             <rect width="178" height="36" rx="6" className={styles.tooltipBox} />
-            <text x="10" y="14" className={styles.tooltipText}>{comparison.athletes[hoveredPoint.athleteIndex].athlete.name}</text>
+            <text x="10" y="14" className={styles.tooltipText}>{`${seriesByAthleteId.get(comparison.athletes[hoveredPoint.athleteIndex].athlete.id)!.label}: ${comparison.athletes[hoveredPoint.athleteIndex].athlete.name}`}</text>
             <text x="10" y="28" className={styles.tooltipValue}>
               {`${formatDateOnly(hoveredPoint.entry.event.date)} - ${format100mSeconds(hoveredPoint.entry.effectiveResult!)}`}
             </text>
@@ -325,8 +324,8 @@ function ComparisonChart({ comparison, season }: { comparison: MultiComparisonDe
       </svg>
       <div className={styles.legend} role="list" aria-label="Chart legend">
         {comparison.athletes.map((athlete) => <span key={athlete.athlete.id} className={styles.legendItem} role="listitem">
-          <span className={styles.legendLine} style={{ background: athleteColors.get(athlete.athlete.id) }} aria-hidden="true" />
-          {athlete.athlete.name}
+          <svg className={styles.legendLine} viewBox="0 0 24 6" aria-hidden="true"><line x1="0" y1="3" x2="24" y2="3" style={{ stroke: seriesByAthleteId.get(athlete.athlete.id)!.color, strokeDasharray: seriesByAthleteId.get(athlete.athlete.id)!.dashArray }} /></svg>
+          {`${athlete.athlete.name} (${seriesByAthleteId.get(athlete.athlete.id)!.label})`}
         </span>)}
       </div>
     </div>

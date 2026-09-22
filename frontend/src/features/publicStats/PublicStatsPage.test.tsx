@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicStatsPage } from './PublicStatsPage';
@@ -81,6 +81,11 @@ describe('PublicStatsPage', () => {
     await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Bea Dash' }));
 
     expect(await screen.findByRole('img', { name: '100m progression chart comparing Ari Runner, Bea Dash' })).toBeInTheDocument();
+    expect(new Set(Array.from(document.querySelectorAll('[data-series-color]'), (line) => line.getAttribute('data-series-color'))).size).toBe(2);
+    expect(screen.getByRole('list', { name: 'Chart legend' })).toHaveTextContent('Ari Runner Series 1 · Open Track Club');
+    const point = screen.getByRole('img', { name: 'Series 1: Ari Runner, 11.20s on 2026-01-10' });
+    fireEvent.focus(point);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Series 1: Ari Runner');
     await userEvent.click(screen.getByRole('button', { name: 'Table' }));
     expect(await screen.findByRole('table', { name: 'Public athlete comparison metrics' })).toBeInTheDocument();
     expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith([clubDetail.athletes[0].athlete.id, OTHER_ATHLETE_ID], expect.any(AbortSignal), undefined);

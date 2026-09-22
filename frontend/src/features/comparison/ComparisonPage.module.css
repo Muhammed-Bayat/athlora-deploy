@@ -280,17 +280,17 @@
 }
 
 .tooltipBox {
-  fill: var(--console-surface-strong);
-  stroke: var(--console-line-strong);
+  fill: var(--chart-tooltip-surface);
+  stroke: var(--chart-tooltip-border);
 }
 
 .tooltipText {
-  fill: var(--console-muted);
+  fill: var(--chart-tooltip-muted);
   font: 0.625rem var(--font-family-mono);
 }
 
 .tooltipValue {
-  fill: var(--console-ink);
+  fill: var(--chart-tooltip-text);
   font: 600 0.7rem var(--font-family-mono);
 }
 
@@ -308,51 +308,28 @@
   gap: var(--space-2);
 }
 
-.seriesLine,
-.seriesLineA,
-.seriesLineB {
+.seriesLine {
   fill: none;
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.seriesLineA {
-  stroke: var(--console-comparison-series-a);
-}
-
-.seriesLineB {
-  stroke: var(--console-comparison-series-b);
-}
-
-.seriesPoint,
-.seriesPointA,
-.seriesPointB {
-  stroke: var(--console-surface-strong);
+.seriesPoint {
+  stroke: var(--chart-tooltip-surface);
   stroke-width: 2;
-}
-
-.seriesPointA {
-  fill: var(--console-comparison-series-a);
-}
-
-.seriesPointB {
-  fill: var(--console-comparison-series-b);
 }
 
 .legendLine {
   display: inline-block;
   width: 24px;
-  height: 3px;
-  border-radius: var(--radius-pill);
+  height: 6px;
+  flex: none;
 }
 
-.legendLineA {
-  background: var(--console-comparison-series-a);
-}
-
-.legendLineB {
-  background: var(--console-comparison-series-b);
+.legendLine line {
+  stroke-width: 3;
+  stroke-linecap: round;
 }
 
 .empty {
