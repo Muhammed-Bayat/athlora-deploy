@@ -50,6 +50,22 @@
   --color-text-light: var(--ui-white);
   --color-text-light-muted: rgba(220, 237, 243, 0.66);
 
+  /* Charts use semantic series and state colours so every chart shares the same accessible palette. */
+  --chart-series-1: #8AE9F2;
+  --chart-series-2: #F4B84F;
+  --chart-series-3: #C69AFF;
+  --chart-series-4: #75D69A;
+  --chart-series-5: #FF91AC;
+  --chart-axis: rgba(138, 233, 242, 0.40);
+  --chart-grid: rgba(138, 233, 242, 0.22);
+  --chart-tooltip-surface: #031D2D;
+  --chart-tooltip-border: rgba(138, 233, 242, 0.42);
+  --chart-tooltip-text: #F7FDFF;
+  --chart-tooltip-muted: #BBD2DB;
+  --chart-pb: #1CA6CE;
+  --chart-pb-outline: #F7FDFF;
+  --chart-focus: #F4B84F;
+
   /* Semantic status */
   --color-success: var(--teal-700);
   --color-warning: #00879E;
@@ -100,6 +116,21 @@ html.theme-light {
   --color-text-faint: #718087;
   --color-text-light: var(--ink-900);
   --color-text-light-muted: rgba(0, 48, 72, 0.62);
+
+  --chart-series-1: #007F9B;
+  --chart-series-2: #A34F00;
+  --chart-series-3: #6D3BB5;
+  --chart-series-4: #167342;
+  --chart-series-5: #B51E52;
+  --chart-axis: rgba(18, 35, 43, 0.44);
+  --chart-grid: rgba(18, 35, 43, 0.18);
+  --chart-tooltip-surface: #FFFFFF;
+  --chart-tooltip-border: rgba(18, 35, 43, 0.24);
+  --chart-tooltip-text: #10232B;
+  --chart-tooltip-muted: #53636A;
+  --chart-pb: #007F9B;
+  --chart-pb-outline: #FFFFFF;
+  --chart-focus: #A34F00;
 
   --ui-white: #10232B;
   --ui-text: #1C3038;

@@ -213,7 +213,7 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
               y1={SVG_PADDING.top}
               x2={SVG_PADDING.left}
               y2={SVG_HEIGHT - SVG_PADDING.bottom}
-              stroke="var(--console-line)"
+              stroke="var(--chart-axis)"
               strokeWidth="1"
             />
             <line
@@ -221,7 +221,7 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
               y1={SVG_HEIGHT - SVG_PADDING.bottom}
               x2={SVG_WIDTH - SVG_PADDING.right}
               y2={SVG_HEIGHT - SVG_PADDING.bottom}
-              stroke="var(--console-line)"
+              stroke="var(--chart-axis)"
               strokeWidth="1"
             />
 
@@ -234,7 +234,7 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
                     y1={y}
                     x2={SVG_WIDTH - SVG_PADDING.right}
                     y2={y}
-                    stroke="var(--console-line)"
+                    stroke="var(--chart-grid)"
                     strokeDasharray="4 4"
                     strokeWidth="1"
                   />
@@ -256,7 +256,7 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
                 <polyline
                   points={geometry.points.map((p) => `${p.x},${p.y}`).join(' ')}
                   fill="none"
-                  stroke="var(--cyan-400)"
+                  stroke="var(--chart-series-1)"
                   strokeWidth="2.5"
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -279,8 +279,8 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
             {geometry.points.map((point) => {
               const isPb = point.entry.isNewPb && point.entry.effectiveResult !== null;
               const r = isPb ? 7 : 4.5;
-              const fill = isPb ? 'var(--blue-500)' : 'var(--cyan-400)';
-              const stroke = isPb ? 'var(--white)' : 'none';
+              const fill = isPb ? 'var(--chart-pb)' : 'var(--chart-series-1)';
+              const stroke = isPb ? 'var(--chart-pb-outline)' : 'none';
               return (
                 <circle
                   key={point.entry.event.id}
@@ -290,6 +290,7 @@ export function ProgressionChart({ athleteId, athleteName, season = 'all' }: Pro
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={isPb ? 2 : 0}
+                  className={styles.point}
                   tabIndex={0}
                   role="img"
                   aria-label={`${formatDateOnly(point.entry.event.date)}: ${point.entry.effectiveResult !== null ? format100mSeconds(point.entry.effectiveResult) : point.entry.effectiveOutcome}${isPb ? ', personal best' : ''}`}

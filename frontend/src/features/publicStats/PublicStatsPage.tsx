@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../../api/publicStatistics';
 import { SeasonSelector, Select } from '../../components';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import type { PublicAthleteComparison, PublicAthleteStatistics, PublicClub, PublicClubStatistics } from '../../types';
 import { format100mSeconds } from '../../utils/formatting';
+import { chartSeriesById } from '../../utils/chartSeries';
 import styles from './PublicStatsPage.module.css';
 
 const StaticTrack = lazy(() => import('./StaticTrack').then((module) => ({ default: module.StaticTrack })));
@@ -67,10 +68,13 @@ function AthleteStatCard({ athlete, season }: { athlete: PublicAthleteStatistics
   );
 }
 
-const comparisonColors = ['#8ae9f2', '#f0b45e', '#bb8af5', '#78d69a', '#ff8fa3'];
-
 function PublicAthleteComparisonPanel({ comparison, season }: { comparison: PublicAthleteComparison; season: SeasonValue }) {
   const [view, setView] = useState<'chart' | 'table'>('chart');
+  const [hoveredPoint, setHoveredPoint] = useState<{ athleteIndex: number; entry: { date: string; result: number } } | null>(null);
+  const seriesByAthleteId = useMemo(
+    () => chartSeriesById(comparison.athletes.map((athlete) => athlete.athlete.id)),
+    [comparison.athletes],
+  );
   const points = comparison.athletes.flatMap((athlete) => athlete.progression.map((entry) => ({ ...entry, athleteId: athlete.athlete.id })));
   const dates = points.map((point) => new Date(`${point.date}T00:00:00Z`).getTime());
   const results = points.map((point) => point.result);
@@ -93,7 +97,13 @@ function PublicAthleteComparisonPanel({ comparison, season }: { comparison: Publ
 
   return <section className={styles.comparisonPanel} aria-label="Athlete comparison results">
     <div className={styles.comparisonToolbar}><h2>{seasonLabel(season)} 100m comparison</h2><div><button type="button" onClick={() => setView('chart')} aria-pressed={view === 'chart'}>Chart</button><button type="button" onClick={() => setView('table')} aria-pressed={view === 'table'}>Table</button></div></div>
-    {view === 'chart' && (points.length === 0 ? <p className={styles.emptyState}>None of the selected athletes has a valid 100m result to chart.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 320" role="img" aria-label={`100m progression chart comparing ${comparison.athletes.map((athlete) => athlete.athlete.name).join(', ')}`}><line x1="58" y1="30" x2="58" y2="266" /><line x1="58" y1="266" x2="676" y2="266" />{comparison.athletes.map((athlete, index) => <g key={athlete.athlete.id}>{athlete.progression.length > 1 && <polyline points={athlete.progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: comparisonColors[index] }} />}{athlete.progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: comparisonColors[index] }}><title>{`${athlete.athlete.name}: ${format100mSeconds(entry.result)} on ${entry.date}`}</title></circle>)}</g>)}</svg><div className={styles.chartLegend}>{comparison.athletes.map((athlete, index) => <span key={athlete.athlete.id}><i style={{ background: comparisonColors[index] }} />{athlete.athlete.name} <small>{athlete.club.name}</small></span>)}</div></>)}
+    {view === 'chart' && (points.length === 0 ? <p className={styles.emptyState}>None of the selected athletes has a valid 100m result to chart.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 320" role="img" aria-label={`100m progression chart comparing ${comparison.athletes.map((athlete) => athlete.athlete.name).join(', ')}`}><line x1="58" y1="30" x2="58" y2="266" /><line x1="58" y1="266" x2="676" y2="266" />{comparison.athletes.map((athlete, athleteIndex) => {
+      const series = seriesByAthleteId.get(athlete.athlete.id)!;
+      return <g key={athlete.athlete.id}>{athlete.progression.length > 1 && <polyline data-series={series.label} data-series-color={series.color} points={athlete.progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: series.color, strokeDasharray: series.dashArray }} />}{athlete.progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: series.color }} tabIndex={0} role="img" aria-label={`${series.label}: ${athlete.athlete.name}, ${format100mSeconds(entry.result)} on ${entry.date}`} onPointerEnter={() => setHoveredPoint({ athleteIndex, entry })} onPointerLeave={() => setHoveredPoint(null)} onFocus={() => setHoveredPoint({ athleteIndex, entry })} onBlur={() => setHoveredPoint(null)}><title>{`${series.label}: ${athlete.athlete.name}: ${format100mSeconds(entry.result)} on ${entry.date}`}</title></circle>)}</g>;
+    })}{hoveredPoint && <g role="tooltip" className={styles.chartTooltip} transform={`translate(${Math.min(x(hoveredPoint.entry.date) + 12, 510)} ${Math.max(y(hoveredPoint.entry.result) - 44, 30)})`}><rect width="200" height="38" rx="6" /><text x="10" y="15">{`${seriesByAthleteId.get(comparison.athletes[hoveredPoint.athleteIndex].athlete.id)!.label}: ${comparison.athletes[hoveredPoint.athleteIndex].athlete.name}`}</text><text x="10" y="29">{`${hoveredPoint.entry.date} - ${format100mSeconds(hoveredPoint.entry.result)}`}</text></g>}</svg><div className={styles.chartLegend} role="list" aria-label="Chart legend">{comparison.athletes.map((athlete) => {
+      const series = seriesByAthleteId.get(athlete.athlete.id)!;
+      return <span key={athlete.athlete.id} role="listitem"><svg className={styles.legendMarker} viewBox="0 0 24 6" aria-hidden="true"><line x1="0" y1="3" x2="24" y2="3" style={{ stroke: series.color, strokeDasharray: series.dashArray }} /></svg>{athlete.athlete.name} <small>{`${series.label} · ${athlete.club.name}`}</small></span>;
+    })}</div></>)}
     {view === 'table' && <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label="Public athlete comparison metrics"><thead><tr><th scope="col">Metric</th>{comparison.athletes.map((athlete) => <th key={athlete.athlete.id} scope="col">{athlete.athlete.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{comparison.athletes.map((athlete) => <td key={athlete.athlete.id}>{row.value(athlete)}</td>)}</tr>)}</tbody></table></div>}
   </section>;
 }

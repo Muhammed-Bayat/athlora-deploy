@@ -72,4 +72,14 @@ describe('ProgressionChart', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('17 Aug 2026');
     expect(screen.getByRole('tooltip')).toHaveTextContent('11.05s');
   });
+
+  it('uses the shared personal-best chart token', async () => {
+    statisticsApi.getAthleteProgression.mockResolvedValue(progression);
+
+    render(<ProgressionChart athleteId={ATHLETE_ID} athleteName="Ari Runner" />);
+
+    const point = await screen.findByRole('img', { name: '17 Aug 2026: 11.05s, personal best' });
+    expect(point).toHaveAttribute('fill', 'var(--chart-pb)');
+    expect(point).toHaveAttribute('stroke', 'var(--chart-pb-outline)');
+  });
 });

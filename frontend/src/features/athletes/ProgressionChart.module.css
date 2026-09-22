@@ -61,22 +61,28 @@
   pointer-events: stroke;
 }
 
+.point:focus-visible {
+  stroke: var(--chart-focus);
+  stroke-width: 3;
+  outline: none;
+}
+
 .tooltip {
   pointer-events: none;
 }
 
 .tooltipBox {
-  fill: var(--console-surface-strong);
-  stroke: var(--console-line-strong);
+  fill: var(--chart-tooltip-surface);
+  stroke: var(--chart-tooltip-border);
 }
 
 .tooltipText {
-  fill: var(--console-muted);
+  fill: var(--chart-tooltip-muted);
   font: 0.625rem var(--font-family-mono);
 }
 
 .tooltipValue {
-  fill: var(--console-ink);
+  fill: var(--chart-tooltip-text);
   font: 600 0.75rem var(--font-family-mono);
 }
 
@@ -143,8 +149,8 @@
   min-width: 24px;
   padding: 2px 6px;
   border-radius: var(--radius-pill);
-  background: var(--blue-500);
-  color: var(--white);
+  background: var(--chart-pb);
+  color: var(--chart-pb-outline);
   font: var(--font-weight-bold) 0.65rem var(--font-family-mono);
 }
 
@@ -167,12 +173,12 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--cyan-400);
+  background: var(--chart-series-1);
 }
 
 .legendDotPb {
-  background: var(--blue-500);
-  box-shadow: 0 0 0 2px var(--white);
+  background: var(--chart-pb);
+  box-shadow: 0 0 0 2px var(--chart-pb-outline);
 }
 
 .empty {
