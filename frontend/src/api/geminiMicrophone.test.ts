@@ -180,6 +180,18 @@ describe('GeminiMicrophone', () => {
       expect(typeof onChunk.mock.calls[0][0]).toBe('string');
     });
 
+    it('reports audible voice activity but ignores silence', async () => {
+      const onVoiceActivity = vi.fn();
+      const mic = createMic();
+      await mic.start(vi.fn(), onVoiceActivity);
+
+      fireAudioEvent(new Float32Array([0.001, -0.001, 0.001]));
+      expect(onVoiceActivity).not.toHaveBeenCalled();
+
+      fireAudioEvent(new Float32Array([0.1, -0.1, 0.1]));
+      expect(onVoiceActivity).toHaveBeenCalledOnce();
+    });
+
     it('fills output buffer with zeros (silent)', async () => {
       const onChunk = vi.fn();
       const mic = createMic();
