@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach, beforeAll } from 'vitest';
 import pg from 'pg';
 import { applyMigrations, loadMigrations } from './migrate.js';
 import { listGuestFixtures } from '../services/fixtures.js';
+import { MEET_TEST_TABLES } from './meet-test-tables.js';
 
 /**
  * Migration integration tests against a real PostgreSQL database.
@@ -20,6 +21,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  ...MEET_TEST_TABLES,
   'fixture_notifications',
   'club_join_requests',
   'clubs',
@@ -119,6 +121,7 @@ describeDB('migrations against a real database', () => {
       '0025_club_public_schedule_publication.sql',
       '0026_user_preferences.sql',
       '0027_club_branding.sql',
+      '0028_multi_discipline_meet_foundation.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -197,6 +200,7 @@ describeDB('migrations against a real database', () => {
       '0025_club_public_schedule_publication.sql',
       '0026_user_preferences.sql',
       '0027_club_branding.sql',
+      '0028_multi_discipline_meet_foundation.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -206,7 +210,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(29);
+    expect(rows).toHaveLength(30);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

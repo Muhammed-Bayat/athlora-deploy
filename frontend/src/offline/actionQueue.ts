@@ -1,7 +1,10 @@
 import Dexie from 'dexie';
 import { getOfflineDB, type OfflineAction } from './db';
+import { isSessionTarget, type SessionTarget } from '../types/meets';
 
 export interface EnqueueActionInput {
+  target?: SessionTarget;
+  workspaceId?: string;
   actionType: OfflineAction['actionType'];
   eventId: string;
   entryId?: string;
@@ -11,9 +14,11 @@ export interface EnqueueActionInput {
 }
 
 export async function enqueueAction(input: EnqueueActionInput, userId: string): Promise<string> {
+  if (input.target !== undefined && (!isSessionTarget(input.target) || !input.workspaceId)) throw new Error('Session actions require a complete target and workspace');
   const db = getOfflineDB(userId);
   const id = crypto.randomUUID();
   const action: OfflineAction = {
+    ...(input.target ? { target: input.target, workspaceId: input.workspaceId } : {}),
     id,
     actionType: input.actionType,
     eventId: input.eventId,

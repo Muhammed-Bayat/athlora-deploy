@@ -1,8 +1,10 @@
 import type { PublicOfflineAction } from '../offline/publicDb';
+import type { SessionTarget } from '../types/meets';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface PublicSyncAction {
+  target?: SessionTarget;
   actionId: string;
   actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
   payload: Record<string, unknown>;
@@ -17,6 +19,7 @@ export interface PublicSyncBatchRequest {
 }
 
 export interface PublicSyncActionReceipt {
+  target?: SessionTarget;
   actionId: string;
   status: 'accepted' | 'rejected' | 'duplicate';
   code?: string;
@@ -50,18 +53,19 @@ export async function postPublicSyncBatch(
   const body = await response.json();
   if (!response.ok) {
     const error = body && typeof body === 'object' && 'error' in body
-      ? (body as { error?: string }).error
+      ? (body as { error?: unknown }).error
       : `Request failed with status ${response.status}`;
-    throw new Error(error);
+    throw new Error(typeof error === 'string' ? error : (error as { message?: string } | undefined)?.message ?? 'Request failed');
   }
   return body as PublicSyncBatchResponse;
 }
 
 export function toPublicSyncAction(action: PublicOfflineAction): PublicSyncAction {
   return {
+    ...(action.target ? { target: action.target } : {}),
     actionId: action.id,
     actionType: action.actionType,
-    payload: action.payload,
+    payload: action.entryId ? { ...action.payload, entryId: action.entryId } : action.payload,
     expectedVersion: action.expectedVersion,
     clientTimestamp: new Date(action.createdAt).toISOString(),
   };

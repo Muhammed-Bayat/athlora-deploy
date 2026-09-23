@@ -3,6 +3,7 @@ import { enqueuePublicAction, getPublicQueueStatus } from '../offline/publicActi
 import { cachePublicSnapshot } from '../offline/publicEventCache';
 import { drainPublicQueue } from '../offline/syncEngine';
 import { useOnlineStatus } from './useOnlineStatus';
+import type { SessionTarget } from '../types/meets';
 
 interface UsePublicOfflineSyncOptions {
   sessionToken: string;
@@ -19,6 +20,7 @@ export interface PublicOfflineSyncResult {
   queueStatus: { pending: number; synced: number; failed: number } | null;
   sessionExpired: boolean;
   enqueue: (input: {
+    target?: SessionTarget;
     actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
     payload: Record<string, unknown>;
     entryId?: string;
@@ -67,6 +69,7 @@ export function usePublicOfflineSync({ sessionToken, eventId, deviceId }: UsePub
 
   const enqueue = useCallback(
     async (input: {
+      target?: SessionTarget;
       actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
       payload: Record<string, unknown>;
       entryId?: string;

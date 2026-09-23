@@ -1,0 +1,128 @@
+import type { EntryType, EventStatus, IncidentType, ResultOutcome, UserRole } from './domain.js';
+
+export interface SessionTarget {
+  disciplineSessionId: string;
+  entrantId: string;
+}
+
+export type MeetActor =
+  | { userId: string; workspaceId: string; role: UserRole }
+  | { publicLoggerSessionId: string };
+
+export interface DisciplineDefinition {
+  id: string;
+  code: string;
+  version: number;
+  kind: 'track' | 'field' | 'relay' | 'vertical';
+  unit: 'seconds' | 'metres' | 'cm';
+  direction: 'lower' | 'higher';
+  defaultRules: { aggregation: 'timed' | 'best'; entrantType: 'individual' | 'relay'; teamSize?: number };
+  precision: number;
+  presentation: { label: string; unitLabel?: string };
+  createdAt: string;
+  source: string;
+}
+
+export interface DisciplineSession {
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  disciplineDefinitionId: string;
+  label: string;
+  status: EventStatus;
+  version: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetEntrant {
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  kind: 'athlete' | 'guest' | 'relay';
+  athleteId: string | null;
+  name: string;
+  memberIds: string[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SessionRegistration extends SessionTarget {
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  withdrawnAt: string | null;
+  withdrawnBy: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SessionEntry extends SessionTarget {
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  entryType: EntryType;
+  value: number | null;
+  unit: DisciplineDefinition['unit'] | null;
+  isFoul: boolean;
+  incidentType: IncidentType | null;
+  noteText: string | null;
+  recordedBy: string | null;
+  publicLoggerSessionId: string | null;
+  version: number;
+  deviceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface SessionResult extends SessionTarget {
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  outcome: ResultOutcome;
+  finalResult: number | null;
+  unit: DisciplineDefinition['unit'];
+  manualOverride: number | null;
+  overrideReason: string | null;
+  overriddenBy: string | null;
+  overrideAt: string | null;
+  effectiveResult: number | null;
+  effectiveOutcome: ResultOutcome;
+  countsTowardsStatistics: boolean;
+  placing: number | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionStatistics {
+  disciplineSessionId: string;
+  entrantId: string | null;
+  disciplineDefinitionId: string;
+  unit: DisciplineDefinition['unit'];
+  direction: DisciplineDefinition['direction'];
+  resultCount: number;
+  validResultCount: number;
+  best: number | null;
+}
+
+export interface SessionCreateInput { disciplineDefinitionId: string; label: string }
+export interface SessionStateInput { status: EventStatus; expectedVersion: number }
+export type EntrantCreateInput =
+  | { kind: 'athlete'; athleteId: string }
+  | { kind: 'guest'; name: string }
+  | { kind: 'relay'; name: string; memberIds: string[] };
+export interface SessionEntryInput {
+  entryType: EntryType;
+  value: number | null;
+  unit: DisciplineDefinition['unit'] | null;
+  isFoul: boolean;
+  incidentType: IncidentType | null;
+  noteText: string | null;
+  deviceId: string | null;
+}
+export interface SessionEntryReplacement extends SessionEntryInput { expectedVersion: number }
+export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }

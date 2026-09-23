@@ -28,6 +28,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
+  ...MEET_TEST_TABLES,
   'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
@@ -307,3 +308,4 @@ describeDB('events against a real database', () => {
     await expect(getEvent(coachId, 'not-a-uuid', pool)).rejects.toMatchObject({ status: 404 });
   });
 });
+import { MEET_TEST_TABLES } from '../db/meet-test-tables.js';

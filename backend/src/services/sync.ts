@@ -80,12 +80,16 @@ export async function processSyncBatch(
       }
 
       const existingReceipt = await client.query(
-        'SELECT status, entry_id, server_version, error_code FROM sync_action_receipts WHERE action_id = $1',
+        'SELECT status, entry_id, server_version, error_code, discipline_session_id FROM sync_action_receipts WHERE action_id = $1',
         [action.actionId],
       );
 
       if (existingReceipt.rows.length > 0) {
         const row = existingReceipt.rows[0];
+        if (row.discipline_session_id) {
+          receipts.push({ actionId: action.actionId, status: 'rejected', code: 'NOT_FOUND' });
+          continue;
+        }
         if (row.status === 'rejected') {
           receipts.push({
             actionId: action.actionId,

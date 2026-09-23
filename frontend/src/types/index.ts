@@ -720,3 +720,4 @@ export interface ComparisonDetail {
 export interface MultiComparisonDetail {
   athletes: ComparisonAthleteAggregate[];
 }
+export type { SessionTarget, DisciplineDefinition, DisciplineSession, MeetEntrant, SessionRegistration, SessionEntry, SessionResult, SessionStatistics } from './meets';

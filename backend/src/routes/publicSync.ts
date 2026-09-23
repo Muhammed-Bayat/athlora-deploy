@@ -1,6 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { processPublicSyncBatch } from '../services/publicSync.js';
 import type { PublicSyncActionInput } from '../services/publicSync.js';
+import { processSessionSyncBatch } from '../services/sessionSync.js';
+import { resolvePublicMeetActor } from '../services/publicLoggers.js';
+import { ApiError } from '../middleware/errors.js';
 
 const publicSyncRouter = Router();
 
@@ -29,13 +32,20 @@ publicSyncRouter.post('/batch', async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const result = await processPublicSyncBatch(sessionToken, eventId, deviceId, actions);
+    const sessionTargeted = actions.some((action) => action && typeof action === 'object' && 'target' in action);
+    const result = sessionTargeted
+      ? await processSessionSyncBatch(await resolvePublicMeetActor(sessionToken, eventId), eventId, deviceId, actions)
+      : await processPublicSyncBatch(sessionToken, eventId, deviceId, actions);
 
     res.json({
       receipts: result.receipts,
       recomputedResults: result.recomputedResults,
     });
   } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.status).json({ error: { code: error.code, message: error.message, details: error.details } });
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[publicSync] Error:', message, error);
     if (message.includes('Invalid or expired public logger session')) {

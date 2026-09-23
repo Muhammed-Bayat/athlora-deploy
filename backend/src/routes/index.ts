@@ -27,6 +27,8 @@ import fixtureNotificationsRouter from './fixtureNotifications.js';
 import remindersRouter from './reminders.js';
 import publicStatisticsRouter from './publicStatistics.js';
 import publicScheduleRouter from './publicSchedule.js';
+import meetsRouter, { disciplinesRouter } from './meets.js';
+import publicMeetsRouter from './publicMeets.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, resolveLocalApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
@@ -87,6 +89,7 @@ squadsRouter.post('/:id/unarchive', requireOperationalAccess(), squads.unarchive
 
 router.use('/auth', authRouter);
 router.use('/public/logger', publicLoggerRouter);
+router.use('/public/logger', publicMeetsRouter);
 router.use('/public/statistics', publicStatisticsRouter);
 router.use('/public/schedule', publicScheduleRouter);
 router.use('/public/logger/sync', publicSyncRouter);
@@ -119,11 +122,13 @@ router.use('/preferences', verifyAuth0Token, resolveApplicationUser, preferences
 router.use('/squads', verifyAuth0Token, resolveApplicationUser, squadsRouter);
 router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use('/venues', verifyAuth0Token, resolveApplicationUser, venuesRouter);
+router.use('/disciplines', verifyAuth0Token, resolveApplicationUser, disciplinesRouter);
 router.use(
   '/events',
   verifyAuth0Token,
   resolveApplicationUser,
-   fixtureHostRouter,
+  meetsRouter,
+    fixtureHostRouter,
    publicLoggerOwnerRouter,
   participantsRouter,
   timelineRouter,

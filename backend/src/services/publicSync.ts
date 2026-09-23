@@ -73,6 +73,10 @@ export async function processPublicSyncBatch(
 
       if (existingReceipt.rows.length > 0) {
         const row = existingReceipt.rows[0];
+        if (row.discipline_session_id) {
+          receipts.push({ actionId: action.actionId, status: 'rejected', code: 'NOT_FOUND' });
+          continue;
+        }
         receipts.push({
           actionId: action.actionId,
           status: 'duplicate',

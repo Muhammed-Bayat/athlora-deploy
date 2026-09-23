@@ -6,13 +6,15 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 
 export const REALTIME_INVALIDATION_EVENT = 'realtime:invalidate';
 
-export type RealtimeResource = 'event' | 'participants' | 'results' | 'timeline';
+export type RealtimeResource = 'event' | 'participants' | 'results' | 'timeline' | 'sessions' | 'entrants';
 
 export interface RealtimeInvalidation {
   id: string;
   eventId: string;
   resources: readonly RealtimeResource[];
   occurredAt: string;
+  disciplineSessionId?: string;
+  entrantId?: string;
 }
 
 interface Socket {
@@ -90,6 +92,15 @@ export function notifyEventInvalidated(eventId: unknown, ...resources: RealtimeR
     eventId,
     resources,
     occurredAt: new Date().toISOString(),
+  });
+}
+
+/** The event room remains the authorization boundary; targets only narrow refetches. */
+export function notifySessionInvalidated(eventId: string, disciplineSessionId: string, entrantId?: string): void {
+  if (!isCanonicalUuid(eventId) || !isCanonicalUuid(disciplineSessionId) || (entrantId !== undefined && !isCanonicalUuid(entrantId))) return;
+  io?.to(room(eventId)).emit(REALTIME_INVALIDATION_EVENT, {
+    id: randomUUID(), eventId, disciplineSessionId, ...(entrantId ? { entrantId } : {}),
+    resources: ['sessions', 'entrants', 'timeline', 'results'], occurredAt: new Date().toISOString(),
   });
 }
 

@@ -29,6 +29,7 @@ import { getAthleteStatisticsDetail } from './statistics.js';
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
+  ...MEET_TEST_TABLES,
   'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
@@ -295,3 +296,4 @@ describeDB('cross-coach ownership isolation against a real database', () => {
     ).rejects.toMatchObject(notFound);
   });
 });
+import { MEET_TEST_TABLES } from '../db/meet-test-tables.js';

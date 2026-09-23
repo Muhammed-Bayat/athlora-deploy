@@ -22,9 +22,19 @@ interface SocketModule {
 }
 
 interface RealtimeRoomOptions {
+  disciplineSessionId?: string;
+  entrantId?: string;
   workspaceId: string;
   eventId: string | null;
   onInvalidate: () => void | Promise<void>;
+}
+
+export function isRealtimeTargetRelevant(payload: unknown, eventId: string, disciplineSessionId?: string, entrantId?: string): boolean {
+  if (!payload || typeof payload !== 'object') return true;
+  const target = payload as { eventId?: string; disciplineSessionId?: string; entrantId?: string };
+  return (!target.eventId || target.eventId === eventId)
+    && (!disciplineSessionId || !target.disciplineSessionId || target.disciplineSessionId === disciplineSessionId)
+    && (!entrantId || !target.entrantId || target.entrantId === entrantId);
 }
 
 async function loadSocketModule(): Promise<SocketModule> {
@@ -35,7 +45,7 @@ async function loadSocketModule(): Promise<SocketModule> {
  * Joins one scoped room and asks the caller to reload canonical HTTP data when
  * the server broadcasts a change. It does not retain realtime payloads.
  */
-export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: RealtimeRoomOptions): RealtimeConnectionState {
+export function useRealtimeRoom({ workspaceId, eventId, disciplineSessionId, entrantId, onInvalidate }: RealtimeRoomOptions): RealtimeConnectionState {
   const [state, setState] = useState<RealtimeConnectionState>(() => (
     import.meta.env.VITE_REALTIME_URL ? 'disconnected' : 'unavailable'
   ));
@@ -55,6 +65,7 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
 
     let active = true;
     const invalidate = (payload?: unknown) => {
+      if (!isRealtimeTargetRelevant(payload, eventId, disciplineSessionId, entrantId)) return;
       const id = typeof payload === 'object' && payload !== null && 'id' in payload && typeof payload.id === 'string'
         ? payload.id
         : undefined;
@@ -120,7 +131,7 @@ export function useRealtimeRoom({ workspaceId, eventId, onInvalidate }: Realtime
       socket.off(realtimeProtocol.invalidated, invalidate);
       socket.disconnect();
     };
-  }, [eventId, workspaceId, isOnline]);
+  }, [eventId, workspaceId, disciplineSessionId, entrantId, isOnline]);
 
   // Disconnect when going offline to prevent reconnection attempts.
   useEffect(() => {
