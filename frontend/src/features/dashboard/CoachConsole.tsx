@@ -15,8 +15,11 @@ import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../uti
 import { timezoneCoordinates } from '../../utils/weatherLocation';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
+import { getClubBranding } from '../../api/clubBranding';
 import { InstallButton } from '../../components/InstallButton';
 import { OfflineIndicator } from '../../components/OfflineIndicator';
+import { ClubBadge } from '../../components/ClubBadge';
+import type { ClubBrandSummary } from '../../types';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -332,6 +335,7 @@ export function CoachConsole() {
   const [themeLight, setThemeLight] = useState(() => { try { return localStorage.getItem(THEME_STORAGE_KEY) === 'light'; } catch { return false; } });
   const weatherMenuRef = useRef<HTMLDetailsElement | null>(null);
   const requestedGeoRef = useRef(false);
+  const [clubBranding, setClubBranding] = useState<ClubBrandSummary | null>(null);
   const reducedMotion = useMemo(() => (typeof window === 'undefined' ? false : window.matchMedia('(prefers-reduced-motion: reduce)').matches), []);
   const weatherMeta = WEATHER_PRESETS.find((preset) => preset.id === weather)!;
   const destination: ConsoleView = location.pathname.includes('/athletes') ? 'athletes'
@@ -383,6 +387,15 @@ export function CoachConsole() {
     document.documentElement.classList.toggle('theme-light', themeLight);
     return () => document.documentElement.classList.remove('theme-light');
   }, [themeLight]);
+
+  useEffect(() => {
+    let current = true;
+    setClubBranding(null);
+    getClubBranding()
+      .then((branding) => { if (current) setClubBranding(branding); })
+      .catch(() => { if (current) setClubBranding(null); });
+    return () => { current = false; };
+  }, [activeWorkspace.id]);
 
   useEffect(() => {
     let current = true;
@@ -504,9 +517,12 @@ export function CoachConsole() {
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
       <div className={styles.workspaceSwitcher}>
         <span>Club</span>
+        <div className={styles.workspaceSelectRow}>
+          <ClubBadge name={activeWorkspace.name} branding={clubBranding} size="sm" decorative className={styles.switcherBadge} />
           <select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
-          {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-        </select>
+            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+          </select>
+        </div>
       </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
       <section className={styles.readiness} aria-label="Squad readiness">
@@ -514,7 +530,7 @@ export function CoachConsole() {
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
         <p>Upcoming events<b>{eventUpcomingCount ?? '—'}</b></p>
       </section>
-      <footer><span>C</span><div><b>Coach Console</b><small>Head Coach access</small></div></footer>
+      <footer><ClubBadge name={activeWorkspace.name} branding={clubBranding} size="sm" decorative className={styles.footerMark} /><div><b>Coach Console</b><small>Head Coach access</small></div></footer>
     </aside>
     <div className={styles.main}>
       <header className={styles.topbar}>

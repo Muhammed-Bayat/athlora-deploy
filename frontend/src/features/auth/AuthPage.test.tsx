@@ -20,6 +20,14 @@ const clubApi = vi.hoisted(() => ({
   approveClubJoinRequest: vi.fn(),
   rejectClubJoinRequest: vi.fn(),
 }));
+const brandingApi = vi.hoisted(() => ({
+  getClubBranding: vi.fn(),
+  updateClubBranding: vi.fn(),
+  uploadClubLogo: vi.fn(),
+  uploadClubCover: vi.fn(),
+  clearClubLogo: vi.fn(),
+  clearClubCover: vi.fn(),
+}));
 
 const auth0 = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -30,6 +38,7 @@ vi.mock('@auth0/auth0-react', () => ({ useAuth0: () => auth0 }));
 vi.mock('../../api/auth');
 vi.mock('../../api/workspaces', () => workspaceApi);
 vi.mock('../../api/clubs', () => clubApi);
+vi.mock('../../api/clubBranding', () => brandingApi);
 
 const currentUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -53,6 +62,15 @@ beforeEach(() => {
   workspaceApi.listWorkspaceInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
   clubApi.listClubs.mockResolvedValue({ data: [], meta: { count: 0 } });
   clubApi.listClubJoinRequests.mockResolvedValue({ data: [], meta: { count: 0 } });
+  brandingApi.getClubBranding.mockResolvedValue({
+    description: null,
+    primaryColor: null,
+    accentColor: null,
+    logoUrl: null,
+    logoContentType: null,
+    coverUrl: null,
+    coverContentType: null,
+  });
 });
 
 describe('AuthPage', () => {

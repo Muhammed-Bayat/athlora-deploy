@@ -5,6 +5,7 @@ export { Select, type SelectOption } from './Select';
 export { SeasonSelector } from './SeasonSelector';
 export { Card, type CardTone } from './Card';
 export { Badge, type BadgeVariant } from './Badge';
+export { ClubBadge, type ClubBadgeSize, type ClubBadgeProps } from './ClubBadge';
 export { Modal } from './Modal';
 export { Toast, type ToastVariant } from './Toast';
 export { EmptyState } from './EmptyState';

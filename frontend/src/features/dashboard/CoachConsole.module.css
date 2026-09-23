@@ -224,6 +224,17 @@
   text-transform: uppercase;
 }
 
+.workspaceSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.switcherBadge {
+  flex: none;
+}
+
 .workspaceSelect {
   width: 100%;
   min-width: 0;
@@ -400,7 +411,7 @@
   border-top: 1px solid rgba(138, 233, 242, 0.10);
 }
 
-.sidebar > footer > span {
+.sidebar > footer > .footerMark {
   display: grid;
   width: 32px;
   height: 32px;

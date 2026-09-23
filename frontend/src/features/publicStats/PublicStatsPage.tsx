@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../../api/publicStatistics';
-import { SeasonSelector, Select } from '../../components';
+import { SeasonSelector, Select, ClubBadge } from '../../components';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import type { PublicAthleteComparison, PublicAthleteStatistics, PublicClub, PublicClubStatistics } from '../../types';
 import { format100mSeconds } from '../../utils/formatting';
@@ -109,6 +109,8 @@ function PublicAthleteComparisonPanel({ comparison, season }: { comparison: Publ
 }
 
 function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics; season: SeasonValue }) {
+  const branding = statistics.club.branding;
+  const accentColor = branding?.accentColor ?? undefined;
   const metrics = [
     ['Roster', String(statistics.roster.total)],
     ['With results', String(statistics.distinctAthletesWithValidResults)],
@@ -119,9 +121,22 @@ function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics
   ];
 
   return (
-    <article className={styles.clubCard} onPointerMove={setTilt} onPointerLeave={resetTilt}>
+    <article
+      className={styles.clubCard}
+      onPointerMove={setTilt}
+      onPointerLeave={resetTilt}
+      style={accentColor ? { borderColor: accentColor } : undefined}
+    >
       <div className={styles.cardSheen} aria-hidden="true" />
-      <div className={styles.clubIdentity}><span>ATHLORA / CLUB</span><i aria-hidden="true" /><h2>{statistics.club.name}</h2></div>
+      <div className={styles.clubIdentity}>
+        <span>ATHLORA / CLUB</span>
+        <i aria-hidden="true" style={accentColor ? { background: accentColor, boxShadow: `0 0 14px ${accentColor}` } : undefined} />
+        <h2>
+          <ClubBadge name={statistics.club.name} branding={branding} size="lg" decorative />
+          <span>{statistics.club.name}</span>
+        </h2>
+        {branding?.description && <p className={styles.clubDescription}>{branding.description}</p>}
+      </div>
       <div className={styles.clubMetrics} aria-label={`${statistics.club.name} ${seasonLabel(season).toLowerCase()} 100m metrics`}>
         {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
       </div>

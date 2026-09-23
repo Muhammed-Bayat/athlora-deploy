@@ -36,10 +36,29 @@ export interface WorkspaceInvitation {
   token?: string;
 }
 
+export interface ClubBrandSummary {
+  description?: string | null;
+  primaryColor?: string | null;
+  accentColor?: string | null;
+  logoUrl?: string | null;
+  coverUrl?: string | null;
+}
+
+export interface ClubBranding {
+  description: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  logoUrl: string | null;
+  logoContentType: string | null;
+  coverUrl: string | null;
+  coverContentType: string | null;
+}
+
 export interface Club {
   id: string;
   workspaceId: string;
   name: string;
+  branding?: ClubBrandSummary;
   createdAt: string;
   updatedAt: string;
 }
@@ -140,7 +159,7 @@ export interface ClubRosterCounts {
 }
 
 export interface ClubStatistics {
-  club: Pick<Club, 'id' | 'name'>;
+  club: Pick<Club, 'id' | 'name'> & { branding?: ClubBrandSummary };
   roster: ClubRosterCounts;
   distinctAthletesWithValidResults: number;
   total100mResultCount: number;
@@ -163,6 +182,7 @@ export interface ClubMultiComparisonDetail {
 export interface PublicClub {
   id: string;
   name: string;
+  branding?: ClubBrandSummary;
 }
 
 export interface PublicAthleteStatistics {
@@ -357,6 +377,7 @@ export interface FixtureTeam {
   status: FixtureWorkspaceStatus;
   acceptedRevision: number;
   withdrawnAt: string | null;
+  branding?: ClubBrandSummary;
 }
 
 export interface FixtureDetail {

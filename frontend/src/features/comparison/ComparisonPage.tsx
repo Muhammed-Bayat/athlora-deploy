@@ -11,7 +11,7 @@ import {
   updateClubPublication,
 } from '../../api/clubs';
 import { listAthletes } from '../../api/athletes';
-import { Button, Card, SeasonSelector, Select } from '../../components';
+import { Button, Card, ClubBadge, SeasonSelector, Select } from '../../components';
 import { normalizeSeason, seasonLabel, seasonQueryValue, type SeasonValue } from '../../utils/season';
 import type {
   Athlete,
@@ -351,7 +351,7 @@ function ClubStatisticsTable({ statistics, season }: { statistics: ClubStatistic
   return (
     <table className={styles.comparisonTable} aria-label={`${statistics.club.name} ${seasonLabel(season).toLowerCase()} 100m statistics`}>
       <thead>
-        <tr><th scope="col">Metric</th><th scope="col">{statistics.club.name}</th></tr>
+        <tr><th scope="col">Metric</th><th scope="col"><span className={styles.clubColumn}><ClubBadge name={statistics.club.name} branding={statistics.club.branding} size="sm" decorative />{statistics.club.name}</span></th></tr>
       </thead>
       <tbody>
         {rows.map((row) => (
@@ -374,7 +374,7 @@ function ClubComparisonTable({ comparison, season }: { comparison: ClubMultiComp
   return (
     <table className={styles.comparisonTable} aria-label={`${seasonLabel(season)} club comparison metrics`}>
       <thead>
-        <tr><th scope="col">Metric</th>{comparison.clubs.map((club) => <th key={club.club.id} scope="col">{club.club.name}</th>)}</tr>
+        <tr><th scope="col">Metric</th>{comparison.clubs.map((club) => <th key={club.club.id} scope="col"><span className={styles.clubColumn}><ClubBadge name={club.club.name} branding={club.club.branding} size="sm" decorative />{club.club.name}</span></th>)}</tr>
       </thead>
       <tbody>
         {rows.map((row) => (
