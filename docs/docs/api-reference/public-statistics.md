@@ -42,7 +42,17 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
 ```json
 {
   "data": {
-    "club": { "id": "uuid", "name": "Open Track Club" },
+    "club": {
+      "id": "uuid",
+      "name": "Open Track Club",
+      "branding": {
+        "description": "City athletics club",
+        "primaryColor": "#001D3C",
+        "accentColor": "#45BED7",
+        "logoUrl": "/api/v1/media/clubs/uuid/logo-....png",
+        "coverUrl": null
+      }
+    },
     "roster": { "active": 12, "inactive": 1, "archived": 2, "total": 15 },
     "fastestValidTime": 10.91,
     "averageValidTime": 11.4,
@@ -63,6 +73,8 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
 ```
 
 Archived athletes are excluded from `athletes`. Club aggregates retain their existing all-time comparison semantics. Effective-result rules are identical to the authenticated comparison API: cancelled events and void outcomes are excluded from valid metrics, a positive manual override takes precedence, and accepted guest-fixture results count for the athlete's club.
+
+`club.branding` is present only when results publication is enabled. Media URLs may be null when no logo or cover has been uploaded; clients fall back to initials derived from the club name when `logoUrl` is null.
 
 ## AI declaration
 

@@ -152,6 +152,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 - Documentation: Docusaurus typecheck and production build pass after the split-flag docs updates.
 - Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0025_club_public_schedule_publication.sql` and the full 27-migration set).
 
+### Club branding — 2026-09-23
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **642 tests pass, 0 skip** (includes new `ClubBadge`, contrast-utils, and branding-aware surface tests).
+- Backend: lint, strict typecheck and build pass; **632 tests pass, 40 database-gated tests skip** (includes the new branding route, payload-validation, color-contrast, media-storage, and public-DTO suites).
+- Documentation: Docusaurus typecheck and production build pass after the branding contract/schema updates.
+- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0027_club_branding.sql` and the full 29-migration set).
+
 ### GraySky migration verification — 2026-09-14
 
 - Frontend: lint passes with 12 existing warnings; strict typecheck/build pass; **530 tests pass, 4 skip**.
@@ -177,4 +184,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free].

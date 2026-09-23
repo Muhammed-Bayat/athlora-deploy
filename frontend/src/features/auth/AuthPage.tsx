@@ -8,6 +8,7 @@ import { useWorkspace } from './WorkspaceContext';
 import { inviteWorkspaceMember, leaveCurrentWorkspace, listWorkspaceInvitations, listWorkspaceMembers, removeWorkspaceMember, resendWorkspaceInvitation, revokeWorkspaceInvitation, updateWorkspaceMemberRole } from '../../api/workspaces';
 import { approveClubJoinRequest, listClubJoinRequests, listClubs, rejectClubJoinRequest } from '../../api/clubs';
 import type { ClubJoinRequest, WorkspaceInvitation, WorkspaceMember } from '../../types';
+import { ClubBrandingCard } from './ClubBrandingCard';
 import styles from './AuthPage.module.css';
 
 function message(error: unknown): string {
@@ -224,6 +225,8 @@ export function AuthPage() {
           {!hasAuth0Password && <p className={styles.ticket}>Your password is managed by your identity provider.</p>}
           {passwordError && <p className={styles.error} role="alert">{passwordError}</p>}
         </Card>
+
+        <ClubBrandingCard />
 
         <Card className={styles.danger}>
           <p>Club membership</p><h2>Leave {activeWorkspace.name}</h2>

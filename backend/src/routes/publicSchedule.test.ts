@@ -16,18 +16,51 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('public schedule routes', () => {
   it('lists only the clubs supplied by the public schedule service without authentication', async () => {
-    vi.mocked(publicScheduleService.listPublicScheduleClubs).mockResolvedValue([{ id: CLUB_ID, name: 'Open Track Club' }]);
+    vi.mocked(publicScheduleService.listPublicScheduleClubs).mockResolvedValue([{
+      id: CLUB_ID,
+      name: 'Open Track Club',
+      branding: {
+        description: null,
+        primaryColor: null,
+        accentColor: null,
+        logoUrl: null,
+        coverUrl: null,
+      },
+    }]);
 
     const response = await request(app).get('/api/v1/public/schedule/clubs?q=track');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ data: [{ id: CLUB_ID, name: 'Open Track Club' }], meta: { count: 1 } });
+    expect(response.body).toEqual({
+      data: [{
+        id: CLUB_ID,
+        name: 'Open Track Club',
+        branding: {
+          description: null,
+          primaryColor: null,
+          accentColor: null,
+          logoUrl: null,
+          coverUrl: null,
+        },
+      }],
+      meta: { count: 1 },
+    });
     expect(publicScheduleService.listPublicScheduleClubs).toHaveBeenCalledWith('track');
   });
 
   it('returns an upcoming club schedule without authentication', async () => {
     vi.mocked(publicScheduleService.getPublicClubSchedule).mockResolvedValue({
-      club: { id: CLUB_ID, name: 'Open Track Club' },
+      club: {
+        id: CLUB_ID,
+        name: 'Open Track Club',
+        branding: {
+          description: null,
+          primaryColor: null,
+          accentColor: null,
+          logoUrl: null,
+          coverUrl: null,
+        },
+      },
       events: [
         {
           id: '44444444-4444-4444-8444-444444444444',
@@ -45,7 +78,17 @@ describe('public schedule routes', () => {
     const response = await request(app).get(`/api/v1/public/schedule/clubs/${CLUB_ID}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.club).toEqual({ id: CLUB_ID, name: 'Open Track Club' });
+    expect(response.body.data.club).toEqual({
+      id: CLUB_ID,
+      name: 'Open Track Club',
+      branding: {
+        description: null,
+        primaryColor: null,
+        accentColor: null,
+        logoUrl: null,
+        coverUrl: null,
+      },
+    });
     expect(response.body.data.events[0]).toEqual(expect.objectContaining({ title: 'Spring Open', date: '2026-10-01' }));
     expect(publicScheduleService.getPublicClubSchedule).toHaveBeenCalledWith(CLUB_ID);
   });

@@ -11,6 +11,7 @@ import {
   type PublicScheduleEvent,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { publicMediaPath } from './mediaStorage.js';
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -20,6 +21,11 @@ interface PublicScheduleClubRow {
   id: string;
   workspace_id: string;
   name: string;
+  description: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+  logo_key: string | null;
+  cover_key: string | null;
 }
 
 interface PublicScheduleEventRow {
@@ -48,12 +54,22 @@ function mapEventRow(row: PublicScheduleEventRow): PublicScheduleEvent {
   };
 }
 
+function publicBrandSummary(row: PublicScheduleClubRow) {
+  return {
+    description: row.description,
+    primaryColor: row.primary_color,
+    accentColor: row.accent_color,
+    logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
+    coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
+  };
+}
+
 export async function listPublicScheduleClubs(
   search: string | null,
   executor: DbExecutor = getPool(),
 ): Promise<PublicClub[]> {
   const result = await executor.query<PublicScheduleClubRow>(
-    `SELECT id, name
+    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
      FROM clubs
      WHERE public_schedule_enabled = true
        AND ($1::text IS NULL OR name ILIKE '%' || $1 || '%')
@@ -61,7 +77,7 @@ export async function listPublicScheduleClubs(
      LIMIT 100`,
     [search],
   );
-  return result.rows.map(({ id, name }) => ({ id, name }));
+  return result.rows.map((row) => ({ id: row.id, name: row.name, branding: publicBrandSummary(row) }));
 }
 
 export async function getPublicClubSchedule(
@@ -71,7 +87,7 @@ export async function getPublicClubSchedule(
 ): Promise<PublicClubSchedule> {
   if (!isCanonicalUuid(clubId)) throw notFound();
   const clubResult = await executor.query<PublicScheduleClubRow>(
-    `SELECT id, workspace_id, name
+    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
      FROM clubs
      WHERE id = $1 AND public_schedule_enabled = true`,
     [clubId],
@@ -90,7 +106,7 @@ export async function getPublicClubSchedule(
     [club.workspace_id, nowDate],
   );
   return {
-    club: { id: club.id, name: club.name },
+    club: { id: club.id, name: club.name, branding: publicBrandSummary(club) },
     events: eventsResult.rows.map(mapEventRow),
   };
 }

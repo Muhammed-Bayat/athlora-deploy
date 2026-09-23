@@ -235,6 +235,16 @@
   color: var(--console-ink);
 }
 
+.clubColumn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--console-ink);
+  font: 600 0.9rem/1.2 var(--font-sans, inherit);
+}
+
 .viewToggle {
   display: flex;
   flex-wrap: wrap;

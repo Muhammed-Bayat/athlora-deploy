@@ -118,6 +118,7 @@ describeDB('migrations against a real database', () => {
       '0024_public_club_statistics.sql',
       '0025_club_public_schedule_publication.sql',
       '0026_user_preferences.sql',
+      '0027_club_branding.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -134,6 +135,11 @@ describeDB('migrations against a real database', () => {
     expect(await hasColumn('event_participants', 'participant_workspace_id')).toBe(true);
     expect(await hasColumn('clubs', 'public_results_enabled')).toBe(true);
     expect(await hasColumn('clubs', 'public_schedule_enabled')).toBe(true);
+    expect(await hasColumn('clubs', 'description')).toBe(true);
+    expect(await hasColumn('clubs', 'primary_color')).toBe(true);
+    expect(await hasColumn('clubs', 'accent_color')).toBe(true);
+    expect(await hasColumn('clubs', 'logo_key')).toBe(true);
+    expect(await hasColumn('clubs', 'cover_key')).toBe(true);
 
     expect(await hasIndex('idx_events_created_by')).toBe(true);
     expect(await hasIndex('idx_events_status_date')).toBe(true);
@@ -190,6 +196,7 @@ describeDB('migrations against a real database', () => {
       '0024_public_club_statistics.sql',
       '0025_club_public_schedule_publication.sql',
       '0026_user_preferences.sql',
+      '0027_club_branding.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -199,7 +206,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(28);
+    expect(rows).toHaveLength(29);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

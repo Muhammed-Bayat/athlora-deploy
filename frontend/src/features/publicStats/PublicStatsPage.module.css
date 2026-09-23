@@ -115,7 +115,8 @@
 .clubIdentity { position: relative; z-index: 1; max-width: 70%; }
 .clubIdentity > span { color: #8ae9f2; font: 700 0.64rem var(--font-family-mono); letter-spacing: 0.13em; }
 .clubIdentity i { display: block; width: 28px; height: 2px; margin: 14px 0; background: #8ae9f2; box-shadow: 0 0 14px #8ae9f2; }
-.clubIdentity h2 { margin: 0; color: #f1fcff; font: 700 clamp(1.4rem, 3vw, 2.05rem) / 1.04 var(--font-display); letter-spacing: -0.055em; }
+.clubIdentity h2 { display: flex; align-items: center; gap: 14px; margin: 0; color: #f1fcff; font: 700 clamp(1.4rem, 3vw, 2.05rem) / 1.04 var(--font-display); letter-spacing: -0.055em; }
+.clubDescription { max-width: 42ch; margin: 14px 0 0; color: #9fbfcb; font-size: 0.95rem; line-height: 1.5; }
 .clubMetrics { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 30px; border: 1px solid rgba(138, 233, 242, 0.1); border-radius: 13px; overflow: hidden; background: rgba(138, 233, 242, 0.1); }
 .clubMetrics > div { padding: 12px 11px; background: rgba(2, 20, 31, 0.74); }
 .clubMetrics span, .athleteMetrics span { display: block; color: #87a9b4; font: 700 0.58rem var(--font-family-mono); letter-spacing: 0.07em; text-transform: uppercase; }

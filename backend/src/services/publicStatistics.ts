@@ -12,12 +12,18 @@ import {
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { getClubStatistics } from './clubs.js';
+import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
 interface PublicClubRow {
   id: string;
   workspace_id: string;
   name: string;
+  description: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+  logo_key: string | null;
+  cover_key: string | null;
 }
 
 interface PublicAthleteStatisticsRow {
@@ -62,7 +68,7 @@ function rounded(value: number | string | null): number | null {
 async function findPublicClub(clubId: unknown, executor: DbExecutor): Promise<PublicClubRow> {
   if (!isCanonicalUuid(clubId)) throw notFound();
   const result = await executor.query<PublicClubRow>(
-    `SELECT id, workspace_id, name
+    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
      FROM clubs
      WHERE id = $1 AND public_results_enabled = true`,
     [clubId],
@@ -70,6 +76,16 @@ async function findPublicClub(clubId: unknown, executor: DbExecutor): Promise<Pu
   const club = result.rows[0];
   if (!club) throw notFound();
   return club;
+}
+
+function publicBrandSummary(row: PublicClubRow) {
+  return {
+    description: row.description,
+    primaryColor: row.primary_color,
+    accentColor: row.accent_color,
+    logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
+    coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
+  };
 }
 
 function mapPublicAthleteStatistics(row: PublicAthleteStatisticsRow): PublicAthleteStatistics {
@@ -170,7 +186,7 @@ async function getPublicAthleteStatistics(
 
 export async function listPublicClubs(search: string | null): Promise<PublicClub[]> {
   const result = await getPool().query<PublicClubRow>(
-    `SELECT id, workspace_id, name
+    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
      FROM clubs
      WHERE public_results_enabled = true
        AND ($1::text IS NULL OR name ILIKE '%' || $1 || '%')
@@ -178,7 +194,7 @@ export async function listPublicClubs(search: string | null): Promise<PublicClub
      LIMIT 100`,
     [search],
   );
-  return result.rows.map(({ id, name }) => ({ id, name }));
+  return result.rows.map((row) => ({ id: row.id, name: row.name, branding: publicBrandSummary(row) }));
 }
 
 export async function getPublicClubStatistics(clubId: unknown, season: SeasonScope = parseSeasonYear(undefined)): Promise<PublicClubStatistics> {
@@ -186,7 +202,11 @@ export async function getPublicClubStatistics(clubId: unknown, season: SeasonSco
     const club = await findPublicClub(clubId, client);
     const statistics = await getClubStatistics(club.id, client, season);
     const athletes = await getPublicAthleteStatistics(club.workspace_id, client, season);
-    return { ...statistics, club: { id: club.id, name: club.name }, athletes };
+    return {
+      ...statistics,
+      club: { id: club.id, name: club.name, branding: publicBrandSummary(club) },
+      athletes,
+    };
   });
 }
 

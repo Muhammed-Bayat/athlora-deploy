@@ -8,6 +8,7 @@ import {
   parseAthleteReplacementPayload,
   parseAthleteStatusPayload,
   parseClubPublicationPayload,
+  parseClubBrandingPayload,
   parseEventCreatePayload,
   parseEventListQuery,
   parseEventParticipantBulkRsvpPayload,
@@ -764,6 +765,43 @@ describe('club publication payload', () => {
       () => parseClubPublicationPayload({ publicResultsEnabled: true, publicScheduleEnabled: false, extra: true }),
       [{ path: 'extra', code: 'unknown_field', message: 'Field is not allowed' }],
     );
+  });
+});
+
+describe('club branding payload', () => {
+  it('parses description and accessible colours, normalizing case and blanks', () => {
+    expect(parseClubBrandingPayload({
+      description: '  City athletics club  ',
+      primaryColor: '#001d3c',
+      accentColor: '#45bed7',
+    })).toEqual({
+      description: 'City athletics club',
+      primaryColor: '#001D3C',
+      accentColor: '#45BED7',
+    });
+    expect(parseClubBrandingPayload({
+      description: '   ',
+      primaryColor: '',
+      accentColor: null,
+    })).toEqual({ description: null, primaryColor: null, accentColor: null });
+  });
+
+  it('rejects invalid colours, unreadable pairs, long descriptions, and unknown fields', () => {
+    expectValidationError(() => parseClubBrandingPayload({ primaryColor: 'red' }), [
+      { path: 'primaryColor', code: 'invalid_format', message: 'Expected a #RRGGBB colour' },
+    ]);
+    expectValidationError(() => parseClubBrandingPayload({ accentColor: '#777777' }), [
+      { path: 'accentColor', code: 'invalid_contrast', message: 'Colour must support readable white or ink text (WCAG AA 4.5:1)' },
+    ]);
+    expectValidationError(() => parseClubBrandingPayload({ description: 'x'.repeat(501) }), [
+      { path: 'description', code: 'too_long', message: 'Must be at most 500 characters' },
+    ]);
+    expectValidationError(() => parseClubBrandingPayload({ description: 42 }), [
+      { path: 'description', code: 'invalid_type', message: 'Expected a string or null' },
+    ]);
+    expectValidationError(() => parseClubBrandingPayload({ logoKey: 'nope' }), [
+      { path: 'logoKey', code: 'unknown_field', message: 'Field is not allowed' },
+    ]);
   });
 });
 

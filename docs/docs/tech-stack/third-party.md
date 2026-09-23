@@ -667,6 +667,38 @@ app.use(helmet());                        // All default security headers
 app.use(cors({ origin: allowedOrigins })); // CORS_ORIGINS env var, comma-separated
 ```
 
+---
+
+## 11b. Club brand media — multer + AWS SDK for S3
+
+### Why
+
+Coaches upload a club logo and cover image as multipart form data. Bytes are sniffed and stored outside source control in an S3-compatible object store (Cloudflare R2, AWS S3, Backblaze B2, or local MinIO).
+
+### Packages
+
+| Package | Version | Used in |
+|---------|---------|---------|
+| `multer` | ^2.4.0 | Backend |
+| `@types/multer` | ^2.2.0 | Backend (dev) |
+| `@aws-sdk/client-s3` | ^3.1138.0 | Backend |
+
+### Implementation
+
+- `backend/src/middleware/clubMediaUpload.ts` — memory-storage multer with a 5 MB single-file limit (`file` field). Oversize files become `413 CLUB_MEDIA_TOO_LARGE`; missing files become `400 CLUB_MEDIA_REQUIRED`.
+- `backend/src/services/mediaStorage.ts` — magic-byte sniffing (PNG/JPEG/WebP only → `415 CLUB_MEDIA_TYPE_UNSUPPORTED`), content-addressed keys `clubs/{workspaceId}/{kind}-{sha256}.{ext}`, `PutObject`/`GetObject`/`DeleteObject`, and `publicMediaPath` (either `S3_PUBLIC_BASE_URL` or the API `/api/v1/media/clubs/...` path).
+- `backend/src/controllers/clubBranding.ts` — replace/delete lifecycle; old objects are removed best-effort after a successful DB commit.
+
+### Environment variables
+
+| Variable | Side | Purpose |
+|----------|------|---------|
+| `S3_ENDPOINT` | Backend | S3-compatible endpoint URL |
+| `S3_REGION` | Backend | Object-store region (default `auto`) |
+| `S3_BUCKET` | Backend | Bucket name |
+| `S3_ACCESS_KEY_ID` | Backend | Access key |
+| `S3_SECRET_ACCESS_KEY` | Backend | Secret key (never exposed to frontend) |
+| `S3_PUBLIC_BASE_URL` | Backend | Optional public CDN/base URL for media |
 **helmet** sets `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `Content-Security-Policy`, `Referrer-Policy`, and other standard headers with secure defaults. No custom configuration.
 
 **cors** parses `CORS_ORIGINS` (default: `http://localhost:5173`) and allows only listed origins. Used by both Express HTTP and Socket.IO.
@@ -860,4 +892,4 @@ Flat config format (`eslint.config.js`) in each package.
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. Research and compilation were performed with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. Research and compilation were performed with the assistance of opencode[mimo-v2.5-free]. The club brand media section (multer, AWS SDK for S3, and `S3_*` environment variables) was documented with the assistance of opencode[mimo-v2.6-flash-free].

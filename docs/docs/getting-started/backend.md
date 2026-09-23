@@ -39,9 +39,17 @@ PORT=4000
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 NOMINATIM_USER_AGENT=Athlora/0.2 (https://example.com/contact)
 GEMINI_API_KEY=
+S3_ENDPOINT=
+S3_REGION=auto
+S3_BUCKET=
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_PUBLIC_BASE_URL=
 ```
 
 The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint.
+
+Club branding uploads require an S3-compatible object store (`S3_*`). When `S3_PUBLIC_BASE_URL` is unset, media is served from the API at `/api/v1/media/clubs/{workspaceId}/{filename}`. Local development can use any S3-compatible endpoint (for example MinIO).
 
 The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http://localhost:5174` (see the E2E section in `getting-started/scripts.md`).
 
@@ -61,15 +69,15 @@ The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http
 ## Layout
 
 ```text
-src/routes        API route declarations (auth, ai, athletes, clubs, comparison, dashboard,
-                  eventHelpers, fixtures, fixtureNotifications, injuries, participants,
-                  publicLoggers, publicSchedule, publicStatistics, publicSync, reminders,
-                  results, statistics, sync, timeline, venues, weather, workspaces)
+src/routes        API route declarations (auth, ai, athletes, clubs, clubBranding, comparison,
+                  dashboard, eventHelpers, fixtures, fixtureNotifications, injuries, media,
+                  participants, publicLoggers, publicSchedule, publicStatistics, publicSync,
+                  reminders, results, statistics, sync, timeline, venues, weather, workspaces)
 src/controllers   HTTP request and response handling
-src/services      coach-scoped persistence and business logic (29 modules)
-src/middleware    authentication, ownership, capabilities, validation, errors, notImplemented
+src/services      coach-scoped persistence and business logic (33 modules)
+src/middleware    authentication, ownership, capabilities, validation, errors, club media upload
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations (27 SQL files), row mappers, and transactions
+src/db            pg client, migrations (29 SQL files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 
@@ -161,4 +169,4 @@ Create a dedicated Auth0 Machine-to-Machine application for the Management API w
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints, S3-compatible media storage, and WCAG validation were documented with the assistance of opencode[mimo-v2.6-flash-free].
