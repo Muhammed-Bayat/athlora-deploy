@@ -311,6 +311,17 @@ When a club has enabled schedule publication (regardless of the results flag), t
 
 The dedicated [public statistics reference](./public-statistics) and [public schedule reference](./public-schedule) define request parameters and visibility rules.
 
+### 3.13 User dashboard preferences
+
+Per-user dashboard layout and saved-filter presets, scoped to `(user_id, workspace_id)`.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /preferences` | Read the caller's dashboard card order, hidden cards, and saved filter presets |
+| `PUT /preferences` | Full-replacement write of all three preference arrays |
+
+`GET /preferences` returns `{ dashboardCardOrder, dashboardHiddenCards, savedFilters }`, inserting any missing known cards and dropping unknown/retired ids so the shape is always complete. `PUT /preferences` requires a body containing all three keys as arrays. `dashboardCardOrder` must list every known card id exactly once (required cards may not be omitted or reordered out of presence); `dashboardHiddenCards` may contain only hideable card ids; `savedFilters` accepts at most 50 presets, each with a `name` (≤60 chars), a client `id` (≤128 chars), a `surface` of `dashboard`, `events`, or `roster`, and a plain-object `filters` map. The route uses `verifyAuth0Token` and `resolveApplicationUser` but no `requireCoach`, so any authenticated workspace member may read and write their own preferences. Reset to defaults is a `PUT` with the default arrays.
+
 ## 4. DTOs
 
 Field names are camelCase on the wire. Calendar dates are real Gregorian `YYYY-MM-DD` values. Local event clock times accept `HH:mm` or `HH:mm:ss` and are serialized as `HH:mm:ss` without timezone conversion. `createdAt`/`updatedAt` (and `archivedAt`, `overrideAt`) are `timestamptz` ISO 8601 strings.
@@ -639,4 +650,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free].

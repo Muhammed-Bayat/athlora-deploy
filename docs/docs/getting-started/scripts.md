@@ -31,14 +31,14 @@ The backend also provides `db:migrate` for source migrations and `db:migrate:pro
 | `docs` | `npm ci`, `npm run build` |
 | `e2e` | PostgreSQL on port `55432`, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
 
-The `e2e` job provisions an isolated PostgreSQL cluster inside the job container on port `55432` so host-networked Gitea runners cannot collide with an existing database on `5432`. Playwright `global-setup` migrates and truncates that database before every run. The job requires seven repository secrets: the three public Auth0 settings plus host and guest test-account credentials. When any are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
+The `e2e` job first detects whether the seven repository secrets are present (via a step output — not `secrets` in `if:`), then provisions an isolated PostgreSQL cluster inside the job container on port `55432` so host-networked Gitea runners cannot collide with an existing database on `5432`. Provisioning is root/sudo-aware: act runner images often run as root without a `sudo` binary, so the job elevates only when needed and switches to the `postgres` user with `runuser`/`su` instead of `sudo -u`. Playwright `global-setup` migrates and truncates that database before every run. When any of the seven secrets are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
 
 | Job | Work performed |
 |---|---|
 | `frontend` | Install, lint, type-check, test, and build the SPA. |
 | `backend` | Install, lint, type-check, test, and build the API. |
 | `docs` | Install and build the Docusaurus site. |
-| `e2e` | Install all test dependencies, provision PostgreSQL on isolated port `55432`, install Chromium, and run Playwright when Auth0 secrets are available. |
+| `e2e` | Install all test dependencies, provision PostgreSQL on isolated port `55432` (root/sudo-aware), install Chromium, and run Playwright when Auth0 secrets are available. |
 
 The E2E job uses an in-job PostgreSQL cluster and a disposable `athlora_e2e` database. It skips with an explicit message until these repository secrets are configured:
 
@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### User dashboard preferences — 2026-09-23
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **635 tests pass, 0 skip** (includes new customize-dialog, hidden-cards, and saved-views dashboard tests).
+- Backend: lint, strict typecheck and build pass; **613 tests pass, 40 database-gated tests skip** (includes the new preferences validation, service, and route suites).
+- Documentation: Docusaurus typecheck and production build pass after the preferences contract/schema updates.
+- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0026_user_preferences.sql` and the full 28-migration set).
+
 ### Independent publication flags and public schedule — 2026-09-23
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **632 tests pass, 0 skip**.
@@ -170,4 +177,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free].
