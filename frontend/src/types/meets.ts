@@ -4,7 +4,17 @@ export interface SessionTarget { disciplineSessionId: string; entrantId: string 
 export interface DisciplineDefinition {
   id: string; code: string; version: number; kind: 'track' | 'field' | 'relay' | 'vertical';
   unit: 'seconds' | 'metres' | 'cm'; direction: 'lower' | 'higher';
-  defaultRules: { aggregation: 'timed' | 'best'; entrantType: 'individual' | 'relay'; teamSize?: number };
+  defaultRules: {
+    aggregation: 'timed' | 'best';
+    entrantType: 'individual' | 'relay';
+    teamSize?: number;
+    distance?: number;
+    hurdleHeight?: number;
+    hurdleCount?: number;
+    steeplechase?: boolean;
+    raceWalk?: boolean;
+    attempts?: number;
+  };
   precision: number; presentation: { label: string; unitLabel?: string }; createdAt: string; source: string;
 }
 export interface DisciplineSession {
