@@ -9,6 +9,256 @@
   color: var(--ui-text);
 }
 
+.dashboardToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customizeButton {
+  border: 1px solid var(--ui-line);
+  border-radius: 999px;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.customizeButton:hover {
+  border-color: var(--cyan-300);
+}
+
+.customizeButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dialogLead {
+  margin: 0 0 14px;
+  color: var(--ui-muted);
+}
+
+.dialogError,
+.dialogSuccess {
+  margin: 0 0 12px;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+
+.dialogError {
+  background: rgba(255, 120, 120, 0.12);
+  color: #ffb4b4;
+}
+
+.dialogSuccess {
+  background: rgba(138, 233, 242, 0.12);
+  color: var(--cyan-200);
+}
+
+.customizeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.customizeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-panel);
+}
+
+.customizeMeta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.customizeMeta small {
+  color: var(--ui-muted);
+}
+
+.customizeControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.iconButton {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-panel-soft);
+  color: var(--ui-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hideToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-muted);
+  font-size: 0.9rem;
+}
+
+.requiredBadge {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cyan-200);
+  background: rgba(138, 233, 242, 0.12);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+}
+
+.dialogPrimary,
+.dialogSecondary {
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.dialogPrimary {
+  background: linear-gradient(135deg, var(--cyan-200), var(--cyan-400));
+  color: #001018;
+  font-weight: 600;
+}
+
+.dialogSecondary {
+  background: transparent;
+  border-color: var(--ui-line);
+  color: var(--ui-text);
+}
+
+.dialogPrimary:disabled,
+.dialogSecondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.savedFilters {
+  display: grid;
+  gap: 10px;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-lg);
+  background: var(--ui-panel);
+}
+
+.savedFiltersList:empty {
+  display: none;
+}
+
+.presetChips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.presetChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.presetChip {
+  border: 1px solid var(--ui-line);
+  background: var(--ui-panel-soft);
+  color: var(--ui-text);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.presetChip:hover {
+  border-color: var(--cyan-300);
+}
+
+.presetDelete {
+  border: none;
+  background: transparent;
+  color: var(--ui-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+}
+
+.presetDelete:hover {
+  color: #ff9e8a;
+}
+
+.savedFiltersForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.savedFiltersForm input {
+  flex: 1 1 180px;
+  min-width: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-panel-soft);
+  color: var(--ui-text);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+}
+
+.savedFiltersForm button {
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.savedFiltersForm button:disabled,
+.savedFiltersForm input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .dashboard *,
 .dashboard *::before,
 .dashboard *::after {
