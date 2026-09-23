@@ -16,10 +16,12 @@ PUT /api/v1/clubs/publication
 Both endpoints require an authenticated member of the active club workspace. Only a `coach` can update publication.
 
 ```json
-{ "publicResultsEnabled": true }
+{ "publicResultsEnabled": true, "publicScheduleEnabled": false }
 ```
 
-Publishing is reversible. It makes the club name, non-archived athlete names, and all-time 100m metric summaries available from the public endpoints. It does not expose athlete profile information, injuries, notes, event names, venues, dates, or progression history.
+The two flags are independent. `publicResultsEnabled` gates this page's public statistics endpoints (named athlete performance, detailed reports, leaderboards). `publicScheduleEnabled` gates the separate public schedule endpoints only — turning it on or off never changes results visibility, and vice versa. The PUT body is a full replacement and requires both booleans.
+
+Publishing results is reversible. It makes the club name, non-archived athlete names, and all-time 100m metric summaries available from the public statistics endpoints. It does not expose athlete profile information, injuries, notes, event names, venues, dates, or progression history.
 
 ## Published Clubs
 
@@ -61,3 +63,7 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
 ```
 
 Archived athletes are excluded from `athletes`. Club aggregates retain their existing all-time comparison semantics. Effective-result rules are identical to the authenticated comparison API: cancelled events and void outcomes are excluded from valid metrics, a positive manual override takes precedence, and accepted guest-fixture results count for the athlete's club.
+
+## AI declaration
+
+This document was created with the assistance of opencode[mimo-v2.6-flash-free].

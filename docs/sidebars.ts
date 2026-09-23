@@ -32,7 +32,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'API Reference',
-        items: ['api-reference/contract', 'api-reference/external-integrations', 'api-reference/auth0', 'api-reference/weather', 'api-reference/venues', 'api-reference/comparison', 'api-reference/public-statistics', 'api-reference/progression', 'api-reference/fixtures', 'api-reference/public-loggers', 'api-reference/event-helpers', 'api-reference/ai-integration'],
+        items: ['api-reference/contract', 'api-reference/external-integrations', 'api-reference/auth0', 'api-reference/weather', 'api-reference/venues', 'api-reference/comparison', 'api-reference/public-statistics', 'api-reference/public-schedule', 'api-reference/progression', 'api-reference/fixtures', 'api-reference/public-loggers', 'api-reference/event-helpers', 'api-reference/ai-integration'],
     },
     {
       type: 'category',

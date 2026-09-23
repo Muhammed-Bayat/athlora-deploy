@@ -63,12 +63,13 @@ The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http
 ```text
 src/routes        API route declarations (auth, ai, athletes, clubs, comparison, dashboard,
                   eventHelpers, fixtures, fixtureNotifications, injuries, participants,
-                  publicLoggers, results, statistics, sync, timeline, venues, weather, workspaces)
+                  publicLoggers, publicSchedule, publicStatistics, publicSync, reminders,
+                  results, statistics, sync, timeline, venues, weather, workspaces)
 src/controllers   HTTP request and response handling
-src/services      coach-scoped persistence and business logic (28 modules)
+src/services      coach-scoped persistence and business logic (29 modules)
 src/middleware    authentication, ownership, capabilities, validation, errors, notImplemented
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations (26 SQL files), row mappers, and transactions
+src/db            pg client, migrations (27 SQL files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 
@@ -100,6 +101,8 @@ Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separa
 - Fixture notifications: in-app notification system for fixture invitations, reacceptance, and response events with unread counts.
 - Gemini AI token endpoint: creates short-lived Gemini API tokens for the frontend voice assistant. The backend does not relay audio; the browser streams directly to Gemini's BidiGenerateContentConstrained WebSocket.
 - Offline sync batch endpoint: processes arrays of `create_entry`/`edit_entry`/`undo_entry` actions with per-action idempotent receipt processing, duplicate detection, and optimistic version conflict handling.
+- Club publication: `GET|PUT /api/v1/clubs/publication` exposes two independent flags (`publicResultsEnabled`, `publicScheduleEnabled`). The PUT body is a full replacement and requires both booleans; only a coach can update. Migration `0025_club_public_schedule_publication.sql` adds `clubs.public_schedule_enabled` (default `false`) without renaming or coupling the existing results flag.
+- Public schedule: unauthenticated `GET /api/v1/public/schedule/clubs` and `GET /api/v1/public/schedule/clubs/:clubId` return only clubs with `publicScheduleEnabled = true` and their upcoming meet metadata (`date >= today`, `status IN ('scheduled','in_progress')` — title, date/time, venue, discipline only; never rosters, participants, or results). Unknown or unpublished clubs share the generic `404 NOT_FOUND`. The results flag alone never gates these routes, and the schedule flag alone never gates public statistics.
 - Capability middleware for feature-flag gating, validation middleware for strict payload checking, and not-implemented stubs for legacy routes.
 
 All failures use `{ error: { code, message, details } }`. Missing, malformed, wrong-parent, and cross-coach resources intentionally share a generic `404 NOT_FOUND` response.
@@ -157,4 +160,4 @@ Create a dedicated Auth0 Machine-to-Machine application for the Management API w
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].
