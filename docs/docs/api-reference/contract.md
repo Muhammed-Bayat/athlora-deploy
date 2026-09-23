@@ -119,7 +119,7 @@ Workspace membership is server-derived and is the authorization boundary: athlet
 
 Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
-Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, and update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
+Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`), and mutate club branding (description, colours, logo, cover). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -182,6 +182,13 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 | `GET /clubs/calendar` | Get events for selected accessible clubs' shared calendar |
 | `GET /clubs/publication` | Read the active club's independent public-results and public-schedule settings |
 | `PUT /clubs/publication` | Update both publication settings as a full replacement (coach only) |
+| `GET /clubs/branding` | Read the active club's branding (description, colours, logo/cover URLs) |
+| `PUT /clubs/branding` | Update description and brand colours (coach only; WCAG AA pair required) |
+| `POST /clubs/branding/logo` | Replace the club logo (coach only; multipart `file`, PNG/JPEG/WebP ≤5 MB) |
+| `DELETE /clubs/branding/logo` | Clear the club logo (coach only) |
+| `POST /clubs/branding/cover` | Replace the club cover (coach only; multipart `file`, PNG/JPEG/WebP ≤5 MB) |
+| `DELETE /clubs/branding/cover` | Clear the club cover (coach only) |
+| `GET /media/clubs/:workspaceId/:filename` | Serve a stored brand asset with immutable cache and `nosniff` |
 
 The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
@@ -650,4 +657,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].

@@ -62,6 +62,7 @@ Returns the selected season's 100m performance for the club's current roster, in
 - Total and valid 100m result counts.
 - Fastest and latest valid time.
 - Average, median, and population standard deviation of valid times.
+- Club branding summary (`description`, `primaryColor`, `accentColor`, `logoUrl`, `coverUrl`) when present.
 
 ## Club Comparison
 
@@ -78,3 +79,7 @@ Compares exactly two distinct clubs using the same selected-season statistics re
 - `dq`, `dnf`, and `dns` outcomes never count as valid results.
 - A positive `manualOverride` is used instead of `finalResult`.
 - An athlete's result at an accepted guest fixture counts for their own club's statistics and progression.
+
+## AI declaration
+
+This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free].

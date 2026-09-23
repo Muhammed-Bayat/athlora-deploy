@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0026_user_preferences.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0027_club_branding.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -83,6 +83,15 @@ clubs
   id UUID PK DEFAULT gen_random_uuid()
   workspace_id UUID FK -> workspaces.id ON DELETE CASCADE, UQ
   name TEXT NOT NULL
+  description TEXT NULL CHECK (length(description) <= 500)
+  primary_color TEXT NULL CHECK (primary_color ~ '^#[0-9A-Fa-f]{6}$')
+  accent_color TEXT NULL CHECK (accent_color ~ '^#[0-9A-Fa-f]{6}$')
+  logo_key TEXT NULL
+  logo_content_type TEXT NULL
+  logo_byte_size INTEGER NULL CHECK (logo_byte_size IS NULL OR logo_byte_size > 0 AND logo_byte_size <= 5242880)
+  cover_key TEXT NULL
+  cover_content_type TEXT NULL
+  cover_byte_size INTEGER NULL CHECK (cover_byte_size IS NULL OR cover_byte_size > 0 AND cover_byte_size <= 5242880)
   public_results_enabled BOOLEAN NOT NULL DEFAULT false
   public_schedule_enabled BOOLEAN NOT NULL DEFAULT false
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -507,6 +516,7 @@ event_reminder_mutes
 | `0024_public_club_statistics.sql` | Club public-results setting |
 | `0025_club_public_schedule_publication.sql` | Independent club public-schedule setting |
 | `0026_user_preferences.sql` | Per-user dashboard card order, hidden cards, and saved filter presets |
+| `0027_club_branding.sql` | Club description, brand colours, logo, and cover media keys |
 
 ## Schema maintenance
 
@@ -514,4 +524,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free].

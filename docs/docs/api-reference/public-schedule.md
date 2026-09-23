@@ -35,7 +35,7 @@ GET /api/v1/public/schedule/clubs?q={name}
 Returns up to 100 clubs with a published schedule matching the optional case-insensitive name search. Unpublished clubs are never returned.
 
 ```json
-{ "data": [{ "id": "uuid", "name": "Open Track Club" }], "meta": { count: 1 } }
+{ "data": [{ "id": "uuid", "name": "Open Track Club", "branding": { "description": null, "primaryColor": null, "accentColor": null, "logoUrl": null, "coverUrl": null } }], "meta": { count: 1 } }
 ```
 
 ## Upcoming club schedule
@@ -49,7 +49,11 @@ Returns `404 NOT_FOUND` if the club is unknown or its schedule is not published.
 ```json
 {
   "data": {
-    "club": { "id": "uuid", "name": "Open Track Club" },
+    "club": {
+      "id": "uuid",
+      "name": "Open Track Club",
+      "branding": { "description": null, "primaryColor": null, "accentColor": null, "logoUrl": null, "coverUrl": null }
+    },
     "events": [
       {
         "id": "uuid",
@@ -66,8 +70,8 @@ Returns `404 NOT_FOUND` if the club is unknown or its schedule is not published.
 }
 ```
 
-Events are ordered by date ascending, then time ascending (nulls last), then creation time. `discipline` is nullable for multi-discipline meets.
+Events are ordered by date ascending, then time ascending (nulls last), then creation time. `discipline` is nullable for multi-discipline meets. `club.branding` is present only when schedule publication is enabled.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free].

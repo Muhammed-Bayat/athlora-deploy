@@ -59,6 +59,9 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 
 ## Implemented features
 
+- Authenticated coach console with roster, events, live logging, comparison, and account surfaces.
+- Club branding settings on the Account page: description, accessible brand colours, logo and cover upload (PNG/JPEG/WebP ≤5 MB), with live WCAG contrast checks. Branding is applied through the shared `ClubBadge` component on the console footer/switcher, fixture team lists, public stats cards, and comparison tables, with an initials fallback when no logo is set.
+
 - Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
 - API-backed dashboard with summary, live-event, loading, onboarding, and recovery states. A **Customize dashboard** dialog reorders cards with move up/down buttons and toggles hideable cards (required season/hero/status cards stay visible); preferences hydrate from `GET /api/v1/preferences` without blocking the default layout and save through `PUT /api/v1/preferences`. Named dashboard views persist the current season as saved-filter presets that can be applied or deleted from the dashboard toolbar.
 - Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
@@ -133,4 +136,4 @@ Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding settings and branded surface wiring were documented with the assistance of opencode[mimo-v2.6-flash-free].
