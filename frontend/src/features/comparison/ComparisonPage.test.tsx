@@ -99,7 +99,7 @@ beforeEach(() => {
       : [{ id: ATHLETE_2.id, name: 'Bob Dash', status: 'active' }],
     meta: { count: 1 },
   }));
-  mockGetClubPublication.mockResolvedValue({ publicResultsEnabled: false });
+  mockGetClubPublication.mockResolvedValue({ publicResultsEnabled: false, publicScheduleEnabled: false });
 });
 
 function renderPage(params?: Record<string, string>) {
@@ -133,14 +133,29 @@ describe('ComparisonPage', () => {
     expect(await screen.findByRole('button', { name: 'Add club to comparison' })).not.toBeDisabled();
   });
 
-  it('lets a coach publish the club results from the comparison page', async () => {
-    mockUpdateClubPublication.mockResolvedValue({ publicResultsEnabled: true });
+  it('lets a coach publish the club results independently of the schedule', async () => {
+    mockUpdateClubPublication.mockResolvedValue({ publicResultsEnabled: true, publicScheduleEnabled: false });
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Publish results' }));
 
-    expect(mockUpdateClubPublication).toHaveBeenCalledWith(true);
-    expect(await screen.findByText('Public')).toBeInTheDocument();
+    expect(mockUpdateClubPublication).toHaveBeenCalledWith(true, false);
+    expect(await screen.findByRole('button', { name: 'Stop publishing' })).toBeInTheDocument();
+    expect(screen.getAllByText('Public')).toHaveLength(1);
+    expect(screen.getAllByText('Private')).toHaveLength(1);
+  });
+
+  it('lets a coach publish the club schedule independently of the results', async () => {
+    mockUpdateClubPublication.mockResolvedValue({ publicResultsEnabled: false, publicScheduleEnabled: true });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Publish schedule' }));
+
+    expect(mockUpdateClubPublication).toHaveBeenCalledWith(false, true);
+    expect(await screen.findByRole('button', { name: 'Stop publishing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publish results' })).toBeInTheDocument();
+    expect(screen.getAllByText('Public')).toHaveLength(1);
+    expect(screen.getAllByText('Private')).toHaveLength(1);
   });
 
   it('shows the same-club athlete prompt until two distinct athletes are selected', () => {

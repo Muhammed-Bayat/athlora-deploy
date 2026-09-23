@@ -483,12 +483,23 @@ export function ComparisonPage() {
     return () => { current = false; };
   }, [activeWorkspace.id]);
 
-  const togglePublication = useCallback(() => {
+  const toggleResultsPublication = useCallback(() => {
     if (!publication || activeWorkspace.role !== 'coach') return;
-    const nextEnabled = !publication.publicResultsEnabled;
     setPublicationUpdating(true);
     setPublicationError(null);
-    void updateClubPublication(nextEnabled)
+    void updateClubPublication(!publication.publicResultsEnabled, publication.publicScheduleEnabled)
+      .then(setPublication)
+      .catch((error: unknown) => {
+        setPublicationError(error instanceof Error ? error.message : 'Could not update publication status');
+      })
+      .finally(() => setPublicationUpdating(false));
+  }, [activeWorkspace.role, publication]);
+
+  const toggleSchedulePublication = useCallback(() => {
+    if (!publication || activeWorkspace.role !== 'coach') return;
+    setPublicationUpdating(true);
+    setPublicationError(null);
+    void updateClubPublication(publication.publicResultsEnabled, !publication.publicScheduleEnabled)
       .then(setPublication)
       .catch((error: unknown) => {
         setPublicationError(error instanceof Error ? error.message : 'Could not update publication status');
@@ -715,17 +726,36 @@ export function ComparisonPage() {
             <p className={styles.publicationEyebrow}>Public statistics</p>
             <h2>Share this club's 100m results</h2>
             <p>
-              Publishing makes the club name, non-archived athlete names, and all-time 100m metrics visible on Athlora's public Stats page.
+              Publishing makes the club name, non-archived athlete names, and all-time 100m metrics (personal bests, leaderboards, detailed reports) visible on Athlora's public Stats page.
             </p>
           </div>
           <div className={styles.publicationAction}>
             {publicationLoading ? <p>Loading publication status...</p> : activeWorkspace.role === 'coach' ? (
-              <Button onClick={togglePublication} disabled={publicationUpdating}>
+              <Button onClick={toggleResultsPublication} disabled={publicationUpdating}>
                 {publication?.publicResultsEnabled ? 'Stop publishing' : 'Publish results'}
               </Button>
             ) : <p>Only a coach can change this setting.</p>}
             {publication && <span className={publication.publicResultsEnabled ? styles.published : styles.unpublished}>
               {publication.publicResultsEnabled ? 'Public' : 'Private'}
+            </span>}
+          </div>
+        </div>
+        <div className={styles.publicationPanel}>
+          <div>
+            <p className={styles.publicationEyebrow}>Public schedule</p>
+            <h2>Share this club's upcoming meets</h2>
+            <p>
+              Publishing makes upcoming meet titles, dates/times, venues, and disciplines visible to anyone. It never exposes athlete or guest rosters.
+            </p>
+          </div>
+          <div className={styles.publicationAction}>
+            {publicationLoading ? <p>Loading publication status...</p> : activeWorkspace.role === 'coach' ? (
+              <Button onClick={toggleSchedulePublication} disabled={publicationUpdating}>
+                {publication?.publicScheduleEnabled ? 'Stop publishing' : 'Publish schedule'}
+              </Button>
+            ) : <p>Only a coach can change this setting.</p>}
+            {publication && <span className={publication.publicScheduleEnabled ? styles.published : styles.unpublished}>
+              {publication.publicScheduleEnabled ? 'Public' : 'Private'}
             </span>}
           </div>
         </div>
