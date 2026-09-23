@@ -9,8 +9,10 @@ vi.mock('../../utils/weatherLocation', () => ({ timezoneCoordinates: () => ({ la
 
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
 const permissionsQuery = vi.hoisted(() => vi.fn());
+const brandingApi = vi.hoisted(() => ({ getClubBranding: vi.fn() }));
 
 vi.mock('../../api/weather', () => weatherApi);
+vi.mock('../../api/clubBranding', () => brandingApi);
 
 vi.mock('./DashboardPage', () => ({
   DashboardPage: ({
@@ -86,6 +88,7 @@ describe('CoachConsole dashboard navigation', () => {
       configurable: true,
       value: { query: permissionsQuery },
     });
+    brandingApi.getClubBranding.mockResolvedValue(null);
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ results: [{ latitude: -26.2041, longitude: 28.0473, timezone: 'Africa/Johannesburg' }] }),

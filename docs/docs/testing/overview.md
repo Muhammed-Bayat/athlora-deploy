@@ -44,7 +44,7 @@ test: {
   globals: true,
   setupFiles: ['./src/test/setup.ts'],
   css: false,
-  testTimeout: 15_000,
+  testTimeout: 30_000,
   exclude: ['e2e/**', 'node_modules/**'],
   coverage: {
     provider: 'v8',
@@ -540,4 +540,4 @@ The submitted response evidence and form links are retained in [Sprint 2 Stakeho
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free].
