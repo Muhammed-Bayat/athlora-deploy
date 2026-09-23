@@ -1,6 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { SessionTarget } from '../types/meets';
 
 export interface OfflineAction {
+  target?: SessionTarget;
+  workspaceId?: string;
   id: string;
   actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
   eventId: string;
@@ -34,17 +37,28 @@ export interface CachedTimeline {
   cachedAt: number;
 }
 
+export interface CachedSession {
+  key: string;
+  workspaceId: string;
+  eventId: string;
+  disciplineSessionId: string;
+  data: Record<string, unknown>;
+  cachedAt: number;
+}
+
 export type OfflineDB = Dexie & {
   offlineActions: EntityTable<OfflineAction, 'id'>;
   cachedEvents: EntityTable<CachedEvent, 'id'>;
   cachedParticipants: EntityTable<CachedParticipants, 'eventId'>;
   cachedTimeline: EntityTable<CachedTimeline, 'eventId'>;
+  cachedSessions: EntityTable<CachedSession, 'key'>;
 };
 
-let dbInstance: OfflineDB | null = null;
+const dbInstances = new Map<string, OfflineDB>();
 
 export function getOfflineDB(userId: string): OfflineDB {
-  if (dbInstance) return dbInstance;
+  const existing = dbInstances.get(userId);
+  if (existing) return existing;
 
   const db = new Dexie(`athlora-${userId}`) as OfflineDB;
 
@@ -55,10 +69,16 @@ export function getOfflineDB(userId: string): OfflineDB {
     cachedTimeline: 'eventId',
   });
 
-  dbInstance = db;
+  db.version(2).stores({
+    offlineActions: 'id, [status+eventId+createdAt], eventId, status, workspaceId',
+    cachedSessions: 'key, [workspaceId+eventId+disciplineSessionId]',
+  });
+
+  dbInstances.set(userId, db);
   return db;
 }
 
 export function resetOfflineDB(): void {
-  dbInstance = null;
+  for (const db of dbInstances.values()) db.close();
+  dbInstances.clear();
 }

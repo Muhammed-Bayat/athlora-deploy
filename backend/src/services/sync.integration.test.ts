@@ -6,6 +6,7 @@ import { processSyncBatch, type SyncActionInput } from './sync.js';
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
+  ...MEET_TEST_TABLES,
   'sync_action_receipts',
   'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
@@ -179,3 +180,4 @@ describeDB('processSyncBatch against a real database', () => {
     expect(rows).toHaveLength(0);
   });
 });
+import { MEET_TEST_TABLES } from '../db/meet-test-tables.js';

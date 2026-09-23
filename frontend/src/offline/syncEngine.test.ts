@@ -34,6 +34,20 @@ describe('Sync Engine', () => {
     vi.clearAllMocks();
   });
 
+  it('separates legacy and session batches in order and pins session workspaces', async () => {
+    const target = { disciplineSessionId: crypto.randomUUID(), entrantId: crypto.randomUUID() };
+    const legacy = makeAction();
+    const session = { ...makeAction(), target, workspaceId: 'original-workspace' };
+    vi.mocked(actionQueue.getPendingActions).mockResolvedValue([legacy, session]);
+    vi.mocked(syncApi.postSyncBatch).mockResolvedValue({ receipts: [], recomputedResults: false });
+    await drainQueue('event-1', 'user-1');
+    expect(syncApi.postSyncBatch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(syncApi.postSyncBatch).mock.calls[0][0].actions[0]).not.toHaveProperty('target');
+    expect(vi.mocked(syncApi.postSyncBatch).mock.calls[1]).toEqual([
+      expect.objectContaining({ actions: [expect.objectContaining({ target, actionId: session.id })] }), 'original-workspace',
+    ]);
+  });
+
   it('returns empty result when queue is empty', async () => {
     vi.mocked(actionQueue.getPendingActions).mockResolvedValue([]);
 

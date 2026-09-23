@@ -1,6 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { SessionTarget } from '../types/meets';
 
 export interface PublicOfflineAction {
+  target?: SessionTarget;
   id: string;
   actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
   eventId: string;
@@ -24,6 +26,7 @@ export interface PublicCachedSnapshot {
 export type PublicOfflineDB = Dexie & {
   publicOfflineActions: EntityTable<PublicOfflineAction, 'id'>;
   publicCachedSnapshots: EntityTable<PublicCachedSnapshot, 'eventId'>;
+  publicCachedSessions: EntityTable<{ key: string; eventId: string; disciplineSessionId: string; snapshot: Record<string, unknown>; cachedAt: number }, 'key'>;
 };
 
 const dbInstances = new Map<string, PublicOfflineDB>();
@@ -45,6 +48,7 @@ export function getPublicOfflineDB(sessionToken: string): PublicOfflineDB {
     publicOfflineActions: 'id, [status+eventId+createdAt], eventId, status',
     publicCachedSnapshots: 'eventId',
   });
+  db.version(2).stores({ publicCachedSessions: 'key, [eventId+disciplineSessionId]' });
 
   dbInstances.set(key, db);
   return db;
@@ -52,5 +56,6 @@ export function getPublicOfflineDB(sessionToken: string): PublicOfflineDB {
 
 export function resetPublicOfflineDB(sessionToken: string): void {
   const key = getSessionHash(sessionToken);
+  dbInstances.get(key)?.close();
   dbInstances.delete(key);
 }

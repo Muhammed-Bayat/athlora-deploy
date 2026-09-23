@@ -7,6 +7,7 @@ import type { TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEn
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { recomputeEventResults } from './timeline.js';
+import type { MeetActor } from '../types/meets.js';
 
 const TIMELINE_COLUMNS = 'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id, created_at, updated_at, deleted_at';
 
@@ -184,6 +185,11 @@ async function validSession(
   if (!row) throw unavailable();
   if (row.event_id !== eventId) throw unavailable();
   return row;
+}
+
+export async function resolvePublicMeetActor(sessionToken: string, eventId: string, executor: DbExecutor = getPool()): Promise<MeetActor> {
+  const session = await validSession(sessionToken, eventId, executor);
+  return { publicLoggerSessionId: session.id };
 }
 
 export async function publicLoggerSnapshot(

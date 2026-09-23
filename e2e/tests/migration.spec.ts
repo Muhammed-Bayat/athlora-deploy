@@ -22,7 +22,8 @@ test.describe('migration verification', () => {
 
   test('all migrations are tracked in schema_migrations', async () => {
     const result = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(result.rows).toHaveLength(28);
+    expect(result.rows).toHaveLength(30);
+    expect(result.rows).toContainEqual({ name: '0028_multi_discipline_meet_foundation.sql' });
   });
 
   test('core tables exist', async () => {
@@ -35,6 +36,14 @@ test.describe('migration verification', () => {
       'event_participants',
       'timeline_entries',
       'results',
+      'discipline_definitions',
+      'discipline_sessions',
+      'meet_entrants',
+      'relay_members',
+      'session_entrants',
+      'session_timeline_entries',
+      'session_results',
+      'meet_domain_audit',
       'squads',
       'athlete_squads',
       'athlete_status_transitions',
@@ -75,7 +84,7 @@ test.describe('migration verification', () => {
   test('athlete lifecycle status column exists', async () => {
     const result = await pool.query(`
       SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'athletes' AND column_name = 'status'
+      WHERE table_name = 'athletes' AND column_name = 'lifecycle_status'
     `);
     expect(result.rows.length).toBe(1);
   });

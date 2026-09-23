@@ -6,12 +6,13 @@ import { ApiError } from '../middleware/errors.js';
 import { processSyncBatch, designateOfflineLogger, revokeOfflineLoggerDesignation, transferOfflineLoggerDesignation } from '../services/sync.js';
 import type { SyncActionInput } from '../services/sync.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
+import { processSessionSyncBatch } from '../services/sessionSync.js';
 
 const router = Router();
 
 const baseAccess = [verifyAuth0Token, resolveApplicationUser, requireOperationalAccess()];
 const syncAccess = [...baseAccess, requireEventOwnership('eventId')];
-const batchAccess = [...baseAccess, requireBodyEventOwnership, requireBodyEventLoggingOpen];
+const batchAccess = [requireBodyEventOwnership, requireBodyEventLoggingOpen];
 
 const MAX_BATCH_ACTIONS = 50;
 const ACTION_TYPES = new Set(['create_entry', 'edit_entry', 'undo_entry']);
@@ -19,6 +20,16 @@ const ACTION_TYPES = new Set(['create_entry', 'edit_entry', 'undo_entry']);
 function validationError(message: string): ApiError {
   return new ApiError(400, 'VALIDATION_ERROR', message);
 }
+
+// Explicit session targets take the new scoped service; legacy batches retain their middleware/contract.
+router.post('/sync/batch', ...baseAccess, async (req, res, next) => {
+  if (!Array.isArray(req.body?.actions) || !req.body.actions.some((action: unknown) => action && typeof action === 'object' && 'target' in action)) return next();
+  try {
+    const { userId, workspaceId, workspaceRole } = getApplicationUserContext(req);
+    const result = await processSessionSyncBatch({ userId, workspaceId, role: workspaceRole }, req.body.eventId, req.body.deviceId, req.body.actions);
+    res.json({ data: result });
+  } catch (error) { next(error); }
+});
 
 router.post('/sync/batch', ...batchAccess, async (req, res, next) => {
   try {

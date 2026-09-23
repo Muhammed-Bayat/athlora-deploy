@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { enqueueAction, getQueueStatus } from '../offline/actionQueue';
 import { drainQueue } from '../offline/syncEngine';
 import { useOnlineStatus } from './useOnlineStatus';
+import type { SessionTarget } from '../types/meets';
 
 interface UseEventOfflineSyncOptions {
+  workspaceId?: string;
   userId: string;
   eventId: string;
   deviceId: string;
@@ -17,6 +19,7 @@ export interface EventOfflineSyncResult {
   failedCount: number;
   queueStatus: { pending: number; synced: number; failed: number } | null;
   enqueue: (input: {
+    target?: SessionTarget;
     actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
     payload: Record<string, unknown>;
     entryId?: string;
@@ -26,7 +29,7 @@ export interface EventOfflineSyncResult {
   refreshStatus: () => Promise<void>;
 }
 
-export function useEventOfflineSync({ userId, eventId, deviceId }: UseEventOfflineSyncOptions): EventOfflineSyncResult {
+export function useEventOfflineSync({ userId, eventId, deviceId, workspaceId }: UseEventOfflineSyncOptions): EventOfflineSyncResult {
   const { isOnline, wasOffline, resetWasOffline } = useOnlineStatus();
   const [queueStatus, setQueueStatus] = useState<{ pending: number; synced: number; failed: number } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -59,13 +62,14 @@ export function useEventOfflineSync({ userId, eventId, deviceId }: UseEventOffli
 
   const enqueue = useCallback(
     async (input: {
+      target?: SessionTarget;
       actionType: 'create_entry' | 'edit_entry' | 'undo_entry';
       payload: Record<string, unknown>;
       entryId?: string;
       expectedVersion?: number;
     }) => {
       const id = await enqueueAction(
-        { ...input, eventId, deviceId },
+        { ...input, eventId, deviceId, ...(workspaceId ? { workspaceId } : {}) },
         userId,
       );
       await refreshStatus();
@@ -74,7 +78,7 @@ export function useEventOfflineSync({ userId, eventId, deviceId }: UseEventOffli
       }
       return id;
     },
-    [eventId, deviceId, userId, isOnline, syncNow, refreshStatus],
+    [eventId, deviceId, userId, workspaceId, isOnline, syncNow, refreshStatus],
   );
 
   useEffect(() => {

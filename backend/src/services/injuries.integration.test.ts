@@ -6,6 +6,7 @@ import { createInjury, listInjuries, updateInjury, resolveInjury, reopenInjury }
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
+  ...MEET_TEST_TABLES,
   'athlete_injuries',
   'athletes',
   'workspace_members',
@@ -101,3 +102,4 @@ describeDB('injury persistence and authorization against a real database', () =>
     }
   });
 });
+import { MEET_TEST_TABLES } from '../db/meet-test-tables.js';

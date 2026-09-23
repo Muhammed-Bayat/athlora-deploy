@@ -1,7 +1,9 @@
 import Dexie from 'dexie';
 import { getPublicOfflineDB, type PublicOfflineAction } from './publicDb';
+import { isSessionTarget, type SessionTarget } from '../types/meets';
 
 export interface EnqueuePublicActionInput {
+  target?: SessionTarget;
   actionType: PublicOfflineAction['actionType'];
   eventId: string;
   entryId?: string;
@@ -14,9 +16,11 @@ export async function enqueuePublicAction(
   input: EnqueuePublicActionInput,
   sessionToken: string,
 ): Promise<string> {
+  if (input.target !== undefined && !isSessionTarget(input.target)) throw new Error('Session actions require a complete target');
   const db = getPublicOfflineDB(sessionToken);
   const id = crypto.randomUUID();
   const action: PublicOfflineAction = {
+    ...(input.target ? { target: input.target } : {}),
     id,
     actionType: input.actionType,
     eventId: input.eventId,

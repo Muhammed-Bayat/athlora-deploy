@@ -22,10 +22,14 @@ function emptyResult(): DrainResult {
   return { accepted: 0, rejected: 0, duplicates: 0, failed: 0 };
 }
 
-function chunk<T>(items: T[], size: number): T[][] {
+function chunk<T extends { target?: unknown; workspaceId?: string; deviceId: string }>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
+  for (const item of items) {
+    const current = chunks[chunks.length - 1];
+    const first = current?.[0];
+    if (!first || current.length === size || Boolean(first.target) !== Boolean(item.target)
+      || first.workspaceId !== item.workspaceId || first.deviceId !== item.deviceId) chunks.push([item]);
+    else current.push(item);
   }
   return chunks;
 }
@@ -65,16 +69,17 @@ async function drainQueueUnsafe(eventId: string, userId: string): Promise<DrainR
   const pending = await getPendingActions(eventId, userId);
   if (pending.length === 0) return emptyResult();
 
-  const deviceId = pending[0].deviceId;
   const result = emptyResult();
 
   try {
     for (const actions of chunk(pending, BATCH_CHUNK_SIZE)) {
-      const response = await postSyncBatch({
-        deviceId,
+      const batch = {
+        deviceId: actions[0].deviceId,
         eventId,
         actions: actions.map(toSyncAction),
-      });
+      };
+      // Legacy v1 actions retain their old workspace behavior. New actions are pinned at enqueue time.
+      const response = actions[0].workspaceId ? await postSyncBatch(batch, actions[0].workspaceId) : await postSyncBatch(batch);
       const chunkResult = await processReceipts(actions, response.receipts, userId);
       result.accepted += chunkResult.accepted;
       result.rejected += chunkResult.rejected;
@@ -112,46 +117,32 @@ export async function drainPublicQueue(
   const pending = await getPendingPublicActions(eventId, sessionToken);
   if (pending.length === 0) return { accepted: 0, rejected: 0, duplicates: 0, failed: 0, sessionExpired: false };
 
-  const request = {
-    eventId,
-    deviceId: pending[0].deviceId,
-    actions: pending.map(toPublicSyncAction),
-  };
-
-  let response: { receipts: Array<{ actionId: string; status: string; code?: string }>; recomputedResults: boolean };
-  let sessionExpired = false;
-  try {
-    response = await postPublicSyncBatch(sessionToken, request);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Network error';
-    sessionExpired = message.includes('Invalid or expired');
-    for (const action of pending) {
-      await markPublicFailed(action.id, message, sessionToken);
-    }
-    return { accepted: 0, rejected: 0, duplicates: 0, failed: pending.length, sessionExpired };
-  }
-
   const result: DrainResult = { accepted: 0, rejected: 0, duplicates: 0, failed: 0 };
-
-  for (const receipt of response.receipts) {
-    const action = pending.find((a) => a.id === receipt.actionId);
-    if (!action) continue;
-
-    switch (receipt.status) {
-      case 'accepted':
-        await markPublicSynced(action.id, receipt as unknown as Record<string, unknown>, sessionToken);
-        result.accepted++;
-        break;
-      case 'duplicate':
-        await markPublicSynced(action.id, receipt as unknown as Record<string, unknown>, sessionToken);
-        result.duplicates++;
-        break;
-      case 'rejected':
-        await markPublicFailed(action.id, receipt.code ?? 'REJECTED', sessionToken);
-        result.rejected++;
-        break;
+  for (const actions of chunk(pending, BATCH_CHUNK_SIZE)) {
+    try {
+      const response = await postPublicSyncBatch(sessionToken, { eventId, deviceId: actions[0].deviceId, actions: actions.map(toPublicSyncAction) });
+      for (const receipt of response.receipts) {
+        const action = actions.find((item) => item.id === receipt.actionId);
+        if (!action) continue;
+        if (receipt.status === 'accepted' || receipt.status === 'duplicate') {
+          await markPublicSynced(action.id, receipt as unknown as Record<string, unknown>, sessionToken);
+          if (receipt.status === 'accepted') result.accepted++;
+          else result.duplicates++;
+        } else if (receipt.status === 'rejected') {
+          await markPublicFailed(action.id, receipt.code ?? 'REJECTED', sessionToken);
+          result.rejected++;
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Network error';
+      const sessionExpired = message.includes('Invalid or expired') || message.includes('Public logger access is unavailable');
+      // New session actions remain pending on transport failure so stable UUIDs can retry.
+      if (!actions[0].target) {
+        for (const action of actions) await markPublicFailed(action.id, message, sessionToken);
+        result.failed += actions.length;
+      }
+      return { ...result, sessionExpired };
     }
   }
-
-  return { ...result, sessionExpired };
+  return { ...result, sessionExpired: false };
 }
