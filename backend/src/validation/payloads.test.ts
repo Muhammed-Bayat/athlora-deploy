@@ -27,6 +27,7 @@ import {
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
+  parseUserPreferencesPayload,
   parseVenueSearchQuery,
   parseWeatherCurrentQuery,
   validateTimelineEntryState,
@@ -763,6 +764,123 @@ describe('club publication payload', () => {
       () => parseClubPublicationPayload({ publicResultsEnabled: true, publicScheduleEnabled: false, extra: true }),
       [{ path: 'extra', code: 'unknown_field', message: 'Field is not allowed' }],
     );
+  });
+});
+
+describe('user preferences payload', () => {
+  const defaultOrder = [
+    'season-selector',
+    'hero',
+    'status-attention',
+    'stats',
+    'roster-snapshot',
+    'upcoming-events',
+    'pb-trend',
+    'recent-results',
+    'recent-pbs',
+  ];
+
+  it('parses a full default payload', () => {
+    expect(parseUserPreferencesPayload({
+      dashboardCardOrder: defaultOrder,
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [],
+    })).toEqual({
+      dashboardCardOrder: defaultOrder,
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [],
+    });
+  });
+
+  it('parses reordered cards, hidden cards, and named presets', () => {
+    const order = [...defaultOrder];
+    const [stats, hero] = [order[3], order[1]];
+    order[1] = stats;
+    order[3] = hero;
+
+    expect(parseUserPreferencesPayload({
+      dashboardCardOrder: order,
+      dashboardHiddenCards: ['pb-trend', 'recent-pbs'],
+      dashboardSavedFilters: [{
+        id: 'preset-1',
+        surface: 'dashboard',
+        name: '  Sprint week  ',
+        filters: { year: '2026' },
+      }],
+    })).toEqual({
+      dashboardCardOrder: order,
+      dashboardHiddenCards: ['pb-trend', 'recent-pbs'],
+      dashboardSavedFilters: [{ id: 'preset-1', surface: 'dashboard', name: 'Sprint week', filters: { year: '2026' } }],
+    });
+  });
+
+  it('requires all three preference fields and rejects unknown fields', () => {
+    expectValidationError(() => parseUserPreferencesPayload({ dashboardCardOrder: defaultOrder }), [
+      { path: 'dashboardHiddenCards', code: 'required', message: 'Field is required' },
+      { path: 'dashboardSavedFilters', code: 'required', message: 'Field is required' },
+    ]);
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: defaultOrder,
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [],
+      theme: 'dark',
+    }), [
+      { path: 'theme', code: 'unknown_field', message: 'Field is not allowed' },
+    ]);
+  });
+
+  it('rejects incomplete or unknown card ids and required cards in the hidden list', () => {
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: defaultOrder.slice(0, 8),
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [],
+    }), [
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Card order must list every known card exactly once' },
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: `Missing required card id recent-pbs` },
+    ]);
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: [...defaultOrder.slice(0, -1), 'retired-card'],
+      dashboardHiddenCards: ['hero'],
+      dashboardSavedFilters: [],
+    }), [
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Card order must list every known card exactly once' },
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Missing required card id recent-pbs' },
+      { path: 'dashboardCardOrder.8', code: 'invalid_value', message: 'Unknown dashboard card id' },
+      { path: 'dashboardHiddenCards.0', code: 'invalid_value', message: 'Unknown dashboard card id' },
+    ]);
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: [...defaultOrder.slice(0, -1), 'stats'],
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [],
+    }), [
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Card order must list every known card exactly once' },
+      { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Missing required card id recent-pbs' },
+      { path: 'dashboardCardOrder.8', code: 'invalid_value', message: 'Duplicate dashboard card id' },
+    ]);
+  });
+
+  it('validates saved filter shape, surface, uniqueness, and unknown nested fields', () => {
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: defaultOrder,
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [{ id: '', surface: 'live', name: '', filters: [] }],
+    }), [
+      { path: 'dashboardSavedFilters.0.filters', code: 'invalid_type', message: 'Expected a filters object' },
+      { path: 'dashboardSavedFilters.0.id', code: 'invalid_value', message: 'Expected a non-blank id up to 128 characters' },
+      { path: 'dashboardSavedFilters.0.name', code: 'invalid_value', message: 'Expected a non-blank name up to 60 characters' },
+      { path: 'dashboardSavedFilters.0.surface', code: 'invalid_value', message: 'Expected one of dashboard, events, roster' },
+    ]);
+    expectValidationError(() => parseUserPreferencesPayload({
+      dashboardCardOrder: defaultOrder,
+      dashboardHiddenCards: [],
+      dashboardSavedFilters: [
+        { id: 'a', surface: 'dashboard', name: 'One', filters: {} },
+        { id: 'a', surface: 'events', name: 'Two', filters: {}, pinned: true },
+      ],
+    }), [
+      { path: 'dashboardSavedFilters.1.id', code: 'invalid_value', message: 'Saved filter ids must be unique' },
+      { path: 'dashboardSavedFilters.1.pinned', code: 'unknown_field', message: 'Field is not allowed' },
+    ]);
   });
 });
 

@@ -419,15 +419,16 @@ The Gitea Actions workflow (`.gitea/workflows/ci.yml`) runs on every push and pu
 | `backend` | Install → Lint → Typecheck → Test → Build |
 | `coverage` | Install both → Generate frontend coverage → Generate backend coverage → Generate quality report |
 | `docs` | Install → Build |
-| `e2e` | Provision PostgreSQL on port `55432` → Install all deps → Install Chromium → Run Playwright when Auth0/E2E secrets are configured; otherwise emit an explicit skip message |
+| `e2e` | Detect Auth0/E2E secrets → when configured: Provision PostgreSQL on port `55432` (root/sudo-aware) → Install all deps → Install Chromium → Run Playwright; otherwise emit an explicit skip message |
 
 ### E2E job details
 
-The `e2e` job provisions an isolated PostgreSQL cluster inside the job container:
+The `e2e` job first writes a `configured` step output from the seven required Auth0/E2E repository secrets (the `secrets` context is not reliable inside step `if:` expressions on act runners). When configured, it provisions an isolated PostgreSQL cluster inside the job container without assuming `sudo` exists — act runner images often run as root with no `sudo` binary:
 
 ```bash
-sudo apt-get install -y postgresql libpq-dev
-initdb → pg_ctl start -p 55432 → createdb athlora_e2e → set password
+# root → plain apt-get; non-root → sudo when available
+apt-get install -y postgresql libpq-dev
+runuser/su postgres → initdb → pg_ctl start -p 55432 → createdb athlora_e2e → set password
 ```
 
 When the seven required Auth0/E2E repository secrets are not configured, the job prints a clear skip message and stays green:
@@ -539,4 +540,4 @@ The submitted response evidence and form links are retained in [Sprint 2 Stakeho
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free].

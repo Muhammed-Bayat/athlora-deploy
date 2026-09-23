@@ -22,7 +22,7 @@ test.describe('migration verification', () => {
 
   test('all migrations are tracked in schema_migrations', async () => {
     const result = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(result.rows).toHaveLength(22);
+    expect(result.rows).toHaveLength(28);
   });
 
   test('core tables exist', async () => {
@@ -58,6 +58,7 @@ test.describe('migration verification', () => {
       'club_join_requests',
       'workspace_invitations',
       'workspace_membership_audit',
+      'user_preferences',
     ];
 
     const result = await pool.query(`

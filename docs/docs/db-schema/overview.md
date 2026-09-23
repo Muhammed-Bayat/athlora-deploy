@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0025_club_public_schedule_publication.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0026_user_preferences.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -22,6 +22,7 @@ The diagram below reflects the schema documented on this page. Open the [SVG ERD
 - Events own fixture participation, invitations, participants, live-log entries, results, helpers, public logger links, and offline-sync receipts.
 - `timeline_entries` are created by exactly one actor: either an authenticated `users` row or a `public_logger_sessions` row.
 - Results are materialized from the timeline and are unique per event, athlete, and discipline.
+- A user's dashboard preferences are stored per `(user, workspace)` pair.
 
 ## Final relational schema
 
@@ -92,12 +93,21 @@ club_join_requests
   club_id UUID FK -> clubs.id ON DELETE CASCADE
   user_id UUID FK -> users.id ON DELETE CASCADE
   status TEXT NOT NULL DEFAULT 'pending' CHECK ('pending', 'approved', 'rejected', 'withdrawn')
-  reviewed_by UUID FK -> users.id ON DELETE SET NULL, NULL
+  reviewed_by UUID FK -> users.id NULL
   reviewed_at TIMESTAMPTZ NULL
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   CHECK: reviewed_at is present exactly for approved/rejected requests
   UQ partial: one pending request per (club_id, user_id)
+
+user_preferences
+  user_id UUID PK, FK -> users.id ON DELETE CASCADE
+  workspace_id UUID PK, FK -> workspaces.id ON DELETE CASCADE
+  dashboard_card_order JSONB NOT NULL DEFAULT '[]'
+  dashboard_hidden_cards JSONB NOT NULL DEFAULT '[]'
+  dashboard_saved_filters JSONB NOT NULL DEFAULT '[]'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
 account_deletions
   auth0_id TEXT PK
@@ -496,6 +506,7 @@ event_reminder_mutes
 | `0023_event_lifecycle_notifications.sql` | Additional notification kinds |
 | `0024_public_club_statistics.sql` | Club public-results setting |
 | `0025_club_public_schedule_publication.sql` | Independent club public-schedule setting |
+| `0026_user_preferences.sql` | Per-user dashboard card order, hidden cards, and saved filter presets |
 
 ## Schema maintenance
 
@@ -503,4 +514,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0025_club_public_schedule_publication.sql` with the assistance of opencode[mimo-v2.6-flash-free].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free].

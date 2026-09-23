@@ -54,6 +54,52 @@ export interface ClubPublication {
   publicScheduleEnabled: boolean;
 }
 
+export const DASHBOARD_CARD_IDS = [
+  'season-selector',
+  'hero',
+  'status-attention',
+  'stats',
+  'roster-snapshot',
+  'upcoming-events',
+  'pb-trend',
+  'recent-results',
+  'recent-pbs',
+] as const;
+export type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
+
+export const REQUIRED_DASHBOARD_CARD_IDS = [
+  'season-selector',
+  'hero',
+  'status-attention',
+] as const satisfies readonly DashboardCardId[];
+
+export const HIDEABLE_DASHBOARD_CARD_IDS = [
+  'stats',
+  'roster-snapshot',
+  'upcoming-events',
+  'pb-trend',
+  'recent-results',
+  'recent-pbs',
+] as const satisfies readonly DashboardCardId[];
+
+export const DEFAULT_DASHBOARD_CARD_ORDER: readonly DashboardCardId[] = DASHBOARD_CARD_IDS;
+
+export const PREFERENCE_SURFACES = ['dashboard', 'events', 'roster'] as const;
+export type PreferenceSurface = (typeof PREFERENCE_SURFACES)[number];
+
+export interface SavedFilterPreset {
+  id: string;
+  surface: PreferenceSurface;
+  name: string;
+  filters: Record<string, unknown>;
+}
+
+export interface UserPreferences {
+  dashboardCardOrder: DashboardCardId[];
+  dashboardHiddenCards: DashboardCardId[];
+  dashboardSavedFilters: SavedFilterPreset[];
+}
+
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ClubJoinRequest {

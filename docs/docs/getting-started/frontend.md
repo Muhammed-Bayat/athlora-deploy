@@ -60,7 +60,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 ## Implemented features
 
 - Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
-- API-backed dashboard with summary, live-event, loading, onboarding, and recovery states.
+- API-backed dashboard with summary, live-event, loading, onboarding, and recovery states. A **Customize dashboard** dialog reorders cards with move up/down buttons and toggles hideable cards (required season/hero/status cards stay visible); preferences hydrate from `GET /api/v1/preferences` without blocking the default layout and save through `PUT /api/v1/preferences`. Named dashboard views persist the current season as saved-filter presets that can be applied or deleted from the dashboard toolbar.
 - Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
 - Event creation, explicit OpenStreetMap venue search/pin-coordinate selection with manual fallback, lifecycle changes, participant RSVP management, results, manual corrections, and event-day GraySky forecasts.
 - Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
@@ -133,4 +133,4 @@ Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free].

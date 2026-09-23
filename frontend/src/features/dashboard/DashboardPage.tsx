@@ -3,15 +3,21 @@ import { ApiError } from '../../api/client';
 import { getDashboardSummary } from '../../api/dashboard';
 import type {
   AthleteResultHistoryEntry,
+  DashboardCardId,
   DashboardActiveEvent,
   DashboardSummary,
   DashboardTimelineEntry,
+  SavedFilterPreset,
+  UserPreferences,
 } from '../../types';
 import { format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
 import { SeasonSelector } from '../../components';
-import { seasonQueryValue, useSeasonQueryState } from '../../utils/season';
+import { seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import styles from './DashboardPage.module.css';
+import { CustomizeDashboardDialog } from './CustomizeDashboardDialog';
+import { SavedDashboardFilters } from './SavedDashboardFilters';
+import { useDashboardPreferences, visibleCards } from './useDashboardPreferences';
 
 export interface DashboardPageProps {
   onOpenRoster: () => void;
@@ -367,74 +373,142 @@ function LiveDashboard({ activeEvent, inactiveAthletesCount, statusReviewCount, 
   );
 }
 
-function SummaryDashboard({ summary, season, onOpenRoster, onOpenAthlete, onOpenEvents, onOpenEvent }: {
+function SummaryDashboard({
+  summary,
+  season,
+  onOpenRoster,
+  onOpenAthlete,
+  onOpenEvents,
+  onOpenEvent,
+  preferences,
+  onCustomizeOpen,
+  onApplySeason,
+  onSaveView,
+  onDeleteView,
+  saving,
+}: {
   summary: DashboardSummary;
-  season: string;
+  season: SeasonValue;
   onOpenRoster: () => void;
   onOpenAthlete: (athleteId: string) => void;
   onOpenEvents: () => void;
   onOpenEvent: (eventId: string) => void;
+  preferences: UserPreferences;
+  onCustomizeOpen: () => void;
+  onApplySeason: (value: SeasonValue) => void;
+  onSaveView: (name: string) => Promise<boolean>;
+  onDeleteView: (presetId: string) => Promise<boolean>;
+  saving: boolean;
 }) {
+  const visible = visibleCards(preferences.dashboardCardOrder, preferences.dashboardHiddenCards);
+  const cards = new Set(visible);
+
+  const renderCard = (id: DashboardCardId) => {
+    switch (id) {
+      case 'season-selector':
+        return (
+          <div key={id} className={styles.dashboardToolbar}>
+            <SeasonSelector value={season} onChange={onApplySeason} />
+            <button type="button" className={styles.customizeButton} onClick={onCustomizeOpen}>
+              Customize dashboard
+            </button>
+          </div>
+        );
+      case 'hero':
+        return (
+          <section key={id} className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
+            <SummaryHeroCopy summary={summary} />
+            <div className={styles.summaryOrbit} aria-hidden="true">
+              <div className={styles.orbitTrack}>
+                <svg viewBox="0 0 290 180" fill="none">
+                  <ellipse cx="145" cy="90" rx="118" ry="55" />
+                  <ellipse cx="145" cy="90" rx="90" ry="40" />
+                  <ellipse cx="145" cy="90" rx="60" ry="26" />
+                </svg>
+                <i /><i /><i />
+              </div>
+              <p><strong>{summary.activeAthletesCount}</strong> athlete{summary.activeAthletesCount === 1 ? '' : 's'} active in your roster</p>
+            </div>
+          </section>
+        );
+      case 'status-attention':
+        return (
+          <StatusAttention
+            key={id}
+            inactiveAthletesCount={summary.inactiveAthletesCount}
+            statusReviewCount={summary.statusReviewCount}
+          />
+        );
+      case 'stats':
+        return <StatRow key={id} summary={summary} season={season} />;
+      case 'roster-snapshot':
+        return (
+          <section key={id} className={styles.panel} aria-labelledby="roster-snapshot-title">
+            <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster intelligence</p><h3 id="roster-snapshot-title">Roster snapshot</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
+            {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
+              <ul className={styles.rowList}>{summary.rosterSnapshot.map((athlete) => (
+                <li key={athlete.athleteId}><button type="button" className={styles.apiRosterRow} onClick={() => onOpenAthlete(athlete.athleteId)}><span className={styles.apiAvatar} aria-hidden="true">{initials(athlete.name)}</span><span className={styles.rowBody}><strong>{athlete.name}</strong><small>{athlete.discipline} · {athlete.squadNames?.join(', ') || 'No squad assigned'}</small></span><span className={styles.resultValue}><strong>{athlete.pb === null ? 'No PB' : format100mSeconds(athlete.pb)}</strong><small>Personal best</small></span></button></li>
+              ))}</ul>
+            )}
+          </section>
+        );
+      case 'upcoming-events':
+        return (
+          <section key={id} className={styles.panel} aria-labelledby="upcoming-events-title">
+            <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
+            {summary.upcomingEvents.length === 0 ? <p className={styles.emptyCopy}>No upcoming events to show.</p> : (
+              <ul className={styles.rowList}>{summary.upcomingEvents.map((event) => (
+                <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date} className={styles.eventDateBadge}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>
+              ))}</ul>
+            )}
+          </section>
+        );
+      case 'pb-trend':
+        return <TrendPanel key={id} summary={summary} />;
+      case 'recent-results':
+        return (
+          <section key={id} className={styles.apiPanel} aria-labelledby="recent-results-title">
+            <header className={styles.panelHeader}><div><p>Results</p><h2 id="recent-results-title">Recent results</h2></div></header>
+            {summary.recentResults.length === 0 ? <p className={styles.emptyCopy}>No results recorded yet.</p> : <ul className={styles.rowList}>{summary.recentResults.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
+          </section>
+        );
+      case 'recent-pbs':
+        return (
+          <section key={id} className={styles.apiPanel} aria-labelledby="recent-pbs-title">
+            <header className={styles.panelHeader}><div><p>Performance</p><h2 id="recent-pbs-title">Recent PBs</h2></div></header>
+            {summary.recentPbs.length === 0 ? <p className={styles.emptyCopy}>No personal bests recorded yet.</p> : <ul className={styles.rowList}>{summary.recentPbs.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
-      <section className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
-        <SummaryHeroCopy summary={summary} />
-        <div className={styles.summaryOrbit} aria-hidden="true">
-          <div className={styles.orbitTrack}>
-            <svg viewBox="0 0 290 180" fill="none">
-              <ellipse cx="145" cy="90" rx="118" ry="55" />
-              <ellipse cx="145" cy="90" rx="90" ry="40" />
-              <ellipse cx="145" cy="90" rx="60" ry="26" />
-            </svg>
-            <i /><i /><i />
-          </div>
-          <p><strong>{summary.activeAthletesCount}</strong> athlete{summary.activeAthletesCount === 1 ? '' : 's'} active in your roster</p>
-        </div>
-      </section>
-
-      <StatRow summary={summary} season={season} />
-
-      <StatusAttention inactiveAthletesCount={summary.inactiveAthletesCount} statusReviewCount={summary.statusReviewCount} />
-
       {(summary.athletesCount === 0 || summary.upcomingEventCount === 0) && (
         <section className={styles.onboarding} aria-label="Dashboard setup">
           {summary.athletesCount === 0 && <div><h2>No athletes yet</h2><p>Add athletes to build your roster and track their performances.</p><button type="button" onClick={onOpenRoster}>Open roster</button></div>}
           {summary.upcomingEventCount === 0 && <div><h2>No upcoming events</h2><p>Plan a competition or training session for your squad.</p><button type="button" onClick={onOpenEvents}>Open events</button></div>}
         </section>
       )}
-
-      <div className={styles.dashGrid}>
-        <section className={styles.panel} aria-labelledby="roster-snapshot-title">
-          <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster intelligence</p><h3 id="roster-snapshot-title">Roster snapshot</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
-          {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
-            <ul className={styles.rowList}>{summary.rosterSnapshot.map((athlete) => (
-              <li key={athlete.athleteId}><button type="button" className={styles.apiRosterRow} onClick={() => onOpenAthlete(athlete.athleteId)}><span className={styles.apiAvatar} aria-hidden="true">{initials(athlete.name)}</span><span className={styles.rowBody}><strong>{athlete.name}</strong><small>{athlete.discipline} · {athlete.squadNames?.join(', ') || 'No squad assigned'}</small></span><span className={styles.resultValue}><strong>{athlete.pb === null ? 'No PB' : format100mSeconds(athlete.pb)}</strong><small>Personal best</small></span></button></li>
-            ))}</ul>
-          )}
-        </section>
-
-        <section className={styles.panel} aria-labelledby="upcoming-events-title">
-          <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
-          {summary.upcomingEvents.length === 0 ? <p className={styles.emptyCopy}>No upcoming events to show.</p> : (
-            <ul className={styles.rowList}>{summary.upcomingEvents.map((event) => (
-              <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date} className={styles.eventDateBadge}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>
-            ))}</ul>
-          )}
-        </section>
-      </div>
-
-      <TrendPanel summary={summary} />
-
-      <div className={styles.twoColumn}>
-        <section className={styles.apiPanel} aria-labelledby="recent-results-title">
-          <header className={styles.panelHeader}><div><p>Results</p><h2 id="recent-results-title">Recent results</h2></div></header>
-          {summary.recentResults.length === 0 ? <p className={styles.emptyCopy}>No results recorded yet.</p> : <ul className={styles.rowList}>{summary.recentResults.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
-        </section>
-        <section className={styles.apiPanel} aria-labelledby="recent-pbs-title">
-          <header className={styles.panelHeader}><div><p>Performance</p><h2 id="recent-pbs-title">Recent PBs</h2></div></header>
-          {summary.recentPbs.length === 0 ? <p className={styles.emptyCopy}>No personal bests recorded yet.</p> : <ul className={styles.rowList}>{summary.recentPbs.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
-        </section>
-      </div>
+      <SavedDashboardFilters
+        preferences={preferences}
+        season={season}
+        saving={saving}
+        onApply={onApplySeason}
+        onSaveCurrent={onSaveView}
+        onDelete={onDeleteView}
+      />
+      {visible.map((id) => renderCard(id))}
+      {!cards.has('season-selector') && (
+        <div className={styles.dashboardToolbar}>
+          <SeasonSelector value={season} onChange={onApplySeason} />
+          <button type="button" className={styles.customizeButton} onClick={onCustomizeOpen}>
+            Customize dashboard
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -445,6 +519,8 @@ export function DashboardPage(props: DashboardPageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const preferencesState = useDashboardPreferences();
   const onSummaryLoadedRef = useRef(props.onSummaryLoaded);
   onSummaryLoadedRef.current = props.onSummaryLoaded;
 
@@ -468,6 +544,26 @@ export function DashboardPage(props: DashboardPageProps) {
     return () => { current = false; };
   }, [reloadKey, season]);
 
+  const saveCurrentView = async (name: string): Promise<boolean> => {
+    const preset: SavedFilterPreset = {
+      id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? crypto.randomUUID()
+        : `view-${Date.now()}`,
+      surface: 'dashboard',
+      name,
+      filters: { season },
+    };
+    return preferencesState.save({
+      ...preferencesState.preferences,
+      dashboardSavedFilters: [...preferencesState.preferences.dashboardSavedFilters, preset],
+    });
+  };
+
+  const deleteView = async (presetId: string): Promise<boolean> => preferencesState.save({
+    ...preferencesState.preferences,
+    dashboardSavedFilters: preferencesState.preferences.dashboardSavedFilters.filter((preset) => preset.id !== presetId),
+  });
+
   if (!summary && !loadError) {
     return <section className={styles.dashboard} aria-busy="true"><div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading dashboard...</p></div></section>;
   }
@@ -479,10 +575,42 @@ export function DashboardPage(props: DashboardPageProps) {
   const isLive = summary!.state === 'live' && summary!.activeEvent !== null;
   return (
     <section className={`${styles.dashboard} ${revealed ? styles.revealed : ''}`} aria-label="Dashboard overview">
-      <SeasonSelector value={season} onChange={setSeason} />
-      {isLive
-        ? <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
-        : <SummaryDashboard summary={summary!} season={season} onOpenRoster={props.onOpenRoster} onOpenAthlete={props.onOpenAthlete} onOpenEvents={props.onOpenEvents} onOpenEvent={props.onOpenEvent} />}
+      {isLive ? (
+        <>
+          <div className={styles.dashboardToolbar}>
+            <SeasonSelector value={season} onChange={setSeason} />
+            <button type="button" className={styles.customizeButton} onClick={() => setCustomizeOpen(true)}>
+              Customize dashboard
+            </button>
+          </div>
+          <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
+        </>
+      ) : (
+        <SummaryDashboard
+          summary={summary!}
+          season={season}
+          onOpenRoster={props.onOpenRoster}
+          onOpenAthlete={props.onOpenAthlete}
+          onOpenEvents={props.onOpenEvents}
+          onOpenEvent={props.onOpenEvent}
+          preferences={preferencesState.preferences}
+          onCustomizeOpen={() => setCustomizeOpen(true)}
+          onApplySeason={setSeason}
+          onSaveView={saveCurrentView}
+          onDeleteView={deleteView}
+          saving={preferencesState.saving}
+        />
+      )}
+      {customizeOpen && (
+        <CustomizeDashboardDialog
+          preferences={preferencesState.preferences}
+          saving={preferencesState.saving}
+          error={preferencesState.error}
+          onSave={preferencesState.save}
+          onReset={preferencesState.reset}
+          onClose={() => setCustomizeOpen(false)}
+        />
+      )}
     </section>
   );
 }

@@ -2,11 +2,33 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { AthleteResultHistoryEntry, DashboardSummary } from '../../types';
+import type { AthleteResultHistoryEntry, DashboardSummary, UserPreferences } from '../../types';
 import { DashboardPage, type DashboardPageProps } from './DashboardPage';
 
 const dashboardApi = vi.hoisted(() => ({ getDashboardSummary: vi.fn() }));
 vi.mock('../../api/dashboard', () => dashboardApi);
+
+const preferencesApi = vi.hoisted(() => ({
+  getDashboardPreferences: vi.fn(),
+  putDashboardPreferences: vi.fn(),
+}));
+vi.mock('../../api/preferences', () => preferencesApi);
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  dashboardCardOrder: [
+    'season-selector',
+    'hero',
+    'status-attention',
+    'stats',
+    'roster-snapshot',
+    'upcoming-events',
+    'pb-trend',
+    'recent-results',
+    'recent-pbs',
+  ],
+  dashboardHiddenCards: [],
+  dashboardSavedFilters: [],
+};
 
 const EMPTY_SUMMARY: DashboardSummary = {
   state: 'summary',
@@ -111,6 +133,8 @@ function callbacks(): DashboardPageProps {
 beforeEach(() => {
   vi.clearAllMocks();
   dashboardApi.getDashboardSummary.mockResolvedValue(EMPTY_SUMMARY);
+  preferencesApi.getDashboardPreferences.mockResolvedValue(DEFAULT_PREFERENCES);
+  preferencesApi.putDashboardPreferences.mockImplementation(async (payload: UserPreferences) => payload);
 });
 
 describe('DashboardPage', () => {
@@ -255,5 +279,76 @@ describe('DashboardPage', () => {
     page.unmount();
     resolveSummary(EMPTY_SUMMARY);
     await waitFor(() => expect(props.onSummaryLoaded).not.toHaveBeenCalled());
+  });
+
+  it('opens the customize dialog, reorders cards, and saves preferences', async () => {
+    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
+    const user = userEvent.setup();
+    render(<DashboardPage {...callbacks()} />);
+
+    await screen.findByRole('region', { name: 'Roster snapshot' });
+    await user.click(screen.getByRole('button', { name: 'Customize dashboard' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Customize dashboard' });
+    expect(dialog).toBeInTheDocument();
+
+    const rows = within(dialog).getAllByRole('listitem');
+    const recentPbsRow = rows.find((row) => row.textContent?.includes('Recent PBs'));
+    expect(recentPbsRow).toBeDefined();
+    const hideToggle = within(recentPbsRow!).getByRole('checkbox');
+    expect(hideToggle).toBeChecked();
+    await user.click(hideToggle);
+    expect(hideToggle).not.toBeChecked();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Move Recent PBs up' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalled());
+    const payload = preferencesApi.putDashboardPreferences.mock.calls[0][0] as UserPreferences;
+    expect(payload.dashboardHiddenCards).toContain('recent-pbs');
+    expect(payload.dashboardCardOrder.indexOf('recent-pbs')).toBeLessThan(
+      payload.dashboardCardOrder.indexOf('recent-results'),
+    );
+  });
+
+  it('hides optional cards that are marked hidden', async () => {
+    preferencesApi.getDashboardPreferences.mockResolvedValue({
+      ...DEFAULT_PREFERENCES,
+      dashboardHiddenCards: ['recent-pbs'],
+    });
+    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
+    render(<DashboardPage {...callbacks()} />);
+
+    expect(await screen.findByRole('region', { name: 'Recent results' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recent PBs' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Customize dashboard' })).toBeInTheDocument();
+  });
+
+  it('saves and applies named dashboard views', async () => {
+    preferencesApi.getDashboardPreferences.mockResolvedValue({
+      ...DEFAULT_PREFERENCES,
+      dashboardSavedFilters: [
+        { id: 'view-1', surface: 'dashboard', name: 'All-time', filters: { season: 'all' } },
+      ],
+    });
+    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
+    const user = userEvent.setup();
+    render(<DashboardPage {...callbacks()} />);
+
+    await screen.findByRole('region', { name: 'Saved dashboard views' });
+    const nameInput = screen.getByPlaceholderText('Name this view');
+    await user.type(nameInput, 'Sprint block');
+    await user.click(screen.getByRole('button', { name: 'Save view' }));
+    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalled());
+    const saved = preferencesApi.putDashboardPreferences.mock.calls[0][0] as UserPreferences;
+    expect(saved.dashboardSavedFilters).toHaveLength(2);
+    expect(saved.dashboardSavedFilters[1]).toMatchObject({ name: 'Sprint block', surface: 'dashboard' });
+
+    await user.click(screen.getByRole('button', { name: 'All-time' }));
+    expect(screen.getByPlaceholderText('Name this view')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Delete saved view All-time' }));
+    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalledTimes(2));
+    const afterDelete = preferencesApi.putDashboardPreferences.mock.calls[1][0] as UserPreferences;
+    expect(afterDelete.dashboardSavedFilters.map((preset) => preset.id)).not.toContain('view-1');
   });
 });

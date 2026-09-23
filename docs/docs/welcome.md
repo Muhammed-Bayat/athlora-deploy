@@ -74,6 +74,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Realtime** — Socket.IO event subscriptions with Auth0 token verification and workspace-scoped authorization.
 - **Event reminders** — in-app event reminders with mute preferences and notification delivery.
 - **Fixture notifications** — notification bell with unread counts and mark-as-read for fixture lifecycle events.
+- **Dashboard preferences** — per-user dashboard card order, hidden optional cards, and named saved-filter presets stored per `(user, workspace)` (`GET|PUT /api/v1/preferences`). A "Customize dashboard" dialog reorders cards with move up/down buttons; required cards (season selector, hero, status) stay visible. Saved views capture the current season and can be applied or deleted from the dashboard toolbar.
 - **Public logger links** — shareable unauthenticated links managed from the active Live Logger. Officials use the same per-athlete logging console for every event participant, including guest-club athletes, and may correct or undo only their own session entries; the `coach` role can override any entry or result.
 - **Two-athlete comparison** — side-by-side 100m metrics with interactive SVG chart and URL-persisted state, plus two independent coach publication toggles for public results and the public upcoming schedule.
 - **Independent club publication flags** — `clubs.public_results_enabled` and `clubs.public_schedule_enabled` are separate coach-controlled settings on `GET|PUT /api/v1/clubs/publication` (full-replacement body requires both booleans). Unauthenticated `GET /api/v1/public/schedule/clubs` and `/clubs/:clubId` expose upcoming meet metadata only for clubs that opted into schedule publication; results and schedule visibility never share a gate.
@@ -108,4 +109,4 @@ This section is kept current as tools and models change.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard preferences feature was documented with the assistance of opencode[mimo-v2.6-flash-free].
