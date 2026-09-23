@@ -1,5 +1,8 @@
 import { ApiError } from '../middleware/errors.js';
 import {
+  DASHBOARD_CARD_IDS,
+  HIDEABLE_DASHBOARD_CARD_IDS,
+  PREFERENCE_SURFACES,
   DISCIPLINE_100M,
   ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
@@ -11,17 +14,21 @@ import {
   INJURY_REGIONS,
   INJURY_SIDES,
   INJURY_SEVERITIES,
+  type DashboardCardId,
   type Discipline,
   type AthleteLifecycleStatus,
   type EntryType,
   type EventStatus,
   type EventType,
   type IncidentType,
+  type PreferenceSurface,
   type ResultUnit,
   type RsvpStatus,
   type InjuryRegion,
   type InjurySide,
   type InjurySeverity,
+  type SavedFilterPreset,
+  type UserPreferences,
 } from '../types/domain.js';
 import {
   isCanonicalUuid,
@@ -82,6 +89,8 @@ export interface ClubPublicationPayload {
   publicResultsEnabled: boolean;
   publicScheduleEnabled: boolean;
 }
+
+export type UserPreferencesPayload = UserPreferences;
 
 export interface EventCreatePayload {
   type: EventType;
@@ -278,6 +287,160 @@ export function parseClubPublicationPayload(input: unknown): ClubPublicationPayl
     publicResultsEnabled: payload.publicResultsEnabled as boolean,
     publicScheduleEnabled: payload.publicScheduleEnabled as boolean,
   };
+}
+
+const PREFERENCES_FIELDS = ['dashboardCardOrder', 'dashboardHiddenCards', 'dashboardSavedFilters'] as const;
+const KNOWN_CARD_IDS = new Set<string>(DASHBOARD_CARD_IDS);
+const HIDEABLE_CARD_IDS = new Set<string>(HIDEABLE_DASHBOARD_CARD_IDS);
+const PREFERENCE_SURFACES_SET = new Set<string>(PREFERENCE_SURFACES);
+const MAX_SAVED_FILTERS = 50;
+const MAX_FILTER_NAME_LENGTH = 60;
+const MAX_FILTER_ID_LENGTH = 128;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCardIdList(
+  value: unknown,
+  path: string,
+  allowed: ReadonlySet<string>,
+  issues: ValidationIssue[],
+): DashboardCardId[] {
+  if (!Array.isArray(value)) {
+    issues.push(issue(path, 'invalid_type', 'Expected an array of card ids'));
+    return [];
+  }
+  const seen = new Set<string>();
+  const cards: DashboardCardId[] = [];
+  value.forEach((entry, index) => {
+    const entryPath = `${path}.${index}`;
+    if (typeof entry !== 'string') {
+      issues.push(issue(entryPath, 'invalid_type', 'Expected a card id string'));
+      return;
+    }
+    if (!allowed.has(entry)) {
+      issues.push(issue(entryPath, 'invalid_value', 'Unknown dashboard card id'));
+      return;
+    }
+    if (seen.has(entry)) {
+      issues.push(issue(entryPath, 'invalid_value', 'Duplicate dashboard card id'));
+      return;
+    }
+    seen.add(entry);
+    cards.push(entry as DashboardCardId);
+  });
+  return cards;
+}
+
+function parseSavedFilters(value: unknown, issues: ValidationIssue[]): SavedFilterPreset[] {
+  if (!Array.isArray(value)) {
+    issues.push(issue('dashboardSavedFilters', 'invalid_type', 'Expected an array of saved filters'));
+    return [];
+  }
+  if (value.length > MAX_SAVED_FILTERS) {
+    issues.push(issue('dashboardSavedFilters', 'invalid_value', `Provide at most ${MAX_SAVED_FILTERS} saved filters`));
+  }
+  const seenIds = new Set<string>();
+  const presets: SavedFilterPreset[] = [];
+  value.forEach((entry, index) => {
+    const base = `dashboardSavedFilters.${index}`;
+    if (!isPlainObject(entry)) {
+      issues.push(issue(base, 'invalid_type', 'Expected a saved filter object'));
+      return;
+    }
+    const allowedNestedFields = ['id', 'surface', 'name', 'filters'];
+    for (const field of Object.keys(entry)) {
+      if (!allowedNestedFields.includes(field)) {
+        issues.push(issue(`${base}.${field}`, 'unknown_field', 'Field is not allowed'));
+      }
+    }
+
+    let idValid = false;
+    const id = entry.id;
+    if (typeof id !== 'string' || id.trim().length === 0 || id.length > MAX_FILTER_ID_LENGTH) {
+      issues.push(issue(`${base}.id`, 'invalid_value', 'Expected a non-blank id up to 128 characters'));
+    } else if (seenIds.has(id)) {
+      issues.push(issue(`${base}.id`, 'invalid_value', 'Saved filter ids must be unique'));
+    } else {
+      seenIds.add(id);
+      idValid = true;
+    }
+
+    let surfaceValid = false;
+    if (typeof entry.surface !== 'string' || !PREFERENCE_SURFACES_SET.has(entry.surface)) {
+      issues.push(issue(`${base}.surface`, 'invalid_value', `Expected one of ${PREFERENCE_SURFACES.join(', ')}`));
+    } else {
+      surfaceValid = true;
+    }
+
+    let nameValid = false;
+    const name = entry.name;
+    if (typeof name !== 'string' || name.trim().length === 0 || name.trim().length > MAX_FILTER_NAME_LENGTH) {
+      issues.push(issue(`${base}.name`, 'invalid_value', `Expected a non-blank name up to ${MAX_FILTER_NAME_LENGTH} characters`));
+    } else {
+      nameValid = true;
+    }
+
+    let filters: Record<string, unknown> | null = null;
+    if (!isPlainObject(entry.filters)) {
+      issues.push(issue(`${base}.filters`, 'invalid_type', 'Expected a filters object'));
+    } else {
+      filters = entry.filters;
+    }
+
+    if (idValid && surfaceValid && nameValid && filters) {
+      presets.push({
+        id: (id as string).trim(),
+        surface: entry.surface as PreferenceSurface,
+        name: (name as string).trim(),
+        filters,
+      });
+    }
+  });
+  return presets;
+}
+
+export function parseUserPreferencesPayload(input: unknown): UserPreferencesPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, PREFERENCES_FIELDS, issues);
+
+  let dashboardCardOrder: DashboardCardId[] = [];
+  let dashboardHiddenCards: DashboardCardId[] = [];
+  let dashboardSavedFilters: SavedFilterPreset[] = [];
+
+  if (!hasOwn(payload, 'dashboardCardOrder')) {
+    issues.push(issue('dashboardCardOrder', 'required', 'Field is required'));
+  } else {
+    dashboardCardOrder = parseCardIdList(payload.dashboardCardOrder, 'dashboardCardOrder', KNOWN_CARD_IDS, issues);
+    if (Array.isArray(payload.dashboardCardOrder)) {
+      const present = new Set(dashboardCardOrder);
+      for (const required of DASHBOARD_CARD_IDS) {
+        if (!present.has(required)) {
+          issues.push(issue('dashboardCardOrder', 'invalid_value', `Missing required card id ${required}`));
+        }
+      }
+      if (dashboardCardOrder.length !== DASHBOARD_CARD_IDS.length) {
+        issues.push(issue('dashboardCardOrder', 'invalid_value', 'Card order must list every known card exactly once'));
+      }
+    }
+  }
+
+  if (!hasOwn(payload, 'dashboardHiddenCards')) {
+    issues.push(issue('dashboardHiddenCards', 'required', 'Field is required'));
+  } else {
+    dashboardHiddenCards = parseCardIdList(payload.dashboardHiddenCards, 'dashboardHiddenCards', HIDEABLE_CARD_IDS, issues);
+  }
+
+  if (!hasOwn(payload, 'dashboardSavedFilters')) {
+    issues.push(issue('dashboardSavedFilters', 'required', 'Field is required'));
+  } else {
+    dashboardSavedFilters = parseSavedFilters(payload.dashboardSavedFilters, issues);
+  }
+
+  if (issues.length > 0) throwValidation(issues);
+  return { dashboardCardOrder, dashboardHiddenCards, dashboardSavedFilters };
 }
 
 export function parseEventParticipantCreatePayload(

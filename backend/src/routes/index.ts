@@ -20,6 +20,7 @@ import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js'
 import publicSyncRouter from './publicSync.js';
 import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
+import preferencesRouter from './preferences.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
 import remindersRouter from './reminders.js';
 import publicStatisticsRouter from './publicStatistics.js';
@@ -110,6 +111,7 @@ router.use(
   athletesRouter,
 );
 router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
+router.use('/preferences', verifyAuth0Token, resolveApplicationUser, preferencesRouter);
 router.use('/squads', verifyAuth0Token, resolveApplicationUser, squadsRouter);
 router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use('/venues', verifyAuth0Token, resolveApplicationUser, venuesRouter);
