@@ -32,6 +32,14 @@ export function requireEventOwnership(parameter = 'id'): RequestHandler {
   return ownershipGuard((req, workspaceId) => assertEventOwnership(workspaceId, req.params[parameter]));
 }
 
+export const requireBodyEventOwnership = ownershipGuard((req, workspaceId) =>
+  assertEventOwnership(workspaceId, req.body?.eventId),
+);
+
+export const requireBodyEventLoggingOpen = ownershipGuard((req, workspaceId) =>
+  assertEventLoggingOpen(workspaceId, req.body?.eventId),
+);
+
 export const requireEventAthleteOwnership = ownershipGuard((req, workspaceId) =>
   assertEventAthleteOwnership(workspaceId, req.params.eventId, req.body?.athleteId),
 );
