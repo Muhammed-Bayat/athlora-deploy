@@ -1,4 +1,6 @@
 import { getPool } from '../db/client.js';
+import { recomputeEventResults } from './timeline.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 
 export interface SyncActionInput {
   actionId: string;
@@ -21,6 +23,23 @@ export interface SyncBatchResult {
   recomputedResults: boolean;
 }
 
+const VALID_ACTION_TYPES = new Set(['create_entry', 'edit_entry', 'undo_entry']);
+
+function isValidAction(action: SyncActionInput): boolean {
+  return Boolean(
+    action
+    && typeof action === 'object'
+    && isCanonicalUuid(action.actionId)
+    && typeof action.actionType === 'string'
+    && VALID_ACTION_TYPES.has(action.actionType)
+    && action.payload
+    && typeof action.payload === 'object'
+    && !Array.isArray(action.payload)
+    && typeof action.clientTimestamp === 'string'
+    && !Number.isNaN(Date.parse(action.clientTimestamp)),
+  );
+}
+
 export async function processSyncBatch(
   eventId: string,
   actorId: string,
@@ -35,20 +54,63 @@ export async function processSyncBatch(
 
     const receipts: SyncActionReceipt[] = [];
 
+    const eventRow = await client.query<{ type: 'competition' | 'training'; status: string }>(
+      'SELECT type, status FROM events WHERE id = $1',
+      [eventId],
+    );
+    const eventType = eventRow.rows[0]?.type ?? 'competition';
+    const loggingOpen = eventRow.rows[0]?.status === 'in_progress';
+
     for (const action of actions) {
+      if (!isValidAction(action)) {
+        if (action && isCanonicalUuid(action.actionId)) {
+          await client.query(
+            `INSERT INTO sync_action_receipts (action_id, event_id, actor_id, device_id, action_type, status, error_code)
+             VALUES ($1, $2, $3, $4, $5, 'rejected', 'INVALID_ACTION')
+             ON CONFLICT (action_id) DO NOTHING`,
+            [action.actionId, eventId, actorId, deviceId, typeof action.actionType === 'string' ? action.actionType : 'unknown'],
+          );
+        }
+        receipts.push({
+          actionId: action && isCanonicalUuid(action.actionId) ? action.actionId : 'invalid',
+          status: 'rejected',
+          code: 'INVALID_ACTION',
+        });
+        continue;
+      }
+
       const existingReceipt = await client.query(
-        'SELECT * FROM sync_action_receipts WHERE action_id = $1',
+        'SELECT status, entry_id, server_version, error_code FROM sync_action_receipts WHERE action_id = $1',
         [action.actionId],
       );
 
       if (existingReceipt.rows.length > 0) {
         const row = existingReceipt.rows[0];
-        receipts.push({
-          actionId: action.actionId,
-          status: 'duplicate',
-          entryId: row.entry_id,
-          serverVersion: row.server_version,
-        });
+        if (row.status === 'rejected') {
+          receipts.push({
+            actionId: action.actionId,
+            status: 'rejected',
+            code: row.error_code ?? 'REJECTED',
+          });
+        } else {
+          receipts.push({
+            actionId: action.actionId,
+            status: 'duplicate',
+            entryId: row.entry_id ?? undefined,
+            serverVersion: row.server_version ?? undefined,
+          });
+        }
+        continue;
+      }
+
+      if (!loggingOpen) {
+        await client.query(
+          `INSERT INTO sync_action_receipts (action_id, event_id, actor_id, device_id, action_type, status, error_code)
+           VALUES ($1, $2, $3, $4, $5, 'rejected', 'EVENT_NOT_IN_PROGRESS')
+           ON CONFLICT (action_id) DO NOTHING`,
+          [action.actionId, eventId, actorId, deviceId, action.actionType],
+        );
+        receipts.push({ actionId: action.actionId, status: 'rejected', code: 'EVENT_NOT_IN_PROGRESS' });
         continue;
       }
 
@@ -172,7 +234,12 @@ export async function processSyncBatch(
 
     await client.query('COMMIT');
 
-    return { receipts, recomputedResults: receipts.some((r) => r.status === 'accepted') };
+    const recomputedResults = receipts.some((r) => r.status === 'accepted');
+    if (recomputedResults) {
+      await recomputeEventResults(getPool(), eventId, eventType);
+    }
+
+    return { receipts, recomputedResults };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -262,7 +329,7 @@ export async function transferOfflineLoggerDesignation(
   try {
     await client.query('BEGIN');
 
-    const updateRes = await client.query(
+    const revokeRes = await client.query(
       `UPDATE event_helper_grants
        SET is_offline_logger = false, offline_queue_device_id = NULL, updated_at = now()
        WHERE id = $1 AND event_id = $2 AND is_offline_logger = true
@@ -270,7 +337,7 @@ export async function transferOfflineLoggerDesignation(
       [fromGrantId, eventId],
     );
 
-    if (updateRes.rows.length === 0) {
+    if (revokeRes.rows.length === 0) {
       throw new Error('Source grant not found or not designated as offline logger');
     }
 

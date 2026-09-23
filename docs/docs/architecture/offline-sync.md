@@ -114,11 +114,15 @@ Caches the full event snapshot (participants + timeline) per event for offline d
 
 ### `drainQueue(eventId, userId)` — Authenticated
 
-1. Fetches all pending actions for the event (in creation order)
-2. Builds a `SyncBatchRequest` with `deviceId`, `eventId`, and the action array
-3. Sends `POST /api/v1/sync/batch`
-4. Processes receipts: marks each action as synced (accepted/duplicate) or failed (rejected)
-5. Returns `{ accepted, rejected, duplicates, failed }`
+1. Fetches all pending actions for the event (creation order via the `[status+eventId+createdAt]` index)
+2. Single-flight guard keyed by `eventId:userId` — concurrent reconnect/interval callers share one in-flight drain
+3. Builds a `SyncBatchRequest` with the stable `deviceId`, `eventId`, and mapped actions (`actionId`, `payload` including `entryId`, `expectedVersion`, ISO `clientTimestamp`)
+4. Chunks at 50 actions and sends sequential `POST /api/v1/sync/batch` requests (mirrors the public cap)
+5. Processes receipts: marks accepted/duplicate as synced (storing the server receipt) and rejected as failed with the rejection code; actions without a receipt stay pending
+6. On transport/HTTP failure, leaves every action **pending** so the queue is preserved for the next reconnect — the server is idempotent by `actionId`, so a re-send cannot create duplicates
+7. Returns `{ accepted, rejected, duplicates, failed }`
+
+Rejected actions do not block accepted siblings in the same batch; they remain visible via `QueueStatusBadge` failed counts and the reconnect toast.
 
 ### `drainPublicQueue(eventId, sessionToken)` — Public
 
@@ -133,7 +137,7 @@ POST /api/v1/sync/batch
 Body: { deviceId, eventId, actions: SyncActionInput[] }
 ```
 
-Processing: idempotent, optimistic version conflict detection.
+Processing: idempotent via `sync_action_receipts`, optimistic version conflict detection. `eventId` is owned from the request body (not a path param); logging must be open (`in_progress`). Structural validation rejects non-canonical `actionId`s, unknown action types, and batches larger than 50 with `400 VALIDATION_ERROR` before any write.
 
 ### Public
 
@@ -196,4 +200,4 @@ The `QueueStatusBadge` component displays the current queue state (pending/synce
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free].

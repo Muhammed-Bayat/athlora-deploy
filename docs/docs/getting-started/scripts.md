@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### Authenticated offline batch sync — 2026-09-23
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **644 tests pass, 0 skip** (includes the rewritten sync-engine batch drain, `toSyncAction` mapper, and receipt-handling suites).
+- Backend: lint, strict typecheck and build pass; **642 tests pass, 43 database-gated tests skip** (includes the new `POST /sync/batch` route validation/ownership suite, expanded processSyncBatch receipt tests, and 3 DB-gated sync integration tests for idempotent retries).
+- Documentation: Docusaurus typecheck and production build pass after the offline-sync architecture and contract §3.11 updates.
+- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count unchanged for the full 29-migration set plus the new sync integration file).
+
 ### User dashboard preferences — 2026-09-23
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **635 tests pass, 0 skip** (includes new customize-dialog, hidden-cards, and saved-views dashboard tests).
@@ -176,7 +183,7 @@ The implemented Stage 1 checks pass locally, and the same frontend/backend/docs 
 | `docs` | build | passing |
 | `e2e` | Playwright (Chromium) + axe | configured (smoke + spec files covering workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization, migration, accessibility, routing, analytics, comparison, offline, fixtures + vertical slice); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
 
-The backend suite includes 40 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, and 1 injury-persistence test. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
+The backend suite includes 43 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, 1 injury-persistence test, and 3 offline sync-batch idempotency/lifecycle tests. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
 
 ## Definition of done
 
@@ -184,4 +191,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free].

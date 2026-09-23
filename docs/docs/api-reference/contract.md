@@ -296,7 +296,11 @@ Query parameters: `cursor` (pagination token), `limit` (page size, default 50, m
 |---|---|
 | `POST /sync/batch` | Process a batch of offline queue actions |
 
-The batch endpoint accepts an array of actions (`create_entry`, `edit_entry`, `undo_entry`) with per-action expected versions and client timestamps. Each action is processed idempotently; duplicate action IDs are detected and returned as `duplicate`. Rejected actions include the rejection code. A `recomputedResults` flag indicates whether the server recomputed results after the batch. The server stores a receipt per action for conflict resolution on subsequent drains.
+Request body: `{ deviceId, eventId, actions }`. `eventId` must be a canonical UUID owned by the active workspace, and logging must be open (`in_progress`). `actions` is a non-empty array of at most **50** items. Each action requires a canonical UUID `actionId`, an `actionType` of `create_entry` | `edit_entry` | `undo_entry`, an object `payload`, and an ISO `clientTimestamp`; `expectedVersion` is an optional integer. Structural failures return `400 VALIDATION_ERROR` before processing. Ownership failures return `404 NOT_FOUND`; a completed/cancelled event returns `409 EVENT_NOT_IN_PROGRESS`.
+
+Each action is processed idempotently against `sync_action_receipts`. On retry, an originally accepted action returns `duplicate` (with `entryId`/`serverVersion`); an originally rejected action returns `rejected` with the original code. Per-action rejection codes include `VERSION_CONFLICT` (stale expected version), `EVENT_NOT_IN_PROGRESS`, `INVALID_ACTION`, and `INTERNAL_ERROR`. Accepted and rejected receipts are independent — one rejected action never blocks accepted siblings in the same batch.
+
+Response envelope: `{ data: { receipts, recomputedResults } }`. `recomputedResults` is `true` only when at least one action was newly accepted and the server actually recomputed event results after the batch.
 
 ### 3.12 Public statistics and schedule
 
@@ -657,4 +661,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract was updated with the assistance of opencode[mimo-v2.6-flash-free].

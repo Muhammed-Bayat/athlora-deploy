@@ -254,13 +254,17 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     const syncOnReconnect = async () => {
       try {
         const result = await syncPending(selectedEventId);
-        const total = result.accepted + result.duplicates + result.failed;
-        if (total > 0) {
-          if (result.failed > 0) {
-            setToast(`Synced ${result.accepted + result.duplicates} of ${total} queued action(s). ${result.failed} failed.`);
+        const outcomeCount = result.accepted + result.duplicates + result.rejected + result.failed;
+        const syncedCount = result.accepted + result.duplicates;
+        if (outcomeCount > 0) {
+          if (result.rejected > 0 || result.failed > 0) {
+            const notApplied = result.rejected + result.failed;
+            setToast(`Synced ${syncedCount} of ${outcomeCount} queued action(s). ${notApplied} not applied.`);
           } else {
-            setToast(`Synced ${result.accepted + result.duplicates} queued action(s).`);
+            setToast(`Synced ${syncedCount} queued action(s).`);
           }
+        }
+        if (syncedCount > 0) {
           void loadEventDataRef.current(selectedEventId);
         }
       } catch {

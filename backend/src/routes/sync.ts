@@ -1,34 +1,80 @@
 import { Router } from 'express';
 import { resolveApplicationUser, verifyAuth0Token, getApplicationUserContext } from '../middleware/auth.js';
 import { requireOperationalAccess } from '../middleware/capabilities.js';
-import { requireEventOwnership } from '../middleware/ownership.js';
+import { requireBodyEventLoggingOpen, requireBodyEventOwnership, requireEventOwnership } from '../middleware/ownership.js';
+import { ApiError } from '../middleware/errors.js';
 import { processSyncBatch, designateOfflineLogger, revokeOfflineLoggerDesignation, transferOfflineLoggerDesignation } from '../services/sync.js';
 import type { SyncActionInput } from '../services/sync.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
 
 const router = Router();
 
-const syncAccess = [verifyAuth0Token, resolveApplicationUser, requireOperationalAccess(), requireEventOwnership('eventId')];
+const baseAccess = [verifyAuth0Token, resolveApplicationUser, requireOperationalAccess()];
+const syncAccess = [...baseAccess, requireEventOwnership('eventId')];
+const batchAccess = [...baseAccess, requireBodyEventOwnership, requireBodyEventLoggingOpen];
 
-router.post('/sync/batch', ...syncAccess, async (req, res, next) => {
+const MAX_BATCH_ACTIONS = 50;
+const ACTION_TYPES = new Set(['create_entry', 'edit_entry', 'undo_entry']);
+
+function validationError(message: string): ApiError {
+  return new ApiError(400, 'VALIDATION_ERROR', message);
+}
+
+router.post('/sync/batch', ...batchAccess, async (req, res, next) => {
   try {
-    const { deviceId, eventId, actions } = req.body as {
-      deviceId: string;
-      eventId: string;
-      actions: SyncActionInput[];
-    };
+    const body = req.body as Partial<{
+      deviceId: unknown;
+      eventId: unknown;
+      actions: unknown;
+    }> | null;
 
-    if (!deviceId || !eventId || !Array.isArray(actions)) {
-      res.status(400).json({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'deviceId, eventId, and actions array are required',
-        },
-      });
-      return;
+    if (!body || typeof body.deviceId !== 'string' || body.deviceId.trim() === '') {
+      throw validationError('deviceId is required');
+    }
+    if (typeof body.eventId !== 'string' || !isCanonicalUuid(body.eventId)) {
+      throw validationError('eventId must be a canonical UUID');
+    }
+    if (!Array.isArray(body.actions) || body.actions.length === 0) {
+      throw validationError('actions must be a non-empty array');
+    }
+    if (body.actions.length > MAX_BATCH_ACTIONS) {
+      throw validationError(`Maximum ${MAX_BATCH_ACTIONS} actions per batch`);
     }
 
+    const actions: SyncActionInput[] = body.actions.map((raw, index) => {
+      const action = raw as Partial<SyncActionInput> | null;
+      if (!action || typeof action !== 'object') {
+        throw validationError(`actions[${index}] must be an object`);
+      }
+      if (typeof action.actionId !== 'string' || !isCanonicalUuid(action.actionId)) {
+        throw validationError(`actions[${index}].actionId must be a canonical UUID`);
+      }
+      if (typeof action.actionType !== 'string' || !ACTION_TYPES.has(action.actionType)) {
+        throw validationError(`actions[${index}].actionType must be create_entry, edit_entry, or undo_entry`);
+      }
+      if (!action.payload || typeof action.payload !== 'object' || Array.isArray(action.payload)) {
+        throw validationError(`actions[${index}].payload must be an object`);
+      }
+      if (typeof action.clientTimestamp !== 'string' || Number.isNaN(Date.parse(action.clientTimestamp))) {
+        throw validationError(`actions[${index}].clientTimestamp must be a valid ISO timestamp`);
+      }
+      if (
+        action.expectedVersion !== undefined
+        && (typeof action.expectedVersion !== 'number' || !Number.isInteger(action.expectedVersion))
+      ) {
+        throw validationError(`actions[${index}].expectedVersion must be an integer when provided`);
+      }
+      return {
+        actionId: action.actionId,
+        actionType: action.actionType as SyncActionInput['actionType'],
+        payload: action.payload as Record<string, unknown>,
+        expectedVersion: action.expectedVersion,
+        clientTimestamp: action.clientTimestamp,
+      };
+    });
+
     const { userId } = getApplicationUserContext(req);
-    const result = await processSyncBatch(eventId, userId, deviceId, actions);
+    const result = await processSyncBatch(body.eventId, userId, body.deviceId, actions);
     res.json({ data: result });
   } catch (error) {
     next(error);

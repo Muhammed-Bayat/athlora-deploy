@@ -36,3 +36,22 @@ export async function postSyncBatch(batch: SyncBatchRequest): Promise<SyncBatchR
   });
   return response.data;
 }
+
+export function toSyncAction(action: {
+  id: string;
+  actionType: SyncAction['actionType'];
+  entryId?: string;
+  payload: Record<string, unknown>;
+  expectedVersion?: number;
+  createdAt: number;
+}): SyncAction {
+  return {
+    actionId: action.id,
+    actionType: action.actionType,
+    payload: action.entryId
+      ? { ...action.payload, entryId: action.entryId }
+      : action.payload,
+    expectedVersion: action.expectedVersion,
+    clientTimestamp: new Date(action.createdAt).toISOString(),
+  };
+}
