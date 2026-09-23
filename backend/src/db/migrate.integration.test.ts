@@ -39,6 +39,7 @@ const TABLES = [
   'events',
   'athletes',
   'users',
+  'user_preferences',
   'schema_migrations',
 ];
 
@@ -116,6 +117,7 @@ describeDB('migrations against a real database', () => {
       '0023_event_lifecycle_notifications.sql',
       '0024_public_club_statistics.sql',
       '0025_club_public_schedule_publication.sql',
+      '0026_user_preferences.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -187,6 +189,7 @@ describeDB('migrations against a real database', () => {
       '0023_event_lifecycle_notifications.sql',
       '0024_public_club_statistics.sql',
       '0025_club_public_schedule_publication.sql',
+      '0026_user_preferences.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -196,7 +199,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(27);
+    expect(rows).toHaveLength(28);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 

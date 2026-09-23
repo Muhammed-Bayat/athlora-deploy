@@ -54,6 +54,7 @@ const APP_TABLES = [
   'sync_action_receipts',
   'clubs',
   'club_join_requests',
+  'user_preferences',
 ];
 
 async function resetDatabase(): Promise<void> {
