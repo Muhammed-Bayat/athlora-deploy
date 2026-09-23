@@ -128,28 +128,35 @@ export async function getClubPublication(
   workspaceId: string,
   executor: DbExecutor = getPool(),
 ): Promise<ClubPublication> {
-  const result = await executor.query<{ public_results_enabled: boolean }>(
-    'SELECT public_results_enabled FROM clubs WHERE workspace_id = $1',
+  const result = await executor.query<{ public_results_enabled: boolean; public_schedule_enabled: boolean }>(
+    'SELECT public_results_enabled, public_schedule_enabled FROM clubs WHERE workspace_id = $1',
     [workspaceId],
   );
   if (!result.rows[0]) throw clubNotFound();
-  return { publicResultsEnabled: result.rows[0].public_results_enabled };
+  return {
+    publicResultsEnabled: result.rows[0].public_results_enabled,
+    publicScheduleEnabled: result.rows[0].public_schedule_enabled,
+  };
 }
 
 export async function updateClubPublication(
   workspaceId: string,
   publicResultsEnabled: boolean,
+  publicScheduleEnabled: boolean,
   executor: DbExecutor = getPool(),
 ): Promise<ClubPublication> {
-  const result = await executor.query<{ public_results_enabled: boolean }>(
+  const result = await executor.query<{ public_results_enabled: boolean; public_schedule_enabled: boolean }>(
     `UPDATE clubs
-     SET public_results_enabled = $2, updated_at = now()
+     SET public_results_enabled = $2, public_schedule_enabled = $3, updated_at = now()
      WHERE workspace_id = $1
-     RETURNING public_results_enabled`,
-    [workspaceId, publicResultsEnabled],
+     RETURNING public_results_enabled, public_schedule_enabled`,
+    [workspaceId, publicResultsEnabled, publicScheduleEnabled],
   );
   if (!result.rows[0]) throw clubNotFound();
-  return { publicResultsEnabled: result.rows[0].public_results_enabled };
+  return {
+    publicResultsEnabled: result.rows[0].public_results_enabled,
+    publicScheduleEnabled: result.rows[0].public_schedule_enabled,
+  };
 }
 
 export async function listClubComparisonAthletes(

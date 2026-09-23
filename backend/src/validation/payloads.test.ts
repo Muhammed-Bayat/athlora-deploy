@@ -7,6 +7,7 @@ import {
   parseAthleteProgressionQuery,
   parseAthleteReplacementPayload,
   parseAthleteStatusPayload,
+  parseClubPublicationPayload,
   parseEventCreatePayload,
   parseEventListQuery,
   parseEventParticipantBulkRsvpPayload,
@@ -729,6 +730,39 @@ describe('squad payloads', () => {
       { path: 'extra', code: 'unknown_field', message: 'Field is not allowed' },
       { path: 'name', code: 'invalid_type', message: 'Expected a string' },
     ]);
+  });
+});
+
+describe('club publication payload', () => {
+  it('parses both independent publication flags', () => {
+    expect(parseClubPublicationPayload({ publicResultsEnabled: true, publicScheduleEnabled: false })).toEqual({
+      publicResultsEnabled: true,
+      publicScheduleEnabled: false,
+    });
+    expect(parseClubPublicationPayload({ publicResultsEnabled: false, publicScheduleEnabled: true })).toEqual({
+      publicResultsEnabled: false,
+      publicScheduleEnabled: true,
+    });
+  });
+
+  it('requires both flags as booleans and rejects unknown fields', () => {
+    expectValidationError(() => parseClubPublicationPayload({ publicResultsEnabled: true }), [
+      { path: 'publicScheduleEnabled', code: 'required', message: 'Field is required' },
+    ]);
+    expectValidationError(() => parseClubPublicationPayload({ publicScheduleEnabled: true }), [
+      { path: 'publicResultsEnabled', code: 'required', message: 'Field is required' },
+    ]);
+    expectValidationError(
+      () => parseClubPublicationPayload({ publicResultsEnabled: 'yes', publicScheduleEnabled: 1 }),
+      [
+        { path: 'publicResultsEnabled', code: 'invalid_type', message: 'Expected a boolean' },
+        { path: 'publicScheduleEnabled', code: 'invalid_type', message: 'Expected a boolean' },
+      ],
+    );
+    expectValidationError(
+      () => parseClubPublicationPayload({ publicResultsEnabled: true, publicScheduleEnabled: false, extra: true }),
+      [{ path: 'extra', code: 'unknown_field', message: 'Field is not allowed' }],
+    );
   });
 });
 

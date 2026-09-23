@@ -15,6 +15,7 @@ import {
   createJoinRequest,
   getClubComparison,
   getClubMultiComparison,
+  getClubPublication,
   getClubStatistics,
   listClubComparisonAthletes,
   listClubCalendarEvents,
@@ -22,6 +23,7 @@ import {
   listClubs,
   listMyJoinRequests,
   reviewJoinRequest,
+  updateClubPublication,
   withdrawJoinRequest,
 } from './clubs.js';
 
@@ -403,6 +405,40 @@ describe('reviewJoinRequest', () => {
       status: 409,
       code: 'USER_ALREADY_IN_WORKSPACE',
     });
+  });
+});
+
+describe('club publication', () => {
+  it('reads both independent publication flags', async () => {
+    query.mockResolvedValue(poolRow([{ public_results_enabled: true, public_schedule_enabled: false }]));
+
+    await expect(getClubPublication(WORKSPACE_ID)).resolves.toEqual({
+      publicResultsEnabled: true,
+      publicScheduleEnabled: false,
+    });
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('public_results_enabled');
+    expect(sql).toContain('public_schedule_enabled');
+    expect(parameters).toEqual([WORKSPACE_ID]);
+  });
+
+  it('writes both flags in one full-replacement update', async () => {
+    query.mockResolvedValue(poolRow([{ public_results_enabled: false, public_schedule_enabled: true }]));
+
+    await expect(updateClubPublication(WORKSPACE_ID, false, true)).resolves.toEqual({
+      publicResultsEnabled: false,
+      publicScheduleEnabled: true,
+    });
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('public_results_enabled = $2');
+    expect(sql).toContain('public_schedule_enabled = $3');
+    expect(parameters).toEqual([WORKSPACE_ID, false, true]);
+  });
+
+  it('throws CLUB_NOT_FOUND when the workspace has no club row', async () => {
+    query.mockResolvedValue(poolRow([]));
+    await expect(getClubPublication(WORKSPACE_ID)).rejects.toMatchObject({ status: 404, code: 'CLUB_NOT_FOUND' });
+    await expect(updateClubPublication(WORKSPACE_ID, true, true)).rejects.toMatchObject({ status: 404, code: 'CLUB_NOT_FOUND' });
   });
 });
 
