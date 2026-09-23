@@ -23,6 +23,7 @@ export interface Club {
 
 export interface ClubPublication {
   publicResultsEnabled: boolean;
+  publicScheduleEnabled: boolean;
 }
 
 export interface ClubAthleteLookup {
@@ -63,6 +64,22 @@ export interface ClubMultiComparisonDetail {
 export interface PublicClub {
   id: string;
   name: string;
+}
+
+export interface PublicScheduleEvent {
+  id: string;
+  title: string;
+  date: string;
+  time: string | null;
+  type: EventType;
+  discipline: Discipline | null;
+  locationName: string | null;
+  status: EventStatus;
+}
+
+export interface PublicClubSchedule {
+  club: PublicClub;
+  events: PublicScheduleEvent[];
 }
 
 export interface PublicAthleteStatistics {

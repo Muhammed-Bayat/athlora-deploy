@@ -70,7 +70,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 - Cross-club fixture system: guest fixture management, team roster assignment, RSVP tracking, finish-time recording, result corrections, team withdrawal, fixture notifications with unread badges, and incoming invitation workflows (accept/decline/request changes).
 - Public logger links: coach-created shareable token links allowing external guests to start sessions, view event snapshots, and record results/incidents without Auth0.
 - Offline-first PWA with Dexie/IndexedDB (4-table schema: offlineActions, cachedEvents, cachedParticipants, cachedTimeline), action queue (enqueue/pending/markSynced/markFailed/reset), batch sync engine, event data caching, offline designation guards, and data cleanup.
-- Two-athlete 100m comparison page with dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), and URL-param-driven athlete selection.
+- Two-athlete 100m comparison page with dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), URL-param-driven athlete selection, and two independent coach publication toggles (public results vs public schedule) that call `PUT /clubs/publication` with both flags as a full replacement.
 - Single-athlete all-time 100m progression chart with PB milestones, chart/table toggle, cursor-based pagination, and accessibility features.
 - Real-time Socket.IO event subscriptions for live invalidation notifications, with connection state management, deduplication, and workspace-aware authorization.
 - Club discovery and join-request workflow: search clubs, create clubs, send/withdraw/approve/reject join requests, and manage club membership.
@@ -133,4 +133,4 @@ Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free].

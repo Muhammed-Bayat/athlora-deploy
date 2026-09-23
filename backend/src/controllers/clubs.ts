@@ -120,6 +120,7 @@ export const updatePublication: RequestHandler = async (req, res, next) => {
     const publication = await updateClubPublication(
       getApplicationUserContext(req).workspaceId,
       req.body.publicResultsEnabled,
+      req.body.publicScheduleEnabled,
     );
     res.json({ data: publication });
   } catch (error) { next(error); }

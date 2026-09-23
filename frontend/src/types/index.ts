@@ -51,6 +51,7 @@ export interface ClubCalendarEvent {
 
 export interface ClubPublication {
   publicResultsEnabled: boolean;
+  publicScheduleEnabled: boolean;
 }
 
 export type ClubJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';

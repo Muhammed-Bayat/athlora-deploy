@@ -75,7 +75,8 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Event reminders** — in-app event reminders with mute preferences and notification delivery.
 - **Fixture notifications** — notification bell with unread counts and mark-as-read for fixture lifecycle events.
 - **Public logger links** — shareable unauthenticated links managed from the active Live Logger. Officials use the same per-athlete logging console for every event participant, including guest-club athletes, and may correct or undo only their own session entries; the `coach` role can override any entry or result.
-- **Two-athlete comparison** — side-by-side 100m metrics with interactive SVG chart and URL-persisted state.
+- **Two-athlete comparison** — side-by-side 100m metrics with interactive SVG chart and URL-persisted state, plus two independent coach publication toggles for public results and the public upcoming schedule.
+- **Independent club publication flags** — `clubs.public_results_enabled` and `clubs.public_schedule_enabled` are separate coach-controlled settings on `GET|PUT /api/v1/clubs/publication` (full-replacement body requires both booleans). Unauthenticated `GET /api/v1/public/schedule/clubs` and `/clubs/:clubId` expose upcoming meet metadata only for clubs that opted into schedule publication; results and schedule visibility never share a gate.
 - **Athlete progression** — chronological 100m result history with PB milestones and interactive chart.
 - **Expanded E2E suite** — 15+ spec files covering workspace, roles, squads, lifecycle, injuries, helpers, realtime, reminders, public logger, notifications, authorization, migration, accessibility, routing, and analytics.
 - **Quality gate** — lint, typecheck, Vitest/RTL, Supertest, production builds, an informational Vitest V8 coverage report, the Playwright E2E suite (smoke + desktop/mobile vertical slice + axe audit), and the Docusaurus build are configured in CI. The Gitea `coverage` job prints a short Markdown summary; the `e2e` job boots a Postgres service container and skips with a clear message until the Auth0/E2E credentials are configured as repository secrets.
@@ -97,8 +98,8 @@ These pages are a living record that agents maintain as part of every task. If y
 
 This documentation site and the repository follow the course AI policy.
 
-- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `OpenCode[gpt-5.6-terra]`
-- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`, `OpenCode[gpt-5.6-terra]`
+- **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `OpenCode[gpt-5.6-terra]`, `opencode[mimo-v2.6-flash-free]`
+- **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`, `OpenCode[gpt-5.6-terra]`, `opencode[mimo-v2.6-flash-free]`
 - **Code review:** `opencode[gpt-5.6-sol]`
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.
@@ -107,4 +108,4 @@ This section is kept current as tools and models change.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].

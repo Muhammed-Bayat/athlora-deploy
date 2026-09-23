@@ -154,10 +154,10 @@ describe('club routes', () => {
     expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID]);
   });
 
-  it('lets a coach view and update the active club publication setting', async () => {
+  it('lets a coach view and update the active club publication settings', async () => {
     query.mockResolvedValue(applicationUser());
-    vi.mocked(clubService.getClubPublication).mockResolvedValue({ publicResultsEnabled: false });
-    vi.mocked(clubService.updateClubPublication).mockResolvedValue({ publicResultsEnabled: true });
+    vi.mocked(clubService.getClubPublication).mockResolvedValue({ publicResultsEnabled: false, publicScheduleEnabled: false });
+    vi.mocked(clubService.updateClubPublication).mockResolvedValue({ publicResultsEnabled: true, publicScheduleEnabled: false });
 
     const status = await request(app)
       .get('/api/v1/clubs/publication')
@@ -165,14 +165,44 @@ describe('club routes', () => {
     const updated = await request(app)
       .put('/api/v1/clubs/publication')
       .set('Authorization', 'Bearer valid')
-      .send({ publicResultsEnabled: true });
+      .send({ publicResultsEnabled: true, publicScheduleEnabled: false });
 
     expect(status.status).toBe(200);
-    expect(status.body).toEqual({ data: { publicResultsEnabled: false } });
+    expect(status.body).toEqual({ data: { publicResultsEnabled: false, publicScheduleEnabled: false } });
     expect(updated.status).toBe(200);
-    expect(updated.body).toEqual({ data: { publicResultsEnabled: true } });
+    expect(updated.body).toEqual({ data: { publicResultsEnabled: true, publicScheduleEnabled: false } });
     expect(clubService.getClubPublication).toHaveBeenCalledWith(WORKSPACE_ID);
-    expect(clubService.updateClubPublication).toHaveBeenCalledWith(WORKSPACE_ID, true);
+    expect(clubService.updateClubPublication).toHaveBeenCalledWith(WORKSPACE_ID, true, false);
+  });
+
+  it('updates the schedule publication flag independently of the results flag', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.updateClubPublication).mockResolvedValue({ publicResultsEnabled: true, publicScheduleEnabled: true });
+
+    const response = await request(app)
+      .put('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid')
+      .send({ publicResultsEnabled: true, publicScheduleEnabled: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: { publicResultsEnabled: true, publicScheduleEnabled: true } });
+    expect(clubService.updateClubPublication).toHaveBeenCalledWith(WORKSPACE_ID, true, true);
+  });
+
+  it('rejects a publication payload missing the schedule flag', async () => {
+    query.mockResolvedValue(applicationUser());
+
+    const response = await request(app)
+      .put('/api/v1/clubs/publication')
+      .set('Authorization', 'Bearer valid')
+      .send({ publicResultsEnabled: true });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(response.body.error.details.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'publicScheduleEnabled', code: 'required' })]),
+    );
+    expect(clubService.updateClubPublication).not.toHaveBeenCalled();
   });
 
   it('requires the active club workspace and a coach to approve a request', async () => {

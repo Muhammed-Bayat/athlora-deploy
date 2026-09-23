@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### Independent publication flags and public schedule — 2026-09-23
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **632 tests pass, 0 skip**.
+- Backend: lint, strict typecheck and build pass; **600 tests pass, 40 database-gated tests skip** (includes the new publication and public-schedule unit/API suites).
+- Documentation: Docusaurus typecheck and production build pass after the split-flag docs updates.
+- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0025_club_public_schedule_publication.sql` and the full 27-migration set).
+
 ### GraySky migration verification — 2026-09-14
 
 - Frontend: lint passes with 12 existing warnings; strict typecheck/build pass; **530 tests pass, 4 skip**.
@@ -163,4 +170,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free].

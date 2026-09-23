@@ -119,7 +119,7 @@ Workspace membership is server-derived and is the authorization boundary: athlet
 
 Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
-Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, and withdraw a fixture team. Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
+Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, and update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -180,8 +180,8 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 | `GET /clubs/comparison?club1Id=&club2Id=` | Compare all-time 100m statistics for two clubs |
 | `GET /clubs/comparison/multi?clubIds=` | Compare multiple clubs' 100m statistics |
 | `GET /clubs/calendar` | Get events for selected accessible clubs' shared calendar |
-| `GET /clubs/publication` | Read the active club's public-results setting |
-| `PUT /clubs/publication` | Update the active club's public-results setting (coach only) |
+| `GET /clubs/publication` | Read the active club's independent public-results and public-schedule settings |
+| `PUT /clubs/publication` | Update both publication settings as a full replacement (coach only) |
 
 The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
@@ -291,9 +291,9 @@ Query parameters: `cursor` (pagination token), `limit` (page size, default 50, m
 
 The batch endpoint accepts an array of actions (`create_entry`, `edit_entry`, `undo_entry`) with per-action expected versions and client timestamps. Each action is processed idempotently; duplicate action IDs are detected and returned as `duplicate`. Rejected actions include the rejection code. A `recomputedResults` flag indicates whether the server recomputed results after the batch. The server stores a receipt per action for conflict resolution on subsequent drains.
 
-### 3.12 Public statistics
+### 3.12 Public statistics and schedule
 
-The publication owner controls public club-result visibility through `GET|PUT /clubs/publication`. When a club has enabled publication, the following unauthenticated, read-only endpoints are available:
+The publication owner controls two independent flags through `GET|PUT /clubs/publication` (`publicResultsEnabled`, `publicScheduleEnabled`). When a club has enabled results publication, the following unauthenticated, read-only statistics endpoints are available:
 
 | Method & path | Purpose |
 |---|---|
@@ -302,7 +302,14 @@ The publication owner controls public club-result visibility through `GET|PUT /c
 | `GET /public/statistics/clubs/:clubId` | Get published club 100m statistics |
 | `GET /public/statistics/comparison` | Compare published athlete performance |
 
-The dedicated [public statistics reference](./public-statistics) defines its request parameters and visibility rules.
+When a club has enabled schedule publication (regardless of the results flag), these unauthenticated, read-only schedule endpoints are available:
+
+| Method & path | Purpose |
+|---|---|
+| `GET /public/schedule/clubs` | Search clubs with a published upcoming schedule |
+| `GET /public/schedule/clubs/:clubId` | Get a published club's upcoming meets (title, date/time, venue, discipline only — never rosters) |
+
+The dedicated [public statistics reference](./public-statistics) and [public schedule reference](./public-schedule) define request parameters and visibility rules.
 
 ## 4. DTOs
 
@@ -632,4 +639,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free].

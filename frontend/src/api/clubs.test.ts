@@ -30,4 +30,19 @@ describe('club API', () => {
     expect(fetchMock.mock.calls[10]?.[0]).toContain('clubs/comparison?club1Id=club-1&club2Id=club-2');
     expect(fetchMock.mock.calls[11]?.[0]).toContain('clubs/comparison/multi?clubId=club-1&clubId=club-2');
   });
+
+  it('sends both publication flags on update', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: { publicResultsEnabled: true, publicScheduleEnabled: false } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await clubs.updateClubPublication(true, false);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/clubs/publication'),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ publicResultsEnabled: true, publicScheduleEnabled: false }),
+      }),
+    );
+  });
 });

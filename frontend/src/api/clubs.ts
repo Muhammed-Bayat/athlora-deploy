@@ -60,9 +60,12 @@ export async function getClubPublication(): Promise<ClubPublication> {
   return response.data;
 }
 
-export async function updateClubPublication(publicResultsEnabled: boolean): Promise<ClubPublication> {
+export async function updateClubPublication(
+  publicResultsEnabled: boolean,
+  publicScheduleEnabled: boolean,
+): Promise<ClubPublication> {
   const response = await request<{ data: ClubPublication }>('/api/v1/clubs/publication', {
-    method: 'PUT', body: JSON.stringify({ publicResultsEnabled }),
+    method: 'PUT', body: JSON.stringify({ publicResultsEnabled, publicScheduleEnabled }),
   });
   return response.data;
 }
