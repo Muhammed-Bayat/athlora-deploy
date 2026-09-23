@@ -20,6 +20,8 @@ import publicLoggerRouter, { publicLoggerOwnerRouter } from './publicLoggers.js'
 import publicSyncRouter from './publicSync.js';
 import syncRouter from './sync.js';
 import clubsRouter from './clubs.js';
+import clubBrandingRouter from './clubBranding.js';
+import mediaRouter from './media.js';
 import preferencesRouter from './preferences.js';
 import fixtureNotificationsRouter from './fixtureNotifications.js';
 import remindersRouter from './reminders.js';
@@ -93,7 +95,9 @@ router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWor
 // Listing is used to decide whether a synchronized user needs Club onboarding.
 router.get('/workspaces', verifyAuth0Token, resolveLocalApplicationUser, listAccessibleWorkspaces);
 router.use('/workspaces', verifyAuth0Token, resolveApplicationUser, workspacesRouter);
+router.use('/clubs/branding', clubBrandingRouter);
 router.use('/clubs', clubsRouter);
+router.use('/media', mediaRouter);
 router.use('/', eventHelpersRouter);
 router.use('/', syncRouter);
 router.use(

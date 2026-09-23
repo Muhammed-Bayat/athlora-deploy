@@ -46,12 +46,34 @@ beforeEach(() => {
 
 describe('listClubs', () => {
   it('returns mapped club rows for a search', async () => {
-    query.mockResolvedValue(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters', created_at: new Date(), updated_at: new Date() }]));
+    query.mockResolvedValue(poolRow([{
+      id: CLUB_ID,
+      workspace_id: WORKSPACE_ID,
+      name: 'Sprinters',
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }]));
 
     const clubs = await listClubs('Sprinters');
 
     expect(clubs).toHaveLength(1);
-    expect(clubs[0]).toMatchObject({ id: CLUB_ID, name: 'Sprinters', workspaceId: WORKSPACE_ID });
+    expect(clubs[0]).toMatchObject({
+      id: CLUB_ID,
+      name: 'Sprinters',
+      workspaceId: WORKSPACE_ID,
+      branding: {
+        description: null,
+        primaryColor: null,
+        accentColor: null,
+        logoUrl: null,
+        coverUrl: null,
+      },
+    });
     const sql = query.mock.calls[0][0] as string;
     expect(sql).toContain('ILIKE');
     expect(query.mock.calls[0][1]).toEqual(['Sprinters']);
@@ -126,7 +148,16 @@ describe('club comparison data', () => {
 
   it('lists only non-archived safe athlete lookup fields', async () => {
     query
-      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([{
+        id: CLUB_ID,
+        workspace_id: WORKSPACE_ID,
+        name: 'Sprinters',
+        description: null,
+        primary_color: null,
+        accent_color: null,
+        logo_key: null,
+        cover_key: null,
+      }]))
       .mockResolvedValueOnce(poolRow([
         { id: USER_ID, name: 'Ari Runner', lifecycle_status: 'active' },
         { id: ACTOR_ID, name: 'Bea Runner', lifecycle_status: 'inactive' },
@@ -146,7 +177,16 @@ describe('club comparison data', () => {
 
   it('derives all-time club statistics from effective valid results', async () => {
     query
-      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([{
+        id: CLUB_ID,
+        workspace_id: WORKSPACE_ID,
+        name: 'Sprinters',
+        description: null,
+        primary_color: null,
+        accent_color: null,
+        logo_key: null,
+        cover_key: null,
+      }]))
       .mockResolvedValueOnce(poolRow([{
         active_count: '2', inactive_count: '1', archived_count: '1', total_count: '4',
         distinct_athletes_with_valid_results: '2', total_100m_result_count: '5',
@@ -157,7 +197,17 @@ describe('club comparison data', () => {
     const statistics = await getClubStatistics(CLUB_ID);
 
     expect(statistics).toEqual({
-      club: { id: CLUB_ID, name: 'Sprinters' },
+      club: {
+        id: CLUB_ID,
+        name: 'Sprinters',
+        branding: {
+          description: null,
+          primaryColor: null,
+          accentColor: null,
+          logoUrl: null,
+          coverUrl: null,
+        },
+      },
       roster: { active: 2, inactive: 1, archived: 1, total: 4 },
       distinctAthletesWithValidResults: 2,
       total100mResultCount: 5,
@@ -178,7 +228,16 @@ describe('club comparison data', () => {
 
   it('returns null population standard deviation for fewer than two valid results', async () => {
     query
-      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([{
+        id: CLUB_ID,
+        workspace_id: WORKSPACE_ID,
+        name: 'Sprinters',
+        description: null,
+        primary_color: null,
+        accent_color: null,
+        logo_key: null,
+        cover_key: null,
+      }]))
       .mockResolvedValueOnce(poolRow([{
         active_count: '1', inactive_count: '0', archived_count: '0', total_count: '1',
         distinct_athletes_with_valid_results: '1', total_100m_result_count: '1',
@@ -200,10 +259,20 @@ describe('club comparison data', () => {
       valid_100m_result_count: '0', fastest_valid_time: null, latest_valid_time: null,
       average_valid_time: null, median_valid_time: null, population_standard_deviation: null,
     };
+    const clubRow = (id: string, workspaceId: string, name: string) => ({
+      id,
+      workspace_id: workspaceId,
+      name,
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+    });
     query
-      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters' }]))
+      .mockResolvedValueOnce(poolRow([clubRow(CLUB_ID, WORKSPACE_ID, 'Sprinters')]))
       .mockResolvedValueOnce(poolRow([statisticsRow]))
-      .mockResolvedValueOnce(poolRow([{ id: otherClubId, workspace_id: otherWorkspaceId, name: 'Harriers' }]))
+      .mockResolvedValueOnce(poolRow([clubRow(otherClubId, otherWorkspaceId, 'Harriers')]))
       .mockResolvedValueOnce(poolRow([statisticsRow]));
 
     await expect(getClubComparison(CLUB_ID, otherClubId)).resolves.toMatchObject({

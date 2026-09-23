@@ -32,11 +32,30 @@ beforeEach(() => {
 
 describe('listPublicScheduleClubs', () => {
   it('queries only schedule-published clubs with the optional search', async () => {
-    query.mockResolvedValue(poolRow([{ id: CLUB_ID, name: 'Open Track Club' }]));
+    query.mockResolvedValue(poolRow([{
+      id: CLUB_ID,
+      workspace_id: WORKSPACE_ID,
+      name: 'Open Track Club',
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+    }]));
 
     const clubs = await listPublicScheduleClubs('track');
 
-    expect(clubs).toEqual([{ id: CLUB_ID, name: 'Open Track Club' }]);
+    expect(clubs).toEqual([{
+      id: CLUB_ID,
+      name: 'Open Track Club',
+      branding: {
+        description: null,
+        primaryColor: null,
+        accentColor: null,
+        logoUrl: null,
+        coverUrl: null,
+      },
+    }]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('public_schedule_enabled = true');
     expect(sql).not.toContain('public_results_enabled');
@@ -47,13 +66,32 @@ describe('listPublicScheduleClubs', () => {
 describe('getPublicClubSchedule', () => {
   it('gates the club lookup on the schedule flag and never joins participant data', async () => {
     query
-      .mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Open Track Club' }]))
+      .mockResolvedValueOnce(poolRow([{
+        id: CLUB_ID,
+        workspace_id: WORKSPACE_ID,
+        name: 'Open Track Club',
+        description: null,
+        primary_color: null,
+        accent_color: null,
+        logo_key: null,
+        cover_key: null,
+      }]))
       .mockResolvedValueOnce(poolRow([upcomingEventRow]));
 
     const schedule = await getPublicClubSchedule(CLUB_ID, undefined, new Date('2026-09-15T12:00:00.000Z'));
 
     expect(schedule).toEqual({
-      club: { id: CLUB_ID, name: 'Open Track Club' },
+      club: {
+        id: CLUB_ID,
+        name: 'Open Track Club',
+        branding: {
+          description: null,
+          primaryColor: null,
+          accentColor: null,
+          logoUrl: null,
+          coverUrl: null,
+        },
+      },
       events: [{
         id: EVENT_ID,
         title: 'Spring Open',
@@ -95,7 +133,16 @@ describe('getPublicClubSchedule', () => {
 
   it('covers the four publication combinations through independent flags', async () => {
     // Schedule on, results off: schedule is visible.
-    query.mockResolvedValueOnce(poolRow([{ id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Club' }]))
+    query.mockResolvedValueOnce(poolRow([{
+      id: CLUB_ID,
+      workspace_id: WORKSPACE_ID,
+      name: 'Club',
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+    }]))
       .mockResolvedValueOnce(poolRow([upcomingEventRow]));
     await expect(getPublicClubSchedule(CLUB_ID)).resolves.toMatchObject({ club: { id: CLUB_ID } });
 
@@ -104,7 +151,16 @@ describe('getPublicClubSchedule', () => {
     await expect(getPublicClubSchedule(CLUB_ID)).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
     // Results on/off has no effect on the schedule list query shape.
-    query.mockResolvedValueOnce(poolRow([{ id: CLUB_ID, name: 'Club' }]));
+    query.mockResolvedValueOnce(poolRow([{
+      id: CLUB_ID,
+      workspace_id: WORKSPACE_ID,
+      name: 'Club',
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+    }]));
     await listPublicScheduleClubs(null);
     expect(String(query.mock.calls.at(-1)?.[0])).toContain('public_schedule_enabled = true');
     expect(String(query.mock.calls.at(-1)?.[0])).not.toContain('public_results_enabled');

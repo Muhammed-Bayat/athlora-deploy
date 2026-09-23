@@ -150,11 +150,23 @@ describe('shared fixture results', () => {
 
 describe('fixture rosters', () => {
   it('returns participants for every participating workspace grouped by team', async () => {
+    const teamRow = (workspaceId: string, workspaceName: string) => ({
+      workspace_id: workspaceId,
+      workspace_name: workspaceName,
+      status: 'accepted',
+      accepted_revision: 1,
+      withdrawn_at: null,
+      description: null,
+      primary_color: null,
+      accent_color: null,
+      logo_key: null,
+      cover_key: null,
+    });
     query
       .mockResolvedValueOnce({ rows: [{ '1': 1 }] })
       .mockResolvedValueOnce({ rows: [
-        { workspace_id: HOST_WORKSPACE_ID, workspace_name: 'Host Team', status: 'accepted', accepted_revision: 1, withdrawn_at: null },
-        { workspace_id: WORKSPACE_ID, workspace_name: 'Guest Team', status: 'accepted', accepted_revision: 1, withdrawn_at: null },
+        teamRow(HOST_WORKSPACE_ID, 'Host Team'),
+        teamRow(WORKSPACE_ID, 'Guest Team'),
       ] })
       .mockResolvedValueOnce({ rows: [{
         event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', participant_workspace_id: HOST_WORKSPACE_ID,
@@ -167,8 +179,8 @@ describe('fixture rosters', () => {
     const rosters = await listHostedFixtureRosters(HOST_WORKSPACE_ID, EVENT_ID);
 
     expect(rosters).toEqual([
-      expect.objectContaining({ team: expect.objectContaining({ workspaceId: HOST_WORKSPACE_ID }), participants: [expect.objectContaining({ athleteId: ATHLETE_ID })] }),
-      expect.objectContaining({ team: expect.objectContaining({ workspaceId: WORKSPACE_ID }), participants: [expect.objectContaining({ athlete: expect.objectContaining({ name: 'Guest Runner' }) })] }),
+      expect.objectContaining({ team: expect.objectContaining({ workspaceId: HOST_WORKSPACE_ID, branding: expect.objectContaining({ primaryColor: null, logoUrl: null }) }), participants: [expect.objectContaining({ athleteId: ATHLETE_ID })] }),
+      expect.objectContaining({ team: expect.objectContaining({ workspaceId: WORKSPACE_ID, branding: expect.objectContaining({ primaryColor: null }) }), participants: [expect.objectContaining({ athlete: expect.objectContaining({ name: 'Guest Runner' }) })] }),
     ]);
     expect(query).toHaveBeenLastCalledWith(expect.not.stringContaining('ep.participant_workspace_id = $2'), [EVENT_ID]);
   });

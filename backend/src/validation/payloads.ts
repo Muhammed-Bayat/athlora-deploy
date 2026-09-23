@@ -41,6 +41,7 @@ import {
   normalizeLocalTime,
   normalizeRequiredString,
 } from './primitives.js';
+import { hasAccessibleForeground, isHexColor } from '../services/colorContrast.js';
 
 export interface ValidationIssue {
   path: string;
@@ -88,6 +89,12 @@ export interface AthleteStatusPayload {
 export interface ClubPublicationPayload {
   publicResultsEnabled: boolean;
   publicScheduleEnabled: boolean;
+}
+
+export interface ClubBrandingPayload {
+  description: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
 }
 
 export type UserPreferencesPayload = UserPreferences;
@@ -233,6 +240,8 @@ const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
 const FIXTURE_INVITATION_CREATE_FIELDS = ['targetClubId', 'expiresInDays'] as const;
 const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
 const CLUB_PUBLICATION_FIELDS = ['publicResultsEnabled', 'publicScheduleEnabled'] as const;
+const CLUB_BRANDING_FIELDS = ['description', 'primaryColor', 'accentColor'] as const;
+const CLUB_BRANDING_DESCRIPTION_MAX = 500;
 
 type PayloadObject = Record<string, unknown>;
 const POSTGRES_INTEGER_MAX = 2_147_483_647;
@@ -287,6 +296,57 @@ export function parseClubPublicationPayload(input: unknown): ClubPublicationPayl
     publicResultsEnabled: payload.publicResultsEnabled as boolean,
     publicScheduleEnabled: payload.publicScheduleEnabled as boolean,
   };
+}
+
+function optionalBrandingColor(
+  payload: PayloadObject,
+  field: 'primaryColor' | 'accentColor',
+  issues: ValidationIssue[],
+): string | null {
+  if (!hasOwn(payload, field) || payload[field] === null) return null;
+  if (typeof payload[field] !== 'string') {
+    issues.push(issue(field, 'invalid_type', 'Expected a colour string or null'));
+    return null;
+  }
+  const value = payload[field].trim().toUpperCase();
+  if (value === '') return null;
+  if (!isHexColor(value)) {
+    issues.push(issue(field, 'invalid_format', 'Expected a #RRGGBB colour'));
+    return null;
+  }
+  if (!hasAccessibleForeground(value)) {
+    issues.push(issue(field, 'invalid_contrast', 'Colour must support readable white or ink text (WCAG AA 4.5:1)'));
+    return null;
+  }
+  return value;
+}
+
+export function parseClubBrandingPayload(input: unknown): ClubBrandingPayload {
+  const payload = payloadObject(input);
+  const issues: ValidationIssue[] = [];
+  rejectUnknownFields(payload, CLUB_BRANDING_FIELDS, issues);
+
+  let description: string | null = null;
+  if (hasOwn(payload, 'description') && payload.description !== null) {
+    if (typeof payload.description !== 'string') {
+      issues.push(issue('description', 'invalid_type', 'Expected a string or null'));
+    } else {
+      const normalized = payload.description.trim();
+      if (normalized.length === 0) {
+        description = null;
+      } else if (normalized.length > CLUB_BRANDING_DESCRIPTION_MAX) {
+        issues.push(issue('description', 'too_long', `Must be at most ${CLUB_BRANDING_DESCRIPTION_MAX} characters`));
+      } else {
+        description = normalized;
+      }
+    }
+  }
+
+  const primaryColor = optionalBrandingColor(payload, 'primaryColor', issues);
+  const accentColor = optionalBrandingColor(payload, 'accentColor', issues);
+
+  if (issues.length > 0) throwValidation(issues);
+  return { description, primaryColor, accentColor };
 }
 
 const PREFERENCES_FIELDS = ['dashboardCardOrder', 'dashboardHiddenCards', 'dashboardSavedFilters'] as const;
