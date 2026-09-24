@@ -16,6 +16,7 @@ import { FixtureHostPanel } from './FixtureHostPanel';
 import { GuestRosterPanel } from './GuestRosterPanel';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
 import styles from './EventsPage.module.css';
+import { VerticalEventsPanel } from './VerticalEventsPanel';
 
 type LifecycleAction = 'start' | 'complete' | 'cancel';
 
@@ -44,6 +45,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const [fixtureTeams, setFixtureTeams] = useState<FixtureTeamRoster[]>([]);
   const [rosterState, setRosterState] = useState<'idle' | 'loaded' | 'failed'>('idle');
   const [isGuest, setIsGuest] = useState(false);
+  const [showVertical, setShowVertical] = useState(false);
 
   useEffect(() => { onBusyChange?.(participantBusy || correctionBusy); }, [correctionBusy, onBusyChange, participantBusy]);
 
@@ -144,6 +146,8 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
         {!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
+        <Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>
+        {showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
         <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
         {isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}
        {canManageLifecycle && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}

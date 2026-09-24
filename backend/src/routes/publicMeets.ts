@@ -3,13 +3,14 @@ import { ApiError } from '../middleware/errors.js';
 import { notifySessionInvalidated } from '../realtime/index.js';
 import { resolvePublicMeetActor } from '../services/publicLoggers.js';
 import { listDisciplines, listEntrants, listRegistrations, listSessions } from '../services/meets.js';
-import { createSessionEntry, listSessionEntries, mutateSessionEntry } from '../services/sessionPerformances.js';
+import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry } from '../services/sessionPerformances.js';
 import type { SessionEntry } from '../types/meets.js';
 import { object, parseSessionEntry, parseSessionEntryReplacement, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
 
 function publicEntry(entry: SessionEntry, publicLoggerSessionId: string) {
   return { id: entry.id, eventId: entry.eventId, disciplineSessionId: entry.disciplineSessionId,
+    verticalState: entry.verticalState, attemptOrder: entry.attemptOrder,
     entrantId: entry.entrantId, entryType: entry.entryType, value: entry.value, unit: entry.unit,
     isFoul: entry.isFoul, incidentType: entry.incidentType, version: entry.version, createdAt: entry.createdAt,
     canEdit: entry.publicLoggerSessionId === publicLoggerSessionId, canUndo: entry.publicLoggerSessionId === publicLoggerSessionId };
@@ -25,8 +26,9 @@ const snapshot: RequestHandler = async (req, res, next) => {
     const entrants = await listEntrants(actor, eventId);
     res.json({ data: { disciplines: await listDisciplines(),
       entrants: entrants.map(({ id, name, kind, memberIds }) => ({ id, name, kind, memberIds })),
-      sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, version }) => ({
-        id, label, disciplineDefinitionId, status, version,
+      sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, version, verticalConfig }) => ({
+        id, label, disciplineDefinitionId, status, version, verticalConfig,
+        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical })),
         entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
         entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '')),
       }))),

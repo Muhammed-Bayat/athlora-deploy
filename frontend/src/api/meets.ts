@@ -10,7 +10,7 @@ async function mutate<T>(path: string, method: string, body: unknown): Promise<T
 }
 export const listDisciplines = () => request<ApiList<DisciplineDefinition>>('/api/v1/disciplines');
 export const listSessions = (eventId: string) => request<ApiList<DisciplineSession>>(`${eventPath(eventId)}/sessions`);
-export const createSession = (eventId: string, body: { disciplineDefinitionId: string; label: string }) => mutate<DisciplineSession>(`${eventPath(eventId)}/sessions`, 'POST', body);
+export const createSession = (eventId: string, body: { disciplineDefinitionId: string; label: string; verticalConfig?: import('../types/meets').VerticalConfig }) => mutate<DisciplineSession>(`${eventPath(eventId)}/sessions`, 'POST', body);
 export const changeSessionState = (eventId: string, sessionId: string, status: EventStatus, expectedVersion: number) => mutate<DisciplineSession>(sessionPath(eventId, sessionId), 'PATCH', { status, expectedVersion });
 export const listEntrants = (eventId: string) => request<ApiList<MeetEntrant>>(`${eventPath(eventId)}/entrants`);
 export const createEntrant = (eventId: string, body: EntrantCreateInput) => mutate<MeetEntrant>(`${eventPath(eventId)}/entrants`, 'POST', body);

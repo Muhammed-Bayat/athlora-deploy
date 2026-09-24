@@ -17,7 +17,7 @@ export interface DisciplineDefinition {
   unit: 'seconds' | 'metres' | 'cm';
   direction: 'lower' | 'higher';
   defaultRules: {
-    aggregation: 'timed' | 'best';
+    aggregation: 'timed' | 'best' | 'vertical';
     entrantType: 'individual' | 'relay';
     teamSize?: number;
     distance?: number;
@@ -26,6 +26,9 @@ export interface DisciplineDefinition {
     steeplechase?: boolean;
     raceWalk?: boolean;
     attempts?: number;
+    failureLimit?: number;
+    heightIncrement?: number;
+    round?: 'qualification' | 'final';
   };
   precision: number;
   presentation: { label: string; unitLabel?: string };
@@ -34,6 +37,7 @@ export interface DisciplineDefinition {
 }
 
 export interface DisciplineSession {
+  verticalConfig?: VerticalConfig | null;
   id: string;
   eventId: string;
   workspaceId: string;
@@ -70,6 +74,8 @@ export interface SessionRegistration extends SessionTarget {
 }
 
 export interface SessionEntry extends SessionTarget {
+  verticalState?: VerticalState | null;
+  attemptOrder?: number | null;
   id: string;
   eventId: string;
   workspaceId: string;
@@ -89,6 +95,9 @@ export interface SessionEntry extends SessionTarget {
 }
 
 export interface SessionResult extends SessionTarget {
+  vertical?: VerticalSummary;
+  isPb?: boolean;
+  isSb?: boolean;
   id: string;
   eventId: string;
   workspaceId: string;
@@ -119,13 +128,17 @@ export interface SessionStatistics {
   best: number | null;
 }
 
-export interface SessionCreateInput { disciplineDefinitionId: string; label: string }
+export type VerticalState = 'clearance' | 'failure' | 'pass' | 'void';
+export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
+export interface VerticalSummary { failuresAtBest: number; totalFailuresToBest: number; consecutiveFailures: number; eliminated: boolean }
+export interface SessionCreateInput { disciplineDefinitionId: string; label: string; verticalConfig?: VerticalConfig }
 export interface SessionStateInput { status: EventStatus; expectedVersion: number }
 export type EntrantCreateInput =
   | { kind: 'athlete'; athleteId: string }
   | { kind: 'guest'; name: string }
   | { kind: 'relay'; name: string; memberIds: string[] };
 export interface SessionEntryInput {
+  verticalState?: VerticalState | null;
   entryType: EntryType;
   value: number | null;
   unit: DisciplineDefinition['unit'] | null;

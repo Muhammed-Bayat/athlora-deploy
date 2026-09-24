@@ -2,6 +2,7 @@ import { ApiError } from '../middleware/errors.js';
 import { ENTRY_TYPES, EVENT_STATUSES, INCIDENT_TYPES } from '../types/domain.js';
 import type { EntrantCreateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { isCanonicalUuid } from './primitives.js';
+import { parseVerticalConfig } from './verticalMeets.js';
 
 function invalid(path: string): never {
   throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', {
@@ -37,8 +38,8 @@ export function parseSessionTarget(value: unknown): SessionTarget {
 }
 
 export function parseSessionCreate(value: unknown): SessionCreateInput {
-  const body = object(value, ['disciplineDefinitionId', 'label']);
-  return { disciplineDefinitionId: uuid(body.disciplineDefinitionId, 'disciplineDefinitionId'), label: text(body.label, 'label') };
+  const body = object(value, ['disciplineDefinitionId', 'label', 'verticalConfig']);
+  return { disciplineDefinitionId: uuid(body.disciplineDefinitionId, 'disciplineDefinitionId'), label: text(body.label, 'label'), ...(body.verticalConfig === undefined ? {} : { verticalConfig: parseVerticalConfig(body.verticalConfig) }) };
 }
 
 export function parseSessionState(value: unknown): SessionStateInput {
@@ -65,9 +66,10 @@ export function parseEntrantCreate(value: unknown): EntrantCreateInput {
   return { kind: 'relay', name: text(body.name, 'name'), memberIds };
 }
 
-const ENTRY_FIELDS = ['entryType', 'value', 'unit', 'isFoul', 'incidentType', 'noteText', 'deviceId'] as const;
+const ENTRY_FIELDS = ['entryType', 'value', 'unit', 'isFoul', 'incidentType', 'noteText', 'deviceId', 'verticalState'] as const;
 export function parseSessionEntry(value: unknown): SessionEntryInput {
   const body = object(value, ENTRY_FIELDS);
+  if (body.verticalState != null && !['clearance', 'failure', 'pass', 'void'].includes(body.verticalState as string)) invalid('verticalState');
   if (!ENTRY_TYPES.includes(body.entryType as SessionEntryInput['entryType'])) invalid('entryType');
   const amount = body.value ?? null;
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0)) invalid('value');
@@ -82,6 +84,7 @@ export function parseSessionEntry(value: unknown): SessionEntryInput {
   const note = body.noteText == null ? null : text(body.noteText, 'noteText', 2000);
   if (body.entryType === 'note' && !note) invalid('noteText');
   return {
+    ...(body.verticalState == null ? {} : { verticalState: body.verticalState as SessionEntryInput['verticalState'] }),
     entryType: body.entryType as SessionEntryInput['entryType'], value: amount as number | null,
     unit: unit as SessionEntryInput['unit'], isFoul, incidentType: incident as SessionEntryInput['incidentType'],
     noteText: note, deviceId: body.deviceId == null ? null : text(body.deviceId, 'deviceId', 200),

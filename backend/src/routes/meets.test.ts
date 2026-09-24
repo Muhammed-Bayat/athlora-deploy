@@ -23,6 +23,17 @@ app.use(errorHandler);
 beforeEach(() => { vi.clearAllMocks(); role = 'coach'; });
 
 describe('additive meet API', () => {
+  it('accepts vertical configuration and explicit height states while rejecting invalid configuration', async () => {
+    vi.mocked(meets.createSession).mockResolvedValue({ id: sessionId } as never);
+    const verticalConfig = { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' };
+    expect((await request(app).post(`/events/${eventId}/sessions`).send({ disciplineDefinitionId: sessionId, label: 'High Jump', verticalConfig })).status).toBe(201);
+    expect((await request(app).post(`/events/${eventId}/sessions`).send({ disciplineDefinitionId: sessionId, label: 'High Jump', verticalConfig: { ...verticalConfig, failureLimit: 0 } })).status).toBe(400);
+    vi.mocked(performances.createSessionEntry).mockResolvedValue({ id: entrantId } as never);
+    for (const verticalState of ['clearance', 'failure', 'pass', 'void']) {
+      expect((await request(app).post(`/events/${eventId}/sessions/${sessionId}/entrants/${entrantId}/entries`).send({ entryType: 'attempt', value: 1.5, unit: 'metres', verticalState })).status).toBe(201);
+      expect(performances.createSessionEntry).toHaveBeenLastCalledWith({ userId, workspaceId, role: 'coach' }, eventId, { disciplineSessionId: sessionId, entrantId }, expect.objectContaining({ verticalState, value: 1.5 }));
+    }
+  });
   it('returns existing envelopes and passes authenticated workspace/actor separately from payload', async () => {
     vi.mocked(meets.createSession).mockResolvedValue({ id: sessionId } as never);
     const response = await request(app).post(`/events/${eventId}/sessions`).send({ disciplineDefinitionId: sessionId, label: 'Heat 1' });
