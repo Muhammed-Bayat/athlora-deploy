@@ -4,6 +4,7 @@ import { getPool } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { verticalAthleteStatistics } from '../services/verticalStatistics.js';
+import { publicClubSessionResults } from '../services/publicResults.js';
 import { parseSeasonYear } from '../services/seasons.js';
 
 const router = Router();
@@ -12,6 +13,11 @@ router.get('/seasons', publicStatistics.listSeasons);
 router.get('/clubs', publicStatistics.listClubs);
 router.get('/comparison', publicStatistics.athleteComparison);
 router.get('/clubs/:clubId', publicStatistics.clubStatistics);
+router.get('/clubs/:clubId/session-results', async (req, res, next) => {
+  try {
+    res.json({ data: await publicClubSessionResults(req.params.clubId) });
+  } catch (error) { next(error); }
+});
 router.get('/clubs/:clubId/vertical', async (req, res, next) => {
   try {
     if (!isCanonicalUuid(req.params.clubId)) throw new ApiError(404, 'NOT_FOUND', 'Resource not found');

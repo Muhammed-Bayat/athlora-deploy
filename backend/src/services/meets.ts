@@ -1,7 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
-import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, MeetActor, MeetEntrant, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
+import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
@@ -134,6 +134,63 @@ export async function createEntrant(actor: MeetActor, eventId: string, input: En
     await meetAudit(db, actor, eventId, actor.workspaceId, 'entrant', entrant.id, 'created', null, entrant);
     return entrant;
   });
+}
+
+export async function updateEntrant(actor: MeetActor, eventId: string, entrantId: string, input: EntrantUpdateInput, transaction: MeetTransaction = withTransaction): Promise<MeetEntrant> {
+  meetCoach(actor);
+  meetIds(entrantId);
+  return transaction(async (db) => {
+    const access = await meetAccess(db, actor, eventId, true);
+    if (access.helper) meetNotFound();
+    if (access.event.status !== 'scheduled') meetConflict('ROSTER_LOCKED', 'Entrants can only be edited before the event starts');
+    const found = await db.query('SELECT * FROM meet_entrants WHERE id = $1 AND event_id = $2 AND workspace_id = $3', [entrantId, eventId, actor.workspaceId]);
+    const before = found.rows[0];
+    if (!before) meetNotFound();
+    if (before.kind !== 'relay') meetConflict('INVALID_ENTRANT_KIND', 'Only relay teams can be edited');
+    const logging = await db.query(
+      `SELECT 1 FROM session_timeline_entries se
+       JOIN session_entrants sr ON sr.session_id = se.session_id AND sr.entrant_id = se.entrant_id
+       WHERE se.entrant_id = $1 AND se.deleted_at IS NULL LIMIT 1`,
+      [entrantId],
+    );
+    if (logging.rows[0]) meetConflict('ROSTER_LOCKED', 'Team composition is frozen after logging has started');
+    if (input.memberIds) {
+      meetIds(...input.memberIds);
+      const members = await db.query<{ id: string; kind: string }>(
+        `SELECT id, kind FROM meet_entrants WHERE id = ANY($1::uuid[]) AND event_id = $2 AND workspace_id = $3 AND kind <> 'relay'`,
+        [input.memberIds, eventId, actor.workspaceId],
+      );
+      if (members.rows.length !== input.memberIds.length) meetNotFound();
+      await db.query('DELETE FROM relay_members WHERE relay_id = $1', [entrantId]);
+      for (const [index, memberId] of input.memberIds.entries()) {
+        const member = members.rows.find((row) => row.id === memberId)!;
+        const membership = await db.query(
+          `INSERT INTO relay_members (event_id, workspace_id, relay_id, member_id, member_kind, leg, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [eventId, actor.workspaceId, entrantId, member.id, member.kind, index + 1, actor.userId],
+        );
+        await meetAudit(db, actor, eventId, actor.workspaceId, 'relay_member', membership.rows[0].id, 'created', null, membership.rows[0]);
+      }
+    }
+    const name = input.name ?? before.name;
+    await db.query('UPDATE meet_entrants SET name = $1 WHERE id = $2', [name, entrantId]);
+    const updated = await listEntrants(actor, eventId, db);
+    const entrant = updated.find((row) => row.id === entrantId)!;
+    await meetAudit(db, actor, eventId, actor.workspaceId, 'entrant', entrantId, 'updated', before, entrant);
+    return entrant;
+  });
+}
+
+export async function listSafeRelayMembers(eventId: string, relayId: string, db: DbExecutor = getPool()): Promise<SafeRelayMember[]> {
+  const result = await db.query<{ leg: number; name: string; member_kind: string }>(
+    `SELECT rm.leg, en.name, rm.member_kind
+     FROM relay_members rm
+     JOIN meet_entrants en ON en.id = rm.member_id AND en.event_id = rm.event_id
+     WHERE rm.relay_id = $1 AND rm.event_id = $2
+     ORDER BY rm.leg`,
+    [relayId, eventId],
+  );
+  return result.rows.map((row) => ({ leg: Number(row.leg), name: row.name, isGuest: row.member_kind === 'guest' }));
 }
 
 export async function listRegistrations(actor: MeetActor, eventId: string, sessionId: string, db: DbExecutor = getPool()): Promise<SessionRegistration[]> {

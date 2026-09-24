@@ -4,7 +4,7 @@ import { notifyEventInvalidated, notifySessionInvalidated } from '../realtime/in
 import * as meets from '../services/meets.js';
 import * as performances from '../services/sessionPerformances.js';
 import type { MeetActor, SessionTarget } from '../types/meets.js';
-import { object, parseEntrantCreate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionState, parseVersion } from '../validation/meets.js';
+import { object, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
 
 function actor(req: Request): MeetActor {
@@ -55,6 +55,12 @@ export const createEntrant = handler(async (req) => {
   notifyEventInvalidated(eventId, 'entrants');
   return entrant;
 }, 201);
+export const updateEntrant = handler(async (req) => {
+  const eventId = parameter(req, 'eventId');
+  const entrant = await meets.updateEntrant(actor(req), eventId, parameter(req, 'entrantId'), parseEntrantUpdate(req.body));
+  notifyEventInvalidated(eventId, 'entrants');
+  return entrant;
+});
 export const registrations = handler((req) => meets.listRegistrations(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId')));
 export const registerEntrant = handler(async (req) => {
   object(req.body ?? {}, []);
@@ -98,5 +104,12 @@ export const overrideResult = handler(async (req) => {
   await performances.overrideSessionResult(actor(req), eventId, ids, parseSessionOverride(req.body));
   notifySessionInvalidated(eventId, ids.disciplineSessionId, ids.entrantId);
   return (await performances.listSessionResults(actor(req), eventId, ids.disciplineSessionId)).find((row) => row.entrantId === ids.entrantId);
+});
+export const selectResultEntry = handler(async (req) => {
+  const eventId = parameter(req, 'eventId');
+  const ids = target(req);
+  const result = await performances.selectSessionResultEntry(actor(req), eventId, ids, parseSessionSelection(req.body));
+  notifySessionInvalidated(eventId, ids.disciplineSessionId, ids.entrantId);
+  return result;
 });
 export const statistics = handler((req) => performances.sessionStatistics(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId'), entrantFilter(req)));

@@ -133,7 +133,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setError(null);
     try {
       const res = await listEvents();
-      setEvents(res.data);
+      setEvents(res.data.filter((item) => item.discipline !== null));
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events');

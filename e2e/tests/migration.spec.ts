@@ -22,8 +22,8 @@ test.describe('migration verification', () => {
 
   test('all migrations are tracked in schema_migrations', async () => {
     const result = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(result.rows).toHaveLength(30);
-    expect(result.rows).toContainEqual({ name: '0028_multi_discipline_meet_foundation.sql' });
+    expect(result.rows).toHaveLength(36);
+    expect(result.rows).toContainEqual({ name: '0034_relay_catalogue_and_official_entry.sql' });
   });
 
   test('core tables exist', async () => {

@@ -15,7 +15,7 @@ The `/e2e` package uses Playwright to test the current 100m vertical slice again
 | `desktop-chromium` | Complete 100m workflow and expanded feature tests at a desktop viewport. |
 | `mobile-chromium` | The same tests at a Pixel 5 viewport. |
 
-The expanded suite covers: the full 100m vertical slice (roster, events, assignment, live logging, corrections, overrides, completion, statistics, dashboard, archive), workspace switching and membership management, role enforcement, squad management, athlete lifecycle (active/inactive/archived), injury creation and resolution, event helpers and offline designation, Socket.IO realtime, event reminders, public logger links, fixture notifications and RSVP, authorization boundaries, migration verification, accessibility deep audit, routing/navigation, and analytics/comparison.
+The expanded suite covers: the full 100m vertical slice (roster, events, assignment, live logging, corrections, overrides, completion, statistics, dashboard, archive), multi-discipline meet setup with relay session logging and official-entry selection, workspace switching and membership management, role enforcement, squad management, athlete lifecycle (active/inactive/archived), injury creation and resolution, event helpers and offline designation, Socket.IO realtime, event reminders, public logger links, fixture notifications and RSVP, authorization boundaries, migration verification, accessibility deep audit, routing/navigation, and analytics/comparison.
 
 ## Requirements
 
@@ -69,4 +69,4 @@ The HTML report is written to `e2e/playwright-report`. On a failed test, traces 
 
 ## AI declaration
 
-This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol].
+This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The expanded suite coverage note for relay session logging was updated with the assistance of opencode[mimo-v2.6-flash-free].

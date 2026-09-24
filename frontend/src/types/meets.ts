@@ -48,7 +48,8 @@ export interface SessionResult extends SessionTarget {
   isPb?: boolean; isSb?: boolean;
   id: string; eventId: string; workspaceId: string; outcome: ResultOutcome; finalResult: number | null;
   unit: DisciplineDefinition['unit']; manualOverride: number | null; overrideReason: string | null;
-  overriddenBy: string | null; overrideAt: string | null; effectiveResult: number | null;
+  overriddenBy: string | null; overrideAt: string | null; selectedEntryId: string | null;
+  effectiveResult: number | null;
   effectiveOutcome: ResultOutcome; countsTowardsStatistics: boolean; placing: number | null;
   version: number; createdAt: string; updatedAt: string;
 }
@@ -59,6 +60,9 @@ export interface SessionStatistics {
 }
 export type EntrantCreateInput = { kind: 'athlete'; athleteId: string }
   | { kind: 'guest'; name: string; clubName?: string | null; details?: string | null } | { kind: 'relay'; name: string; memberIds: string[] };
+export interface EntrantUpdateInput { name?: string; memberIds?: string[] }
+export interface SessionSelectionInput { entryId: string | null; expectedVersion: number }
+export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
 export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }
 export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
 

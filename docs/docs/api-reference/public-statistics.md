@@ -76,6 +76,54 @@ Archived athletes are excluded from `athletes`. Club aggregates retain their exi
 
 `club.branding` is present only when results publication is enabled. Media URLs may be null when no logo or cover has been uploaded; clients fall back to initials derived from the club name when `logoUrl` is null.
 
+## Published session and team results
+
+```
+GET /api/v1/public/statistics/clubs/{clubId}/session-results
+```
+
+Returns `404 NOT_FOUND` if the club is unknown or not published (`publicResultsEnabled` must be true). The response lists multi-discipline meet sessions with coach-visible standings projected to safe public fields only:
+
+```json
+{
+  "data": [
+    {
+      "eventId": "uuid",
+      "eventTitle": "City Relays",
+      "eventDate": "2026-09-20",
+      "sessions": [
+        {
+          "id": "uuid",
+          "label": "4x400m Final",
+          "status": "completed",
+          "disciplineCode": "4x400m",
+          "disciplineLabel": "4x400m relay",
+          "unit": "seconds",
+          "precision": 2,
+          "results": [
+            {
+              "entrantId": "uuid",
+              "name": "Speed Demons",
+              "kind": "relay",
+              "members": [
+                { "leg": 1, "name": "Ari Runner", "isGuest": false },
+                { "leg": 2, "name": "Bea Dash", "isGuest": false }
+              ],
+              "value": 61.12,
+              "outcome": "valid",
+              "placing": 1,
+              "isSelected": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Relay `members` expose only ordered leg number, display name, and guest flag. Raw `memberIds`, athlete UUIDs for members, notes, incidents, override audit fields, and private entrant details are never returned. Team times never write athlete `results` rows and therefore never affect individual PB/SB statistics. Read-time placing uses standard competition ranking with ties. The public Stats page renders these tables under the published club view.
+
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free].

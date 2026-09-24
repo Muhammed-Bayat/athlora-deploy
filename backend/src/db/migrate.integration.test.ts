@@ -122,6 +122,12 @@ describeDB('migrations against a real database', () => {
       '0026_user_preferences.sql',
       '0027_club_branding.sql',
       '0028_multi_discipline_meet_foundation.sql',
+      '0029_timed_discipline_catalogue.sql',
+      '0030_measured_field_catalogue.sql',
+      '0031_vertical_events_catalogue.sql',
+      '0032_athlete_disciplines_and_season_goals.sql',
+      '0033_guest_entrant_details.sql',
+      '0034_relay_catalogue_and_official_entry.sql',
     ]);
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
@@ -201,6 +207,12 @@ describeDB('migrations against a real database', () => {
       '0026_user_preferences.sql',
       '0027_club_branding.sql',
       '0028_multi_discipline_meet_foundation.sql',
+      '0029_timed_discipline_catalogue.sql',
+      '0030_measured_field_catalogue.sql',
+      '0031_vertical_events_catalogue.sql',
+      '0032_athlete_disciplines_and_season_goals.sql',
+      '0033_guest_entrant_details.sql',
+      '0034_relay_catalogue_and_official_entry.sql',
     ]);
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
@@ -210,8 +222,8 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(30);
-    expect(await hasColumn('results', 'outcome')).toBe(true);
+    expect(rows).toHaveLength(36);
+    expect(await hasColumn('session_results', 'selected_entry_id')).toBe(true);
   });
 
   it('rejects an applied migration whose checksum changed', async () => {

@@ -2,7 +2,7 @@ import { Router, type RequestHandler } from 'express';
 import { ApiError } from '../middleware/errors.js';
 import { notifySessionInvalidated } from '../realtime/index.js';
 import { resolvePublicMeetActor } from '../services/publicLoggers.js';
-import { listDisciplines, listEntrants, listRegistrations, listSessions } from '../services/meets.js';
+import { listDisciplines, listEntrants, listRegistrations, listSessions, listSafeRelayMembers } from '../services/meets.js';
 import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry } from '../services/sessionPerformances.js';
 import type { SessionEntry } from '../types/meets.js';
 import { object, parseSessionEntry, parseSessionEntryReplacement, parseVersion } from '../validation/meets.js';
@@ -24,8 +24,12 @@ const snapshot: RequestHandler = async (req, res, next) => {
     const actor = await resolvePublicMeetActor(token, eventId);
     const sessions = await listSessions(actor, eventId);
     const entrants = await listEntrants(actor, eventId);
+    const safeEntrants = await Promise.all(entrants.map(async ({ id, name, kind }) => ({
+      id, name, kind,
+      members: kind === 'relay' ? await listSafeRelayMembers(eventId, id) : [],
+    })));
     res.json({ data: { disciplines: await listDisciplines(),
-      entrants: entrants.map(({ id, name, kind, memberIds }) => ({ id, name, kind, memberIds })),
+      entrants: safeEntrants,
       sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, version, verticalConfig }) => ({
         id, label, disciplineDefinitionId, status, version, verticalConfig,
         results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical })),

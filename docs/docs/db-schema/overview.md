@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0033_guest_entrant_details.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0034_relay_catalogue_and_official_entry.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -557,6 +557,7 @@ event_reminder_mutes
 | `0028_multi_discipline_meet_foundation.sql` - `0031_vertical_events_catalogue.sql` | Immutable discipline catalogue and multi-discipline meet/session foundation; `events.discipline = NULL` identifies generic meets |
 | `0032_athlete_disciplines_and_season_goals.sql` | Athlete catalogue preferences and measurable private season goals |
 | `0033_guest_entrant_details.sql` | Nullable club name and private details for generic-meet entrants |
+| `0034_relay_catalogue_and_official_entry.sql` | Seeded `4x400m` relay catalogue row and `session_results.selected_entry_id` for coach-selected official attempts |
 
 ## Schema maintenance
 
@@ -564,4 +565,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free].
