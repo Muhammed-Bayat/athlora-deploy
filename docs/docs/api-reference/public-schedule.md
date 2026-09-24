@@ -10,7 +10,7 @@ The public schedule exposes only upcoming meet metadata for clubs that a coach h
 
 - Only clubs with `publicScheduleEnabled = true` are visible; unknown or unpublished clubs return `404 NOT_FOUND` with the same generic code (non-enumerating).
 - Upcoming means `date >= today` (UTC) with status `scheduled` or `in_progress`. Completed and cancelled events are never returned.
-- Responses contain only club identity and event metadata: title, date, time, type, discipline, venue (`locationName`), and status.
+- Responses contain only club identity and event metadata: title, date, time, type, discipline, selected disciplines (`disciplines`), venue (`locationName`), and status.
 - Athlete rosters, guest rosters, participants, results, timeline entries, injuries, and notes are never published by these endpoints — independent of either publication flag.
 
 ## Publication control
@@ -62,6 +62,7 @@ Returns `404 NOT_FOUND` if the club is unknown or its schedule is not published.
         "time": "10:00:00",
         "type": "competition",
         "discipline": "100m",
+        "disciplines": [{ "code": "100m", "label": "100m" }],
         "locationName": "City Track",
         "status": "scheduled"
       }
@@ -70,8 +71,8 @@ Returns `404 NOT_FOUND` if the club is unknown or its schedule is not published.
 }
 ```
 
-Events are ordered by date ascending, then time ascending (nulls last), then creation time. `discipline` is nullable for multi-discipline meets. `club.branding` is present only when schedule publication is enabled.
+Events are ordered by date ascending, then time ascending (nulls last), then creation time, then ID. `discipline` is nullable for multi-discipline meets. `disciplines` lists the distinct, non-cancelled catalogue disciplines configured through the meet's sessions (`discipline_sessions` joined to `discipline_definitions`, deduplicated by code and ordered by code). An event with no sessions falls back to a single entry derived from the legacy `discipline` scalar; an event with neither returns an empty array. Cancelled sessions are excluded. `club.branding` is always present on these responses (the endpoints only serve clubs whose schedule publication is enabled).
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free]. The `disciplines` event field and ordering/branding clarifications were documented with the assistance of opencode[mimo-v2.6-flash-free].

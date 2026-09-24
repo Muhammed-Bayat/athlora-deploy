@@ -8,6 +8,7 @@ import {
   type EventStatus,
   type PublicClub,
   type PublicClubSchedule,
+  type PublicScheduleDiscipline,
   type PublicScheduleEvent,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
@@ -39,7 +40,7 @@ interface PublicScheduleEventRow {
   status: string;
 }
 
-function mapEventRow(row: PublicScheduleEventRow): PublicScheduleEvent {
+function mapEventRow(row: PublicScheduleEventRow, disciplines: PublicScheduleDiscipline[]): PublicScheduleEvent {
   if (!EVENT_TYPES.includes(row.type as EventType)) throw notFound();
   if (!EVENT_STATUSES.includes(row.status as EventStatus)) throw notFound();
   return {
@@ -49,9 +50,47 @@ function mapEventRow(row: PublicScheduleEventRow): PublicScheduleEvent {
     time: row.time,
     type: row.type as EventType,
     discipline: (row.discipline as Discipline | null) ?? null,
+    disciplines,
     locationName: row.location_name,
     status: row.status as EventStatus,
   };
+}
+
+function legacyDisciplines(row: PublicScheduleEventRow): PublicScheduleDiscipline[] {
+  return row.discipline ? [{ code: row.discipline, label: row.discipline }] : [];
+}
+
+interface EventDisciplineRow {
+  event_id: string;
+  code: string;
+  label: string | null;
+}
+
+async function loadEventDisciplines(
+  eventIds: string[],
+  executor: DbExecutor,
+): Promise<Map<string, PublicScheduleDiscipline[]>> {
+  if (eventIds.length === 0) return new Map();
+  const result = await executor.query<EventDisciplineRow>(
+    `SELECT s.event_id, d.code, d.presentation->>'label' AS label
+     FROM discipline_sessions s
+     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+     WHERE s.event_id = ANY($1::uuid[])
+       AND s.status <> 'cancelled'
+     ORDER BY s.event_id, d.code, s.created_at, s.id`,
+    [eventIds],
+  );
+  const byEvent = new Map<string, PublicScheduleDiscipline[]>();
+  for (const row of result.rows) {
+    const entry = { code: row.code, label: row.label ?? row.code };
+    const list = byEvent.get(row.event_id);
+    if (list) {
+      if (!list.some((existing) => existing.code === entry.code)) list.push(entry);
+    } else {
+      byEvent.set(row.event_id, [entry]);
+    }
+  }
+  return byEvent;
 }
 
 function publicBrandSummary(row: PublicScheduleClubRow) {
@@ -105,8 +144,15 @@ export async function getPublicClubSchedule(
      ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC`,
     [club.workspace_id, nowDate],
   );
+  const disciplinesByEvent = await loadEventDisciplines(
+    eventsResult.rows.map((row) => row.id),
+    executor,
+  );
   return {
     club: { id: club.id, name: club.name, branding: publicBrandSummary(club) },
-    events: eventsResult.rows.map(mapEventRow),
+    events: eventsResult.rows.map((row) => {
+      const sessionDisciplines = disciplinesByEvent.get(row.id) ?? [];
+      return mapEventRow(row, sessionDisciplines.length > 0 ? sessionDisciplines : legacyDisciplines(row));
+    }),
   };
 }

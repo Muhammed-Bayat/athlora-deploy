@@ -7,6 +7,8 @@ import { Auth0TokenBridge } from './features/auth/Auth0TokenBridge';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { PublicLoggerPage } from './features/publicLogger/PublicLoggerPage';
 import { PublicStatsPage } from './features/publicStats/PublicStatsPage';
+import { PublicScheduleIndexPage } from './features/publicSchedule/PublicScheduleIndexPage';
+import { PublicScheduleClubPage } from './features/publicSchedule/PublicScheduleClubPage';
 import { auth0ProviderOptions } from './utils/auth0';
 
 const rootElement = document.getElementById('root');
@@ -21,8 +23,10 @@ const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
 const isPublicLoggerRoute = /^\/log\/[^/]+$/.test(window.location.pathname);
 const isPublicStatsRoute = /^\/stats\/?$/.test(window.location.pathname);
+const isPublicScheduleRoute = /^\/schedule(?:\/[^/]+)?\/?$/.test(window.location.pathname);
+const isPublicRoute = isPublicLoggerRoute || isPublicStatsRoute || isPublicScheduleRoute;
 
-if (!isPublicLoggerRoute && !isPublicStatsRoute && (!domain || !clientId || !audience)) {
+if (!isPublicRoute && (!domain || !clientId || !audience)) {
   throw new Error('Auth0 environment variables are not configured');
 }
 
@@ -30,6 +34,14 @@ createRoot(rootElement).render(
   <StrictMode>
     {isPublicLoggerRoute ? <BrowserRouter><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></BrowserRouter> :
     isPublicStatsRoute ? <BrowserRouter><Routes><Route path="/stats" element={<PublicStatsPage />} /></Routes></BrowserRouter> :
+    isPublicScheduleRoute ? (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/schedule" element={<PublicScheduleIndexPage />} />
+          <Route path="/schedule/:clubId" element={<PublicScheduleClubPage />} />
+        </Routes>
+      </BrowserRouter>
+    ) :
     <Auth0Provider
       {...auth0ProviderOptions(domain!, clientId!, audience!, window.location.origin)}
       onRedirectCallback={(appState) => {

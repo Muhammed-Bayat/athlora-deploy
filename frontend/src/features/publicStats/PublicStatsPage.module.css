@@ -121,6 +121,9 @@
 .clubMetrics > div { padding: 12px 11px; background: rgba(2, 20, 31, 0.74); }
 .clubMetrics span, .athleteMetrics span { display: block; color: #87a9b4; font: 700 0.58rem var(--font-family-mono); letter-spacing: 0.07em; text-transform: uppercase; }
 .clubMetrics strong, .athleteMetrics strong { display: block; margin-top: 4px; color: #e8fbfd; font: 700 0.93rem var(--font-family-mono); letter-spacing: -0.04em; }
+.clubScheduleLink { position: relative; z-index: 1; margin: 20px 0 0; }
+.clubScheduleLink a { color: #8ae9f2; font: 700 0.66rem var(--font-family-mono); letter-spacing: 0.09em; text-transform: uppercase; }
+.clubScheduleLink a:hover, .clubScheduleLink a:focus-visible { text-decoration: underline; }
 
 .gallerySection { position: relative; margin-top: 72px; }
 .sectionHeading { margin-bottom: 18px; }

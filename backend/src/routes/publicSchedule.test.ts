@@ -69,6 +69,7 @@ describe('public schedule routes', () => {
           time: '10:00:00',
           type: 'competition',
           discipline: '100m',
+          disciplines: [{ code: '100m', label: '100m' }],
           locationName: 'City Track',
           status: 'scheduled',
         },
@@ -89,7 +90,11 @@ describe('public schedule routes', () => {
         coverUrl: null,
       },
     });
-    expect(response.body.data.events[0]).toEqual(expect.objectContaining({ title: 'Spring Open', date: '2026-10-01' }));
+    expect(response.body.data.events[0]).toEqual(expect.objectContaining({
+      title: 'Spring Open',
+      date: '2026-10-01',
+      disciplines: [{ code: '100m', label: '100m' }],
+    }));
     expect(publicScheduleService.getPublicClubSchedule).toHaveBeenCalledWith(CLUB_ID);
   });
 
