@@ -98,6 +98,8 @@ export interface AthleteRow {
   dob: DateValue | null;
   gender: string | null;
   squads?: unknown;
+  preferred_discipline_ids?: unknown;
+  season_goals?: unknown;
   squad?: string | null;
   notes: string | null;
   archived_at: TimestampValue | null;
@@ -612,6 +614,8 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     dob: row.dob === null ? null : databaseDate(row.dob, 'athletes.dob'),
     gender: nullableString(row.gender, 'athletes.gender'),
     squads: row.squads === undefined ? [] : squads(row.squads, 'athletes.squads'),
+    preferredDisciplineIds: Array.isArray(row.preferred_discipline_ids) ? row.preferred_discipline_ids.map((id, index) => uuid(id, `athletes.preferred_discipline_ids.${index}`)) : [],
+    seasonGoals: Array.isArray(row.season_goals) ? row.season_goals.map((goal, index) => mapSeasonGoal(goal, `athletes.season_goals.${index}`)) : [],
     notes: nullableString(row.notes, 'athletes.notes'),
     archivedAt: nullableTimestamp(row.archived_at, 'athletes.archived_at'),
     status,
@@ -625,6 +629,17 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     createdAt: timestamp(row.created_at, 'athletes.created_at'),
     updatedAt: timestamp(row.updated_at, 'athletes.updated_at'),
   };
+}
+
+function mapSeasonGoal(value: unknown, field: string): import('../types/domain.js').AthleteSeasonGoal {
+  if (typeof value !== 'object' || value === null) return invalid(field, 'expected a goal object');
+  const goal = value as Record<string, unknown>;
+  const unit = goal.targetUnit;
+  const status = goal.status;
+  if (unit !== 'seconds' && unit !== 'metres' && unit !== 'cm') return invalid(`${field}.targetUnit`, 'invalid unit');
+  if (status !== 'active' && status !== 'completed') return invalid(`${field}.status`, 'invalid status');
+  if (typeof goal.targetValue !== 'number' || !Number.isFinite(goal.targetValue)) return invalid(`${field}.targetValue`, 'invalid value');
+  return { id: uuid(goal.id, `${field}.id`), disciplineDefinitionId: uuid(goal.disciplineDefinitionId, `${field}.disciplineDefinitionId`), targetValue: goal.targetValue, targetUnit: unit, targetDate: goal.targetDate === null ? null : databaseDate(goal.targetDate as DateValue, `${field}.targetDate`), status, createdAt: timestamp(goal.createdAt as TimestampValue, `${field}.createdAt`), updatedAt: timestamp(goal.updatedAt as TimestampValue, `${field}.updatedAt`) };
 }
 
 function squads(value: unknown, field: string): Squad[] {

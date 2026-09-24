@@ -15,6 +15,8 @@ import type {
 import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
+import { listDisciplines } from '../../api/meets';
+import type { DisciplineDefinition } from '../../types/meets';
 import { ProgressionChart } from './ProgressionChart';
 import styles from './AthleteDetailPage.module.css';
 
@@ -116,6 +118,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const [injuryError, setInjuryError] = useState<string | null>(null);
   const [injuryRetry, setInjuryRetry] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const fitnessButtonRef = useRef<HTMLButtonElement>(null);
@@ -161,6 +164,8 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
       .finally(() => { if (current) setInjuryLoading(false); });
     return () => { current = false; };
   }, [athleteId, injuryRetry]);
+
+  useEffect(() => { void listDisciplines().then(({ data }) => setDisciplines(data)).catch(() => setDisciplines([])); }, []);
 
   useEffect(() => {
     if (!statistics) return;
@@ -300,10 +305,16 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
              <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
               <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
              <div><dt>Status changed</dt><dd><time dateTime={athlete.statusChangedAt}>{new Date(athlete.statusChangedAt).toLocaleDateString()}</time></dd></div>
-            <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
-          </dl>
+             <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
+             <div className={styles.notes}><dt>Preferred disciplines</dt><dd>{athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ') || 'Not provided'}</dd></div>
+           </dl>
         )}
-      </Card>
+       </Card>
+
+       <Card className={styles.profileCard}>
+         <header><div><p>Season planning</p><h2>Season goals</h2></div></header>
+         {!profileLoading && athlete && (athlete.seasonGoals.length === 0 ? <p>No season goals set.</p> : <ul>{athlete.seasonGoals.map((goal) => <li key={goal.id}>{disciplines.find((discipline) => discipline.id === goal.disciplineDefinitionId)?.presentation.label ?? 'Catalogue discipline'}: <strong>{goal.targetValue} {goal.targetUnit}</strong>{goal.targetDate ? ` by ${formatDateOnly(goal.targetDate)}` : ''} <Badge variant={goal.status === 'completed' ? 'sb' : 'neutral'}>{goal.status === 'completed' ? 'Completed' : 'Active'}</Badge></li>)}</ul>)}
+       </Card>
 
       <Card className={styles.historyCard}>
         <header><div><p>Performance log</p><h2>Recent results</h2></div></header>

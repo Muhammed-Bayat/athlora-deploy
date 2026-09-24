@@ -260,6 +260,8 @@ describe('PostgreSQL row mapping', () => {
       dob: '2004-02-29',
       gender: 'open',
       squads: [],
+      preferredDisciplineIds: [],
+      seasonGoals: [],
       notes: 'Returning from injury',
       archivedAt: null,
       status: 'active',

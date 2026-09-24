@@ -6,6 +6,7 @@ import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, Resul
 import { AthleteDetailPage } from './AthleteDetailPage';
 
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
+const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listInjuries: vi.fn() }));
@@ -13,6 +14,7 @@ vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
 vi.mock('../../api/squads', () => squadsApi);
 vi.mock('../../api/injuries', () => injuriesApi);
+vi.mock('../../api/meets', () => meetsApi);
 vi.mock('../fitness/FitnessView', () => ({
   FitnessView: ({ athleteName, onBack }: { athleteName: string; onBack: () => void }) => <section><h1>Fitness & injury map</h1><p>{athleteName}</p><button type="button" onClick={onBack}>Back to performance</button></section>,
 }));
@@ -32,6 +34,8 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     dob: '2004-02-29',
     gender: 'Open',
     squads: [squad(SPRINT_ID, 'Sprint A')],
+    preferredDisciplineIds: [],
+    seasonGoals: [],
     notes: 'Starts focus',
     archivedAt: null,
     status: 'active',
@@ -114,6 +118,7 @@ beforeEach(() => {
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
   statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
   injuriesApi.listInjuries.mockResolvedValue([]);
+  meetsApi.listDisciplines.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
 describe('AthleteDetailPage', () => {
@@ -126,6 +131,17 @@ describe('AthleteDetailPage', () => {
     expect(await screen.findByText('1 active injury')).toBeInTheDocument();
     expect(screen.getByText('Moderate active injury status')).toBeInTheDocument();
     expect(injuriesApi.listInjuries).toHaveBeenCalledWith(ATHLETE_ID, undefined, 'active');
+  });
+
+  it('shows private preferred disciplines and active/completed season goals', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [{ id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m', unitLabel: 's' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' }], meta: { count: 1 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID], seasonGoals: [{ id: '55555555-5555-4555-8555-555555555555', disciplineDefinitionId: SPRINT_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'completed', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }] }));
+    renderDetail();
+
+    expect(await screen.findByText('Preferred disciplines')).toBeInTheDocument();
+    expect(screen.getAllByText('100m')).not.toHaveLength(0);
+    expect(screen.getByText('11.2 seconds')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
   });
 
   it('shows a focused identity, current-year KPIs, profile, active state, empty history, and back behavior', async () => {
@@ -169,7 +185,7 @@ describe('AthleteDetailPage', () => {
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Not provided')).toHaveLength(5);
+    expect(screen.getAllByText('Not provided')).toHaveLength(6);
     expect(screen.getByText('No valid result')).toBeInTheDocument();
     expect(screen.getByText('No valid result this year')).toBeInTheDocument();
   });
@@ -310,7 +326,7 @@ describe('AthleteDetailPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(athleteApi.updateAthlete).toHaveBeenCalledWith(ATHLETE_ID, {
-      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [ELITE_ID], notes: null,
+      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [ELITE_ID], notes: null, preferredDisciplineIds: [], seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
     expect(screen.getAllByText('Elite')).toHaveLength(2);

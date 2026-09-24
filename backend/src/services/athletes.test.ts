@@ -39,6 +39,8 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     dob: '2010-04-12',
     gender: null,
     squads: [],
+    preferred_discipline_ids: [],
+    season_goals: [],
     notes: null,
     archived_at: null,
     lifecycle_status: 'active',
@@ -66,6 +68,8 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     createdAt: '2026-08-01T09:00:00.000Z',
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
+    preferredDisciplineIds: overrides.preferredDisciplineIds ?? [],
+    seasonGoals: overrides.seasonGoals ?? [],
   };
 }
 
@@ -188,6 +192,18 @@ describe('replaceAthlete', () => {
         notes: null,
       }, { query } as never),
     ).rejects.toMatchObject(genericNotFound);
+  });
+
+  it('rejects goal units and values that do not match catalogue definitions', async () => {
+    query.mockResolvedValue({ rows: [{ id: ATHLETE_ID, unit: 'seconds', precision: 2 }] });
+    const payload = { name: 'Ari Runner', dob: null, gender: null, squadIds: [], notes: null, preferredDisciplineIds: [ATHLETE_ID], seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.234, targetUnit: 'seconds' as const, targetDate: null, status: 'active' as const }] };
+
+    await expect(replaceAthlete(USER_ID, ATHLETE_ID, payload, { query } as never)).rejects.toMatchObject({ code: 'INVALID_GOAL_TARGET' });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('discipline_definitions'), [[ATHLETE_ID]]);
+
+    query.mockClear();
+    query.mockResolvedValue({ rows: [{ id: ATHLETE_ID, unit: 'metres', precision: 2 }] });
+    await expect(replaceAthlete(USER_ID, ATHLETE_ID, { ...payload, seasonGoals: [{ ...payload.seasonGoals[0], targetValue: 11.2, targetUnit: 'seconds' }] }, { query } as never)).rejects.toMatchObject({ code: 'INVALID_GOAL_TARGET' });
   });
 });
 

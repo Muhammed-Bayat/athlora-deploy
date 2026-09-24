@@ -56,6 +56,8 @@ export interface AthleteCreatePayload {
   squadIds?: string[];
   squad?: string | null;
   notes: string | null;
+  preferredDisciplineIds?: string[];
+  seasonGoals?: Array<{ id?: string; disciplineDefinitionId: string; targetValue: number; targetUnit: 'seconds' | 'metres' | 'cm'; targetDate: string | null; status: 'active' | 'completed' }>;
 }
 
 export interface AthleteReplacementPayload {
@@ -65,6 +67,8 @@ export interface AthleteReplacementPayload {
   squadIds?: string[];
   squad?: string | null;
   notes: string | null;
+  preferredDisciplineIds?: string[];
+  seasonGoals?: AthleteCreatePayload['seasonGoals'];
 }
 
 export interface AthleteListQuery {
@@ -196,7 +200,7 @@ export interface FixtureInvitationResponsePayload {
   message: string | null;
 }
 
-const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes'] as const;
+const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes', 'preferredDisciplineIds', 'seasonGoals'] as const;
 const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId', 'year'] as const;
 const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type', 'year'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
@@ -769,10 +773,49 @@ function parseAthlete(input: unknown): AthleteCreatePayload {
     gender: nullableString(payload, 'gender', issues),
     squadIds: requiredUuidArray(payload, 'squadIds', issues),
     notes: nullableString(payload, 'notes', issues),
+    ...(hasOwn(payload, 'preferredDisciplineIds') ? { preferredDisciplineIds: optionalUuidArray(payload, 'preferredDisciplineIds', issues) } : {}),
+    ...(hasOwn(payload, 'seasonGoals') ? { seasonGoals: parseSeasonGoals(payload, issues) } : {}),
   };
 
   if (issues.length > 0) throwValidation(issues);
   return result;
+}
+
+function optionalUuidArray(payload: PayloadObject, field: string, issues: ValidationIssue[]): string[] {
+  if (!hasOwn(payload, field)) return [];
+  return requiredUuidArray(payload, field, issues);
+}
+
+function parseSeasonGoals(payload: PayloadObject, issues: ValidationIssue[]): AthleteCreatePayload['seasonGoals'] {
+  if (!hasOwn(payload, 'seasonGoals')) return [];
+  if (!Array.isArray(payload.seasonGoals)) {
+    issues.push(issue('seasonGoals', 'invalid_type', 'Expected an array'));
+    return [];
+  }
+  const seenIds = new Set<string>();
+  return payload.seasonGoals.flatMap((value, index) => {
+    const path = `seasonGoals.${index}`;
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      issues.push(issue(path, 'invalid_type', 'Expected a goal object'));
+      return [];
+    }
+    const goal = value as PayloadObject;
+    rejectUnknownFields(goal, ['id', 'disciplineDefinitionId', 'targetValue', 'targetUnit', 'targetDate', 'status'], issues);
+    const id = hasOwn(goal, 'id') ? (typeof goal.id === 'string' && isCanonicalUuid(goal.id) ? goal.id : (issues.push(issue(`${path}.id`, 'invalid_format', 'Expected a canonical UUID')), undefined)) : undefined;
+    if (id && seenIds.has(id)) issues.push(issue(`${path}.id`, 'duplicate', 'Goal IDs must be unique'));
+    if (id) seenIds.add(id);
+    const disciplineDefinitionId = typeof goal.disciplineDefinitionId === 'string' && isCanonicalUuid(goal.disciplineDefinitionId)
+      ? goal.disciplineDefinitionId : (issues.push(issue(`${path}.disciplineDefinitionId`, 'invalid_format', 'Expected a canonical UUID')), '');
+    const targetValue = isFiniteNumber(goal.targetValue) && goal.targetValue > 0
+      ? goal.targetValue : (issues.push(issue(`${path}.targetValue`, 'invalid_value', 'Expected a positive finite number')), 0);
+    const targetUnit = goal.targetUnit === 'seconds' || goal.targetUnit === 'metres' || goal.targetUnit === 'cm'
+      ? goal.targetUnit : (issues.push(issue(`${path}.targetUnit`, 'invalid_value', 'Expected seconds, metres, or cm')), 'seconds');
+    const targetDate = goal.targetDate === undefined || goal.targetDate === null ? null
+      : typeof goal.targetDate === 'string' && isGregorianDate(goal.targetDate) ? goal.targetDate : (issues.push(issue(`${path}.targetDate`, 'invalid_format', 'Expected a real date in YYYY-MM-DD format or null')), null);
+    const status = goal.status === 'active' || goal.status === 'completed'
+      ? goal.status : (issues.push(issue(`${path}.status`, 'invalid_value', 'Expected active or completed')), 'active');
+    return [{ ...(id ? { id } : {}), disciplineDefinitionId, targetValue, targetUnit, targetDate, status }];
+  });
 }
 
 export function parseAthleteCreatePayload(input: unknown): AthleteCreatePayload {

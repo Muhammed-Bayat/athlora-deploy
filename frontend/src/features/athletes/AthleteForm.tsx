@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { listSquads } from '../../api/squads';
+import { listDisciplines } from '../../api/meets';
 import { ApiError } from '../../api/client';
 import { Button, DatePicker, Input, Select } from '../../components';
-import type { Athlete, AthleteMutationPayload, Squad } from '../../types';
+import type { Athlete, AthleteMutationPayload, AthleteSeasonGoalInput, Squad } from '../../types';
+import type { DisciplineDefinition } from '../../types/meets';
 import { athleteErrorMessage } from './athleteError';
 import styles from './AthleteForm.module.css';
 
@@ -12,6 +14,8 @@ interface AthleteDraft {
   gender: string;
   squadIds: string[];
   notes: string;
+  preferredDisciplineIds: string[];
+  seasonGoals: AthleteSeasonGoalInput[];
 }
 
 type FieldErrors = Partial<Record<keyof AthleteDraft, string>>;
@@ -23,6 +27,8 @@ function draftFor(athlete?: Athlete): AthleteDraft {
     gender: athlete?.gender ?? '',
     squadIds: athlete?.squads?.map((squad) => squad.id) ?? [],
     notes: athlete?.notes ?? '',
+    preferredDisciplineIds: athlete?.preferredDisciplineIds ?? [],
+    seasonGoals: athlete?.seasonGoals ?? [],
   };
 }
 
@@ -34,6 +40,8 @@ function toPayload(draft: AthleteDraft): AthleteMutationPayload {
     gender: nullable(draft.gender),
     squadIds: draft.squadIds,
     notes: nullable(draft.notes),
+    preferredDisciplineIds: draft.preferredDisciplineIds,
+    seasonGoals: draft.seasonGoals,
   };
 }
 
@@ -49,7 +57,7 @@ function validationErrors(error: unknown): FieldErrors {
     if (
       typeof path === 'string'
       && typeof message === 'string'
-       && ['name', 'dob', 'gender', 'squadIds', 'notes'].includes(path)
+        && ['name', 'dob', 'gender', 'squadIds', 'notes', 'preferredDisciplineIds', 'seasonGoals'].includes(path)
     ) {
       fields[path as keyof AthleteDraft] ??= message;
     }
@@ -70,6 +78,7 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [squads, setSquads] = useState<Squad[]>([]);
+  const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,6 +86,8 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
       .then(({ data }) => setSquads(data.filter((squad) => squad.archivedAt === null || athlete?.squads?.some((assigned) => assigned.id === squad.id))))
       .catch(() => setSquads([]));
   }, [athlete]);
+
+  useEffect(() => { void listDisciplines().then(({ data }) => setDisciplines(data)).catch(() => setDisciplines([])); }, []);
 
   const setField = <K extends keyof AthleteDraft>(field: K, value: AthleteDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -109,6 +120,13 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
     }
   };
 
+  const updateGoal = (index: number, patch: Partial<AthleteDraft['seasonGoals'][number]>) => setField('seasonGoals', draft.seasonGoals.map((goal, goalIndex) => goalIndex === index ? { ...goal, ...patch } : goal));
+  const addGoal = () => {
+    const discipline = disciplines[0];
+    if (!discipline) return;
+    setField('seasonGoals', [...draft.seasonGoals, { disciplineDefinitionId: discipline.id, targetValue: 0, targetUnit: discipline.unit, targetDate: null, status: 'active' }]);
+  };
+
   return (
     <form className={styles.formFields} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
@@ -133,7 +151,25 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
          <legend>Discipline groups / squads <span>Optional</span></legend>
          {squads.length === 0 ? <p>No active squads available.</p> : squads.map((squad) => <label key={squad.id}><input type="checkbox" checked={draft.squadIds.includes(squad.id)} disabled={squad.archivedAt !== null} onChange={(event) => setField('squadIds', event.target.checked ? [...draft.squadIds, squad.id] : draft.squadIds.filter((id) => id !== squad.id))} /> {squad.name}{squad.archivedAt && ' (archived)'}</label>)}
        </fieldset>
-       {errors.squadIds && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squadIds}</span>}
+        {errors.squadIds && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squadIds}</span>}
+
+       <fieldset disabled={submitting}>
+         <legend>Preferred disciplines <span>Optional</span></legend>
+         {disciplines.length === 0 ? <p>Discipline catalogue unavailable.</p> : disciplines.map((discipline) => <label key={discipline.id}><input type="checkbox" checked={draft.preferredDisciplineIds.includes(discipline.id)} onChange={(event) => setField('preferredDisciplineIds', event.target.checked ? [...draft.preferredDisciplineIds, discipline.id] : draft.preferredDisciplineIds.filter((id) => id !== discipline.id))} /> {discipline.presentation.label}</label>)}
+       </fieldset>
+
+       <fieldset disabled={submitting}>
+         <legend>Season goals <span>Optional</span></legend>
+         {draft.seasonGoals.map((goal, index) => <div className={styles.goalRow} key={goal.id ?? `${goal.disciplineDefinitionId}-${index}`}>
+           <Select aria-label={`Goal ${index + 1} discipline`} value={goal.disciplineDefinitionId} onChange={(event) => { const discipline = disciplines.find((item) => item.id === event.target.value); if (discipline) updateGoal(index, { disciplineDefinitionId: discipline.id, targetUnit: discipline.unit }); }} options={disciplines.map((discipline) => ({ value: discipline.id, label: discipline.presentation.label }))} />
+           <Input aria-label={`Goal ${index + 1} target`} type="number" min="0" step="any" value={goal.targetValue || ''} onChange={(event) => updateGoal(index, { targetValue: Number(event.target.value) })} />
+           <span>{goal.targetUnit}</span>
+           <DatePicker aria-label={`Goal ${index + 1} target date`} value={goal.targetDate ?? ''} onChange={(value) => updateGoal(index, { targetDate: value || null })} />
+           <label><input type="checkbox" checked={goal.status === 'completed'} onChange={(event) => updateGoal(index, { status: event.target.checked ? 'completed' : 'active' })} /> Completed</label>
+           <Button type="button" variant="ghost" onClick={() => setField('seasonGoals', draft.seasonGoals.filter((_, goalIndex) => goalIndex !== index))}>Remove goal</Button>
+         </div>)}
+         <Button type="button" variant="secondary" onClick={addGoal} disabled={disciplines.length === 0}>Add season goal</Button>
+       </fieldset>
 
       <label htmlFor="athlete-notes">Coach notes <span>Optional</span></label>
       <textarea id="athlete-notes" value={draft.notes} onChange={(event) => setField('notes', event.target.value)} aria-invalid={Boolean(errors.notes)} aria-describedby={errors.notes ? 'athlete-notes-error' : undefined} disabled={submitting} />

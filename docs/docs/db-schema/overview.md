@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0027_club_branding.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0032_athlete_disciplines_and_season_goals.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -166,7 +166,23 @@ athlete_squads
   workspace_id UUID NOT NULL
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   FK (athlete_id, workspace_id) -> athletes(id, workspace_id) ON DELETE CASCADE
-  FK (squad_id, workspace_id) -> squads(id, workspace_id) ON DELETE RESTRICT
+   FK (squad_id, workspace_id) -> squads(id, workspace_id) ON DELETE RESTRICT
+
+athlete_preferred_disciplines
+  athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
+  discipline_definition_id UUID PK, FK -> discipline_definitions.id ON DELETE RESTRICT
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+athlete_season_goals
+  id UUID PK DEFAULT gen_random_uuid()
+  athlete_id UUID FK -> athletes.id ON DELETE CASCADE
+  discipline_definition_id UUID FK -> discipline_definitions.id ON DELETE RESTRICT
+  target_value NUMERIC NOT NULL CHECK (> 0)
+  target_unit TEXT NOT NULL CHECK ('seconds', 'metres', 'cm')
+  target_date DATE NULL
+  status TEXT NOT NULL CHECK ('active', 'completed')
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 
 athlete_status_transitions
   id UUID PK DEFAULT gen_random_uuid()
@@ -517,6 +533,8 @@ event_reminder_mutes
 | `0025_club_public_schedule_publication.sql` | Independent club public-schedule setting |
 | `0026_user_preferences.sql` | Per-user dashboard card order, hidden cards, and saved filter presets |
 | `0027_club_branding.sql` | Club description, brand colours, logo, and cover media keys |
+| `0028_multi_discipline_meet_foundation.sql` - `0031_vertical_events_catalogue.sql` | Immutable discipline catalogue and multi-discipline meet/session foundation |
+| `0032_athlete_disciplines_and_season_goals.sql` | Athlete catalogue preferences and measurable private season goals |
 
 ## Schema maintenance
 
@@ -524,4 +542,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0032`, including athlete discipline preferences and season goals, were documented with the assistance of OpenCode[gpt-5.6-terra].

@@ -66,6 +66,8 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     dob: null,
     gender: null,
     squads: [],
+    preferredDisciplineIds: [],
+    seasonGoals: [],
     notes: null,
     archivedAt: null,
     status: 'active',

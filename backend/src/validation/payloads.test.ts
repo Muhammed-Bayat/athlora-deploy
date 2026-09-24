@@ -157,6 +157,16 @@ describe('athlete payloads', () => {
       { path: '$', code: 'invalid_type', message: 'Expected payload to be an object' },
     ]);
   });
+
+  it('parses catalogue discipline preferences and measurable season goals', () => {
+    expect(parseAthleteCreatePayload({
+      name: 'Ada Runner', squadIds: [], preferredDisciplineIds: [ATHLETE_ID],
+      seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'active' }],
+    })).toMatchObject({
+      preferredDisciplineIds: [ATHLETE_ID],
+      seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'active' }],
+    });
+  });
 });
 
 describe('athlete list queries', () => {

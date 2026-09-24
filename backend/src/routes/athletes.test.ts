@@ -62,6 +62,8 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     dob: '2010-04-12',
     gender: null,
     squads: [],
+    preferred_discipline_ids: [],
+    season_goals: [],
     notes: null,
     archived_at: null,
     lifecycle_status: 'active',
@@ -89,6 +91,8 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     createdAt: '2026-08-01T09:00:00.000Z',
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
+    preferredDisciplineIds: overrides.preferredDisciplineIds ?? [],
+    seasonGoals: overrides.seasonGoals ?? [],
   };
 }
 

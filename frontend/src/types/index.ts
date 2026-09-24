@@ -221,12 +221,26 @@ export interface Athlete {
   dob: string | null;
   gender: string | null;
   squads?: Squad[];
+  preferredDisciplineIds: string[];
+  seasonGoals: AthleteSeasonGoal[];
   squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
   status: AthleteStatus;
   statusChangedAt: string;
   statusChangedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SeasonGoalStatus = 'active' | 'completed';
+export interface AthleteSeasonGoal {
+  id: string;
+  disciplineDefinitionId: string;
+  targetValue: number;
+  targetUnit: 'seconds' | 'metres' | 'cm';
+  targetDate: string | null;
+  status: SeasonGoalStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -246,6 +260,12 @@ export interface AthleteMutationPayload {
   squadIds?: string[];
   squad?: string | null;
   notes: string | null;
+  preferredDisciplineIds: string[];
+  seasonGoals: AthleteSeasonGoalInput[];
+}
+
+export interface AthleteSeasonGoalInput extends Omit<AthleteSeasonGoal, 'id' | 'createdAt' | 'updatedAt'> {
+  id?: string;
 }
 
 export interface AthleteListFilters {

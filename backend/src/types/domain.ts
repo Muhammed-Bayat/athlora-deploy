@@ -169,6 +169,8 @@ export interface Athlete {
   dob: string | null;
   gender: string | null;
   squads?: Squad[];
+  preferredDisciplineIds: string[];
+  seasonGoals: AthleteSeasonGoal[];
   /** @deprecated migration-only compatibility; application reads use squads. */
   squad?: string | null;
   notes: string | null;
@@ -176,6 +178,18 @@ export interface Athlete {
   status: AthleteLifecycleStatus;
   statusChangedAt: string;
   statusChangedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SeasonGoalStatus = 'active' | 'completed';
+export interface AthleteSeasonGoal {
+  id: string;
+  disciplineDefinitionId: string;
+  targetValue: number;
+  targetUnit: 'seconds' | 'metres' | 'cm';
+  targetDate: string | null;
+  status: SeasonGoalStatus;
   createdAt: string;
   updatedAt: string;
 }
