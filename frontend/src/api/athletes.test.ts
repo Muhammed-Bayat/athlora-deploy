@@ -19,6 +19,8 @@ const athlete: Athlete = {
   dob: '2004-02-29',
   gender: 'Open',
   squads: [squad],
+  preferredDisciplineIds: [],
+  seasonGoals: [],
   notes: 'Starts focus',
   archivedAt: null,
   status: 'active',
@@ -34,6 +36,8 @@ const payload: AthleteMutationPayload = {
   gender: athlete.gender,
   squadIds: [squad.id],
   notes: athlete.notes,
+  preferredDisciplineIds: [],
+  seasonGoals: [],
 };
 
 afterEach(() => {

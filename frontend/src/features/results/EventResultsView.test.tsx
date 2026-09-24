@@ -64,6 +64,8 @@ function athlete(athleteId: string, name: string, overrides: Partial<Athlete> = 
     dob: null,
     gender: null,
     squads: [],
+    preferredDisciplineIds: [],
+    seasonGoals: [],
     notes: null,
     archivedAt: null,
     status: 'active',

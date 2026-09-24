@@ -346,7 +346,8 @@ id, auth0Id, name, email, role ('coach'|'assistant'), createdAt, updatedAt
 ### 4.2 Athlete
 
 ```
-id, coachId, name, dob (ISO date|null), gender (string|null), squads (Squad[]),
+id, coachId, name, dob (ISO date|null), gender (string|null), squads (Squad[]), preferredDisciplineIds (UUID[]),
+seasonGoals (AthleteSeasonGoal[]),
 notes (string|null), status ('active'|'inactive'|'archived'), archivedAt (ISO|null),
 statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 ```
@@ -377,7 +378,9 @@ statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 
 Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable. Repeating an athlete status request for its current state is a successful no-op. Every real transition is workspace-authorized, actor-attributed, and flags existing event assignments for coach review.
 
-Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes` — all optional except `name`. `PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes`, `preferredDisciplineIds`, and `seasonGoals` — all optional except `name`. Each preferred discipline must be an ID from the immutable shared catalogue. A season goal has an optional existing `id`, a catalogue `disciplineDefinitionId`, positive `targetValue`, matching `targetUnit`, optional `targetDate`, and `status` (`active` or `completed`). The service rejects unknown disciplines, unit mismatches, and values beyond the definition precision. Supplying either profile array replaces that collection, so goals are created, edited, completed, or removed through the existing protected create/update flows. These fields are returned only by protected athlete endpoints and are never included in public statistics, comparisons, schedules, or logger responses.
+
+`PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
 `GET /athletes/injury-summaries` avoids per-card injury requests. It returns only athletes with active records; absent athletes are healthy. Each row contains `athleteId`, `activeInjuryCount`, `highestSeverity`, and an `activeInjuries` array of `{ bodyRegion, area, side, severity }`. Resolved and soft-deleted injuries are excluded.
 
@@ -661,4 +664,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract was updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra].

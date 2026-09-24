@@ -12,7 +12,9 @@ import type {
 
 const ATHLETE_COLUMNS = `a.id, a.coach_id, a.name, a.dob, a.gender, a.notes, a.archived_at, a.lifecycle_status, a.status_changed_at, a.status_changed_by, a.created_at, a.updated_at,
   COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'archivedAt', s.archived_at, 'createdAt', s.created_at, 'updatedAt', s.updated_at) ORDER BY lower(s.name), s.id)
-    FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), '[]'::json) AS squads`;
+    FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), '[]'::json) AS squads,
+  COALESCE((SELECT json_agg(apd.discipline_definition_id ORDER BY apd.discipline_definition_id) FROM athlete_preferred_disciplines apd WHERE apd.athlete_id = a.id), '[]'::json) AS preferred_discipline_ids,
+  COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g WHERE g.athlete_id = a.id), '[]'::json) AS season_goals`;
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -95,9 +97,11 @@ export async function createAthlete(
 
   const operation = async (client: DbExecutor) => {
     await verifySquads(workspaceId, payload.squadIds ?? [], client);
+    await verifyDisciplineProfile(payload, client);
     const result = await client.query<{ id: string }>('INSERT INTO athletes (workspace_id, coach_id, name, dob, gender, notes, status_changed_by) VALUES ($1, $2, $3, $4, $5, $6, $2) RETURNING id', [workspaceId, userId, payload.name, payload.dob, payload.gender, payload.notes]);
     const athlete = result.rows[0];
     await replaceMemberships(workspaceId, athlete.id, payload.squadIds ?? [], client);
+    if (payload.preferredDisciplineIds !== undefined || payload.seasonGoals !== undefined) await replaceDisciplineProfile(athlete.id, payload, client);
     return getAthlete(workspaceId, athlete.id, client);
   };
   return executor ? operation(executor) : withTransaction(operation);
@@ -113,6 +117,7 @@ export async function replaceAthlete(
 
   const operation = async (client: DbExecutor) => {
     await verifySquads(workspaceId, payload.squadIds ?? [], client);
+    await verifyDisciplineProfile(payload, client);
     const result = await client.query<{ id: string; lifecycle_status: AthleteLifecycleStatus }>(
       `UPDATE athletes
        SET name = CASE WHEN lifecycle_status = 'archived' THEN name ELSE $1 END,
@@ -130,9 +135,60 @@ export async function replaceAthlete(
       throw new ApiError(409, 'ATHLETE_ARCHIVED_READ_ONLY', 'Archived athletes must be restored before editing');
     }
     await replaceMemberships(workspaceId, athleteId, payload.squadIds ?? [], client);
+    if (payload.preferredDisciplineIds !== undefined || payload.seasonGoals !== undefined) await replaceDisciplineProfile(athleteId, payload, client);
     return getAthlete(workspaceId, athleteId, client);
   };
   return executor ? operation(executor) : withTransaction(operation);
+}
+
+async function verifyDisciplineProfile(payload: AthleteCreatePayload, executor: DbExecutor): Promise<void> {
+  const ids = [...new Set([...(payload.preferredDisciplineIds ?? []), ...(payload.seasonGoals ?? []).map((goal) => goal.disciplineDefinitionId)])];
+  if (ids.length === 0) return;
+  const result = await executor.query<{ id: string; unit: string; precision: number }>('SELECT id, unit, precision FROM discipline_definitions WHERE id = ANY($1::uuid[])', [ids]);
+  if (result.rows.length !== ids.length) throw new ApiError(400, 'INVALID_DISCIPLINE_IDS', 'All disciplines must exist in the shared catalogue');
+  const definitions = new Map(result.rows.map((definition) => [definition.id, definition]));
+  for (const goal of payload.seasonGoals ?? []) {
+    const definition = definitions.get(goal.disciplineDefinitionId)!;
+    if (definition.unit !== goal.targetUnit) throw new ApiError(400, 'INVALID_GOAL_TARGET', 'Goal target unit must match its discipline');
+    if (!hasAllowedPrecision(goal.targetValue, definition.precision)) throw new ApiError(400, 'INVALID_GOAL_TARGET', 'Goal target value exceeds the discipline precision');
+  }
+}
+
+function hasAllowedPrecision(value: number, precision: number): boolean {
+  const scaled = value * 10 ** precision;
+  return Math.abs(scaled - Math.round(scaled)) < 1e-9;
+}
+
+async function replaceDisciplineProfile(athleteId: string, payload: AthleteCreatePayload, executor: DbExecutor): Promise<void> {
+  if (payload.preferredDisciplineIds !== undefined) await executor.query('DELETE FROM athlete_preferred_disciplines WHERE athlete_id = $1', [athleteId]);
+  if (payload.preferredDisciplineIds?.length) await executor.query(
+    'INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) SELECT $1, unnest($2::uuid[])',
+    [athleteId, payload.preferredDisciplineIds],
+  );
+  if (payload.seasonGoals === undefined) return;
+  const retainedIds = payload.seasonGoals.flatMap((goal) => goal.id ? [goal.id] : []);
+  if (retainedIds.length) {
+    const existing = await executor.query<{ id: string }>('SELECT id FROM athlete_season_goals WHERE athlete_id = $1 AND id = ANY($2::uuid[])', [athleteId, retainedIds]);
+    if (existing.rows.length !== retainedIds.length) throw new ApiError(400, 'INVALID_GOAL_IDS', 'Goals can only be edited on their athlete');
+  }
+  await executor.query(
+    retainedIds.length
+      ? 'DELETE FROM athlete_season_goals WHERE athlete_id = $1 AND id <> ALL($2::uuid[])'
+      : 'DELETE FROM athlete_season_goals WHERE athlete_id = $1',
+    retainedIds.length ? [athleteId, retainedIds] : [athleteId],
+  );
+  for (const goal of payload.seasonGoals) {
+    if (goal.id) await executor.query(
+      `UPDATE athlete_season_goals SET discipline_definition_id = $1, target_value = $2, target_unit = $3, target_date = $4, status = $5, updated_at = now()
+       WHERE id = $6 AND athlete_id = $7`,
+      [goal.disciplineDefinitionId, goal.targetValue, goal.targetUnit, goal.targetDate, goal.status, goal.id, athleteId],
+    );
+    else await executor.query(
+      `INSERT INTO athlete_season_goals (athlete_id, discipline_definition_id, target_value, target_unit, target_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [athleteId, goal.disciplineDefinitionId, goal.targetValue, goal.targetUnit, goal.targetDate, goal.status],
+    );
+  }
 }
 
 async function verifySquads(workspaceId: string, squadIds: string[], executor: DbExecutor): Promise<void> {

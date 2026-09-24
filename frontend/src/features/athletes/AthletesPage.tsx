@@ -313,6 +313,8 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
       gender,
       squadIds: [],
       notes,
+      preferredDisciplineIds: [],
+      seasonGoals: [],
     });
 
     storeAthlete(athlete);

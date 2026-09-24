@@ -80,6 +80,8 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     dob: '2004-02-29',
     gender: 'Open',
     squads: [squad(SPRINT_ID, 'Sprint A')],
+    preferredDisciplineIds: [],
+    seasonGoals: [],
     notes: 'Starts focus',
     archivedAt: null,
     status: 'active',
@@ -382,6 +384,8 @@ describe('AthletesPage', () => {
       gender: 'Female',
       squadIds: [SPRINT_ID],
       notes: 'Acceleration block',
+      preferredDisciplineIds: [],
+      seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Casey Quick' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Casey Quick added to the roster');
@@ -407,6 +411,8 @@ describe('AthletesPage', () => {
       gender: 'Open',
       squadIds: [SPRINT_ID],
       notes: null,
+      preferredDisciplineIds: [],
+      seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
   });
