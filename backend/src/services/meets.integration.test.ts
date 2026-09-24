@@ -63,7 +63,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   async function migrate() { await transaction((db) => applyMigrations(db, migrations)); }
   async function definition(code = '100m') { return (await listDisciplines(pool)).find((row) => row.code === code)!; }
   async function session(code = '100m', label = 'Session') { return createSession(host, eventId, { disciplineDefinitionId: (await definition(code)).id, label }, transaction); }
-  async function guest(name = 'Guest') { return createEntrant(host, eventId, { kind: 'guest', name }, transaction); }
+  async function guest(name = 'Guest') { return createEntrant(host, eventId, { kind: 'guest', name, clubName: null, details: null }, transaction); }
   async function open(sessionId: string) {
     await pool.query("UPDATE events SET status = 'in_progress' WHERE id = $1", [eventId]);
     return changeSessionState(host, eventId, sessionId, { status: 'in_progress', expectedVersion: 1 }, transaction);
@@ -142,7 +142,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   it('installs the complete schema on an empty database with UUID keys and catalogue seeds', async () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     await migrate();
-    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['100m', '4x100m', 'long_jump']);
+    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['10000m', '100m', '100mh', '110mh', '1500m', '200m', '3000msc', '400m', '400mh', '4x100m', '5000m', '5000mw', '800m', 'discus', 'hammer', 'high_jump', 'javelin', 'long_jump', 'pole_vault', 'shot_put', 'triple_jump']);
     const columns = await pool.query("SELECT table_name, data_type FROM information_schema.columns WHERE column_name = 'id' AND table_name IN ('discipline_definitions','discipline_sessions','meet_entrants','relay_members','session_entrants','session_timeline_entries','session_results','meet_domain_audit')");
     expect(columns.rows).toHaveLength(8);
     expect(columns.rows.every((row) => row.data_type === 'uuid')).toBe(true);
@@ -165,11 +165,14 @@ describeDB('multi-discipline migration and domain integration', () => {
     await migrate();
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
+    const detailedGuest = await createEntrant(host, eventId, { kind: 'guest', name: 'D', clubName: 'Visitors', details: 'Lane 4' }, transaction);
     const members = [athlete.id, ...guests.map((row) => row.id)];
     const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Team', memberIds: members }, transaction);
     expect(relay).toMatchObject({ kind: 'relay', athleteId: null, memberIds: members });
     expect(athlete).toMatchObject({ kind: 'athlete', athleteId, name: 'Host athlete' });
     expect(guests[0]).toMatchObject({ kind: 'guest', athleteId: null });
+    expect(detailedGuest).toMatchObject({ kind: 'guest', clubName: 'Visitors', details: 'Lane 4' });
+    expect((await listEntrants(host, eventId, pool)).find((entrant) => entrant.id === detailedGuest.id)).toMatchObject({ clubName: 'Visitors', details: 'Lane 4' });
     await expect(createEntrant(host, eventId, { kind: 'athlete', athleteId: otherAthleteId }, transaction)).rejects.toMatchObject({ status: 404 });
     await expect(createEntrant(host, eventId, { kind: 'relay', name: 'Invalid', memberIds: [relay.id, athlete.id] }, transaction)).rejects.toMatchObject({ status: 404 });
     await expect(pool.query("INSERT INTO meet_entrants (event_id,workspace_id,kind,athlete_id,name,created_by) VALUES ($1,$2,'athlete',$3,'Leak',$4)", [eventId, host.workspaceId, otherAthleteId, host.userId])).rejects.toMatchObject({ code: '23503' });

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0032_athlete_disciplines_and_season_goals.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0033_guest_entrant_details.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -314,6 +314,27 @@ event_participant_status_reviews
   acknowledged_by UUID FK -> users.id ON DELETE SET NULL, NULL
 ```
 
+### Generic meet entrants
+
+```text
+meet_entrants
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID NOT NULL
+  workspace_id UUID NOT NULL
+  kind TEXT NOT NULL CHECK ('athlete', 'guest', 'relay')
+  athlete_id UUID NULL
+  name TEXT NOT NULL CHECK (trimmed length 1..120)
+  club_name TEXT NULL CHECK (trimmed length 1..120 when present)
+  details TEXT NULL CHECK (trimmed length 1..2000 when present)
+  created_by UUID FK -> users.id
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  UQ (id, event_id, workspace_id); UQ partial (event_id, athlete_id) when athlete_id is present
+  FK (event_id, workspace_id) -> event_fixture_workspaces(event_id, workspace_id)
+  FK (athlete_id, workspace_id) -> athletes(id, workspace_id)
+  CHECK: athlete_id is present exactly when kind is 'athlete'
+  CHECK: club_name and details are null unless kind is 'guest'
+```
+
 ### Live logging, results, helpers, and offline synchronization
 
 ```text
@@ -533,8 +554,9 @@ event_reminder_mutes
 | `0025_club_public_schedule_publication.sql` | Independent club public-schedule setting |
 | `0026_user_preferences.sql` | Per-user dashboard card order, hidden cards, and saved filter presets |
 | `0027_club_branding.sql` | Club description, brand colours, logo, and cover media keys |
-| `0028_multi_discipline_meet_foundation.sql` - `0031_vertical_events_catalogue.sql` | Immutable discipline catalogue and multi-discipline meet/session foundation |
+| `0028_multi_discipline_meet_foundation.sql` - `0031_vertical_events_catalogue.sql` | Immutable discipline catalogue and multi-discipline meet/session foundation; `events.discipline = NULL` identifies generic meets |
 | `0032_athlete_disciplines_and_season_goals.sql` | Athlete catalogue preferences and measurable private season goals |
+| `0033_guest_entrant_details.sql` | Nullable club name and private details for generic-meet entrants |
 
 ## Schema maintenance
 
@@ -542,4 +564,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0032`, including athlete discipline preferences and season goals, were documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra].

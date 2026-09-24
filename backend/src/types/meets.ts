@@ -58,6 +58,8 @@ export interface MeetEntrant {
   kind: 'athlete' | 'guest' | 'relay';
   athleteId: string | null;
   name: string;
+  clubName: string | null;
+  details: string | null;
   memberIds: string[];
   createdBy: string;
   createdAt: string;
@@ -135,7 +137,7 @@ export interface SessionCreateInput { disciplineDefinitionId: string; label: str
 export interface SessionStateInput { status: EventStatus; expectedVersion: number }
 export type EntrantCreateInput =
   | { kind: 'athlete'; athleteId: string }
-  | { kind: 'guest'; name: string }
+  | { kind: 'guest'; name: string; clubName: string | null; details: string | null }
   | { kind: 'relay'; name: string; memberIds: string[] };
 export interface SessionEntryInput {
   verticalState?: VerticalState | null;

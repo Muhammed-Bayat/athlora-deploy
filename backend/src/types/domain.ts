@@ -147,9 +147,8 @@ export interface ClubJoinRequest {
   userEmail?: string;
 }
 
-// MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
-// The database stays permissive (discipline is TEXT) so future disciplines are added
-// by new migrations without breaking this contract.
+// Legacy events retain their 100m contract. Null identifies a generic meet whose
+// disciplines are configured through immutable catalogue-backed sessions.
 export const DISCIPLINE_100M = '100m' as const;
 export type Discipline = typeof DISCIPLINE_100M;
 

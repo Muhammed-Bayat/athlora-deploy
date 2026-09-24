@@ -204,7 +204,7 @@ describe('GET /api/v1/events', () => {
 });
 
 describe('POST /api/v1/events', () => {
-  it('creates an event scoped to the requesting coach with discipline fixed to 100m', async () => {
+  it('creates an event scoped to the requesting coach and preserves a generic discipline', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [eventRow()] });
 
@@ -225,7 +225,7 @@ describe('POST /api/v1/events', () => {
     expect(parameters).toEqual([
       USER_ID, USER_ID,
       'competition',
-      '100m',
+       null,
       'City Sprint Meet',
       '2026-09-01',
       null,
