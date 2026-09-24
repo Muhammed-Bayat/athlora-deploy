@@ -185,6 +185,28 @@ export interface PublicClub {
   branding?: ClubBrandSummary;
 }
 
+export interface PublicScheduleDiscipline {
+  code: string;
+  label: string;
+}
+
+export interface PublicScheduleEvent {
+  id: string;
+  title: string;
+  date: string;
+  time: string | null;
+  type: 'competition' | 'training';
+  discipline: Discipline | null;
+  disciplines: PublicScheduleDiscipline[];
+  locationName: string | null;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+}
+
+export interface PublicClubSchedule {
+  club: PublicClub;
+  events: PublicScheduleEvent[];
+}
+
 export interface PublicAthleteStatistics {
   athlete: { id: string; name: string };
   pb: number | null;

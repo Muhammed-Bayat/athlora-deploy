@@ -86,6 +86,11 @@ export interface PublicClub {
   branding?: ClubBrandSummary;
 }
 
+export interface PublicScheduleDiscipline {
+  code: string;
+  label: string;
+}
+
 export interface PublicScheduleEvent {
   id: string;
   title: string;
@@ -93,6 +98,7 @@ export interface PublicScheduleEvent {
   time: string | null;
   type: EventType;
   discipline: Discipline | null;
+  disciplines: PublicScheduleDiscipline[];
   locationName: string | null;
   status: EventStatus;
 }

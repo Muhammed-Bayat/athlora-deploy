@@ -141,6 +141,7 @@ function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics
       <div className={styles.clubMetrics} aria-label={`${statistics.club.name} ${seasonLabel(season).toLowerCase()} 100m metrics`}>
         {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
       </div>
+      <p className={styles.clubScheduleLink}><a href={`/schedule/${encodeURIComponent(statistics.club.id)}`}>View public schedule →</a></p>
     </article>
   );
 }
@@ -324,7 +325,7 @@ export function PublicStatsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.aurora} aria-hidden="true"><i /><i /><i /></div>
-      <header className={styles.header}><a className={styles.brand} href="/"><img src="/logo-removebg.png" alt="" /><span>Athlora<small>Performance OS</small></span></a><nav aria-label="Public navigation"><a href="/">Home</a><a className={styles.activeLink} href="/stats" aria-current="page">Stats</a><a className={styles.startLink} href="/">Get started</a></nav></header>
+      <header className={styles.header}><a className={styles.brand} href="/"><img src="/logo-removebg.png" alt="" /><span>Athlora<small>Performance OS</small></span></a><nav aria-label="Public navigation"><a href="/">Home</a><a className={styles.activeLink} href="/stats" aria-current="page">Stats</a><a href="/schedule">Schedule</a><a className={styles.startLink} href="/">Get started</a></nav></header>
       <main className={styles.content}>
         <section className={styles.hero} aria-labelledby="public-stats-heading">
           <div className={styles.heroCopy}>
