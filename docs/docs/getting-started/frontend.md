@@ -93,6 +93,18 @@ The dashboard and other authenticated views wait for `PUT /api/v1/auth/me` to fi
 
 Unauthenticated console visits return to the requested canonical path after Auth0 completes. Event list date, type, and status filters are retained in its query string when opening and returning from detail.
 
+## Public routes
+
+Public surfaces are short-circuited in `src/main.tsx` before the Auth0 provider mounts, so they work without Auth0 environment variables:
+
+- `/` — marketing landing page (renders for any unauthenticated path inside the app router)
+- `/log/:token` — public logger session
+- `/stats` — public performance index (gated by `publicResultsEnabled`)
+- `/schedule` — public schedule club index (gated by `publicScheduleEnabled`)
+- `/schedule/:clubId` — published club schedule showing only upcoming meets
+
+The schedule pages live in `src/features/publicSchedule` and consume `src/api/publicSchedule.ts` (`requestPublic`, no auth headers). They render club identity via `ClubBadge`, an explicit search of published clubs on the index, a dedicated non-disclosing unavailable state for disabled/unknown clubs (both are the same generic `404`), an empty state for clubs with no upcoming meets, accessible `<time>` date/time rendering, and a responsive single-column layout below 820px. Landing navigation, the public stats header, and the public stats club card link to these routes; no console-only routes or roster data are referenced.
+
 ## Testing
 
 Frontend tests cover UI behavior, accessibility interactions, API wrappers, authenticated state, dashboard states, athlete and event workflows, live logging, result corrections, and weather handling. Run them with:
@@ -137,4 +149,4 @@ Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding settings and branded surface wiring were documented with the assistance of opencode[mimo-v2.6-flash-free]. The multi-discipline meet roster, session live logger, and public session-results surfaces were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding settings and branded surface wiring were documented with the assistance of opencode[mimo-v2.6-flash-free]. The multi-discipline meet roster, session live logger, and public session-results surfaces were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule routes and feature description were documented with the assistance of opencode[mimo-v2.6-flash-free].

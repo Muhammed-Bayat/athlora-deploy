@@ -318,7 +318,7 @@ When a club has enabled schedule publication (regardless of the results flag), t
 | Method & path | Purpose |
 |---|---|
 | `GET /public/schedule/clubs` | Search clubs with a published upcoming schedule |
-| `GET /public/schedule/clubs/:clubId` | Get a published club's upcoming meets (title, date/time, venue, discipline only — never rosters) |
+| `GET /public/schedule/clubs/:clubId` | Get a published club's upcoming meets (title, date/time, venue, disciplines only — never rosters) |
 
 The dedicated [public statistics reference](./public-statistics) and [public schedule reference](./public-schedule) define request parameters and visibility rules.
 
@@ -684,4 +684,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free].
