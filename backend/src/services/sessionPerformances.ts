@@ -3,7 +3,7 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionStatistics, SessionTarget } from '../types/meets.js';
+import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets.js';
 import { canReadEntrant, canWriteEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
 import { deriveEffectiveResult, deriveFieldBest, deriveTrackTime } from './resultDerivation.js';
@@ -43,16 +43,24 @@ async function recompute(db: DbExecutor, actor: MeetActor, eventId: string, targ
   const rows = await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2 ORDER BY created_at, id', [target.disciplineSessionId, target.entrantId]);
   const entries = rows.rows.map((row) => mapMeetRow<SessionEntry>(row));
   const session = definition.kind === 'vertical' ? await getSession(db, eventId, target.disciplineSessionId) : null;
-  const derived = definition.kind === 'vertical' ? deriveVertical(entries, session!.verticalConfig!) : definition.defaultRules.aggregation === 'timed' ? deriveTrackTime(entries, eventType) : deriveFieldBest(entries);
+  const prior = (await db.query<{ selected_entry_id: string | null }>('SELECT selected_entry_id FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId])).rows[0];
+  const selectedEntryId = prior?.selected_entry_id ?? null;
+  const stillSelected = selectedEntryId && entries.some((entry) => entry.id === selectedEntryId && !entry.deletedAt) ? selectedEntryId : null;
+  const derived = definition.kind === 'vertical'
+    ? deriveVertical(entries, session!.verticalConfig!)
+    : definition.defaultRules.aggregation === 'timed'
+      ? deriveTrackTime(entries, eventType, stillSelected)
+      : deriveFieldBest(entries);
   const before = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
   const after = await db.query(
-    `INSERT INTO session_results (event_id, session_id, entrant_id, workspace_id, outcome, final_result, unit)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (session_id, entrant_id) DO UPDATE
+    `INSERT INTO session_results (event_id, session_id, entrant_id, workspace_id, outcome, final_result, unit, selected_entry_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (session_id, entrant_id) DO UPDATE
        SET outcome = EXCLUDED.outcome, final_result = EXCLUDED.final_result, unit = EXCLUDED.unit,
+           selected_entry_id = EXCLUDED.selected_entry_id,
            version = session_results.version + 1, updated_at = now() RETURNING *`,
-    [eventId, target.disciplineSessionId, target.entrantId, workspaceId, derived.outcome, derived.value, definition.unit],
+    [eventId, target.disciplineSessionId, target.entrantId, workspaceId, derived.outcome, derived.value, definition.unit, stillSelected],
   );
-  await meetAudit(db, actor, eventId, workspaceId, 'result', after.rows[0].id, 'recomputed', before.rows[0], after.rows[0]);
+  await meetAudit(db, actor, eventId, workspaceId, 'result', after.rows[0].id, before.rows[0] ? 'recomputed' : 'created', before.rows[0], after.rows[0]);
 }
 
 export async function listSessionEntries(actor: MeetActor, eventId: string, sessionId: string, entrantId?: string, db: DbExecutor = getPool()): Promise<SessionEntry[]> {
@@ -194,6 +202,41 @@ export async function overrideSessionResult(actor: MeetActor, eventId: string, t
       [input.manualOverride, input.overrideReason, input.manualOverride === null ? null : actor.userId, before.id],
     );
     await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', before.id, 'overridden', before, result.rows[0]);
+  });
+}
+
+export async function selectSessionResultEntry(actor: MeetActor, eventId: string, target: SessionTarget, input: SessionSelectionInput, transaction: MeetTransaction = withTransaction): Promise<SessionResult> {
+  meetCoach(actor);
+  return transaction(async (db) => {
+    const access = await meetAccess(db, actor, eventId, true);
+    if (access.helper) meetNotFound();
+    const session = await getSession(db, eventId, target.disciplineSessionId);
+    const definition = await getDefinition(db, session.disciplineDefinitionId);
+    if (definition.kind === 'vertical') meetConflict('DERIVED_RESULT_ONLY', 'Vertical results are derived from attempt history');
+    const entrant = await registration(db, actor, access, eventId, target, false);
+    const found = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
+    const before = found.rows[0];
+    if (!before) meetNotFound();
+    if (before.version !== input.expectedVersion) meetConflict('RESULT_VERSION_CONFLICT', 'Result has been modified');
+    if (input.entryId) {
+      meetIds(input.entryId);
+      const entry = await db.query(
+        `SELECT 1 FROM session_timeline_entries
+         WHERE id = $1 AND session_id = $2 AND entrant_id = $3 AND deleted_at IS NULL
+           AND entry_type = 'attempt' AND value IS NOT NULL`,
+        [input.entryId, target.disciplineSessionId, target.entrantId],
+      );
+      if (!entry.rows[0]) meetNotFound();
+    }
+    await db.query(
+      `UPDATE session_results SET selected_entry_id = $1, updated_at = now() WHERE id = $2`,
+      [input.entryId, before.id],
+    );
+    await recompute(db, actor, eventId, target, entrant.workspace_id, definition, access.event.type);
+    const after = (await db.query('SELECT * FROM session_results WHERE id = $1', [before.id])).rows[0];
+    await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', before.id, input.entryId ? 'entry_selected' : 'entry_selection_cleared', before, after);
+    const board = await listSessionResults(actor, eventId, target.disciplineSessionId, db);
+    return board.find((row) => row.entrantId === target.entrantId)!;
   });
 }
 

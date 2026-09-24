@@ -47,6 +47,14 @@ Relay members are ordered individual entrants in the same event/workspace.
 Registrations can be withdrawn without deleting their results. Mutable changes
 record the server-authenticated actor, timestamps and before/after audit details.
 
+Relay teams can be renamed and their member order rewritten through a coach-only
+`PATCH` while the meet is still `scheduled`, as long as no session timeline entry
+has been recorded (`ROSTER_LOCKED` otherwise). The catalogue seeds `4x100m` and
+`4x400m`; heats and finals are independent sessions. Session results for timed
+disciplines store an optional coach-selected official entry
+(`session_results.selected_entry_id`). Ranking remains read-time; public
+projections expose only ordered safe member summaries and never raw member IDs.
+
 ## API and authorization
 
 Add catalogue reads at `/api/v1/disciplines` and event-nested `/sessions` and
@@ -78,4 +86,4 @@ build, and real PostgreSQL integration tests independently of Auth0 E2E secrets.
 
 ## AI declaration
 
-Prepared and implemented with OpenCode[openai/gpt-6-astra] for Issue #244.
+Prepared and implemented with OpenCode[openai/gpt-6-astra] for Issue #244. Relay roster patch rules, coach-selected official entry, and related verification notes were updated with the assistance of opencode[mimo-v2.6-flash-free].

@@ -2,6 +2,7 @@ import type { Discipline, EntryType, EventType, IncidentType, ResultOutcome } fr
 import { isPositiveRaceTime } from '../validation/primitives.js';
 
 export interface EntryInput {
+  id?: string;
   entryType: EntryType;
   value: number | null;
   isFoul: boolean;
@@ -63,11 +64,16 @@ function isValidEntryForTrack(entry: EntryInput): boolean {
 export function deriveTrackTime(
   entries: readonly EntryInput[],
   eventType: EventType = 'competition',
+  selectedEntryId?: string | null,
 ): Derivation {
   const voided = voidedBy(entries);
   if (voided) return voided;
 
   const activeAttempts = entries.filter(isValidEntryForTrack);
+  if (selectedEntryId) {
+    const selected = activeAttempts.find((entry) => entry.id === selectedEntryId);
+    if (selected) return { value: selected.value, incident: null, outcome: 'valid' };
+  }
   if (activeAttempts.length === 0) {
     return { value: null, incident: null, outcome: 'no_result' };
   }

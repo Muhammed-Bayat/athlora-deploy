@@ -3,8 +3,8 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { applyMigrations, loadMigrations } from '../db/migrate.js';
 import type { MeetActor, SessionEntryInput, SessionTarget } from '../types/meets.js';
-import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listSessions, registerEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
-import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry, overrideSessionResult, sessionStatistics } from './sessionPerformances.js';
+import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listSessions, registerEntrant, updateEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
+import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry, overrideSessionResult, selectSessionResultEntry, sessionStatistics } from './sessionPerformances.js';
 import { createTimelineEntry, listTimelineEntries, removeTimelineEntry } from './timeline.js';
 import { getAthleteStatisticsDetail } from './statistics.js';
 import { processSessionSyncBatch, type SessionSyncAction } from './sessionSync.js';
@@ -142,7 +142,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   it('installs the complete schema on an empty database with UUID keys and catalogue seeds', async () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     await migrate();
-    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['10000m', '100m', '100mh', '110mh', '1500m', '200m', '3000msc', '400m', '400mh', '4x100m', '5000m', '5000mw', '800m', 'discus', 'hammer', 'high_jump', 'javelin', 'long_jump', 'pole_vault', 'shot_put', 'triple_jump']);
+    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['10000m', '100m', '100mh', '110mh', '1500m', '200m', '3000msc', '400m', '400mh', '4x100m', '4x400m', '5000m', '5000mw', '800m', 'discus', 'hammer', 'high_jump', 'javelin', 'long_jump', 'pole_vault', 'shot_put', 'triple_jump']);
     const columns = await pool.query("SELECT table_name, data_type FROM information_schema.columns WHERE column_name = 'id' AND table_name IN ('discipline_definitions','discipline_sessions','meet_entrants','relay_members','session_entrants','session_timeline_entries','session_results','meet_domain_audit')");
     expect(columns.rows).toHaveLength(8);
     expect(columns.rows.every((row) => row.data_type === 'uuid')).toBe(true);
@@ -221,6 +221,38 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(audit.rows.every((row) => row.actor_id === host.userId && row.public_logger_session_id === null)).toBe(true);
     expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
     expect((await pool.query('SELECT * FROM timeline_entries')).rows).toEqual([]);
+  });
+
+  it('supports coach-selected official relay entries, roster edits, 4x400m size checks, and keeps individual stats isolated', async () => {
+    await migrate();
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
+    const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Team', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
+    const session400 = await session('4x400m', '4x400 Final');
+    const target = { disciplineSessionId: session400.id, entrantId: relay.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(session400.id);
+    const first = await createSessionEntry(host, eventId, target, { ...timed, value: 62.1 }, transaction);
+    const second = await createSessionEntry(host, eventId, target, { ...timed, value: 61.4 }, transaction);
+    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 61.4, selectedEntryId: null });
+    const selected = await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 2 }, transaction);
+    expect(selected).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id, placing: 1 });
+    await expect(selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 99 }, transaction)).rejects.toMatchObject({ code: 'RESULT_VERSION_CONFLICT' });
+    await expect(selectSessionResultEntry({ ...host, role: 'assistant' as const }, eventId, target, { entryId: first.id, expectedVersion: 3 }, transaction)).rejects.toMatchObject({ status: 403 });
+    await mutateSessionEntry(host, eventId, target, second.id, { expectedVersion: 2 }, true, transaction);
+    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id });
+    expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
+    const history = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
+    expect(history.pb).toBeNull();
+    await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
+    await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
+    await pool.query('DELETE FROM session_timeline_entries');
+    await pool.query('DELETE FROM session_results');
+    const updated = await updateEntrant(host, eventId, relay.id, { name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction);
+    expect(updated).toMatchObject({ name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] });
+    const { athleteRelayHistory } = await import('./relayHistory.js');
+    const relayHistory = await athleteRelayHistory(host.workspaceId, athleteId, pool);
+    expect(relayHistory.some((row) => row.teamName === 'Renamed' && row.countsAsIndividualResult === false)).toBe(true);
   });
 
   it('uses measured direction, ignores fouls, and excludes cancelled/withdrawn registrations from statistics', async () => {

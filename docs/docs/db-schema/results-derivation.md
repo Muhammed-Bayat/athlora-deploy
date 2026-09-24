@@ -12,11 +12,12 @@ The deployed derivation implementation is fixed to **100m** (track, timed) with 
 
 Recording a track event produces time values in seconds. The finishing time follows the 100m sprint timing rules in `deriveTrackTime(entries, eventType)` — the event type decides how the time is read from the active attempts:
 
-- **Competition** (`eventType = 'competition'`, the default): a single active finish. The finishing time is the **latest** valid `attempt` in the timeline (the final time, recorded after any splits).
+- **Competition** (`eventType = 'competition'`, the default): a single active finish. The finishing time is the **latest** valid `attempt` in the timeline (the final time, recorded after any splits), unless a coach has selected a different attempt as the official entry for that session result.
 - **Training** (`eventType = 'training'`): the finishing time is the **fastest** (lowest) valid positive `attempt` — the quickest rep is the one that counts.
+- **Selected official entry:** for multi-discipline session results (`session_results.selected_entry_id`), `deriveTrackTime` prefers the selected non-deleted attempt when it is present and still valid. Clearing the selection or deleting the selected entry falls back to the competition/training rule above. Selection is coach-only, version-checked, and audited (`entry_selected` / `entry_selection_cleared`).
 
 ```ts
-deriveTrackTime(entries, eventType = 'competition')  // → { value, incident, outcome }
+deriveTrackTime(entries, eventType = 'competition', selectedEntryId = null)  // → { value, incident, outcome }
 ```
 
 - Only `attempt` entries count; soft-deleted entries (`deletedAt` set) and zero/negative/non-finite values are ignored.
@@ -61,4 +62,4 @@ These rules are deliberately small and pure so they can be unit-tested exhaustiv
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The selected official-entry derivation rule for multi-discipline session results was documented with the assistance of opencode[mimo-v2.6-flash-free].

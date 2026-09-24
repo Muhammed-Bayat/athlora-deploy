@@ -1,6 +1,6 @@
 import { ApiError } from '../middleware/errors.js';
 import { ENTRY_TYPES, EVENT_STATUSES, INCIDENT_TYPES } from '../types/domain.js';
-import type { EntrantCreateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionStateInput, SessionTarget } from '../types/meets.js';
+import type { EntrantCreateInput, EntrantUpdateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionSelectionInput, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { isCanonicalUuid } from './primitives.js';
 import { parseVerticalConfig } from './verticalMeets.js';
 
@@ -108,4 +108,24 @@ export function parseSessionOverride(value: unknown): SessionOverrideInput {
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0)) invalid('manualOverride');
   if (amount === null && body.overrideReason != null) invalid('overrideReason');
   return { manualOverride: amount as number | null, overrideReason: amount === null ? null : text(body.overrideReason, 'overrideReason', 2000), expectedVersion: parseVersion(body.expectedVersion) };
+}
+
+export function parseSessionSelection(value: unknown): SessionSelectionInput {
+  const body = object(value, ['entryId', 'expectedVersion']);
+  const entryId = body.entryId === null ? null : uuid(body.entryId, 'entryId');
+  return { entryId, expectedVersion: parseVersion(body.expectedVersion) };
+}
+
+export function parseEntrantUpdate(value: unknown): EntrantUpdateInput {
+  const body = object(value, ['name', 'memberIds']);
+  const update: EntrantUpdateInput = {};
+  if (body.name !== undefined) update.name = text(body.name, 'name');
+  if (body.memberIds !== undefined) {
+    if (!Array.isArray(body.memberIds) || body.memberIds.length < 2 || body.memberIds.length > 20) invalid('memberIds');
+    const memberIds = body.memberIds.map((id) => uuid(id, 'memberIds'));
+    if (new Set(memberIds).size !== memberIds.length) invalid('memberIds');
+    update.memberIds = memberIds;
+  }
+  if (update.name === undefined && update.memberIds === undefined) invalid('$');
+  return update;
 }

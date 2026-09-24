@@ -7,12 +7,14 @@ const mockListPublicClubs = vi.fn();
 const mockListPublicSeasons = vi.fn();
 const mockGetPublicClubStatistics = vi.fn();
 const mockGetPublicAthleteComparison = vi.fn();
+const mockGetPublicClubSessionResults = vi.fn();
 
 vi.mock('../../api/publicStatistics', () => ({
   listPublicClubs: (...args: unknown[]) => mockListPublicClubs(...args),
   listPublicSeasons: (...args: unknown[]) => mockListPublicSeasons(...args),
   getPublicClubStatistics: (...args: unknown[]) => mockGetPublicClubStatistics(...args),
   getPublicAthleteComparison: (...args: unknown[]) => mockGetPublicAthleteComparison(...args),
+  getPublicClubSessionResults: (...args: unknown[]) => mockGetPublicClubSessionResults(...args),
 }));
 
 const CLUB_ID = '33333333-3333-4333-8333-333333333333';
@@ -38,6 +40,7 @@ beforeEach(() => {
   mockListPublicSeasons.mockResolvedValue([new Date().getUTCFullYear()]);
   mockGetPublicClubStatistics.mockResolvedValue(clubDetail);
   mockGetPublicAthleteComparison.mockResolvedValue({ athletes: [] });
+  mockGetPublicClubSessionResults.mockResolvedValue([]);
 });
 
 describe('PublicStatsPage', () => {

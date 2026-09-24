@@ -21,6 +21,9 @@ export function MeetRosterPanel({ event, canOperate, isCoach }: { event: Athleti
   const [relayName, setRelayName] = useState('');
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [entrantId, setEntrantId] = useState('');
+  const [editingRelayId, setEditingRelayId] = useState('');
+  const [editRelayName, setEditRelayName] = useState('');
+  const [editMemberIds, setEditMemberIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const selected = sessions.find((session) => session.id === sessionId);
@@ -58,6 +61,15 @@ export function MeetRosterPanel({ event, canOperate, isCoach }: { event: Athleti
     if (sessionId) await meets.registerEntrant(event.id, { disciplineSessionId: sessionId, entrantId: entrant.id });
     setRelayName(''); setMemberIds([]);
   });
+  const beginEditRelay = (relay: MeetEntrant) => {
+    setEditingRelayId(relay.id);
+    setEditRelayName(relay.name);
+    setEditMemberIds(relay.memberIds);
+  };
+  const saveRelayEdit = () => run(async () => {
+    await meets.updateEntrant(event.id, editingRelayId, { name: editRelayName, memberIds: editMemberIds });
+    setEditingRelayId('');
+  });
 
   return <section aria-label="Multi-discipline meet roster" aria-busy={busy}>
     <h2>Meet sessions and roster</h2>
@@ -87,7 +99,25 @@ export function MeetRosterPanel({ event, canOperate, isCoach }: { event: Athleti
       <label>Entrant <select value={entrantId} onChange={(input) => setEntrantId(input.target.value)}><option value="">Choose entrant</option>{entrants.filter((item) => (item.kind === 'relay') === (definition?.defaultRules.entrantType === 'relay')).map((item) => <option key={item.id} value={item.id}>{item.name}{activeRegistration(item.id) ? ' (registered)' : ''}</option>)}</select></label>
       {editable && entrantId && !activeRegistration(entrantId) && <Button onClick={() => void run(async () => { await meets.registerEntrant(event.id, { disciplineSessionId: sessionId, entrantId }); })} disabled={busy}>Register for session</Button>}
       {isCoach && selected.status === 'scheduled' && event.status !== 'cancelled' && entrantId && activeRegistration(entrantId) && <Button variant="secondary" onClick={() => void run(async () => { await meets.withdrawEntrant(event.id, { disciplineSessionId: sessionId, entrantId }); })} disabled={busy}>Withdraw from session</Button>}
-      <ul aria-label="Registered entrants">{registrations.map((registration) => { const entrant = entrants.find((item) => item.id === registration.entrantId); return <li key={registration.id}><span>{entrant?.name ?? 'Entrant'}: {registration.withdrawnAt ? 'withdrawn' : 'registered'}</span>{entrant?.clubName && <span> ({entrant.clubName})</span>}{entrant?.details && <span> - {entrant.details}</span>}</li>; })}</ul>
+      <ul aria-label="Registered entrants">{registrations.map((registration) => { const entrant = entrants.find((item) => item.id === registration.entrantId); return <li key={registration.id}><span>{entrant?.name ?? 'Entrant'}: {registration.withdrawnAt ? 'withdrawn' : 'registered'}</span>{entrant?.clubName && <span> ({entrant.clubName})</span>}{entrant?.details && <span> - {entrant.details}</span>}{entrant?.kind === 'relay' && entrant.memberIds.length > 0 && <span> Legs: {entrant.memberIds.map((id) => entrants.find((item) => item.id === id)?.name ?? 'Member').join(' → ')}</span>}{editable && entrant?.kind === 'relay' && editingRelayId !== entrant.id && <Button variant="secondary" onClick={() => beginEditRelay(entrant)}>Edit team</Button>}</li>; })}</ul>
+      {editingRelayId && (() => {
+        const relay = entrants.find((item) => item.id === editingRelayId);
+        if (!relay) return null;
+        return <fieldset disabled={busy}><legend>Edit relay team</legend>
+          <label>Team name <input value={editRelayName} onChange={(input) => setEditRelayName(input.target.value)} /></label>
+          {entrants.filter((item) => item.kind !== 'relay').map((item) => (
+            <label key={item.id}>
+              <input
+                type="checkbox"
+                checked={editMemberIds.includes(item.id)}
+                onChange={(input) => setEditMemberIds((current) => input.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
+              /> {item.name}
+            </label>
+          ))}
+          <Button onClick={() => void saveRelayEdit()} disabled={busy || !editRelayName.trim() || editMemberIds.length < 2}>Save team</Button>
+          <Button variant="secondary" onClick={() => setEditingRelayId('')} disabled={busy}>Cancel</Button>
+        </fieldset>;
+      })()}
     </>}
   </section>;
 }
