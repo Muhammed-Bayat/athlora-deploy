@@ -7,6 +7,7 @@ import { createApp } from '../app.js';
 const syncService = vi.hoisted(() => ({
   processSyncBatch: vi.fn(),
   designateOfflineLogger: vi.fn(),
+  getOfflineLoggerDesignation: vi.fn(),
   revokeOfflineLoggerDesignation: vi.fn(),
   transferOfflineLoggerDesignation: vi.fn(),
 }));
@@ -216,5 +217,25 @@ describe('POST /api/v1/sync/batch', () => {
 
     expect(response.status).toBe(401);
     expect(syncService.processSyncBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/events/:eventId/helpers/offline-logger', () => {
+  it('returns the current designated logger for an owned event', async () => {
+    queueOwnershipQueries('ok');
+    syncService.getOfflineLoggerDesignation.mockResolvedValue({
+      grantId: ACTION_ID,
+      userId: USER_ID,
+      name: 'Coach Taylor',
+      deviceId: 'device-1',
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/events/${EVENT_ID}/helpers/offline-logger`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ name: 'Coach Taylor', deviceId: 'device-1' });
+    expect(syncService.getOfflineLoggerDesignation).toHaveBeenCalledWith(EVENT_ID);
   });
 });

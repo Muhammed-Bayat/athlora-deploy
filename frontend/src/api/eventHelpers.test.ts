@@ -8,6 +8,21 @@ function response(data: unknown, status = 200) {
 }
 
 describe('eventHelpers API', () => {
+  it('reads the active offline logger designation', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({
+      data: { grantId: 'grant-1', userId: 'user-1', name: 'Coach Avery', deviceId: 'device-1' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await eventHelpers.getOfflineLoggerDesignation('ev-1');
+
+    expect(result).toMatchObject({ name: 'Coach Avery', deviceId: 'device-1' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/events/ev-1/helpers/offline-logger'),
+      expect.any(Object),
+    );
+  });
+
   it('designates an offline logger with the correct URL and body', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: { success: true } }));
     vi.stubGlobal('fetch', fetchMock);

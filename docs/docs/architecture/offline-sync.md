@@ -98,7 +98,8 @@ Caches the full event snapshot (participants + timeline) per event for offline d
 | `getPendingActions(eventId, userId)` | Returns pending actions for an event in creation order |
 | `markSynced(actionId, receipt, userId)` | Marks an action as synced with the server receipt |
 | `markFailed(actionId, error, userId)` | Marks an action as failed with the error message |
-| `getQueueStatus(eventId, userId)` | Returns `{ pending, synced, failed }` counts |
+| `getQueueStatus(eventId, userId)` | Returns pending/synced/failed counts and the latest local sync timestamp |
+| `getQueueActions(eventId, userId)` | Returns locally stored actions for recovery, newest first |
 
 ### Public (`publicActionQueue.ts`)
 
@@ -108,7 +109,8 @@ Caches the full event snapshot (participants + timeline) per event for offline d
 | `getPendingPublicActions(eventId, sessionToken)` | Returns pending actions for an event |
 | `markPublicSynced(actionId, receipt, sessionToken)` | Marks an action as synced |
 | `markPublicFailed(actionId, error, sessionToken)` | Marks an action as failed |
-| `getPublicQueueStatus(eventId, sessionToken)` | Returns counts |
+| `getPublicQueueStatus(eventId, sessionToken)` | Returns counts and the latest local sync timestamp |
+| `getPublicQueueActions(eventId, sessionToken)` | Returns locally stored actions for recovery, newest first |
 
 ## Sync Engine (`syncEngine.ts`)
 
@@ -122,7 +124,7 @@ Caches the full event snapshot (participants + timeline) per event for offline d
 6. On transport/HTTP failure, leaves every action **pending** so the queue is preserved for the next reconnect — the server is idempotent by `actionId`, so a re-send cannot create duplicates
 7. Returns `{ accepted, rejected, duplicates, failed }`
 
-Rejected actions do not block accepted siblings in the same batch; they remain visible via `QueueStatusBadge` failed counts and the reconnect toast.
+Rejected actions do not block accepted siblings in the same batch. Their rejection code is retained with the action so the logger can identify and retry it after recovery.
 
 ### `drainPublicQueue(eventId, sessionToken)` — Public
 
@@ -149,6 +151,14 @@ Body: { eventId, deviceId, actions: PublicSyncActionInput[] }
 
 Processing: idempotent, **last-write-wins** conflict resolution with audit logging.
 
+### Offline logger designation
+
+```
+GET /api/v1/events/:eventId/helpers/offline-logger
+```
+
+The authenticated, event-owner endpoint returns the active offline logger grant, user, and queue device ID, or `null` when no helper is designated. It is intended for status/audit display and does not change a designation.
+
 ### Conflict Resolution
 
 | Scenario | Authenticated | Public |
@@ -163,9 +173,9 @@ Processing: idempotent, **last-write-wins** conflict resolution with audit loggi
 
 Tracks `navigator.onLine` and `wasOffline` (true after returning from offline).
 
-### `useEventOfflineSync({ userId, eventId, deviceId })`
+### `useEventOffline(userId, eventId)`
 
-For authenticated Live Logger. Provides `enqueue`, `syncNow`, `isOnline`, `pendingCount`, `failedCount`. Auto-syncs on reconnect and every 10 seconds when online.
+For the authenticated Live Logger. Provides offline mutation fallbacks, detailed local actions, cache fallback data, retry, queue refresh, and drain operations.
 
 ### `usePublicOfflineSync({ sessionToken, eventId, deviceId })`
 
@@ -173,11 +183,16 @@ For public logger. Same interface. Also provides `cacheSnapshot` for persisting 
 
 ## UI Integration
 
-Both `LiveLoggingPage` and `PublicLoggerPage`:
+`LiveLoggingPage`, `SessionLivePanel`, and `PublicLoggerPage`:
 - Check `isOnline` before each mutation
 - If offline, enqueue the action and show a toast ("Queued for sync")
-- Show sync status badges (pending count, failed count, "Offline" indicator)
+- Render the accessible `OfflineRecoverySurface`, including connection state, cache freshness, designated logger status when available, last local sync, and action-level local records
+- Identify each local action by action type, target session, entrant/athlete when available, device ID, creation time, server receipt time, and server error
+- State explicitly that queued data is local and becomes server-canonical only after the server accepts it
+- Provide refresh, sync-now, and per-action retry controls without a page reload
 - Auto-sync when connectivity returns
+
+Opened multi-discipline sessions are cached with their catalogue, entrants, entries, and results. If the selected session cannot be read while offline, the logger restores that cache and shows its freshness timestamp.
 
 ## Service Worker
 
@@ -188,9 +203,9 @@ Configured via `vite-plugin-pwa`, the service worker caches:
 
 Write operations bypass the service worker and go directly to the action queue.
 
-## Queue Status UI
+## Recovery UI
 
-The `QueueStatusBadge` component displays the current queue state (pending/synced/failed counts). Used by both authenticated and public logger pages.
+`OfflineRecoverySurface` is a responsive, keyboard-accessible recovery surface shared by authenticated 100m logging, multi-discipline session logging, and public logging. It keeps local queue state visibly distinct from refreshed server data. Failed actions retain their server rejection code and can be reset to pending, then retried through the normal idempotent sync path.
 
 ## Dependencies
 
@@ -200,4 +215,4 @@ The `QueueStatusBadge` component displays the current queue state (pending/synce
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free]. The recovery surface and designation-status documentation were updated with assistance from OpenCode[openai/gpt-5.6-terra].

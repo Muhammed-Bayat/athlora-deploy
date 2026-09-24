@@ -1,5 +1,12 @@
 import { getOfflineDB } from './db';
 
+export interface CachedEventData {
+  event: Record<string, unknown> | null;
+  participants: Record<string, unknown> | null;
+  timeline: Record<string, unknown>[] | null;
+  cachedAt: number | null;
+}
+
 export async function cacheEventData(
   eventId: string,
   workspaceId: string,
@@ -21,11 +28,7 @@ export async function cacheEventData(
 export async function getCachedEventData(
   eventId: string,
   userId: string,
-): Promise<{
-  event: Record<string, unknown> | null;
-  participants: Record<string, unknown> | null;
-  timeline: Record<string, unknown>[] | null;
-}> {
+): Promise<CachedEventData> {
   const db = getOfflineDB(userId);
   const [event, participants, timeline] = await Promise.all([
     db.cachedEvents.get(eventId),
@@ -33,10 +36,13 @@ export async function getCachedEventData(
     db.cachedTimeline.get(eventId),
   ]);
 
+  const timestamps = [event?.cachedAt, participants?.cachedAt, timeline?.cachedAt]
+    .filter((value): value is number => value !== undefined);
   return {
     event: event?.data ?? null,
     participants: participants?.data ?? null,
     timeline: timeline?.entries ?? null,
+    cachedAt: timestamps.length > 0 ? Math.min(...timestamps) : null,
   };
 }
 

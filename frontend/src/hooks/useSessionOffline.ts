@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOnlineStatus } from './useOnlineStatus';
-import { enqueueAction, getQueueStatus } from '../offline/actionQueue';
+import { enqueueAction, getQueueActions, getQueueStatus, resetFailed, type OfflineQueueStatus } from '../offline/actionQueue';
 import { drainQueue, type DrainResult } from '../offline/syncEngine';
 import type { SessionEntryInput, SessionTarget } from '../types/meets';
+import type { OfflineAction } from '../offline/db';
 
 const DEVICE_ID_KEY = 'athlora-device-id';
 
@@ -21,7 +22,9 @@ function getOrCreateDeviceId(): string {
 
 export interface SessionOfflineState {
   isOnline: boolean;
-  queueStatus: { pending: number; synced: number; failed: number };
+  deviceId: string;
+  queueStatus: OfflineQueueStatus;
+  queueActions: OfflineAction[];
 }
 
 export interface SessionOfflineActions {
@@ -30,6 +33,7 @@ export interface SessionOfflineActions {
   enqueueUndoEntry: (eventId: string, workspaceId: string, target: SessionTarget, entryId: string, expectedVersion: number) => Promise<boolean>;
   syncPending: (eventId: string) => Promise<DrainResult>;
   refreshQueueStatus: (eventId: string) => Promise<void>;
+  retryFailedAction: (actionId: string, eventId: string) => Promise<void>;
 }
 
 export function useSessionOffline(
@@ -39,13 +43,17 @@ export function useSessionOffline(
 ): SessionOfflineState & SessionOfflineActions {
   const { isOnline } = useOnlineStatus();
   const deviceIdRef = useRef(getOrCreateDeviceId());
-  const [queueStatus, setQueueStatus] = useState({ pending: 0, synced: 0, failed: 0 });
+  const [queueStatus, setQueueStatus] = useState<OfflineQueueStatus>({ pending: 0, synced: 0, failed: 0, lastSyncedAt: null });
+  const [queueActions, setQueueActions] = useState<OfflineAction[]>([]);
 
   const refreshQueueStatus = useCallback(async (eventId: string) => {
     try {
-      setQueueStatus(await getQueueStatus(eventId, userId));
+      const [status, actions] = await Promise.all([getQueueStatus(eventId, userId), getQueueActions(eventId, userId)]);
+      setQueueStatus(status);
+      setQueueActions(actions);
     } catch {
-      setQueueStatus({ pending: 0, synced: 0, failed: 0 });
+      setQueueStatus({ pending: 0, synced: 0, failed: 0, lastSyncedAt: null });
+      setQueueActions([]);
     }
   }, [userId]);
 
@@ -105,13 +113,21 @@ export function useSessionOffline(
     return result;
   }, [refreshQueueStatus, userId]);
 
+  const retryFailedAction = useCallback(async (actionId: string, eventId: string) => {
+    await resetFailed(actionId, userId);
+    await refreshQueueStatus(eventId);
+  }, [refreshQueueStatus, userId]);
+
   return {
     isOnline,
+    deviceId: deviceIdRef.current,
     queueStatus,
+    queueActions,
     enqueueCreateEntry,
     enqueueEditEntry,
     enqueueUndoEntry,
     syncPending,
     refreshQueueStatus,
+    retryFailedAction,
   };
 }

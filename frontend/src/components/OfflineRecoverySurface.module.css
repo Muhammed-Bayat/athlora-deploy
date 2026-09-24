@@ -1,0 +1,44 @@
+.surface {
+  border: 1px solid var(--color-border, #cbd5e1);
+  border-left: 4px solid var(--color-primary, #2563eb);
+  border-radius: var(--radius-md, 0.5rem);
+  background: var(--color-surface, #fff);
+  margin: var(--space-4, 1rem) 0;
+  padding: var(--space-4, 1rem);
+}
+
+.summary, .facts, .action {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+}
+
+.summary { align-items: flex-start; justify-content: space-between; }
+.kicker { color: var(--color-primary, #2563eb); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; margin: 0; text-transform: uppercase; }
+.summary h3 { margin: 0.25rem 0; }
+.explainer { margin: 0; max-width: 52rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.facts { border-top: 1px solid var(--color-border, #cbd5e1); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 1rem 0; padding-top: 1rem; }
+.facts div { min-width: 0; }
+.facts dt { color: var(--color-text-muted, #475569); font-size: 0.8rem; }
+.facts dd { font-weight: 600; margin: 0.2rem 0; overflow-wrap: anywhere; }
+.facts small, .action small { color: var(--color-text-muted, #475569); display: block; overflow-wrap: anywhere; }
+
+.queue { border-top: 1px solid var(--color-border, #cbd5e1); padding-top: 0.75rem; }
+.queue summary { cursor: pointer; font-weight: 700; }
+.empty { color: var(--color-text-muted, #475569); }
+.actionList { display: grid; gap: 0.75rem; list-style: none; margin: 0.75rem 0 0; padding: 0; }
+.action { align-items: flex-start; border-left: 3px solid var(--color-border, #cbd5e1); justify-content: space-between; padding: 0.5rem 0 0.5rem 0.75rem; }
+.action[data-status='pending'] { border-left-color: #d97706; }
+.action[data-status='synced'] { border-left-color: #15803d; }
+.action[data-status='failed'] { border-left-color: #b91c1c; }
+.action p { margin: 0.25rem 0; }
+.status { font-size: 0.85rem; margin-left: 0.5rem; }
+.errorText { color: #b91c1c; font-weight: 600; }
+
+@media (max-width: 700px) {
+  .summary, .action { flex-direction: column; }
+  .actions { width: 100%; }
+  .actions button { flex: 1; }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

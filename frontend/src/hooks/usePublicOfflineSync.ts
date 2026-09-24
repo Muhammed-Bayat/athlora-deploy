@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { enqueuePublicAction, getPublicQueueStatus } from '../offline/publicActionQueue';
+import {
+  enqueuePublicAction,
+  getPublicQueueActions,
+  getPublicQueueStatus,
+  resetPublicFailed,
+  type PublicOfflineQueueStatus,
+} from '../offline/publicActionQueue';
 import { cachePublicSnapshot } from '../offline/publicEventCache';
 import { drainPublicQueue } from '../offline/syncEngine';
 import { useOnlineStatus } from './useOnlineStatus';
 import type { SessionTarget } from '../types/meets';
+import type { PublicOfflineAction } from '../offline/publicDb';
 
 interface UsePublicOfflineSyncOptions {
   sessionToken: string;
@@ -13,11 +20,13 @@ interface UsePublicOfflineSyncOptions {
 
 export interface PublicOfflineSyncResult {
   isOnline: boolean;
+  deviceId: string;
   wasOffline: boolean;
   isSyncing: boolean;
   pendingCount: number;
   failedCount: number;
-  queueStatus: { pending: number; synced: number; failed: number } | null;
+  queueStatus: PublicOfflineQueueStatus | null;
+  queueActions: PublicOfflineAction[];
   sessionExpired: boolean;
   enqueue: (input: {
     target?: SessionTarget;
@@ -29,12 +38,14 @@ export interface PublicOfflineSyncResult {
   cacheSnapshot: (snapshot: Record<string, unknown>) => Promise<void>;
   syncNow: () => Promise<void>;
   refreshStatus: () => Promise<void>;
+  retryFailedAction: (actionId: string) => Promise<void>;
   clearSessionExpired: () => void;
 }
 
 export function usePublicOfflineSync({ sessionToken, eventId, deviceId }: UsePublicOfflineSyncOptions): PublicOfflineSyncResult {
   const { isOnline, wasOffline, resetWasOffline } = useOnlineStatus();
-  const [queueStatus, setQueueStatus] = useState<{ pending: number; synced: number; failed: number } | null>(null);
+  const [queueStatus, setQueueStatus] = useState<PublicOfflineQueueStatus | null>(null);
+  const [queueActions, setQueueActions] = useState<PublicOfflineAction[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const isSyncingRef = useRef(false);
@@ -42,10 +53,15 @@ export function usePublicOfflineSync({ sessionToken, eventId, deviceId }: UsePub
   const refreshStatus = useCallback(async () => {
     if (!sessionToken || !eventId) return;
     try {
-      const status = await getPublicQueueStatus(eventId, sessionToken);
+      const [status, actions] = await Promise.all([
+        getPublicQueueStatus(eventId, sessionToken),
+        getPublicQueueActions(eventId, sessionToken),
+      ]);
       setQueueStatus(status);
+      setQueueActions(actions);
     } catch {
       setQueueStatus(null);
+      setQueueActions([]);
     }
   }, [eventId, sessionToken]);
 
@@ -99,6 +115,11 @@ export function usePublicOfflineSync({ sessionToken, eventId, deviceId }: UsePub
     setSessionExpired(false);
   }, []);
 
+  const retryFailedAction = useCallback(async (actionId: string) => {
+    await resetPublicFailed(actionId, sessionToken);
+    await refreshStatus();
+  }, [refreshStatus, sessionToken]);
+
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
@@ -120,16 +141,19 @@ export function usePublicOfflineSync({ sessionToken, eventId, deviceId }: UsePub
 
   return {
     isOnline,
+    deviceId,
     wasOffline,
     isSyncing,
     pendingCount: queueStatus?.pending ?? 0,
     failedCount: queueStatus?.failed ?? 0,
     queueStatus,
+    queueActions,
     sessionExpired,
     enqueue,
     cacheSnapshot,
     syncNow,
     refreshStatus,
+    retryFailedAction,
     clearSessionExpired,
   };
 }

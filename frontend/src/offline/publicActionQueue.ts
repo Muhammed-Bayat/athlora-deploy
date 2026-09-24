@@ -2,6 +2,13 @@ import Dexie from 'dexie';
 import { getPublicOfflineDB, type PublicOfflineAction } from './publicDb';
 import { isSessionTarget, type SessionTarget } from '../types/meets';
 
+export interface PublicOfflineQueueStatus {
+  pending: number;
+  synced: number;
+  failed: number;
+  lastSyncedAt?: number | null;
+}
+
 export interface EnqueuePublicActionInput {
   target?: SessionTarget;
   actionType: PublicOfflineAction['actionType'];
@@ -49,6 +56,15 @@ export async function getPendingPublicActions(
     .toArray();
 }
 
+export async function getPublicQueueActions(
+  eventId: string,
+  sessionToken: string,
+): Promise<PublicOfflineAction[]> {
+  const db = getPublicOfflineDB(sessionToken);
+  const actions = await db.publicOfflineActions.where('eventId').equals(eventId).toArray();
+  return actions.sort((left, right) => right.createdAt - left.createdAt);
+}
+
 export async function markPublicSynced(
   actionId: string,
   receipt: Record<string, unknown>,
@@ -88,12 +104,16 @@ export async function resetPublicFailed(
 export async function getPublicQueueStatus(
   eventId: string,
   sessionToken: string,
-): Promise<{ pending: number; synced: number; failed: number }> {
+): Promise<PublicOfflineQueueStatus> {
   const db = getPublicOfflineDB(sessionToken);
-  const [pending, synced, failed] = await Promise.all([
+  const [pending, synced, failed, actions] = await Promise.all([
     db.publicOfflineActions.where({ status: 'pending', eventId }).count(),
     db.publicOfflineActions.where({ status: 'synced', eventId }).count(),
     db.publicOfflineActions.where({ status: 'failed', eventId }).count(),
+    getPublicQueueActions(eventId, sessionToken),
   ]);
-  return { pending, synced, failed };
+  const syncedAt = actions
+    .map((action) => action.syncedAt ?? 0)
+    .reduce((latest, value) => Math.max(latest, value), 0);
+  return { pending, synced, failed, lastSyncedAt: syncedAt || null };
 }

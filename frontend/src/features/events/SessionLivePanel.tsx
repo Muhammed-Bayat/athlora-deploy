@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as meets from '../../api/meets';
-import { Button } from '../../components';
+import { Button, OfflineRecoverySurface } from '../../components';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { useSessionOffline } from '../../hooks/useSessionOffline';
 import { useCurrentUser } from '../auth/CurrentUserContext';
-import { QueueStatusBadge } from '../timeline/QueueStatusBadge';
+import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
+import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResult } from '../../types/meets';
 
@@ -37,6 +38,8 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
+  const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
 
   const session = sessions.find((item) => item.id === sessionId);
@@ -45,25 +48,64 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const live = canOperate && session?.status === 'in_progress' && event.status === 'in_progress';
 
   const reload = useCallback(async () => {
-    const [catalogue, nextSessions, nextEntrants] = await Promise.all([
-      meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
-    ]);
-    setDefinitions(catalogue.data);
-    setSessions(nextSessions.data);
-    setEntrants(nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] })));
-    if (sessionId) {
-      const [history, board] = await Promise.all([
-        meets.listSessionEntries(event.id, sessionId),
-        meets.listSessionResults(event.id, sessionId),
+    try {
+      const [catalogue, nextSessions, nextEntrants] = await Promise.all([
+        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
       ]);
-      setEntries(history.data.filter((entry) => !entrantId || entry.entrantId === entrantId));
-      setResults(board.data);
+      setDefinitions(catalogue.data);
+      setSessions(nextSessions.data);
+      const normalizedEntrants = nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] }));
+      setEntrants(normalizedEntrants);
+      if (sessionId) {
+        const [history, board] = await Promise.all([
+          meets.listSessionEntries(event.id, sessionId),
+          meets.listSessionResults(event.id, sessionId),
+        ]);
+        const nextEntries = history.data.filter((entry) => !entrantId || entry.entrantId === entrantId);
+        setEntries(nextEntries);
+        setResults(board.data);
+        void cacheSession(currentUser?.id ?? 'anonymous', activeWorkspace.id, event.id, sessionId, {
+          definitions: catalogue.data,
+          sessions: nextSessions.data,
+          entrants: normalizedEntrants,
+          entries: nextEntries,
+          results: board.data,
+        }).then(() => {
+          setCacheFreshness(Date.now());
+        }).catch(() => {
+          // A session can still be logged when browser storage is unavailable.
+        });
+      }
+    } catch (reason) {
+      if (!sessionId) throw reason;
+      const cached = await getCachedSession(currentUser?.id ?? 'anonymous', activeWorkspace.id, event.id, sessionId);
+      if (!cached) throw reason;
+      const data = cached.data as {
+        definitions: DisciplineDefinition[];
+        sessions: DisciplineSession[];
+        entrants: MeetEntrant[];
+        entries: SessionEntry[];
+        results: SessionResult[];
+      };
+      setDefinitions(data.definitions);
+      setSessions(data.sessions);
+      setEntrants(data.entrants);
+      setEntries(data.entries);
+      setResults(data.results);
+      setCacheFreshness(cached.cachedAt);
     }
-  }, [event.id, sessionId, entrantId]);
+  }, [activeWorkspace.id, currentUser?.id, entrantId, event.id, sessionId]);
 
   useEffect(() => {
     void reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load session logging'));
   }, [reload, event.status, reloadKey]);
+
+  useEffect(() => {
+    if (!offline.isOnline) return;
+    void getOfflineLoggerDesignation(event.id)
+      .then(setOfflineDesignation)
+      .catch(() => setOfflineDesignation(null));
+  }, [event.id, offline.isOnline]);
 
   useRealtimeRoom({
     workspaceId: activeWorkspace.id,
@@ -131,6 +173,34 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const def = definitions.find((candidate) => candidate.id === item.disciplineDefinitionId);
     return def && def.defaultRules.aggregation === 'timed' && def.kind !== 'vertical';
   });
+  const recoveryActions = (offline.queueActions ?? []).map((action) => {
+    const targetEntrant = action.target?.entrantId ? entrants.find((entrant) => entrant.id === action.target?.entrantId) : null;
+    const targetSession = action.target?.disciplineSessionId ? sessions.find((item) => item.id === action.target?.disciplineSessionId) : null;
+    return {
+      id: action.id,
+      actionType: action.actionType,
+      status: action.status,
+      createdAt: action.createdAt,
+      syncedAt: action.syncedAt,
+      deviceId: action.deviceId,
+      subject: targetEntrant ? `Entrant: ${targetEntrant.name}` : action.entryId ? `Session entry: ${action.entryId}` : 'Session entry',
+      target: targetSession ? `Session: ${targetSession.label}` : 'Meet session',
+      error: action.error,
+    };
+  });
+  const designation = offlineDesignation ? {
+    label: offlineDesignation.name ?? 'Designated helper',
+    deviceId: offlineDesignation.deviceId,
+    isCurrentDevice: offlineDesignation.deviceId === offline.deviceId,
+  } : null;
+  const syncOfflineChanges = async () => {
+    try {
+      await offline.syncPending(event.id);
+      await reload();
+    } catch {
+      setError('Unable to sync queued actions. Check the action history and retry when connected.');
+    }
+  };
 
   function exportResults() {
     const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
@@ -162,7 +232,18 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     <section aria-label="Session live logging" aria-busy={busy}>
       <h2>Session live logger</h2>
       <p>Team-level timed logging with coach-selected official results. Offline attempts queue and sync when reconnecting.</p>
-      <QueueStatusBadge eventId={event.id} userId={currentUser?.id ?? 'anonymous'} />
+      <OfflineRecoverySurface
+        isOnline={offline.isOnline}
+        actions={recoveryActions}
+        cacheFreshness={cacheFreshness}
+        designation={designation}
+        onRefresh={reload}
+        onSyncNow={syncOfflineChanges}
+        onRetryAction={async (actionId) => {
+          await offline.retryFailedAction(actionId, event.id);
+          await syncOfflineChanges();
+        }}
+      />
       {error && <p role="alert">{error}</p>}
       <label>
         Session

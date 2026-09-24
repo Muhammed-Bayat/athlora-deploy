@@ -11,7 +11,7 @@ import {
 import { getCachedPublicSnapshot, cachePublicSnapshot } from '../../offline/publicEventCache';
 import { usePublicOfflineSync } from '../../hooks/usePublicOfflineSync';
 import type { IncidentType, PublicLoggerSnapshot } from '../../types';
-import { Button, Input, Modal } from '../../components';
+import { Button, Input, Modal, OfflineRecoverySurface } from '../../components';
 import { getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 function getDeviceId(): string {
   const stored = localStorage.getItem('athlora_device_id');
@@ -22,7 +22,6 @@ function getDeviceId(): string {
 }
 import styles from '../timeline/LiveLoggingPage.module.css';
 import joinStyles from './PublicLoggerPage.module.css';
-import badgeStyles from '../timeline/QueueStatusBadge.module.css';
 
 function storageKeys(linkToken: string | undefined): { session: string; event: string } | null {
   if (!linkToken) return null;
@@ -38,29 +37,6 @@ function clearSession(keys: { session: string; event: string } | null): void {
   sessionStorage.removeItem(keys.event);
 }
 
-function SyncBadge({ isOnline, pendingCount, failedCount }: { isOnline: boolean; pendingCount: number; failedCount: number }) {
-  if (pendingCount === 0 && failedCount === 0) return null;
-  if (!isOnline) {
-    return (
-      <span className={`${badgeStyles.badge} ${badgeStyles.pending}`} role="status">
-        Offline — {pendingCount} queued
-      </span>
-    );
-  }
-  if (failedCount > 0) {
-    return (
-      <span className={`${badgeStyles.badge} ${badgeStyles.failed}`} role="status">
-        {failedCount} failed
-      </span>
-    );
-  }
-  return (
-    <span className={`${badgeStyles.badge} ${badgeStyles.pending}`} role="status">
-      Syncing {pendingCount}...
-    </span>
-  );
-}
-
 export function PublicLoggerPage() {
   const { token } = useParams();
   const [name, setName] = useState('');
@@ -73,6 +49,7 @@ export function PublicLoggerPage() {
   const [editing, setEditing] = useState<PublicLoggerSnapshot['timeline'][number] | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editIncident, setEditIncident] = useState<IncidentType>(null);
+  const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
   const keys = useMemo(() => storageKeys(token), [token]);
   const deviceId = useMemo(() => getDeviceId(), []);
 
@@ -89,10 +66,12 @@ export function PublicLoggerPage() {
       const fresh = await getPublicLoggerSnapshot(sessionToken, eventId);
       setSnapshot(fresh);
       await cachePublicSnapshot(eventId, fresh as unknown as Record<string, unknown>, sessionToken);
+      setCacheFreshness(Date.now());
     } catch {
       const cached = await getCachedPublicSnapshot(eventId, sessionToken);
       if (cached) {
-        setSnapshot(cached as unknown as PublicLoggerSnapshot);
+        setSnapshot(cached.snapshot as unknown as PublicLoggerSnapshot);
+        setCacheFreshness(cached.cachedAt);
       } else {
         throw new Error('No cached data available');
       }
@@ -134,6 +113,7 @@ export function PublicLoggerPage() {
       if (keys) { sessionStorage.setItem(keys.session, next.sessionToken); sessionStorage.setItem(keys.event, next.snapshot.event.id); }
       setSession(next.sessionToken); setSnapshot(next.snapshot);
       await cachePublicSnapshot(next.snapshot.event.id, next.snapshot as unknown as Record<string, unknown>, next.sessionToken);
+      setCacheFreshness(Date.now());
     } catch (requestError) { handleError(requestError, 'Unable to open this logger.'); } finally { setBusy(null); }
   };
 
@@ -223,6 +203,21 @@ export function PublicLoggerPage() {
   }
 
   const loggingOpen = snapshot.event.status === 'in_progress';
+  const recoveryActions = offlineSync.queueActions.map((action) => {
+    const athleteId = typeof action.payload.athleteId === 'string' ? action.payload.athleteId : null;
+    const athlete = athleteId ? snapshot.participants.find((participant) => participant.athleteId === athleteId)?.name : null;
+    return {
+      id: action.id,
+      actionType: action.actionType,
+      status: action.status,
+      createdAt: action.createdAt,
+      syncedAt: action.syncedAt,
+      deviceId: action.deviceId,
+      subject: athlete ? `Athlete: ${athlete}` : action.entryId ? `Timeline entry: ${action.entryId}` : 'Timeline entry',
+      target: 'Public 100m session',
+      error: action.error,
+    };
+  });
   return (
     <main className={styles.container}>
       <div className={styles.activeHeader}>
@@ -232,15 +227,22 @@ export function PublicLoggerPage() {
           <p>Track · 100m · {snapshot.participants.length} assigned athletes</p>
         </div>
         <div className={styles.headerButtons}>
-          {!offlineSync.isOnline && (
-            <span className={`${badgeStyles.badge} ${badgeStyles.pending}`} role="status">
-              Offline
-            </span>
-          )}
-          <SyncBadge isOnline={offlineSync.isOnline} pendingCount={offlineSync.pendingCount} failedCount={offlineSync.failedCount} />
           <Button variant="secondary" onClick={() => void refresh()} disabled={Boolean(busy)}>{busy === 'refresh' ? 'Refreshing...' : 'Refresh'}</Button>
         </div>
       </div>
+
+      <OfflineRecoverySurface
+        isOnline={offlineSync.isOnline}
+        actions={recoveryActions}
+        cacheFreshness={cacheFreshness}
+        isSyncing={offlineSync.isSyncing}
+        onRefresh={refresh}
+        onSyncNow={offlineSync.syncNow}
+        onRetryAction={async (actionId) => {
+          await offlineSync.retryFailedAction(actionId);
+          await offlineSync.syncNow();
+        }}
+      />
 
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
 

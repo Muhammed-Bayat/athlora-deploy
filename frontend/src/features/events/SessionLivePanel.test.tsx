@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../../types';
+import * as eventHelpersApi from '../../api/eventHelpers';
 import { SessionLivePanel } from './SessionLivePanel';
 
 const api = vi.hoisted(() => ({
@@ -18,10 +19,13 @@ const api = vi.hoisted(() => ({
 const offline = vi.hoisted(() => ({
   isOnline: true,
   queueStatus: { pending: 0, failed: 0, lastSyncedAt: null },
+  queueActions: [],
+  deviceId: 'device-1',
   enqueueCreateEntry: vi.fn(async () => false),
   enqueueUndoEntry: vi.fn(async () => false),
   syncPending: vi.fn(async () => undefined),
   refreshQueueStatus: vi.fn(async () => undefined),
+  retryFailedAction: vi.fn(async () => undefined),
 }));
 const workspace = vi.hoisted(() => ({ useWorkspace: () => ({ activeWorkspace: { id: 'ws-1' } }) }));
 const currentUser = vi.hoisted(() => ({ useCurrentUser: () => ({ id: 'coach-1' }) }));
@@ -32,7 +36,7 @@ vi.mock('../../hooks/useSessionOffline', () => ({ useSessionOffline: () => offli
 vi.mock('../auth/WorkspaceContext', () => workspace);
 vi.mock('../auth/CurrentUserContext', () => currentUser);
 vi.mock('../realtime/useRealtimeRoom', () => realtime);
-vi.mock('../timeline/QueueStatusBadge', () => ({ QueueStatusBadge: () => null }));
+vi.mock('../../api/eventHelpers');
 
 const event: AthleticsEvent = {
   id: 'event-1',
@@ -60,8 +64,10 @@ describe('SessionLivePanel', () => {
     sessionVersion = 1;
     offline.isOnline = true;
     offline.queueStatus = { pending: 0, failed: 0, lastSyncedAt: null };
+    offline.queueActions = [];
     offline.enqueueCreateEntry.mockResolvedValue(false);
     offline.enqueueUndoEntry.mockResolvedValue(false);
+    vi.mocked(eventHelpersApi.getOfflineLoggerDesignation).mockResolvedValue(null);
     api.changeSessionState.mockImplementation(async () => {
       sessionStatus = 'in_progress';
       sessionVersion += 1;

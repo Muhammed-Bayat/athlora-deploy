@@ -22,9 +22,12 @@ vi.mock('./db', () => {
         stores[name].push(record);
         return record.id ?? `id-${nextId++}`;
       }),
-      where: vi.fn((query: Record<string, unknown>) => {
+      where: vi.fn((query: string | Record<string, unknown>) => {
         if (typeof query === 'string') {
-          return makeClause((r) => r.status === query);
+          return {
+            ...makeClause(),
+            equals: vi.fn((value: unknown) => makeClause((record) => record[query] === value)),
+          };
         }
         return makeClause((r) =>
           Object.entries(query).every(([k, v]) => r[k] === v),
@@ -97,6 +100,20 @@ describe('actionQueue', () => {
     expect(status).toHaveProperty('pending');
     expect(status).toHaveProperty('synced');
     expect(status).toHaveProperty('failed');
+  });
+
+  it('returns local action details and the latest sync timestamp for an event', async () => {
+    const actionId = await actionQueue.enqueueAction({
+      actionType: 'create_entry', eventId: 'ev-details', payload: { athleteId: 'ath-1' }, deviceId: 'dev-1',
+    }, 'user-1');
+    await actionQueue.markSynced(actionId, { status: 'accepted' }, 'user-1');
+
+    const actions = await actionQueue.getQueueActions('ev-details', 'user-1');
+    const status = await actionQueue.getQueueStatus('ev-details', 'user-1');
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ id: actionId, deviceId: 'dev-1', status: 'synced' });
+    expect(status.lastSyncedAt).toEqual(expect.any(Number));
   });
 
   it('getAllPendingActions returns pending actions', async () => {

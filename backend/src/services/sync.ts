@@ -23,6 +23,13 @@ export interface SyncBatchResult {
   recomputedResults: boolean;
 }
 
+export interface OfflineLoggerDesignation {
+  grantId: string;
+  userId: string | null;
+  name: string | null;
+  deviceId: string | null;
+}
+
 const VALID_ACTION_TYPES = new Set(['create_entry', 'edit_entry', 'undo_entry']);
 
 function isValidAction(action: SyncActionInput): boolean {
@@ -289,6 +296,25 @@ export async function designateOfflineLogger(
   } finally {
     client.release();
   }
+}
+
+export async function getOfflineLoggerDesignation(eventId: string): Promise<OfflineLoggerDesignation | null> {
+  const pool = getPool();
+  const result = await pool.query<{
+    grant_id: string;
+    user_id: string | null;
+    name: string | null;
+    device_id: string | null;
+  }>(
+    `SELECT grant.id AS grant_id, user_record.id AS user_id, user_record.name, grant.offline_queue_device_id AS device_id
+     FROM event_helper_grants grant
+     LEFT JOIN users user_record ON user_record.auth0_id = grant.auth0_sub
+     WHERE grant.event_id = $1 AND grant.status = 'active' AND grant.is_offline_logger = true
+     LIMIT 1`,
+    [eventId],
+  );
+  const row = result.rows[0];
+  return row ? { grantId: row.grant_id, userId: row.user_id, name: row.name, deviceId: row.device_id } : null;
 }
 
 export async function revokeOfflineLoggerDesignation(

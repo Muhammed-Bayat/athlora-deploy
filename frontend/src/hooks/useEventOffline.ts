@@ -2,8 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOnlineStatus } from './useOnlineStatus';
 import {
   enqueueAction,
+  getQueueActions,
   getQueueStatus,
+  resetFailed,
+  type OfflineQueueStatus,
 } from '../offline/actionQueue';
+import type { OfflineAction } from '../offline/db';
 import { drainQueue, type DrainResult } from '../offline/syncEngine';
 import { cacheEventData, getCachedEventData } from '../offline/eventCache';
 import type {
@@ -32,7 +36,9 @@ function getOrCreateDeviceId(): string {
 export interface EventOfflineState {
   isOnline: boolean;
   wasOffline: boolean;
-  queueStatus: { pending: number; synced: number; failed: number };
+  deviceId: string;
+  queueStatus: OfflineQueueStatus;
+  queueActions: OfflineAction[];
 }
 
 export interface EventOfflineActions {
@@ -42,13 +48,14 @@ export interface EventOfflineActions {
     event: AthleticsEvent,
     participants: EventParticipantSummary[],
     timeline: TimelineEntry[],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   getCachedEventData: (
     eventId: string,
   ) => Promise<{
     event: AthleticsEvent | null;
     participants: EventParticipantSummary[];
     timeline: TimelineEntry[];
+    cachedAt: number | null;
   } | null>;
   createEntry: (
     eventId: string,
@@ -66,6 +73,7 @@ export interface EventOfflineActions {
   ) => Promise<boolean>;
   syncPending: (eventId: string) => Promise<DrainResult>;
   refreshQueueStatus: (eventId: string) => Promise<void>;
+  retryFailedAction: (actionId: string, eventId: string) => Promise<void>;
 }
 
 export function useEventOffline(
@@ -74,7 +82,8 @@ export function useEventOffline(
 ): EventOfflineState & EventOfflineActions {
   const { isOnline, wasOffline } = useOnlineStatus();
   const deviceIdRef = useRef(getOrCreateDeviceId());
-  const [queueStatus, setQueueStatus] = useState({ pending: 0, synced: 0, failed: 0 });
+  const [queueStatus, setQueueStatus] = useState<OfflineQueueStatus>({ pending: 0, synced: 0, failed: 0, lastSyncedAt: null });
+  const [queueActions, setQueueActions] = useState<OfflineAction[]>([]);
   const wasOfflineRef = useRef(false);
 
   useEffect(() => {
@@ -83,10 +92,15 @@ export function useEventOffline(
 
   const refreshQueueStatus = useCallback(async (eventId: string) => {
     try {
-      const status = await getQueueStatus(eventId, userId);
+      const [status, actions] = await Promise.all([
+        getQueueStatus(eventId, userId),
+        getQueueActions(eventId, userId),
+      ]);
       setQueueStatus(status);
+      setQueueActions(actions);
     } catch {
-      setQueueStatus({ pending: 0, synced: 0, failed: 0 });
+      setQueueStatus({ pending: 0, synced: 0, failed: 0, lastSyncedAt: null });
+      setQueueActions([]);
     }
   }, [userId]);
 
@@ -110,8 +124,10 @@ export function useEventOffline(
         timeline as unknown as Record<string, unknown>[],
         userId,
       );
+      return true;
     } catch {
       // Cache errors are non-fatal
+      return false;
     }
   }, [userId]);
 
@@ -123,6 +139,7 @@ export function useEventOffline(
         event: cached.event as unknown as AthleticsEvent,
         participants: (cached.participants ?? []) as unknown as EventParticipantSummary[],
         timeline: (cached.timeline ?? []) as unknown as TimelineEntry[],
+        cachedAt: cached.cachedAt,
       };
     } catch {
       return null;
@@ -201,10 +218,17 @@ export function useEventOffline(
     return result;
   }, [userId, refreshQueueStatus]);
 
+  const retryFailedAction = useCallback(async (actionId: string, eventId: string) => {
+    await resetFailed(actionId, userId);
+    await refreshQueueStatus(eventId);
+  }, [userId, refreshQueueStatus]);
+
   return {
     isOnline,
     wasOffline,
+    deviceId: deviceIdRef.current,
     queueStatus,
+    queueActions,
     cacheEventData: cacheEventDataAction,
     getCachedEventData: getCachedEventDataAction,
     createEntry,
@@ -212,5 +236,6 @@ export function useEventOffline(
     deleteEntry,
     syncPending,
     refreshQueueStatus,
+    retryFailedAction,
   };
 }
