@@ -274,6 +274,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
       </section>
 
       <ProgressionChart athleteId={athleteId} athleteName={displayName} season={season} />
+      <VerticalStatistics key={`${athleteId}:${season}`} path={`/api/v1/athletes/${encodeURIComponent(athleteId)}/statistics/vertical?year=${season}`} names={{ [athleteId]: displayName }} />
 
       <Card className={styles.injuryCard}>
         <header><div><p>Fitness overview</p><h2>Active injury map</h2></div></header>
@@ -353,3 +354,4 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     </section>
   );
 }
+import { VerticalStatistics } from './VerticalStatistics';

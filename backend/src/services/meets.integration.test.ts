@@ -76,6 +76,29 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(s.id);
     return target;
   }
+  it.each(['high_jump', 'pole_vault'])('logs, audits, finalizes and countbacks %s', async code => {
+    await migrate();
+    const s = await createSession(host, eventId, { disciplineDefinitionId: (await definition(code)).id, label: code, verticalConfig: { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' } }, transaction);
+    const entrants = [await guest('First'), await guest('Tied'), await guest('Third')];
+    for (const en of entrants) await registerEntrant(host, eventId, { disciplineSessionId: s.id, entrantId: en.id }, transaction);
+    const opened = await open(s.id);
+    for (const [index, en] of entrants.entries()) {
+      const target = { disciplineSessionId: s.id, entrantId: en.id };
+      const input = { ...timed, unit: 'metres' as const, value: 1.5 };
+      if (index === 2) await createSessionEntry(host, eventId, target, { ...input, verticalState: 'failure' }, transaction);
+      await createSessionEntry(host, eventId, target, { ...input, verticalState: 'clearance' }, transaction);
+      await createSessionEntry(host, eventId, target, { ...input, value: 1.55, verticalState: 'pass' }, transaction);
+      for (let n = 0; n < 3; n++) await createSessionEntry(host, eventId, target, { ...input, value: 1.6, verticalState: 'failure' }, transaction);
+      await expect(createSessionEntry(host, eventId, target, { ...input, value: 1.65, verticalState: 'clearance' }, transaction)).rejects.toMatchObject({ code: 'INVALID_VERTICAL_SEQUENCE' });
+    }
+    expect((await sessionStatistics(host, eventId, s.id, undefined, pool)).best).toBeNull();
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: opened.version }, transaction);
+    const results = await listSessionResults(host, eventId, s.id, pool);
+    expect(entrants.map(en => results.find(r => r.entrantId === en.id)?.placing)).toEqual([1, 1, 3]);
+    expect(results.every(r => r.finalResult === 1.5 && r.countsTowardsStatistics)).toBe(true);
+    const audit = await pool.query("SELECT * FROM meet_domain_audit WHERE event_id = $1 AND entity_type = 'entry'", [eventId]);
+    expect(audit.rows.length).toBe(16);
+  });
   function action(target: SessionTarget, overrides: Partial<SessionSyncAction> = {}): SessionSyncAction {
     return { actionId: randomUUID(), actionType: 'create_entry', target, payload: { ...timed }, clientTimestamp: new Date().toISOString(), ...overrides };
   }
@@ -90,7 +113,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await migrate();
     const after = await pool.query('SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(t) FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1', [eventId]);
     expect(after.rows).toEqual(before.rows);
-    expect((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count).toBe('30');
+    expect(Number((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count)).toBe(migrations.length);
     expect(await listTimelineEntries(host.workspaceId, eventId, pool)).toEqual([{ ...legacy, recorderName: 'Host', recorderClub: 'Host' }]);
     const stats = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(stats.pb).toBe(11.1);

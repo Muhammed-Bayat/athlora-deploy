@@ -3,6 +3,7 @@ import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
 import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, MeetActor, MeetEntrant, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
+import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
@@ -38,11 +39,13 @@ export async function createSession(actor: MeetActor, eventId: string, input: Se
     const access = await meetAccess(db, actor, eventId, true);
     if (!access.host) meetNotFound();
     if (!['scheduled', 'in_progress'].includes(access.event.status)) meetConflict('EVENT_CLOSED', 'The event is closed');
-    await getDefinition(db, input.disciplineDefinitionId);
+    const definition = await getDefinition(db, input.disciplineDefinitionId);
+    if (definition.kind === 'vertical') { validateVerticalDefinition(definition); parseVerticalConfig(input.verticalConfig); }
+    else if (input.verticalConfig) meetConflict('INVALID_CONFIGURATION', 'Vertical configuration requires a vertical discipline');
     const result = await db.query(
-      `INSERT INTO discipline_sessions (event_id, workspace_id, discipline_definition_id, label, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$5) RETURNING *`,
-      [eventId, access.event.workspace_id, input.disciplineDefinitionId, input.label, actor.userId],
+      `INSERT INTO discipline_sessions (event_id, workspace_id, discipline_definition_id, label, created_by, updated_by, vertical_config)
+       VALUES ($1,$2,$3,$4,$5,$5,$6) RETURNING *`,
+      [eventId, access.event.workspace_id, input.disciplineDefinitionId, input.label, actor.userId, input.verticalConfig ?? null],
     );
     const session = mapMeetRow<DisciplineSession>(result.rows[0]);
     await meetAudit(db, actor, eventId, session.workspaceId, 'session', session.id, 'created', null, session);

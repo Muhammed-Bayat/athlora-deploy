@@ -7,6 +7,8 @@ import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, 
 import { canReadEntrant, canWriteEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
 import { deriveEffectiveResult, deriveFieldBest, deriveTrackTime } from './resultDerivation.js';
+import { deriveVertical, verticalPlacings } from './verticalScoring.js';
+import { VERTICAL_PERFORMANCES, verticalRecords } from './verticalStatistics.js';
 
 async function registration(db: DbExecutor, actor: MeetActor, access: MeetAccess, eventId: string, target: SessionTarget, write: boolean) {
   meetIds(target.disciplineSessionId, target.entrantId);
@@ -30,6 +32,8 @@ async function loggingTarget(db: DbExecutor, actor: MeetActor, eventId: string, 
 }
 
 function validateDisciplineEntry(input: SessionEntryInput, definition: DisciplineDefinition): void {
+  if (definition.kind !== 'vertical' && input.verticalState) throw new ApiError(400, 'VALIDATION_ERROR', 'Vertical state requires a vertical discipline');
+  if (definition.kind === 'vertical' && (['split', 'penalty'].includes(input.entryType) || (input.entryType !== 'attempt' && input.verticalState))) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid vertical entry type');
   if ((input.unit !== null && input.unit !== definition.unit) || (input.isFoul && definition.direction === 'lower')) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Entry does not match the discipline unit or foul rules');
   }
@@ -38,7 +42,8 @@ function validateDisciplineEntry(input: SessionEntryInput, definition: Disciplin
 async function recompute(db: DbExecutor, actor: MeetActor, eventId: string, target: SessionTarget, workspaceId: string, definition: DisciplineDefinition, eventType: MeetAccess['event']['type']): Promise<void> {
   const rows = await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2 ORDER BY created_at, id', [target.disciplineSessionId, target.entrantId]);
   const entries = rows.rows.map((row) => mapMeetRow<SessionEntry>(row));
-  const derived = definition.defaultRules.aggregation === 'timed' ? deriveTrackTime(entries, eventType) : deriveFieldBest(entries);
+  const session = definition.kind === 'vertical' ? await getSession(db, eventId, target.disciplineSessionId) : null;
+  const derived = definition.kind === 'vertical' ? deriveVertical(entries, session!.verticalConfig!) : definition.defaultRules.aggregation === 'timed' ? deriveTrackTime(entries, eventType) : deriveFieldBest(entries);
   const before = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
   const after = await db.query(
     `INSERT INTO session_results (event_id, session_id, entrant_id, workspace_id, outcome, final_result, unit)
@@ -67,13 +72,14 @@ export async function createSessionEntry(actor: MeetActor, eventId: string, targ
   return transaction(async (db) => {
     const { access, entrant, definition } = await loggingTarget(db, actor, eventId, target);
     validateDisciplineEntry(input, definition);
+    const order = definition.kind === 'vertical' ? await db.query<{ next: number }>('SELECT COALESCE(MAX(attempt_order), 0) + 1 AS next FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]) : null;
     const result = await db.query(
       `INSERT INTO session_timeline_entries
-        (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+         (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id, vertical_state, attempt_order)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [entryId, eventId, target.disciplineSessionId, target.entrantId, entrant.workspace_id, input.entryType, input.value,
         input.unit, input.isFoul, input.incidentType, input.noteText, input.deviceId,
-        'userId' in actor ? actor.userId : null, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : null],
+         'userId' in actor ? actor.userId : null, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : null, input.verticalState ?? null, order?.rows[0].next ?? null],
     );
     const entry = mapMeetRow<SessionEntry>(result.rows[0]);
     await meetAudit(db, actor, eventId, entrant.workspace_id, 'entry', entry.id, 'created', null, entry);
@@ -115,8 +121,8 @@ export async function mutateSessionEntry(
       validateDisciplineEntry(input, definition);
       const result = await db.query(
         `UPDATE session_timeline_entries SET entry_type = $1, value = $2, unit = $3, is_foul = $4,
-         incident_type = $5, note_text = $6, device_id = $7, version = version + 1, updated_at = now() WHERE id = $8 RETURNING *`,
-        [input.entryType, input.value, input.unit, input.isFoul, input.incidentType, input.noteText, input.deviceId, entryId],
+          incident_type = $5, note_text = $6, device_id = $7, vertical_state = $9, version = version + 1, updated_at = now() WHERE id = $8 RETURNING *`,
+         [input.entryType, input.value, input.unit, input.isFoul, input.incidentType, input.noteText, input.deviceId, entryId, input.verticalState ?? null],
       );
       after = mapMeetRow<SessionEntry>(result.rows[0]);
     }
@@ -130,6 +136,7 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   const access = await meetAccess(db, actor, eventId);
   const session = await getSession(db, eventId, sessionId);
   const definition = await getDefinition(db, session.disciplineDefinitionId);
+  const verticalEntries = definition.kind === 'vertical' ? (await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 ORDER BY attempt_order', [sessionId])).rows.map(row => mapMeetRow<SessionEntry>(row)) : [];
   const result = await db.query(
     `SELECT r.*, se.withdrawn_at FROM session_results r JOIN session_entrants se
        ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
@@ -138,14 +145,29 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   // Rank the whole session, then filter visibility; guest ranks must not change with the viewer.
   const rows = result.rows.map((row) => {
     const mapped = mapMeetRow<SessionResult>(row);
-    const effective = deriveEffectiveResult({ value: mapped.finalResult, outcome: mapped.outcome, incident: null }, mapped.manualOverride);
+    const vertical = definition.kind === 'vertical' ? deriveVertical(verticalEntries.filter(entry => entry.entrantId === mapped.entrantId), session.verticalConfig!) : undefined;
+    const effective = vertical ?? deriveEffectiveResult({ value: mapped.finalResult, outcome: mapped.outcome, incident: null }, mapped.manualOverride);
     const eligible = access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.withdrawn_at === null;
-    return { ...mapped, effectiveResult: effective.value, effectiveOutcome: effective.outcome,
-      countsTowardsStatistics: eligible && effective.outcome === 'valid', placing: null as number | null };
+    return { ...mapped, ...(vertical ? { vertical } : {}), effectiveResult: effective.value, effectiveOutcome: effective.outcome,
+      countsTowardsStatistics: eligible && effective.outcome === 'valid' && (definition.kind !== 'vertical' || session.status === 'completed'), placing: null as number | null };
   });
-  const ranked = rows.filter((row) => row.countsTowardsStatistics && row.effectiveResult !== null)
-    .sort((a, b) => (a.effectiveResult! - b.effectiveResult!) * (definition.direction === 'lower' ? 1 : -1));
-  ranked.forEach((row, index) => { row.placing = index > 0 && ranked[index - 1].effectiveResult === row.effectiveResult ? ranked[index - 1].placing : index + 1; });
+  const ranked = rows.filter((row) => row.countsTowardsStatistics && row.effectiveResult !== null);
+  if (definition.kind === 'vertical') {
+    const places = verticalPlacings(ranked.map(row => ({ entrantId: row.entrantId, score: { ...row.vertical!, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null } })));
+    ranked.forEach(row => { row.placing = places.get(row.entrantId) ?? null; });
+  } else {
+    ranked.sort((a, b) => (a.effectiveResult! - b.effectiveResult!) * (definition.direction === 'lower' ? 1 : -1));
+    ranked.forEach((row, index) => { row.placing = index > 0 && ranked[index - 1].effectiveResult === row.effectiveResult ? ranked[index - 1].placing : index + 1; });
+  }
+  if (definition.kind === 'vertical') {
+    for (const row of rows) {
+      const history = await db.query<{ final_result: string; event_date: string }>(`WITH performances AS (${VERTICAL_PERFORMANCES})
+        SELECT final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
+        WHERE workspace_id = $1 AND code = $2 AND athlete_id = (SELECT athlete_id FROM meet_entrants WHERE id = $3) AND session_id <> $4`, [row.workspaceId, definition.code, row.entrantId, sessionId]);
+      const date = await db.query<{ date: string; athlete_id: string | null }>("SELECT to_char(e.date, 'YYYY-MM-DD') AS date, en.athlete_id FROM events e JOIN meet_entrants en ON en.event_id = e.id WHERE e.id = $1 AND en.id = $2", [eventId, row.entrantId]);
+      Object.assign(row, verticalRecords(row.effectiveResult, row.countsTowardsStatistics && !!date.rows[0]?.athlete_id, date.rows[0]?.date ?? '', history.rows.map(h => ({ value: Number(h.final_result), date: h.event_date }))));
+    }
+  }
   return rows.filter((row) => canReadEntrant(actor, access, row.workspaceId)).map(({ ...row }) => {
     // Do not expose joined registration internals as accidental DTO fields.
     delete (row as unknown as Record<string, unknown>).withdrawnAt;
@@ -158,7 +180,8 @@ export async function overrideSessionResult(actor: MeetActor, eventId: string, t
   await transaction(async (db) => {
     const access = await meetAccess(db, actor, eventId, true);
     if (access.helper) meetNotFound();
-    await getSession(db, eventId, target.disciplineSessionId);
+    const session = await getSession(db, eventId, target.disciplineSessionId);
+    if ((await getDefinition(db, session.disciplineDefinitionId)).kind === 'vertical') meetConflict('DERIVED_RESULT_ONLY', 'Correct the attempt history to change a vertical result');
     const entrant = await registration(db, actor, access, eventId, target, false);
     const found = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
     const before = found.rows[0];

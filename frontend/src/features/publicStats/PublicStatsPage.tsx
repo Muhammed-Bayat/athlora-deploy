@@ -354,7 +354,7 @@ export function PublicStatsPage() {
         {(loadingStatistics || athleteComparisonLoading) && <p className={styles.loading} role="status">Reading the results...</p>}
         {!clubsLoading && !clubsError && clubs.length === 0 && <p className={styles.emptyState}>No clubs have published results yet. Check back after the next time trial.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && !club1 && clubs.length > 0 && <p className={styles.emptyState}>Select a club to open its public performance gallery.</p>}
-        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} /></section><AthleteGallery athletes={club1.athletes} season={season} /></>}
+        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} /></section><AthleteGallery athletes={club1.athletes} season={season} /><VerticalStatistics key={`${club1.club.id}:${season}`} path={`/api/v1/public/statistics/clubs/${encodeURIComponent(club1.club.id)}/vertical?year=${season}`} names={Object.fromEntries(club1.athletes.map(a => [a.athlete.id, a.athlete.name]))} /></>}
         {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length < 2 && <p className={styles.emptyState}>Select at least two clubs to compare their {seasonLabel(season).toLowerCase()} performance.</p>}
         {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length >= 2 && <section className={styles.comparisonCards} aria-label="Club comparison">{comparedClubs.map((club) => <ClubStatCard key={club.club.id} statistics={club} season={season} />)}</section>}
         {!loadingStatistics && !athleteComparisonLoading && !statisticsError && !athleteComparisonError && athleteComparisonMode && comparedAthletes.length < 2 && <p className={styles.emptyState}>Select at least two athletes from different published clubs to compare their progression.</p>}
@@ -364,3 +364,4 @@ export function PublicStatsPage() {
     </div>
   );
 }
+import { VerticalStatistics } from '../athletes/VerticalStatistics';
