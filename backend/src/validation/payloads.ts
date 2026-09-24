@@ -105,7 +105,7 @@ export type UserPreferencesPayload = UserPreferences;
 
 export interface EventCreatePayload {
   type: EventType;
-  discipline: Discipline;
+  discipline: Discipline | null;
   title: string;
   date: string;
   time: string | null;
@@ -117,7 +117,7 @@ export interface EventCreatePayload {
 
 export interface EventReplacementPayload {
   type: EventType;
-  discipline: Discipline;
+  discipline: Discipline | null;
   title: string;
   date: string;
   time: string | null;
@@ -912,8 +912,10 @@ function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload 
   const issues: ValidationIssue[] = [];
   rejectUnknownFields(payload, EVENT_FIELDS, issues);
 
-  let discipline: Discipline = DISCIPLINE_100M;
-  if (hasOwn(payload, 'discipline') && payload.discipline !== null) {
+  let discipline: Discipline | null = DISCIPLINE_100M;
+  if (hasOwn(payload, 'discipline') && payload.discipline === null) {
+    discipline = null;
+  } else if (hasOwn(payload, 'discipline')) {
     if (payload.discipline === DISCIPLINE_100M) {
       discipline = DISCIPLINE_100M;
     } else {

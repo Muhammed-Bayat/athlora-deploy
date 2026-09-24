@@ -5,6 +5,8 @@ import { createEvent, listEvents, updateEvent } from '../../api/events';
 import { listClubCalendarEvents, listClubs } from '../../api/clubs';
 import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
+import { createSession, listDisciplines, listSessions } from '../../api/meets';
+import type { DisciplineDefinition } from '../../types/meets';
 import {
   addEventParticipant,
   acknowledgeParticipantStatusReview,
@@ -43,6 +45,7 @@ interface EventDraft {
   locationName: string;
   latitude: string;
   longitude: string;
+  genericMeet: boolean;
 }
 
 type FieldErrors = Partial<Record<keyof EventDraft, string>>;
@@ -71,6 +74,7 @@ function draftFor(event?: AthleticsEvent): EventDraft {
     locationName: event?.locationName ?? '',
     latitude: event?.latitude === null || event?.latitude === undefined ? '' : String(event.latitude),
     longitude: event?.longitude === null || event?.longitude === undefined ? '' : String(event.longitude),
+    genericMeet: event?.discipline === null,
   };
 }
 
@@ -101,7 +105,7 @@ function toPayload(
   return {
     payload: {
       type: draft.type,
-      discipline: DISCIPLINE_100M,
+      discipline: draft.genericMeet ? null : DISCIPLINE_100M,
       title: draft.title.trim(),
       date: draft.date,
       time: draft.time || null,
@@ -159,7 +163,7 @@ function EventTimePicker({ value, disabled, invalid, describedBy, onChange }: {
 export function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
   return {
     type: event.type,
-    discipline: DISCIPLINE_100M,
+    discipline: event.discipline,
     title: event.title,
     date: event.date,
     time: event.time,
@@ -248,7 +252,7 @@ function sortedParticipants(participants: EventParticipantSummary[]): EventParti
 
 interface EventFormProps {
   event?: AthleticsEvent;
-  onSave: (payload: EventMutationPayload) => Promise<void>;
+  onSave: (payload: EventMutationPayload, sessionDefinitionIds: string[]) => Promise<void>;
   onCancel: () => void;
   onSubmittingChange: (submitting: boolean) => void;
 }
@@ -263,6 +267,8 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [venueSearching, setVenueSearching] = useState(false);
   const [venueError, setVenueError] = useState<string | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<VenueSearchResult | null>(null);
+  const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
+  const [sessionDefinitionIds, setSessionDefinitionIds] = useState<string[]>([]);
   const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLButtonElement>(null);
@@ -275,6 +281,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const submit = async (formEvent: FormEvent) => {
     formEvent.preventDefault();
     const parsed = toPayload(draft, event?.status ?? 'scheduled');
+    if (draft.genericMeet && sessionDefinitionIds.length === 0) parsed.errors.genericMeet = 'Choose at least one initial discipline session.';
     if (Object.keys(parsed.errors).length > 0) {
       setErrors(parsed.errors);
       if (parsed.errors.title) titleRef.current?.focus();
@@ -286,7 +293,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     onSubmittingChange(true);
     setSubmitError(null);
     try {
-      await onSave(parsed.payload);
+      await onSave(parsed.payload, sessionDefinitionIds);
     } catch (error) {
       const fields = validationErrors(error);
       setErrors(fields);
@@ -325,6 +332,13 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     return () => window.clearTimeout(timer);
   }, [venueQuery]);
 
+  useEffect(() => {
+    let current = true;
+    void listDisciplines().then(({ data }) => { if (current) setDisciplines(data); }).catch(() => { if (current) setDisciplines([]); });
+    if (event?.discipline === null) void listSessions(event.id).then(({ data }) => { if (current) setSessionDefinitionIds(data.map((session) => session.disciplineDefinitionId)); }).catch(() => undefined);
+    return () => { current = false; };
+  }, [event?.discipline, event?.id]);
+
   const selectVenue = (venue: VenueSearchResult) => {
     venueRequestRef.current += 1;
     setDraft((current) => ({ ...current, locationName: venue.displayName, latitude: String(venue.latitude), longitude: String(venue.longitude) }));
@@ -337,7 +351,19 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
-      <p className={styles.fixedDiscipline}><span>Discipline</span><strong>100m</strong></p>
+      <fieldset className={styles.venueLookup} disabled={submitting || Boolean(event)}>
+        <legend>Meet format</legend>
+        <label><input type="radio" checked={!draft.genericMeet} onChange={() => setField('genericMeet', false)} /> Legacy 100m event</label>
+        <label><input type="radio" checked={draft.genericMeet} onChange={() => setField('genericMeet', true)} /> Multi-discipline meet</label>
+        <p>{draft.genericMeet ? 'Sessions and rosters are managed separately from legacy 100m participants and timeline controls.' : 'Uses the established 100m participants, timeline, and results controls.'}</p>
+        {event && event.discipline !== null && <p>Existing legacy events remain 100m to preserve their historical controls.</p>}
+      </fieldset>
+      {draft.genericMeet && <fieldset className={styles.venueLookup} disabled={submitting}>
+        <legend>Initial discipline sessions</legend>
+        <p>Select one or more catalogue disciplines. More sessions can be added from the meet roster.</p>
+        {disciplines.length === 0 ? <p role="status">Loading catalogue...</p> : disciplines.filter((discipline) => discipline.kind !== 'vertical').map((discipline) => <label key={discipline.id}><input type="checkbox" checked={sessionDefinitionIds.includes(discipline.id)} onChange={(input) => setSessionDefinitionIds((current) => input.target.checked ? [...current, discipline.id] : current.filter((id) => id !== discipline.id))} /> {discipline.presentation.label}</label>)}
+        {errors.genericMeet && <span className={styles.fieldError}>{errors.genericMeet}</span>}
+      </fieldset>}
 
       <label htmlFor="event-title">Event title</label>
       <Input
@@ -772,8 +798,16 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
   const pending = editorBusy;
 
-  const saveEditor = async (payload: EventMutationPayload) => {
+  const saveEditor = async (payload: EventMutationPayload, sessionDefinitionIds: string[]) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
+    if (payload.discipline === null) {
+      const existing = editor === 'new' ? [] : (await listSessions(event.id)).data.map((session) => session.disciplineDefinitionId);
+      const definitions = (await listDisciplines()).data;
+      for (const definitionId of sessionDefinitionIds.filter((id) => !existing.includes(id))) {
+        const label = definitions.find((definition) => definition.id === definitionId)?.presentation.label ?? 'Catalogue session';
+        await createSession(event.id, { disciplineDefinitionId: definitionId, label });
+      }
+    }
     storeEvent(event);
     setEditor(null);
     setNotice(editor === 'new' ? `${event.title} added to the calendar.` : `${event.title} updated.`);

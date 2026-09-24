@@ -403,10 +403,23 @@ Squads are scoped to the active workspace and their names are case-insensitively
 ### 4.4 Event
 
 ```
-id, createdBy, type ('competition'|'training'), discipline ('100m'), title, date (ISO date),
+id, createdBy, type ('competition'|'training'), discipline ('100m'|null), title, date (ISO date),
 time (HH:mm:ss|null), locationName (string|null), latitude (number|null), longitude (number|null),
 status, createdAt, updatedAt
 ```
+
+`discipline: '100m'` is the legacy event contract and keeps the existing participant, timeline, and result controls. `discipline: null` is a generic multi-discipline meet: its catalogue-backed sessions, shared entrant pool, relay legs, and per-session registrations are available only through protected meet endpoints. Athlete preferences, goals, notes, and other private profile fields are never present in those or public meet responses.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /disciplines` | Immutable shared catalogue definitions |
+| `GET`/`POST /events/:eventId/sessions` | List sessions or add a host-managed catalogue session |
+| `GET`/`POST /events/:eventId/entrants` | Read/create the protected shared entrant pool |
+| `GET`/`POST`/`DELETE /events/:eventId/sessions/:sessionId/entrants/:entrantId` | List, add, or withdraw an independent registration |
+
+The protected shared entrant-pool response includes `id`, `eventId`, `workspaceId`, `kind`, `athleteId`, `name`, `clubName`, `details`, `memberIds`, `createdBy`, and `createdAt`. Entrant creation is a strict discriminated payload: athletes accept only `{ kind: 'athlete', athleteId }`; relays accept only `{ kind: 'relay', name, memberIds }`; guests accept `{ kind: 'guest', name, clubName?, details? }`. Guest `clubName` is trimmed and limited to 120 characters; guest `details` is trimmed and limited to 2,000 characters. Both are nullable in responses and never accepted for athlete or relay creation. These private roster fields are not exposed by public meet routes.
+
+Sessions can start only while their parent meet is in progress. A generic meet cannot complete with an in-progress session, and cancelling it cancels remaining scheduled/in-progress sessions without deleting history.
 
 The currently deployed discipline is fixed to **100m** at the API/service boundary: create/full-replacement accepts only `'100m'` or `null` and normalizes both to `'100m'` server-side; any other value is rejected with `400`. The database stays permissive (TEXT) so future disciplines are added through explicit migrations and contracts rather than by loosening this one.
 
@@ -664,4 +677,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra].

@@ -237,6 +237,10 @@ describe('event payloads', () => {
     });
   });
 
+  it('preserves a null discipline for a generic multi-discipline meet', () => {
+    expect(parseEventCreatePayload({ type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01' })).toMatchObject({ discipline: null, status: 'scheduled' });
+  });
+
   it('requires status for full replacement while nulling omitted optional fields', () => {
     expectValidationError(
       () =>

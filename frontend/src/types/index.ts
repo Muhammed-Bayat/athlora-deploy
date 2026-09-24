@@ -135,7 +135,7 @@ export interface ClubJoinRequest {
   userEmail?: string;
 }
 
-// MVP discipline contract: fixed to 100m (track, timed) at the API/service boundary.
+// Legacy events retain their 100m contract. Generic meets use catalogue sessions.
 export const DISCIPLINE_100M = '100m' as const;
 export type Discipline = typeof DISCIPLINE_100M;
 
@@ -325,7 +325,7 @@ export interface CurrentWeather {
 
 export interface EventMutationPayload {
   type: EventType;
-  discipline: Discipline;
+  discipline: Discipline | null;
   title: string;
   date: string;
   time: string | null;

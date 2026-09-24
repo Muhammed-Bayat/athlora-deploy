@@ -109,9 +109,18 @@ export async function createEntrant(actor: MeetActor, eventId: string, input: En
       members.push(...input.memberIds.map((id) => result.rows.find((row) => row.id === id)!));
     }
     const result = await db.query(
-      `INSERT INTO meet_entrants (event_id, workspace_id, kind, athlete_id, name, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [eventId, actor.workspaceId, input.kind, input.kind === 'athlete' ? input.athleteId : null, name, actor.userId],
+      `INSERT INTO meet_entrants (event_id, workspace_id, kind, athlete_id, name, club_name, details, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [
+        eventId,
+        actor.workspaceId,
+        input.kind,
+        input.kind === 'athlete' ? input.athleteId : null,
+        name,
+        input.kind === 'guest' ? input.clubName : null,
+        input.kind === 'guest' ? input.details : null,
+        actor.userId,
+      ],
     );
     const entrant = mapMeetRow<MeetEntrant>({ ...result.rows[0], member_ids: members.map((member) => member.id) });
     for (const [index, member] of members.entries()) {

@@ -10,8 +10,13 @@ describe('multi-discipline contracts', () => {
     expect(() => parseSessionCreate({ disciplineDefinitionId: id, label: 'Heat', workspaceId: id })).toThrow();
   });
   it('validates discriminated entrant fields and unique relay members', () => {
-    expect(parseEntrantCreate({ kind: 'guest', name: ' Guest ' })).toEqual({ kind: 'guest', name: 'Guest' });
+    expect(parseEntrantCreate({ kind: 'guest', name: ' Guest ', clubName: ' Visiting club ', details: ' Guest detail ' })).toEqual({ kind: 'guest', name: 'Guest', clubName: 'Visiting club', details: 'Guest detail' });
+    expect(parseEntrantCreate({ kind: 'guest', name: 'Guest' })).toEqual({ kind: 'guest', name: 'Guest', clubName: null, details: null });
     expect(() => parseEntrantCreate({ kind: 'guest', name: 'Guest', athleteId: id })).toThrow();
+    expect(() => parseEntrantCreate({ kind: 'athlete', athleteId: id, clubName: 'Spoofed' })).toThrow();
+    expect(() => parseEntrantCreate({ kind: 'relay', name: 'Team', memberIds: [id, '22222222-2222-4222-8222-222222222222'], details: 'Spoofed' })).toThrow();
+    expect(() => parseEntrantCreate({ kind: 'guest', name: 'Guest', clubName: 'x'.repeat(121) })).toThrow();
+    expect(() => parseEntrantCreate({ kind: 'guest', name: 'Guest', details: 'x'.repeat(2001) })).toThrow();
     expect(() => parseEntrantCreate({ kind: 'relay', name: 'Team', memberIds: [id, id] })).toThrow();
     expect(() => parseEntrantCreate({ kind: 'athlete', athleteId: id, name: 'Spoofed' })).toThrow();
   });

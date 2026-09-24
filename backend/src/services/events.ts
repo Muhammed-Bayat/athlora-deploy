@@ -237,6 +237,15 @@ export async function replaceEvent(
       ],
     );
     const updated = mapEventRow(result.rows[0]);
+    if (currentEvent.discipline === null && updated.status === 'completed') {
+      const activeSessions = await client.query<{ id: string }>(
+        "SELECT id FROM discipline_sessions WHERE event_id = $1 AND status = 'in_progress' LIMIT 1",
+        [eventId],
+      );
+      if (activeSessions.rows.length > 0) {
+        throw new ApiError(409, 'SESSIONS_IN_PROGRESS', 'Complete or cancel all in-progress sessions before completing the meet');
+      }
+    }
     if (currentEvent.status === 'scheduled' && updated.status === 'in_progress' && currentRow.fixture_revision !== undefined) {
       await notifyFixtureStarted(client, eventId, currentRow.fixture_revision);
     }
@@ -298,6 +307,12 @@ export async function cancelEvent(
        [eventId, workspaceId],
     );
     const cancelled = mapEventRow(result.rows[0]);
+    if (currentEvent.discipline === null && currentEvent.status !== 'cancelled') {
+      await client.query(
+        "UPDATE discipline_sessions SET status = 'cancelled', version = version + 1, updated_at = now() WHERE event_id = $1 AND status IN ('scheduled', 'in_progress')",
+        [eventId],
+      );
+    }
     if (currentEvent.status !== 'cancelled') {
       await recomputeEventResults(client, eventId, cancelled.type);
     }

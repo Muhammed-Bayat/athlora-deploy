@@ -1,7 +1,6 @@
 -- Measured field events: Long jump, triple jump, shot put, discus, javelin, and hammer.
 INSERT INTO discipline_definitions (code, version, kind, unit, direction, default_rules, precision, presentation, source)
 VALUES
-  ('long_jump', 1, 'field', 'metres', 'higher', '{"aggregation":"best","entrantType":"individual","attempts":6}', 2, '{"label":"Long jump","unitLabel":"m"}', '0030_measured_field'),
   ('triple_jump', 1, 'field', 'metres', 'higher', '{"aggregation":"best","entrantType":"individual","attempts":6}', 2, '{"label":"Triple jump","unitLabel":"m"}', '0030_measured_field'),
   ('shot_put', 1, 'field', 'metres', 'higher', '{"aggregation":"best","entrantType":"individual","attempts":6}', 2, '{"label":"Shot put","unitLabel":"m"}', '0030_measured_field'),
   ('discus', 1, 'field', 'metres', 'higher', '{"aggregation":"best","entrantType":"individual","attempts":6}', 2, '{"label":"Discus throw","unitLabel":"m"}', '0030_measured_field'),

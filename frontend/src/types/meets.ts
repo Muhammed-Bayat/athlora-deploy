@@ -27,7 +27,7 @@ export interface DisciplineSession {
 }
 export interface MeetEntrant {
   id: string; eventId: string; workspaceId: string; kind: 'athlete' | 'guest' | 'relay';
-  athleteId: string | null; name: string; memberIds: string[]; createdBy: string; createdAt: string;
+  athleteId: string | null; name: string; clubName: string | null; details: string | null; memberIds: string[]; createdBy: string; createdAt: string;
 }
 export interface SessionRegistration extends SessionTarget {
   id: string; eventId: string; workspaceId: string; withdrawnAt: string | null;
@@ -58,7 +58,7 @@ export interface SessionStatistics {
   resultCount: number; validResultCount: number; best: number | null;
 }
 export type EntrantCreateInput = { kind: 'athlete'; athleteId: string }
-  | { kind: 'guest'; name: string } | { kind: 'relay'; name: string; memberIds: string[] };
+  | { kind: 'guest'; name: string; clubName?: string | null; details?: string | null } | { kind: 'relay'; name: string; memberIds: string[] };
 export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }
 export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
 

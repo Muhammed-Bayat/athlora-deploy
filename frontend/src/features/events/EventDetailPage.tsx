@@ -17,6 +17,8 @@ import { GuestRosterPanel } from './GuestRosterPanel';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
 import styles from './EventsPage.module.css';
 import { VerticalEventsPanel } from './VerticalEventsPanel';
+import { MeetRosterPanel } from './MeetRosterPanel';
+import { createSession, listDisciplines, listSessions } from '../../api/meets';
 
 type LifecycleAction = 'start' | 'complete' | 'cancel';
 
@@ -91,9 +93,16 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     },
   });
 
-  const saveEditor = async (payload: EventMutationPayload) => {
+  const saveEditor = async (payload: EventMutationPayload, sessionDefinitionIds: string[]) => {
     if (!event) return;
     const updated = await updateEvent(event.id, payload);
+    if (payload.discipline === null) {
+      const [catalogue, existing] = await Promise.all([listDisciplines(), listSessions(updated.id)]);
+      for (const definitionId of sessionDefinitionIds.filter((id) => !existing.data.some((session) => session.disciplineDefinitionId === id))) {
+        const label = catalogue.data.find((definition) => definition.id === definitionId)?.presentation.label ?? 'Catalogue session';
+        await createSession(updated.id, { disciplineDefinitionId: definitionId, label });
+      }
+    }
     setEvent(updated);
     onEventUpdated?.(updated);
     setEditor(false);
@@ -138,18 +147,14 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
 
   const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
-    <header className={styles.viewHeader}><div><p className={styles.eyebrow}>100m season calendar</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
+    <header className={styles.viewHeader}><div><p className={styles.eyebrow}>{event.discipline === null ? 'Multi-discipline meet' : '100m season calendar'}</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
     {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
-      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>100m</span></div>
-      <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Discipline</dt><dd>100m</dd></div></dl>
+      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>
+      <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Format</dt><dd>{event.discipline === null ? 'Catalogue sessions' : 'Legacy 100m'}</dd></div></dl>
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
-        {!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
-        <Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>
-        {showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}
-        <EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />
-        {isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}
+        {event.discipline === null ? <MeetRosterPanel event={event} canOperate={canOperate} isCoach={isCoach} /> : <><>{!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}</><Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
        {canManageLifecycle && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>

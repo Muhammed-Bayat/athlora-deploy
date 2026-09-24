@@ -49,14 +49,19 @@ export function parseSessionState(value: unknown): SessionStateInput {
 }
 
 export function parseEntrantCreate(value: unknown): EntrantCreateInput {
-  const body = object(value, ['kind', 'athleteId', 'name', 'memberIds']);
+  const body = object(value, ['kind', 'athleteId', 'name', 'clubName', 'details', 'memberIds']);
   if (body.kind === 'athlete') {
     object(body, ['kind', 'athleteId']);
     return { kind: 'athlete', athleteId: uuid(body.athleteId, 'athleteId') };
   }
   if (body.kind === 'guest') {
-    object(body, ['kind', 'name']);
-    return { kind: 'guest', name: text(body.name, 'name') };
+    object(body, ['kind', 'name', 'clubName', 'details']);
+    return {
+      kind: 'guest',
+      name: text(body.name, 'name'),
+      clubName: body.clubName == null ? null : text(body.clubName, 'clubName'),
+      details: body.details == null ? null : text(body.details, 'details', 2000),
+    };
   }
   if (body.kind !== 'relay') invalid('kind');
   object(body, ['kind', 'name', 'memberIds']);

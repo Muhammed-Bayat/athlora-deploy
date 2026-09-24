@@ -41,6 +41,15 @@ describe('additive meet API', () => {
     expect(response.body).toEqual({ data: { id: sessionId } });
     expect(meets.createSession).toHaveBeenCalledWith({ userId, workspaceId, role: 'coach' }, eventId, { disciplineDefinitionId: sessionId, label: 'Heat 1' });
   });
+  it('accepts optional guest club details only on guest entrants', async () => {
+    vi.mocked(meets.createEntrant).mockResolvedValue({ id: entrantId } as never);
+    const response = await request(app).post(`/events/${eventId}/entrants`).send({ kind: 'guest', name: 'Guest', clubName: 'Visitors', details: 'Lane 4' });
+    expect(response.status).toBe(201);
+    expect(meets.createEntrant).toHaveBeenCalledWith({ userId, workspaceId, role: 'coach' }, eventId, {
+      kind: 'guest', name: 'Guest', clubName: 'Visitors', details: 'Lane 4',
+    });
+    expect((await request(app).post(`/events/${eventId}/entrants`).send({ kind: 'athlete', athleteId: entrantId, clubName: 'Visitors' })).status).toBe(400);
+  });
   it('requires coach capability for entrant registration and correction', async () => {
     role = 'assistant';
     expect((await request(app).post(`/events/${eventId}/entrants`).send({ kind: 'guest', name: 'Guest' })).status).toBe(403);
