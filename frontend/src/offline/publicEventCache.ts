@@ -1,5 +1,10 @@
 import { getPublicOfflineDB } from './publicDb';
 
+export interface CachedPublicSnapshot {
+  snapshot: Record<string, unknown>;
+  cachedAt: number;
+}
+
 export async function cachePublicSnapshot(
   eventId: string,
   snapshot: Record<string, unknown>,
@@ -12,10 +17,10 @@ export async function cachePublicSnapshot(
 export async function getCachedPublicSnapshot(
   eventId: string,
   sessionToken: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<CachedPublicSnapshot | null> {
   const db = getPublicOfflineDB(sessionToken);
   const cached = await db.publicCachedSnapshots.get(eventId);
-  return cached?.snapshot ?? null;
+  return cached ? { snapshot: cached.snapshot, cachedAt: cached.cachedAt } : null;
 }
 
 export async function clearPublicSnapshotCache(sessionToken: string): Promise<void> {

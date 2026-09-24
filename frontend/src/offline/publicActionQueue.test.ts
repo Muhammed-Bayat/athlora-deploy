@@ -21,9 +21,12 @@ vi.mock('./publicDb', () => {
         tables[name].push(record);
         return record.id;
       }),
-      where: vi.fn((query: Record<string, unknown>) => {
+      where: vi.fn((query: string | Record<string, unknown>) => {
         if (typeof query === 'string') {
-          return makeClause((r) => r.status === query);
+          return {
+            ...makeClause(),
+            equals: vi.fn((value: unknown) => makeClause((record) => record[query] === value)),
+          };
         }
         return makeClause((r) =>
           Object.entries(query).every(([k, v]) => r[k] === v),
@@ -81,5 +84,19 @@ describe('publicActionQueue', () => {
     expect(status).toHaveProperty('pending');
     expect(status).toHaveProperty('synced');
     expect(status).toHaveProperty('failed');
+  });
+
+  it('returns public action details and the latest sync timestamp for an event', async () => {
+    const actionId = await publicActionQueue.enqueuePublicAction({
+      actionType: 'create_entry', eventId: 'ev-details', payload: { athleteId: 'ath-1' }, deviceId: 'dev-1',
+    }, 'session-token');
+    await publicActionQueue.markPublicSynced(actionId, { status: 'accepted' }, 'session-token');
+
+    const actions = await publicActionQueue.getPublicQueueActions('ev-details', 'session-token');
+    const status = await publicActionQueue.getPublicQueueStatus('ev-details', 'session-token');
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ id: actionId, deviceId: 'dev-1', status: 'synced' });
+    expect(status.lastSyncedAt).toEqual(expect.any(Number));
   });
 });

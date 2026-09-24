@@ -7,6 +7,7 @@ import * as athletesApi from '../../api/athletes';
 import * as participantsApi from '../../api/participants';
 import * as timelineApi from '../../api/timeline';
 import * as resultsApi from '../../api/results';
+import * as eventHelpersApi from '../../api/eventHelpers';
 import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import type { User } from '../../types';
@@ -19,6 +20,7 @@ vi.mock('../../api/participants');
 vi.mock('../../api/timeline');
 vi.mock('../../api/results');
 vi.mock('../../api/fixtures', () => ({ getGuestFixture: vi.fn() }));
+vi.mock('../../api/eventHelpers');
 vi.mock('../events/PublicLoggerPanel', () => ({ PublicLoggerPanel: () => null }));
 
 describe('LiveLoggingPage', () => {
@@ -109,6 +111,7 @@ describe('LiveLoggingPage', () => {
     vi.resetAllMocks();
     vi.mocked(eventsApi.getEvent).mockResolvedValue(mockActiveEvent);
     vi.mocked(athletesApi.listAthletes).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(eventHelpersApi.getOfflineLoggerDesignation).mockResolvedValue(null);
     vi.mocked(getGuestFixture).mockRejectedValue(new Error('Not a guest fixture'));
   });
 

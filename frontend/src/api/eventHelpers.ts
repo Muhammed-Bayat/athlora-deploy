@@ -4,6 +4,20 @@ export interface OfflineDesignationResponse {
   success: boolean;
 }
 
+export interface OfflineLoggerDesignation {
+  grantId: string;
+  userId: string | null;
+  name: string | null;
+  deviceId: string | null;
+}
+
+export async function getOfflineLoggerDesignation(eventId: string): Promise<OfflineLoggerDesignation | null> {
+  const response = await request<{ data: OfflineLoggerDesignation | null }>(
+    `/api/v1/events/${eventId}/helpers/offline-logger`,
+  );
+  return response.data;
+}
+
 export async function designateOfflineLogger(
   eventId: string,
   grantId: string,

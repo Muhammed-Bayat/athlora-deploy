@@ -6,9 +6,9 @@ import { listTimelineEntries, createTimelineEntry, updateTimelineEntry, deleteTi
 import { listResults } from '../../api/results';
 import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
-import { Button, Card, EmptyState, Input, Modal, Toast } from '../../components';
+import { Button, Card, EmptyState, Input, Modal, OfflineRecoverySurface, Toast } from '../../components';
 import { OfflineIndicator } from '../../components/OfflineIndicator';
-import { QueueStatusBadge } from './QueueStatusBadge';
+import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
 import { useCurrentUser } from '../auth/CurrentUserContext';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
@@ -53,6 +53,8 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const {
     isOnline,
+    deviceId,
+    queueActions,
     cacheEventData: cacheEventOfflineData,
     getCachedEventData,
     createEntry: enqueueCreateEntry,
@@ -60,6 +62,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     deleteEntry: enqueueDeleteEntry,
     syncPending,
     refreshQueueStatus,
+    retryFailedAction,
   } = useEventOffline(currentUser?.id ?? '', selectedEventId);
   const [activeEvent, setActiveEvent] = useState<AthleticsEvent | null>(null);
   const [isGuestFixture, setIsGuestFixture] = useState(false);
@@ -73,6 +76,8 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const [error, setError] = useState<string | null>(null);
   const [secondaryError, setSecondaryError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
+  const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
 
   // Per-athlete finish input drafts and submittals
   const [finishInputs, setFinishInputs] = useState<Record<string, string>>({});
@@ -178,7 +183,9 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       if (requestId !== eventDataRequestRef.current) return 'failed';
 
       // Cache event data for offline use
-      void cacheEventOfflineData(eventId, activeWorkspace.id, eventRes, participantsRes.data, timelineRes.data);
+      if (await cacheEventOfflineData(eventId, activeWorkspace.id, eventRes, participantsRes.data, timelineRes.data)) {
+        setCacheFreshness(Date.now());
+      }
 
       if (eventRes.status !== 'in_progress') {
         setEvents((current) => current.filter((event) => event.id !== eventId));
@@ -209,6 +216,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           setActiveEvent(cached.event);
           setParticipants(cached.participants);
           setTimeline(cached.timeline);
+          setCacheFreshness(cached.cachedAt);
           setEventDataLoading(false);
           setToast('Showing cached data. Connect to internet to sync.');
           return 'loaded';
@@ -241,8 +249,17 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       setAthletes([]);
       setTimeline([]);
       setResults([]);
+      setCacheFreshness(null);
+      setOfflineDesignation(null);
     }
   }, [selectedEventId]);
+
+  useEffect(() => {
+    if (!selectedEventId || !isOnline) return;
+    void getOfflineLoggerDesignation(selectedEventId)
+      .then(setOfflineDesignation)
+      .catch(() => setOfflineDesignation(null));
+  }, [isOnline, selectedEventId]);
 
   useEffect(() => {
     if (editError) window.requestAnimationFrame(() => editErrorRef.current?.focus());
@@ -639,6 +656,35 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   }
 
   const availableParticipants = participants.filter((participant) => participant.rsvpStatus !== 'no');
+  const recoveryActions = queueActions.map((action) => {
+    const athleteId = typeof action.payload.athleteId === 'string' ? action.payload.athleteId : null;
+    const athlete = athleteId ? participants.find((participant) => participant.athleteId === athleteId)?.athlete.name : null;
+    return {
+      id: action.id,
+      actionType: action.actionType,
+      status: action.status,
+      createdAt: action.createdAt,
+      syncedAt: action.syncedAt,
+      deviceId: action.deviceId,
+      subject: athlete ? `Athlete: ${athlete}` : action.entryId ? `Timeline entry: ${action.entryId}` : 'Timeline entry',
+      target: '100m session',
+      error: action.error,
+    };
+  });
+  const designation = offlineDesignation ? {
+    label: offlineDesignation.name ?? 'Designated helper',
+    deviceId: offlineDesignation.deviceId,
+    isCurrentDevice: offlineDesignation.deviceId === deviceId,
+  } : null;
+  const syncOfflineChanges = async () => {
+    if (!selectedEventId) return;
+    try {
+      const result = await syncPending(selectedEventId);
+      if (result.accepted + result.duplicates > 0) void loadEventDataRef.current(selectedEventId);
+    } catch {
+      setError('Unable to sync queued actions. Check the action history and retry when connected.');
+    }
+  };
   const resultByAthlete = new Map(results.map((result) => [result.athleteId, result]));
   const currentRecord = (athleteId: string): string => {
     const result = resultByAthlete.get(athleteId);
@@ -659,9 +705,6 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         </div>
         <div className={styles.headerButtons}>
           <OfflineIndicator />
-          {selectedEventId && currentUser && (
-            <QueueStatusBadge eventId={selectedEventId} userId={currentUser.id} />
-          )}
           <Button
             variant="secondary"
             onClick={returnToEventList}
@@ -680,6 +723,21 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           </Button>}
         </div>
       </div>
+      <OfflineRecoverySurface
+        isOnline={isOnline && isDeviceOnline()}
+        actions={recoveryActions}
+        cacheFreshness={cacheFreshness}
+        designation={designation}
+        onRefresh={async () => {
+          if (selectedEventId) await loadEventData(selectedEventId);
+        }}
+        onSyncNow={syncOfflineChanges}
+        onRetryAction={async (actionId) => {
+          if (!selectedEventId) return;
+          await retryFailedAction(actionId, selectedEventId);
+          await syncOfflineChanges();
+        }}
+      />
       <div className={styles.publicLogger}><PublicLoggerPanel event={activeEvent} /></div>
 
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}

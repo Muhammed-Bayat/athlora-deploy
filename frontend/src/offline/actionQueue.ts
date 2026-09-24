@@ -2,6 +2,13 @@ import Dexie from 'dexie';
 import { getOfflineDB, type OfflineAction } from './db';
 import { isSessionTarget, type SessionTarget } from '../types/meets';
 
+export interface OfflineQueueStatus {
+  pending: number;
+  synced: number;
+  failed: number;
+  lastSyncedAt?: number | null;
+}
+
 export interface EnqueueActionInput {
   target?: SessionTarget;
   workspaceId?: string;
@@ -49,6 +56,12 @@ export async function getAllPendingActions(userId: string): Promise<OfflineActio
   return db.offlineActions.where('status').equals('pending').toArray();
 }
 
+export async function getQueueActions(eventId: string, userId: string): Promise<OfflineAction[]> {
+  const db = getOfflineDB(userId);
+  const actions = await db.offlineActions.where('eventId').equals(eventId).toArray();
+  return actions.sort((left, right) => right.createdAt - left.createdAt);
+}
+
 export async function markSynced(
   actionId: string,
   receipt: Record<string, unknown>,
@@ -81,12 +94,16 @@ export async function resetFailed(actionId: string, userId: string): Promise<voi
 export async function getQueueStatus(
   eventId: string,
   userId: string,
-): Promise<{ pending: number; synced: number; failed: number }> {
+): Promise<OfflineQueueStatus> {
   const db = getOfflineDB(userId);
-  const [pending, synced, failed] = await Promise.all([
+  const [pending, synced, failed, actions] = await Promise.all([
     db.offlineActions.where({ status: 'pending', eventId }).count(),
     db.offlineActions.where({ status: 'synced', eventId }).count(),
     db.offlineActions.where({ status: 'failed', eventId }).count(),
+    getQueueActions(eventId, userId),
   ]);
-  return { pending, synced, failed };
+  const syncedAt = actions
+    .map((action) => action.syncedAt ?? 0)
+    .reduce((latest, value) => Math.max(latest, value), 0);
+  return { pending, synced, failed, lastSyncedAt: syncedAt || null };
 }

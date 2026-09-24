@@ -3,7 +3,7 @@ import { resolveApplicationUser, verifyAuth0Token, getApplicationUserContext } f
 import { requireOperationalAccess } from '../middleware/capabilities.js';
 import { requireBodyEventLoggingOpen, requireBodyEventOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { ApiError } from '../middleware/errors.js';
-import { processSyncBatch, designateOfflineLogger, revokeOfflineLoggerDesignation, transferOfflineLoggerDesignation } from '../services/sync.js';
+import { processSyncBatch, designateOfflineLogger, getOfflineLoggerDesignation, revokeOfflineLoggerDesignation, transferOfflineLoggerDesignation } from '../services/sync.js';
 import type { SyncActionInput } from '../services/sync.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { processSessionSyncBatch } from '../services/sessionSync.js';
@@ -110,6 +110,15 @@ router.post('/events/:eventId/helpers/grants/:grantId/designate-offline-logger',
 
     await designateOfflineLogger(grantId, eventId, deviceId);
     res.json({ data: { success: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/events/:eventId/helpers/offline-logger', ...syncAccess, async (req, res, next) => {
+  try {
+    const designation = await getOfflineLoggerDesignation(String(req.params.eventId));
+    res.json({ data: designation });
   } catch (error) {
     next(error);
   }

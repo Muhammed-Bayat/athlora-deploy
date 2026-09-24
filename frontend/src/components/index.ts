@@ -12,3 +12,4 @@ export { EmptyState } from './EmptyState';
 export { AsyncBoundary } from './AsyncBoundary';
 export { InstallButton } from './InstallButton';
 export { OfflineIndicator } from './OfflineIndicator';
+export { OfflineRecoverySurface, type OfflineRecoveryAction, type OfflineLoggerStatus } from './OfflineRecoverySurface';
