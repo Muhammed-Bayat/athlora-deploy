@@ -44,6 +44,21 @@ export async function addEvent(page: Page, title: string, type: 'competition' | 
   await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible();
 }
 
+export async function addMultiDisciplineMeet(page: Page, title: string, type: 'competition' | 'training'): Promise<void> {
+  await page.getByRole('button', { name: 'Add event', exact: true }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Add event' });
+  await dialog.getByLabel('Multi-discipline meet').check();
+  await dialog.getByRole('checkbox').first().check();
+  await dialog.getByLabel('Event title').fill(title);
+  await dialog.getByLabel('Event type').selectOption(type);
+  await dialog.getByLabel('Date').fill(todayIso());
+  await dialog.getByLabel('Venue or address').fill('Central Stadium');
+  await dialog.getByRole('button', { name: 'Search venues' }).click();
+  await dialog.getByRole('button', { name: /Central Stadium, Johannesburg/ }).click();
+  await dialog.getByRole('button', { name: 'Add event', exact: true }).click();
+  await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible();
+}
+
 export async function openEventDetail(page: Page, title: string): Promise<Locator> {
   await page.getByRole('button', { name: new RegExp(title) }).click();
   const dialog = page.getByRole('dialog', { name: title });

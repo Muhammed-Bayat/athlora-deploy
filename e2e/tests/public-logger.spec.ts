@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openView, waitForView, addEvent } from './helpers';
+import { openView, waitForView, addEvent, addMultiDisciplineMeet, openEventDetail } from './helpers';
 
 const token = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -36,6 +36,39 @@ test.describe('public logger links', () => {
 
     const response = page;
     await expect(response.getByText(/invalid|expired|not found/i).first()).toBeVisible();
+  });
+
+  test('an unauthenticated official can open an active multi-discipline meet logger', async ({ page, browser }) => {
+    const t = token();
+    const eventName = `E2E Public Meet Logger ${t}`;
+
+    await page.goto('/console');
+    await openView(page, 'Events', 'Events');
+    await waitForView(page, 'Events');
+    await addMultiDisciplineMeet(page, eventName, 'competition');
+
+    const detail = await openEventDetail(page, eventName);
+    await detail.getByRole('button', { name: 'Start event' }).click();
+    await page.getByRole('dialog', { name: 'Start event' }).getByRole('button', { name: 'Start event' }).click();
+    await detail.getByLabel('Session').selectOption({ index: 1 });
+    await detail.getByRole('button', { name: 'Start session' }).click();
+    await detail.getByRole('button', { name: 'Create shareable link' }).click();
+    const link = await detail.getByLabel('New link, shown once').inputValue();
+
+    const publicContext = await browser.newContext();
+    try {
+      const publicPage = await publicContext.newPage();
+      await publicPage.goto(link);
+      await publicPage.getByLabel('Name').fill('E2E Official');
+      await publicPage.getByLabel('Club or organization').fill('Independent');
+      await publicPage.getByRole('button', { name: 'Open logger' }).click();
+
+      await expect(publicPage.getByRole('heading', { name: eventName })).toBeVisible();
+      await expect(publicPage.getByRole('heading', { name: 'Active sessions' })).toBeVisible();
+      await expect(publicPage.getByText('No session is currently open for public logging.')).toHaveCount(0);
+    } finally {
+      await publicContext.close();
+    }
   });
 
   test('revoking public logger link removes access', async ({ page }) => {

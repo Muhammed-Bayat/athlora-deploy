@@ -38,6 +38,13 @@ function validateDisciplineEntry(input: SessionEntryInput, definition: Disciplin
   }
 }
 
+/** Public officials log performance observations, never private notes. */
+export function assertPublicSessionEntryContent(input: SessionEntryInput): void {
+  if (input.entryType === 'note' || input.noteText !== null) {
+    throw new ApiError(422, 'PUBLIC_LOGGER_ENTRY_RESTRICTED', 'Public loggers cannot create or edit notes');
+  }
+}
+
 export async function recomputeSessionResult(db: DbExecutor, actor: MeetActor, eventId: string, target: SessionTarget, workspaceId: string, definition: DisciplineDefinition): Promise<void> {
   const rows = await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2 ORDER BY created_at, id', [target.disciplineSessionId, target.entrantId]);
   const entries = rows.rows.map((row) => mapMeetRow<SessionEntry>(row));

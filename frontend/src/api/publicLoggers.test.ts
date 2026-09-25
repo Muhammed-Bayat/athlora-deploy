@@ -2,16 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createPublicLoggerEntry,
   createPublicLoggerLink,
+  createPublicMeetLoggerEntry,
+  getPublicMeetLoggerSnapshot,
   getPublicLoggerSnapshot,
   listPublicLoggerLinks,
+  removePublicMeetLoggerEntry,
   removePublicLoggerEntry,
   revokePublicLoggerLink,
   startPublicLoggerSession,
+  updatePublicMeetLoggerEntry,
   updatePublicLoggerEntry,
 } from './publicLoggers';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const ENTRY_ID = '22222222-2222-4222-8222-222222222222';
+const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const SESSION = 'public-session-token';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -68,5 +73,35 @@ describe('public logger API', () => {
 
     vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')));
     await expect(startPublicLoggerSession('link-token', 'Sam', 'North Club')).rejects.toMatchObject({ status: 0, code: 'NETWORK_ERROR' });
+  });
+
+  it('targets public meet entries with both session and entrant ids', async () => {
+    const target = { disciplineSessionId: SESSION_ID, entrantId: ENTRY_ID };
+    const entry = { id: '44444444-4444-4444-8444-444444444444', eventId: EVENT_ID, ...target };
+    const snapshot = { disciplines: [], entrants: [], sessions: [] };
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ data: snapshot }))
+      .mockResolvedValueOnce(response({ data: entry }, 201))
+      .mockResolvedValueOnce(response({ data: entry }))
+      .mockResolvedValueOnce(response(undefined, 204));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getPublicMeetLoggerSnapshot(SESSION, EVENT_ID)).resolves.toEqual(snapshot);
+    await expect(createPublicMeetLoggerEntry(SESSION, EVENT_ID, target, {
+      entryType: 'attempt', value: 6.45, unit: 'metres', isFoul: false, incidentType: null, noteText: null, deviceId: null,
+    })).resolves.toEqual(entry);
+    await expect(updatePublicMeetLoggerEntry(SESSION, EVENT_ID, target, entry.id, {
+      entryType: 'attempt', value: 6.5, unit: 'metres', isFoul: false, incidentType: null, noteText: null, deviceId: null, expectedVersion: 1,
+    })).resolves.toEqual(entry);
+    await expect(removePublicMeetLoggerEntry(SESSION, EVENT_ID, target, entry.id, { expectedVersion: 2 })).resolves.toBeUndefined();
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`/discipline-sessions`);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(`/discipline-sessions/${SESSION_ID}/entrants/${ENTRY_ID}/entries`);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock.mock.calls[2]?.[1]).toEqual(expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock.mock.calls[3]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }));
+    for (const call of fetchMock.mock.calls) {
+      expect(new Headers(call[1]?.headers).get('X-Public-Logger-Session')).toBe(SESSION);
+    }
   });
 });

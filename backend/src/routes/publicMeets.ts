@@ -3,8 +3,8 @@ import { ApiError } from '../middleware/errors.js';
 import { notifySessionInvalidated } from '../realtime/index.js';
 import { resolvePublicMeetActor } from '../services/publicLoggers.js';
 import { listDisciplines, listEntrants, listRegistrations, listSessions, listSafeRelayMembers } from '../services/meets.js';
-import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry } from '../services/sessionPerformances.js';
-import type { SessionEntry } from '../types/meets.js';
+import { assertPublicSessionEntryContent, createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry } from '../services/sessionPerformances.js';
+import type { SessionEntry, SessionEntryInput } from '../types/meets.js';
 import { object, parseSessionEntry, parseSessionEntryReplacement, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
 
@@ -52,15 +52,20 @@ function mutation(mode: 'create' | 'replace' | 'undo'): RequestHandler {
       const actor = await resolvePublicMeetActor(token, eventId);
       const target = { disciplineSessionId, entrantId };
       const entry = mode === 'create'
-        ? await createSessionEntry(actor, eventId, target, parseSessionEntry(req.body))
+        ? await createSessionEntry(actor, eventId, target, publicEntryInput(parseSessionEntry(req.body)))
         : await mutateSessionEntry(actor, eventId, target, String(req.params.entryId), mode === 'undo'
           ? { expectedVersion: parseVersion(object(req.body, ['expectedVersion']).expectedVersion) }
-          : parseSessionEntryReplacement(req.body), mode === 'undo');
+          : publicEntryInput(parseSessionEntryReplacement(req.body)), mode === 'undo');
       notifySessionInvalidated(eventId, disciplineSessionId, entrantId);
       if (mode === 'undo') res.status(204).end();
       else res.status(mode === 'create' ? 201 : 200).json({ data: publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '') });
     } catch (error) { next(error); }
   };
+}
+
+function publicEntryInput<T extends SessionEntryInput>(input: T): T {
+  assertPublicSessionEntryContent(input);
+  return { ...input, deviceId: null };
 }
 
 const router = Router();

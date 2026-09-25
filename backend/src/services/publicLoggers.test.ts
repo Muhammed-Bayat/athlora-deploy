@@ -26,4 +26,17 @@ describe('public logger service', () => {
       .rejects.toMatchObject({ status: 401, code: 'PUBLIC_LOGGER_SESSION_INVALID' });
     expect(query.mock.calls[0][1][0]).not.toBe('expired-session');
   });
+
+  it('marks generic meet snapshots so clients select the multi-discipline logger', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{
+        id: '33333333-3333-4333-8333-333333333333', event_id: EVENT_ID, title: 'Combined Meet',
+        status: 'in_progress', discipline: null, expires_at: new Date('2026-09-01T10:00:00.000Z'),
+      }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(publicLoggerSnapshot('active-session', EVENT_ID, { query } as unknown as DbExecutor))
+      .resolves.toMatchObject({ event: { id: EVENT_ID, discipline: null }, participants: [], timeline: [] });
+  });
 });

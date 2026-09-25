@@ -33,6 +33,9 @@ publicSyncRouter.post('/batch', async (req: Request, res: Response): Promise<voi
     }
 
     const sessionTargeted = actions.some((action) => action && typeof action === 'object' && 'target' in action);
+    if (sessionTargeted && actions.some((action) => !action || typeof action !== 'object' || !('target' in action))) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'Public sync batches cannot mix legacy and session actions');
+    }
     const result = sessionTargeted
       ? await processSessionSyncBatch(await resolvePublicMeetActor(sessionToken, eventId), eventId, deviceId, actions)
       : await processPublicSyncBatch(sessionToken, eventId, deviceId, actions);

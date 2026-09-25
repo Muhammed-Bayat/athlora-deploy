@@ -61,7 +61,7 @@ Both databases share the same schema:
 
 ### offlineActions / publicOfflineActions
 
-Primary key: `id`. Indexes: `[status+eventId+createdAt]`, `eventId`, `status`.
+Primary key: `id`. Indexes: `[status+eventId+createdAt]`, `eventId`, `status`. Public multi-discipline actions additionally carry a `target` containing `disciplineSessionId` and `entrantId`.
 
 ```typescript
 interface OfflineAction {
@@ -128,7 +128,7 @@ Rejected actions do not block accepted siblings in the same batch. Their rejecti
 
 ### `drainPublicQueue(eventId, sessionToken)` — Public
 
-Same flow but uses `POST /api/v1/public/logger/sync/batch` with the session token.
+Same flow but uses `POST /api/v1/public/logger/sync/batch` with the session token. Targeted meet actions are drained only with actions for the same `(eventId, disciplineSessionId, entrantId)` and never mixed with legacy public timeline actions.
 
 ## Batch Sync Endpoints
 
@@ -149,7 +149,7 @@ Header: Authorization: Bearer <session-token>
 Body: { eventId, deviceId, actions: PublicSyncActionInput[] }
 ```
 
-Processing: idempotent, **last-write-wins** conflict resolution with audit logging.
+Processing: idempotent, **last-write-wins** conflict resolution with audit logging. A batch is either legacy public timeline actions or target-scoped multi-discipline session actions; a mixed batch is rejected before processing.
 
 ### Offline logger designation
 
@@ -215,4 +215,4 @@ Write operations bypass the service worker and go directly to the action queue.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free]. The recovery surface and designation-status documentation were updated with assistance from OpenCode[openai/gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free]. The recovery surface and designation-status documentation were updated with assistance from OpenCode[openai/gpt-5.6-terra]. The target-scoped public multi-discipline queue behavior was documented with assistance from OpenCode[gpt-5.6-terra].

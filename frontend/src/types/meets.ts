@@ -39,6 +39,7 @@ export interface SessionEntryInput {
   entryType: EntryType; value: number | null; unit: DisciplineDefinition['unit'] | null;
   isFoul: boolean; incidentType: IncidentType | null; noteText: string | null; deviceId: string | null;
 }
+export interface SessionEntryReplacement extends SessionEntryInput { expectedVersion: number }
 export interface SessionEntry extends SessionEntryInput, SessionTarget {
   attemptOrder?: number | null;
   id: string; eventId: string; workspaceId: string; recordedBy: string | null; publicLoggerSessionId: string | null;
@@ -67,6 +68,37 @@ export interface SessionSelectionInput { entryId: string | null; expectedVersion
 export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
 export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }
 export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
+
+export interface PublicMeetEntrant {
+  id: string;
+  name: string;
+  kind: MeetEntrant['kind'];
+  members: SafeRelayMember[];
+}
+
+export type PublicSessionEntry = Pick<SessionEntry,
+  'id' | 'eventId' | 'disciplineSessionId' | 'entrantId' | 'verticalState' | 'attemptOrder'
+  | 'entryType' | 'value' | 'unit' | 'isFoul' | 'incidentType' | 'version' | 'createdAt'
+> & { canEdit: boolean; canUndo: boolean };
+
+export interface PublicMeetSession {
+  id: string;
+  label: string;
+  disciplineDefinitionId: string;
+  status: EventStatus;
+  resultState?: DisciplineSession['resultState'];
+  version: number;
+  verticalConfig?: VerticalConfig | null;
+  entrantIds: string[];
+  entries: PublicSessionEntry[];
+  results: Array<Pick<SessionResult, 'entrantId' | 'outcome' | 'placing' | 'vertical'> & { value: number | null }>;
+}
+
+export interface PublicMeetLoggerSnapshot {
+  disciplines: DisciplineDefinition[];
+  entrants: PublicMeetEntrant[];
+  sessions: PublicMeetSession[];
+}
 
 export function isSessionTarget(value: unknown): value is SessionTarget {
   if (!value || typeof value !== 'object') return false;
