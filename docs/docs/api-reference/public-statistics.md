@@ -21,7 +21,7 @@ Both endpoints require an authenticated member of the active club workspace. Onl
 
 The two flags are independent. `publicResultsEnabled` gates this page's public statistics endpoints (named athlete performance, detailed reports, leaderboards). `publicScheduleEnabled` gates the separate public schedule endpoints only — turning it on or off never changes results visibility, and vice versa. The PUT body is a full replacement and requires both booleans.
 
-Publishing results is reversible. It makes the club name, non-archived athlete names, and all-time 100m metric summaries available from the public statistics endpoints. It does not expose athlete profile information, injuries, notes, event names, venues, dates, or progression history.
+Publishing results is reversible. It makes the club name, non-archived athlete names, all-time 100m metric summaries, and finalized detailed report performances available from the public statistics endpoints. It never exposes athlete profile information, injuries, notes, raw timeline entries, audit fields, or manual-override metadata.
 
 ## Published Clubs
 
@@ -124,6 +124,16 @@ Returns `404 NOT_FOUND` if the club is unknown or not published (`publicResultsE
 
 Relay `members` expose only ordered leg number, display name, and guest flag. Raw `memberIds`, athlete UUIDs for members, notes, incidents, override audit fields, and private entrant details are never returned. Team times never write athlete `results` rows and therefore never affect individual PB/SB statistics. Read-time placing uses standard competition ranking with ties. The public Stats page renders these tables under the published club view.
 
+## Detailed Statistics Reports
+
+```
+GET /api/v1/public/statistics/report?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={age|under-age}
+```
+
+The unauthenticated `/stats/report` page keeps these filters in its shareable URL and reads the endpoint live, so it never serves a stored private snapshot. The response includes completed legacy 100m results and completed/final individual session performances. Each row contains safe athlete and club names, discipline presentation, performance, public standing, event title and date. Cancelled events, archived athletes, provisional sessions, invalid outcomes, withdrawn registrations, guests, relays and unpublished clubs are excluded.
+
+The report page generates matching CSV and branded PDF downloads in the browser. CSV cells are quoted and values beginning with spreadsheet formulas are escaped. PDF and CSV exports contain the same filtered data displayed in the report.
+
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report was documented with the assistance of OpenCode[gpt-5.6-terra].

@@ -69,6 +69,27 @@ export interface LeaderboardEntry {
   age: number | null;
 }
 
+export interface PublicStatisticsReportEntry {
+  athleteId: string;
+  athleteName: string;
+  clubId: string;
+  clubName: string;
+  discipline: string;
+  label: string;
+  unit: 'seconds' | 'metres' | 'cm';
+  precision: number;
+  direction: 'lower' | 'higher';
+  performance: number;
+  place: number;
+  eventTitle: string;
+  eventDate: string;
+}
+
+export interface PublicStatisticsReport {
+  data: PublicStatisticsReportEntry[];
+  meta: { count: number; generatedAt: string };
+}
+
 export async function getPublicLeaderboard(filters: Record<string, string | undefined>, signal?: AbortSignal): Promise<LeaderboardEntry[]> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -77,6 +98,15 @@ export async function getPublicLeaderboard(filters: Record<string, string | unde
   const query = params.toString() ? `?${params.toString()}` : '';
   const response = await requestPublic<{ data: LeaderboardEntry[] }>(`/api/v1/public/statistics/leaderboard${query}`, { signal });
   return response.data;
+}
+
+export async function getPublicStatisticsReport(filters: Record<string, string | undefined>, signal?: AbortSignal): Promise<PublicStatisticsReport> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return requestPublic<PublicStatisticsReport>(`/api/v1/public/statistics/report${query}`, { signal });
 }
 
 export async function getPublicClubSessionResults(clubId: string, signal?: AbortSignal): Promise<PublicClubSessionResults[]> {

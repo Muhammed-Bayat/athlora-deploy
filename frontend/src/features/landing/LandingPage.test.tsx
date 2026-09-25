@@ -69,6 +69,7 @@ describe('LandingPage', () => {
     renderLanding();
 
     expect(screen.getByRole('link', { name: 'Stats' })).toHaveAttribute('href', '/stats');
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/stats/report');
   });
 
   it('supports keyboard tabs, FAQ relationships, and menu focus restoration', () => {

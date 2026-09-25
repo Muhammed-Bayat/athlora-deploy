@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { isDeviceOnline, onConnectivityChange } from '../offline/networkStatus';
+import { isDeviceOnline, onConnectivityChange, recordNetworkSuccess } from '../offline/networkStatus';
 
 export interface OnlineStatus {
   isOnline: boolean;
@@ -7,7 +7,7 @@ export interface OnlineStatus {
   resetWasOffline: () => void;
 }
 
-const PROBE_URL = '/health';
+const PROBE_URL = `${import.meta.env.VITE_API_BASE_URL ?? ''}/health`;
 const PROBE_TIMEOUT_MS = 4000;
 const PROBE_INTERVAL_MS = 8000;
 
@@ -21,6 +21,7 @@ async function probeNetwork(): Promise<boolean> {
       signal: controller.signal,
     });
     clearTimeout(timeout);
+    if (res.ok) recordNetworkSuccess();
     return res.ok;
   } catch {
     return false;

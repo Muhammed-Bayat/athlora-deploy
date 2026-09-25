@@ -66,9 +66,10 @@ describe('useOnlineStatus', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/health',
+      expect.stringMatching(/\/health$/),
       expect.objectContaining({ method: 'HEAD' }),
     );
+    expect(networkStatus.recordNetworkSuccess).toHaveBeenCalledOnce();
     expect(result.current.isOnline).toBe(true);
   });
 

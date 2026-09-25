@@ -63,4 +63,13 @@ describe('publicStatistics API', () => {
     expect(result).toEqual({ athletes: [] });
     expect(fetchMock.mock.calls[0]?.[0]).toContain('athleteId=a-1&athleteId=a-2&year=2024');
   });
+
+  it('gets the public detailed report with only selected URL filters', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [], meta: { count: 0, generatedAt: '2026-09-25T00:00:00.000Z' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await publicStatistics.getPublicStatisticsReport({ discipline: '100m', season: '', gender: 'female' });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report?discipline=100m&gender=female');
+  });
 });
