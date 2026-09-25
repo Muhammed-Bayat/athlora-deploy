@@ -70,6 +70,10 @@ Mounted at `/public/logger`. These routes do not require a JWT — they use sess
 | `POST` | `/public/logger/events/:eventId/entries` | Submit a timeline entry |
 | `PATCH` | `/public/logger/events/:eventId/entries/:entryId` | Correct the caller's own public entry |
 | `DELETE` | `/public/logger/events/:eventId/entries/:entryId` | Undo the caller's own public entry |
+| `GET` | `/public/logger/events/:eventId/discipline-sessions` | Get multi-discipline meet sessions, entrants, entries, and results |
+| `POST` | `/public/logger/events/:eventId/discipline-sessions/:disciplineSessionId/entrants/:entrantId/entries` | Submit a selected-session observation |
+| `PUT` | `/public/logger/events/:eventId/discipline-sessions/:disciplineSessionId/entrants/:entrantId/entries/:entryId` | Replace the caller's own session entry |
+| `DELETE` | `/public/logger/events/:eventId/discipline-sessions/:disciplineSessionId/entrants/:entrantId/entries/:entryId` | Undo the caller's own session entry |
 | `POST` | `/public/logger/sync/batch` | Submit a batch of offline actions |
 
 ### Start session
@@ -99,6 +103,8 @@ The official provides the shareable link token, their name, and their club. Retu
 ```
 
 The session token is passed as `X-Public-Logger-Session` header on subsequent requests. Sessions expire after a configurable TTL (default 2 hours, min 15 minutes, max 240 minutes via `PUBLIC_LOGGER_SESSION_TTL_MINUTES`).
+
+The session snapshot identifies legacy single-discipline links with `event.discipline`. A `null` discipline denotes a generic meet: the public UI loads the session snapshot below and lets the official choose an active discipline session.
 
 ### Get snapshot
 
@@ -130,6 +136,17 @@ Body: { expectedVersion, value? | incidentType? }
 
 Public officials can correct or undo only entries attributed to their current public session. Both operations use optimistic versions and recompute event results. They cannot alter coach, assistant, or other public officials' entries. The existing `coach` role is the head-coach authority and can override any timeline entry or result through the authenticated console.
 
+### Multi-discipline meet sessions
+
+```
+GET /public/logger/events/:eventId/discipline-sessions
+Header: X-Public-Logger-Session: <session-token>
+```
+
+Returns the public-safe discipline catalogue, entrants, relay leg names, session status, result state, session entries, and computed results for the linked meet. The UI presents only `in_progress` sessions for writing. It can record timed observations, field attempts including fouls, vertical-event state, and approved incident codes against the selected `(disciplineSessionId, entrantId)` target.
+
+The three nested entry routes use the same header. Create accepts a session-entry payload; replacement includes `expectedVersion`; undo requires `expectedVersion`. Public responses omit workspace attribution, logger identity, device identifiers, and note text. Public session entries cannot be `note` entries and cannot contain `noteText`; coach-only notes and roster/lifecycle controls remain authenticated-only.
+
 ### Batch sync (offline)
 
 ```
@@ -143,6 +160,8 @@ Body: {
 ```
 
 Queues multiple offline actions for batch processing. The public logger frontend enqueues actions in IndexedDB when offline and drains them via this endpoint on reconnect.
+
+For a multi-discipline meet, every action carries a `target` with `disciplineSessionId` and `entrantId`. A batch is either entirely legacy event actions or entirely targeted session actions; mixed batches are rejected. This prevents an offline action from being applied to the wrong discipline or entrant.
 
 **Action input:**
 
@@ -198,6 +217,7 @@ Queues multiple offline actions for batch processing. The public logger frontend
 - All participants of the linked event, including fixture guest-club athletes, can receive entries
 - Public officials can edit and undo only their own entries; the authenticated `coach` role can override any entry
 - The public logger cannot view coach notes, athlete dates of birth, or other private data
+- Public session writes are scoped to a linked event, its selected session, and its selected registered entrant; direct-route device IDs are discarded and note content is rejected
 
 ## Database Tables
 
@@ -209,4 +229,4 @@ Queues multiple offline actions for batch processing. The public logger frontend
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra].

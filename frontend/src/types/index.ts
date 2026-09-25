@@ -519,7 +519,7 @@ export interface PublicLoggerLink {
 }
 
 export interface PublicLoggerSnapshot {
-  event: Pick<AthleticsEvent, 'id' | 'title' | 'status'>;
+  event: Pick<AthleticsEvent, 'id' | 'title' | 'status' | 'discipline'>;
   participants: Array<{ athleteId: string; name: string; teamName?: string | null }>;
   timeline: PublicTimelineEntry[];
 }

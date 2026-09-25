@@ -13,6 +13,7 @@ import { usePublicOfflineSync } from '../../hooks/usePublicOfflineSync';
 import type { IncidentType, PublicLoggerSnapshot } from '../../types';
 import { Button, Input, Modal, OfflineRecoverySurface } from '../../components';
 import { getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
+import { PublicMeetLogger } from './PublicMeetLogger';
 function getDeviceId(): string {
   const stored = localStorage.getItem('athlora_device_id');
   if (stored) return stored;
@@ -200,6 +201,10 @@ export function PublicLoggerPage() {
         </section>
       </main>
     );
+  }
+
+  if (snapshot.event.discipline === null) {
+    return <PublicMeetLogger event={snapshot.event} sessionToken={session ?? ''} offlineSync={offlineSync} />;
   }
 
   const loggingOpen = snapshot.event.status === 'in_progress';

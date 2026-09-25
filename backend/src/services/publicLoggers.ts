@@ -22,7 +22,7 @@ export interface PublicLoggerLink {
 }
 
 export interface PublicLoggerSnapshot {
-  event: { id: string; title: string; status: EventStatus };
+  event: { id: string; title: string; status: EventStatus; discipline: typeof DISCIPLINE_100M | null };
   participants: Array<{ athleteId: string; name: string; teamName: string | null }>;
   timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit: boolean; canUndo: boolean }>;
 }
@@ -40,6 +40,7 @@ interface SessionRow {
   event_id: string;
   title: string;
   status: EventStatus;
+  discipline: string | null;
   expires_at: Date | string;
 }
 
@@ -147,7 +148,7 @@ export async function createPublicLoggerSession(
   executor: DbExecutor = getPool(),
 ): Promise<{ sessionToken: string; snapshot: PublicLoggerSnapshot }> {
   const link = await executor.query<SessionRow>(
-    `SELECT pl.id, pl.event_id, e.title, e.status, now() AS expires_at
+    `SELECT pl.id, pl.event_id, e.title, e.status, e.discipline, now() AS expires_at
      FROM public_logger_links pl
      JOIN events e ON e.id = pl.event_id
      WHERE pl.token_hash = $1 AND pl.status = 'active' AND e.status IN ('scheduled', 'in_progress')`,
@@ -172,7 +173,7 @@ async function validSession(
 ): Promise<SessionRow> {
   assertUuid(eventId);
   const result = await executor.query<SessionRow>(
-    `SELECT ps.id, ps.event_id, e.title, e.status, ps.expires_at
+    `SELECT ps.id, ps.event_id, e.title, e.status, e.discipline, ps.expires_at
      FROM public_logger_sessions ps
      JOIN public_logger_links pl ON pl.id = ps.link_id
      JOIN events e ON e.id = ps.event_id
@@ -217,7 +218,12 @@ export async function publicLoggerSnapshot(
     ),
   ]);
   return {
-    event: { id: session.event_id, title: session.title, status: session.status },
+    event: {
+      id: session.event_id,
+      title: session.title,
+      status: session.status,
+      discipline: session.discipline === null ? null : DISCIPLINE_100M,
+    },
     participants: participants.rows.map((participant) => ({ athleteId: participant.athlete_id, name: participant.name, teamName: participant.team_name })),
     timeline: entries.rows.map((entry) => {
       const {

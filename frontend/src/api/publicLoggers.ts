@@ -1,4 +1,5 @@
 import type { ApiList, PublicLoggerLink, PublicLoggerSnapshot, PublicTimelineEntry, TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../types';
+import type { PublicMeetLoggerSnapshot, PublicSessionEntry, SessionEntryInput, SessionEntryReplacement, SessionTarget } from '../types/meets';
 import { ApiError, request } from './client';
 import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
@@ -72,4 +73,51 @@ export function removePublicLoggerEntry(sessionToken: string, eventId: string, e
   return publicRequest<void>(`/events/${eventId}/entries/${entryId}`, {
     method: 'DELETE', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload),
   });
+}
+
+export async function getPublicMeetLoggerSnapshot(sessionToken: string, eventId: string): Promise<PublicMeetLoggerSnapshot> {
+  const response = await publicRequest<{ data: PublicMeetLoggerSnapshot }>(`/events/${eventId}/discipline-sessions`, {
+    headers: { 'X-Public-Logger-Session': sessionToken },
+  });
+  return response.data;
+}
+
+export async function createPublicMeetLoggerEntry(
+  sessionToken: string,
+  eventId: string,
+  target: SessionTarget,
+  payload: SessionEntryInput,
+): Promise<PublicSessionEntry> {
+  const response = await publicRequest<{ data: PublicSessionEntry }>(
+    `/events/${eventId}/discipline-sessions/${target.disciplineSessionId}/entrants/${target.entrantId}/entries`,
+    { method: 'POST', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload) },
+  );
+  return response.data;
+}
+
+export async function updatePublicMeetLoggerEntry(
+  sessionToken: string,
+  eventId: string,
+  target: SessionTarget,
+  entryId: string,
+  payload: SessionEntryReplacement,
+): Promise<PublicSessionEntry> {
+  const response = await publicRequest<{ data: PublicSessionEntry }>(
+    `/events/${eventId}/discipline-sessions/${target.disciplineSessionId}/entrants/${target.entrantId}/entries/${entryId}`,
+    { method: 'PUT', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload) },
+  );
+  return response.data;
+}
+
+export function removePublicMeetLoggerEntry(
+  sessionToken: string,
+  eventId: string,
+  target: SessionTarget,
+  entryId: string,
+  payload: { expectedVersion: number },
+): Promise<void> {
+  return publicRequest<void>(
+    `/events/${eventId}/discipline-sessions/${target.disciplineSessionId}/entrants/${target.entrantId}/entries/${entryId}`,
+    { method: 'DELETE', headers: { 'X-Public-Logger-Session': sessionToken }, body: JSON.stringify(payload) },
+  );
 }

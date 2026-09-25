@@ -7,7 +7,7 @@ import { object, parseSessionEntry, parseSessionEntryReplacement, parseSessionTa
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { meetAccess, meetIds, meetNotFound } from './meetAccess.js';
 import type { MeetTransaction } from './meets.js';
-import { createSessionEntry, mutateSessionEntry } from './sessionPerformances.js';
+import { assertPublicSessionEntryContent, createSessionEntry, mutateSessionEntry } from './sessionPerformances.js';
 
 export interface SessionSyncAction {
   actionId: string;
@@ -73,7 +73,9 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
         const inTransaction: MeetTransaction = (operation) => operation(db);
         let entry;
         if (action.actionType === 'create_entry') {
-          entry = await createSessionEntry(actor, eventId, action.target, parseSessionEntry({ ...action.payload, deviceId }), inTransaction, action.actionId);
+          const input = parseSessionEntry({ ...action.payload, deviceId });
+          if (isPublic) assertPublicSessionEntryContent(input);
+          entry = await createSessionEntry(actor, eventId, action.target, input, inTransaction, action.actionId);
         } else {
           const { entryId, ...payload } = action.payload;
           meetIds(entryId);
@@ -96,9 +98,13 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
             }
           }
           if (action.actionType === 'undo_entry') object(payload, ['expectedVersion']);
-          entry = await mutateSessionEntry(actor, eventId, action.target, entryId as string,
-            action.actionType === 'undo_entry' ? { expectedVersion } : parseSessionEntryReplacement({ ...payload, deviceId, expectedVersion }),
-            action.actionType === 'undo_entry', inTransaction);
+          if (action.actionType === 'undo_entry') {
+            entry = await mutateSessionEntry(actor, eventId, action.target, entryId as string, { expectedVersion }, true, inTransaction);
+          } else {
+            const input = parseSessionEntryReplacement({ ...payload, deviceId, expectedVersion });
+            if (isPublic) assertPublicSessionEntryContent(input);
+            entry = await mutateSessionEntry(actor, eventId, action.target, entryId as string, input, false, inTransaction);
+          }
         }
         await saveReceipt(db, table, actorColumn, actorId, eventId, deviceId, action, entry.id, entry.version, null);
         receipts.push({ actionId: action.actionId, target: action.target, status: 'accepted', entryId: entry.id, serverVersion: entry.version });

@@ -16,6 +16,7 @@ vi.mock('../auth/WorkspaceContext', () => ({ useWorkspace: () => ({ activeWorksp
 vi.mock('../realtime/useRealtimeRoom', () => ({ useRealtimeRoom: vi.fn() }));
 vi.mock('./EventWeatherPanel', () => ({ EventWeatherPanel: () => <p>Weather forecast</p> }));
 vi.mock('./VenuePreview', () => ({ VenuePreview: () => <p>Venue map</p> }));
+vi.mock('./PublicLoggerPanel', () => ({ PublicLoggerPanel: () => <section aria-label="Public logger links">Public logger links</section> }));
 vi.mock('./FixtureHostPanel', () => ({ FixtureHostPanel: () => <section aria-label="Host fixture controls">Host fixture controls</section> }));
 vi.mock('./GuestRosterPanel', () => ({ GuestRosterPanel: ({ scheduled }: { scheduled: boolean }) => <section aria-label="Guest roster">Guest roster {scheduled ? 'editable' : 'read only'}</section> }));
 vi.mock('../results/EventResultsSection', () => ({ EventResultsSection: () => <section aria-label="Event results">Event results</section> }));
