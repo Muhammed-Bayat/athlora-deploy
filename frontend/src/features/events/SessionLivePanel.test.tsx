@@ -56,20 +56,23 @@ const event: AthleticsEvent = {
 
 let sessionStatus = 'scheduled';
 let sessionVersion = 1;
+let resultState = 'provisional';
 
 describe('SessionLivePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStatus = 'scheduled';
     sessionVersion = 1;
+    resultState = 'provisional';
     offline.isOnline = true;
     offline.queueStatus = { pending: 0, failed: 0, lastSyncedAt: null };
     offline.queueActions = [];
     offline.enqueueCreateEntry.mockResolvedValue(false);
     offline.enqueueUndoEntry.mockResolvedValue(false);
     vi.mocked(eventHelpersApi.getOfflineLoggerDesignation).mockResolvedValue(null);
-    api.changeSessionState.mockImplementation(async () => {
-      sessionStatus = 'in_progress';
+    api.changeSessionState.mockImplementation(async (_event, _session, status) => {
+      resultState = status === 'completed' ? 'final' : sessionStatus === 'completed' ? 'reopened' : resultState;
+      sessionStatus = status;
       sessionVersion += 1;
       return {};
     });
@@ -84,6 +87,8 @@ describe('SessionLivePanel', () => {
     }] });
     api.listSessions.mockImplementation(async () => ({ data: [{
       id: 'session-1',
+      workspaceId: 'ws-1',
+      resultState,
       disciplineDefinitionId: 'relay-400',
       label: '4x400m Heat 1',
       status: sessionStatus,
@@ -175,6 +180,11 @@ describe('SessionLivePanel', () => {
     ));
     expect(screen.getByRole('table')).toHaveTextContent('Speed Demons');
     expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Dash');
+    await user.click(screen.getByRole('button', { name: 'Finalize session' }));
+    expect(await screen.findByRole('heading', { name: 'Standings (final)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reopen session' }));
+    expect(await screen.findByRole('heading', { name: 'Standings (reopened — provisional)' })).toBeInTheDocument();
   });
 
   it('queues an offline attempt instead of calling the API', async () => {
@@ -202,5 +212,21 @@ describe('SessionLivePanel', () => {
     const legacy: AthleticsEvent = { ...event, discipline: '100m' };
     const { container } = render(<SessionLivePanel event={legacy} canOperate isCoach />);
     expect(container).toBeEmptyDOMElement();
+  });
+  it('shows automatic measured results without selection controls', async () => {
+    sessionStatus = 'in_progress';
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'relay-400', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    expect(await screen.findByText('Automatic best legal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
+  });
+  it('does not give a logger finalization authority', async () => {
+    sessionStatus = 'in_progress';
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach={false} />);
+    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    expect(screen.queryByRole('button', { name: 'Finalize session' })).not.toBeInTheDocument();
   });
 });

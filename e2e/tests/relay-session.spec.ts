@@ -32,10 +32,16 @@ test('Relay session setup, team logging, official selection, and standings', asy
   await roster.getByRole('button', { name: 'Add guest', exact: true }).click();
   await roster.getByLabel('Guest name').fill('Relay Leg Two');
   await roster.getByRole('button', { name: 'Add guest', exact: true }).click();
+  for (const name of ['Relay Leg Three', 'Relay Leg Four']) {
+    await roster.getByLabel('Guest name').fill(name);
+    await roster.getByRole('button', { name: 'Add guest', exact: true }).click();
+  }
 
   await roster.getByLabel('Team name').fill('Speed Demons');
   await roster.getByLabel('Relay Leg One').check();
   await roster.getByLabel('Relay Leg Two').check();
+  await roster.getByLabel('Relay Leg Three').check();
+  await roster.getByLabel('Relay Leg Four').check();
   await roster.getByRole('button', { name: 'Add relay' }).click();
   await expect(roster.getByRole('list', { name: 'Registered entrants' })).toContainText('Speed Demons');
   await expect(roster.getByRole('list', { name: 'Registered entrants' })).toContainText('Relay Leg One → Relay Leg Two');
@@ -63,7 +69,13 @@ test('Relay session setup, team logging, official selection, and standings', asy
   await expect(live.getByRole('table')).toContainText('Relay Leg One → Relay Leg Two');
   await expect(live.getByRole('table')).toContainText('Selected');
 
-  await live.getByRole('button', { name: 'Complete session' }).click();
-  await expect(live.getByRole('heading', { name: /Standings/ })).toBeVisible();
+  await live.getByRole('button', { name: 'Finalize session' }).click();
+  await expect(live.getByRole('heading', { name: 'Standings (final)' })).toBeVisible();
+  await expect(live.getByRole('button', { name: 'Make official' })).toHaveCount(0);
+  await live.getByRole('button', { name: 'Reopen session' }).click();
+  await expect(live.getByRole('heading', { name: 'Standings (reopened — provisional)' })).toBeVisible();
+  await live.getByRole('button', { name: 'Make official' }).last().click();
+  await live.getByRole('button', { name: 'Finalize session' }).click();
+  await expect(live.getByRole('heading', { name: 'Standings (final)' })).toBeVisible();
   await expect(live.getByRole('button', { name: 'Export results CSV' })).toBeEnabled();
 });

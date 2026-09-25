@@ -34,6 +34,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [entrantId, setEntrantId] = useState('');
   const [value, setValue] = useState('');
   const [incidentType, setIncidentType] = useState('');
+  const [isFoul, setIsFoul] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +46,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
   const selectedEntrant = entrants.find((item) => item.id === entrantId);
-  const live = canOperate && session?.status === 'in_progress' && event.status === 'in_progress';
+  const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
+  const timed = definition?.defaultRules.aggregation === 'timed';
+  const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
 
   const reload = useCallback(async () => {
     try {
@@ -143,8 +146,8 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const payload = {
       entryType: 'attempt' as const,
       value: value === '' ? null : Number(value),
-      unit: value === '' && incidentType ? null : definition?.unit ?? 'seconds',
-      isFoul: false,
+      unit: value === '' ? null : definition?.unit ?? 'seconds',
+      isFoul,
       incidentType: (incidentType || null) as SessionEntry['incidentType'],
       noteText: noteText.trim() || null,
       deviceId: null,
@@ -171,7 +174,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
 
   const timedSessions = sessions.filter((item) => {
     const def = definitions.find((candidate) => candidate.id === item.disciplineDefinitionId);
-    return def && def.defaultRules.aggregation === 'timed' && def.kind !== 'vertical';
+    return def && def.kind !== 'vertical';
   });
   const recoveryActions = (offline.queueActions ?? []).map((action) => {
     const targetEntrant = action.target?.entrantId ? entrants.find((entrant) => entrant.id === action.target?.entrantId) : null;
@@ -231,7 +234,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   return (
     <section aria-label="Session live logging" aria-busy={busy}>
       <h2>Session live logger</h2>
-      <p>Team-level timed logging with coach-selected official results. Offline attempts queue and sync when reconnecting.</p>
+      <p>Timed results require coach selection. Jumps and throws use the automatic best legal attempt. Offline attempts queue and sync when reconnecting.</p>
       <OfflineRecoverySurface
         isOnline={offline.isOnline}
         actions={recoveryActions}
@@ -254,13 +257,14 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       </label>
       {session && definition && (
         <>
-          <p>{definition.presentation.label}: {session.status}</p>
-          {canOperate && session.status === 'scheduled' && event.status === 'in_progress' && (
+          <p>{definition.presentation.label}: {session.status} — {session.resultState ?? 'provisional'}</p>
+          {canFinalize && session.status === 'scheduled' && event.status === 'in_progress' && (
             <Button onClick={() => void startSession()} disabled={busy}>Start session</Button>
           )}
-          {canOperate && session.status === 'in_progress' && (
-            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy}>Complete session</Button>
+          {canFinalize && session.status === 'in_progress' && (
+            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>Finalize session</Button>
           )}
+          {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
           <label>
             Team
             <select value={entrantId} onChange={(input) => setEntrantId(input.target.value)}>
@@ -277,7 +281,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             <fieldset disabled={busy}>
               <legend>Log attempt</legend>
               <label>
-                Time (s)
+                {timed ? 'Time (s)' : `Mark (${definition.unit})`}
                 <input
                   type="number"
                   min="0.01"
@@ -287,6 +291,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                   disabled={Boolean(incidentType)}
                 />
               </label>
+              {!timed && <label><input type="checkbox" checked={isFoul} onChange={e => setIsFoul(e.target.checked)} />Foul</label>}
               <label>
                 Incident
                 <select value={incidentType} onChange={(input) => { setIncidentType(input.target.value); if (input.target.value) setValue(''); }}>
@@ -302,25 +307,25 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 Note
                 <input value={noteText} onChange={(input) => setNoteText(input.target.value)} maxLength={2000} />
               </label>
-              <Button onClick={() => void logAttempt()} disabled={busy || (!value && !incidentType)}>Log attempt</Button>
+              <Button onClick={() => void logAttempt()} disabled={busy || (!value && !incidentType && !isFoul)}>Log attempt</Button>
             </fieldset>
           )}
           <h3>Attempts</h3>
           <ol>
             {teamEntries.map((entry, index) => (
               <li key={entry.id}>
-                #{index + 1} {formatResult(entry.value, definition)} {entry.incidentType ?? ''}
+                #{index + 1} {formatResult(entry.value, definition)} {entry.incidentType ?? ''} {entry.isFoul && 'Foul'}
                 {selectedResult?.selectedEntryId === entry.id && ' · official'}
                 {isCoach && live && (
                   <>
                     {' '}
-                    <Button
+                    {timed && <Button
                       variant="secondary"
-                      disabled={busy || selectedResult?.selectedEntryId === entry.id}
+                      disabled={busy || !offline.isOnline || selectedResult?.selectedEntryId === entry.id || entry.value === null || !!entry.incidentType || entry.isFoul}
                       onClick={() => void selectOfficial(entry.id)}
                     >
                       Make official
-                    </Button>
+                    </Button>}
                     <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entry)}>Undo</Button>
                   </>
                 )}
@@ -328,10 +333,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             ))}
             {teamEntries.length === 0 && <li>No attempts logged yet.</li>}
           </ol>
-          {isCoach && selectedResult && teamEntries.length > 0 && selectedResult.selectedEntryId && (
+          {isCoach && live && timed && selectedResult && teamEntries.length > 0 && selectedResult.selectedEntryId && (
             <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(null)}>Clear official selection</Button>
           )}
-          <h3>Standings {session.status !== 'completed' && '(provisional)'}</h3>
+          <h3>Standings ({session.resultState === 'final' ? 'final' : session.resultState === 'reopened' ? 'reopened — provisional' : 'provisional'})</h3>
           <table>
             <thead>
               <tr>
@@ -355,7 +360,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                       <td>{memberSummary(entrant, entrants)}</td>
                       <td>{formatResult(row.effectiveResult, definition)}</td>
                       <td>{row.effectiveOutcome}</td>
-                      <td>{row.selectedEntryId ? 'Selected' : 'Latest'}</td>
+                      <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>
                     </tr>
                   );
                 })}

@@ -1,7 +1,10 @@
-import { getPool, type DbExecutor } from '../db/client.js';
+import type { DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
-import type { SafeRelayMember } from '../types/meets.js';
+import type { DisciplineDefinition, SafeRelayMember, SessionEntry, VerticalConfig } from '../types/meets.js';
+import { mapMeetRow } from '../db/meet-row-mappers.js';
+import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
+import { withReadTransaction } from '../db/transaction.js';
 
 export interface PublicSessionResultRow {
   entrantId: string;
@@ -22,6 +25,7 @@ export interface PublicSessionResults {
     id: string;
     label: string;
     status: string;
+    resultState: string;
     disciplineCode: string;
     disciplineLabel: string;
     unit: string;
@@ -30,7 +34,8 @@ export interface PublicSessionResults {
   }>;
 }
 
-export async function publicClubSessionResults(clubId: unknown, db: DbExecutor = getPool()): Promise<PublicSessionResults[]> {
+export async function publicClubSessionResults(clubId: unknown, db?: DbExecutor): Promise<PublicSessionResults[]> {
+  if (!db) return withReadTransaction(client => publicClubSessionResults(clubId, client));
   if (!isCanonicalUuid(clubId)) throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
   const club = await db.query<{ workspace_id: string }>(
     'SELECT workspace_id FROM clubs WHERE id = $1 AND public_results_enabled = true',
@@ -44,16 +49,16 @@ export async function publicClubSessionResults(clubId: unknown, db: DbExecutor =
      FROM events e
      JOIN discipline_sessions s ON s.event_id = e.id
      WHERE e.workspace_id = $1 AND e.status <> 'cancelled'
-     ORDER BY e.date DESC, e.id`,
+      ORDER BY date DESC, e.id`,
     [workspaceId],
   );
 
   const meetings: PublicSessionResults[] = [];
   for (const event of events.rows) {
     const sessions = await db.query<{
-      id: string; label: string; status: string; code: string; label_discipline: string; unit: string; precision: number;
+      id: string; label: string; status: string; result_state: string; code: string; label_discipline: string; unit: string; precision: number; definition: Record<string, unknown>; vertical_config: VerticalConfig | null;
     }>(
-      `SELECT s.id, s.label, s.status, d.code, d.presentation->>'label' AS label_discipline, d.unit, d.precision
+      `SELECT s.id, s.label, s.status, s.result_state, s.vertical_config, to_jsonb(d) AS definition, d.code, d.presentation->>'label' AS label_discipline, d.unit, d.precision
        FROM discipline_sessions s
        JOIN discipline_definitions d ON d.id = s.discipline_definition_id
        WHERE s.event_id = $1 AND s.status <> 'cancelled'
@@ -65,7 +70,7 @@ export async function publicClubSessionResults(clubId: unknown, db: DbExecutor =
       const results = await db.query<{
         entrant_id: string; name: string; kind: string; value: string | null; outcome: string; placing: number | null; selected_entry_id: string | null;
       }>(
-        `SELECT en.id AS entrant_id, en.name, en.kind, r.final_result AS value, r.outcome, NULL::integer AS placing, r.selected_entry_id
+        `SELECT en.id AS entrant_id, en.name, en.kind, r.final_result AS value, r.outcome, r.final_place AS placing, r.selected_entry_id
          FROM session_results r
          JOIN session_entrants sr ON sr.session_id = r.session_id AND sr.entrant_id = r.entrant_id AND sr.withdrawn_at IS NULL
          JOIN meet_entrants en ON en.id = r.entrant_id
@@ -73,15 +78,13 @@ export async function publicClubSessionResults(clubId: unknown, db: DbExecutor =
          ORDER BY r.entrant_id`,
         [session.id],
       );
-      const ranked = results.rows
-        .filter((row) => row.outcome === 'valid' && row.value !== null)
-        .slice()
-        .sort((a, b) => Number(a.value) - Number(b.value));
-      const placingByEntrant = new Map<string, number>();
-      ranked.forEach((row, index) => {
-        const previous = ranked[index - 1];
-        placingByEntrant.set(row.entrant_id, previous && previous.value === row.value ? placingByEntrant.get(previous.entrant_id)! : index + 1);
+      const definition = mapMeetRow<DisciplineDefinition>(session.definition);
+      const entries = (await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 ORDER BY created_at, id', [session.id])).rows.map(r => mapMeetRow<SessionEntry>(r));
+      const candidates = results.rows.map(r => {
+        const history = entries.filter(e => e.entrantId === r.entrant_id);
+        return { entrantId: r.entrant_id, score: authoritativeResult(definition, history, r.selected_entry_id, session.vertical_config), entries: history, eligible: true };
       });
+      const placingByEntrant = sessionPlaces(definition, candidates);
       const renderedResults: PublicSessionResultRow[] = [];
       for (const row of results.rows) {
         const members: SafeRelayMember[] = row.kind === 'relay'
@@ -98,9 +101,9 @@ export async function publicClubSessionResults(clubId: unknown, db: DbExecutor =
           name: row.name,
           kind: row.kind as 'athlete' | 'guest' | 'relay',
           members,
-          value: row.value === null ? null : Number(row.value),
-          outcome: row.outcome,
-          placing: placingByEntrant.get(row.entrant_id) ?? null,
+          value: candidates.find(c => c.entrantId === row.entrant_id)!.score.value,
+          outcome: candidates.find(c => c.entrantId === row.entrant_id)!.score.outcome,
+          placing: session.result_state === 'final' ? row.placing : placingByEntrant.get(row.entrant_id) ?? null,
           isSelected: Boolean(row.selected_entry_id),
         });
       }
@@ -109,6 +112,7 @@ export async function publicClubSessionResults(clubId: unknown, db: DbExecutor =
         id: session.id,
         label: session.label,
         status: session.status,
+        resultState: session.result_state,
         disciplineCode: session.code,
         disciplineLabel: session.label_discipline ?? session.code,
         unit: session.unit,
