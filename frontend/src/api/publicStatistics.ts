@@ -52,6 +52,33 @@ export async function getPublicAthleteComparison(athleteIds: string[], signal?: 
   return response.data;
 }
 
+export interface LeaderboardEntry {
+  athleteId: string;
+  athleteName: string;
+  clubId: string;
+  clubName: string;
+  discipline: string;
+  label: string;
+  unit: 'seconds' | 'metres' | 'cm';
+  precision: number;
+  direction: 'lower' | 'higher';
+  performance: number;
+  place: number;
+  season: string | null;
+  gender: string | null;
+  age: number | null;
+}
+
+export async function getPublicLeaderboard(filters: Record<string, string | undefined>, signal?: AbortSignal): Promise<LeaderboardEntry[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const response = await requestPublic<{ data: LeaderboardEntry[] }>(`/api/v1/public/statistics/leaderboard${query}`, { signal });
+  return response.data;
+}
+
 export async function getPublicClubSessionResults(clubId: string, signal?: AbortSignal): Promise<PublicClubSessionResults[]> {
   const response = await requestPublic<{ data: PublicClubSessionResults[] }>(`/api/v1/public/statistics/clubs/${encodeURIComponent(clubId)}/session-results`, { signal });
   return response.data;

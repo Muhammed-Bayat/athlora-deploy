@@ -6,6 +6,7 @@ import App from './App';
 import { Auth0TokenBridge } from './features/auth/Auth0TokenBridge';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { PublicLoggerPage } from './features/publicLogger/PublicLoggerPage';
+import { PublicLeaderboardPage } from './features/publicStats/PublicLeaderboardPage';
 import { PublicStatsPage } from './features/publicStats/PublicStatsPage';
 import { PublicScheduleIndexPage } from './features/publicSchedule/PublicScheduleIndexPage';
 import { PublicScheduleClubPage } from './features/publicSchedule/PublicScheduleClubPage';
@@ -22,7 +23,7 @@ const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
 const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
 const isPublicLoggerRoute = /^\/log\/[^/]+$/.test(window.location.pathname);
-const isPublicStatsRoute = /^\/stats\/?$/.test(window.location.pathname);
+const isPublicStatsRoute = /^\/stats(?:\/leaderboard)?\/?$/.test(window.location.pathname);
 const isPublicScheduleRoute = /^\/schedule(?:\/[^/]+)?\/?$/.test(window.location.pathname);
 const isPublicRoute = isPublicLoggerRoute || isPublicStatsRoute || isPublicScheduleRoute;
 
@@ -33,7 +34,14 @@ if (!isPublicRoute && (!domain || !clientId || !audience)) {
 createRoot(rootElement).render(
   <StrictMode>
     {isPublicLoggerRoute ? <BrowserRouter><Routes><Route path="/log/:token" element={<PublicLoggerPage />} /></Routes></BrowserRouter> :
-    isPublicStatsRoute ? <BrowserRouter><Routes><Route path="/stats" element={<PublicStatsPage />} /></Routes></BrowserRouter> :
+    isPublicStatsRoute ? (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/stats" element={<PublicStatsPage />} />
+          <Route path="/stats/leaderboard" element={<PublicLeaderboardPage />} />
+        </Routes>
+      </BrowserRouter>
+    ) :
     isPublicScheduleRoute ? (
       <BrowserRouter>
         <Routes>
