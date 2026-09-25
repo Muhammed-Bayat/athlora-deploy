@@ -12,6 +12,13 @@ export function PublicSessionResults({ clubId }: { clubId: string }) {
   const [meetings, setMeetings] = useState<PublicClubSessionResults[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(r => r + 1);
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, []);
 
   useEffect(() => {
     if (!clubId) {
@@ -30,7 +37,7 @@ export function PublicSessionResults({ clubId }: { clubId: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [clubId]);
+  }, [clubId, revision]);
 
   if (!clubId) return null;
   if (loading) return <p className={styles.loading} role="status">Loading session results...</p>;
@@ -53,6 +60,7 @@ export function PublicSessionResults({ clubId }: { clubId: string }) {
           {meeting.sessions.map((session) => (
             <div key={session.id}>
               <h4>{session.disciplineLabel} — {session.label}</h4>
+              <p>Results: {session.resultState ?? 'provisional'} · refreshes every 15 seconds</p>
               <div className={styles.tableScroll}>
                 <table className={styles.comparisonTable} aria-label={`${session.label} standings`}>
                   <thead>

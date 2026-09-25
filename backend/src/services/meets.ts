@@ -5,6 +5,7 @@ import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, Entra
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
+import { listSessionResults, recomputeSessionResult } from './sessionPerformances.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
 
@@ -54,20 +55,41 @@ export async function createSession(actor: MeetActor, eventId: string, input: Se
 }
 
 export async function changeSessionState(actor: MeetActor, eventId: string, sessionId: string, input: SessionStateInput, transaction: MeetTransaction = withTransaction): Promise<DisciplineSession> {
-  if (!('userId' in actor)) meetNotFound();
+  meetCoach(actor);
   return transaction(async (db) => {
     const access = await meetAccess(db, actor, eventId, true);
     if (!access.host) meetNotFound();
     const before = await getSession(db, eventId, sessionId);
     if (before.version !== input.expectedVersion) meetConflict('SESSION_VERSION_CONFLICT', 'Session has been modified');
-    assertValidTransition(before.status, input.status);
-    if (input.status === 'in_progress' && access.event.status !== 'in_progress') meetConflict('EVENT_NOT_IN_PROGRESS', 'The event must be in progress');
+    const reopening = before.status === 'completed' && input.status === 'in_progress';
+    if (!reopening) assertValidTransition(before.status, input.status);
+    if (access.event.status === 'cancelled') meetConflict('EVENT_CLOSED', 'The event is cancelled');
+    if (input.status === 'in_progress' && !reopening && access.event.status !== 'in_progress') meetConflict('EVENT_NOT_IN_PROGRESS', 'The event must be in progress');
+    if (input.status === 'completed' && before.resultState !== 'final') {
+      const definition = await getDefinition(db, before.disciplineDefinitionId);
+      const registrations = await db.query<{ entrant_id: string; workspace_id: string }>('SELECT entrant_id, workspace_id FROM session_entrants WHERE session_id = $1 AND withdrawn_at IS NULL', [sessionId]);
+      for (const entrant of registrations.rows) {
+        await recomputeSessionResult(db, actor, eventId, { disciplineSessionId: sessionId, entrantId: entrant.entrant_id }, entrant.workspace_id, definition);
+      }
+      const board = await listSessionResults(actor, eventId, sessionId, db);
+      if (definition.defaultRules.aggregation === 'timed') {
+        const pending = await db.query(`SELECT 1 FROM session_results r JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+          WHERE r.session_id = $1 AND se.withdrawn_at IS NULL AND r.selected_entry_id IS NULL AND r.outcome = 'no_result'
+          AND EXISTS (SELECT 1 FROM session_timeline_entries t WHERE t.session_id = r.session_id AND t.entrant_id = r.entrant_id AND t.deleted_at IS NULL AND t.entry_type = 'attempt' AND t.value > 0 AND NOT t.is_foul) LIMIT 1`, [sessionId]);
+        if (pending.rows.length) meetConflict('OFFICIAL_SELECTION_REQUIRED', 'Select an official time for every entrant with recorded times');
+      }
+      for (const row of board) {
+        await db.query('UPDATE session_results SET final_place = $1 WHERE id = $2', [row.placing, row.id]);
+        await meetAudit(db, actor, eventId, row.workspaceId, 'result', row.id, 'finalized', row, { ...row, finalPlace: row.placing });
+      }
+    }
+    if (reopening || input.status === 'cancelled') await db.query('UPDATE session_results SET final_place = NULL WHERE session_id = $1', [sessionId]);
     const result = await db.query(
-      `UPDATE discipline_sessions SET status = $1, version = version + 1, updated_by = $2, updated_at = now()
-       WHERE id = $3 RETURNING *`, [input.status, actor.userId, sessionId],
+      `UPDATE discipline_sessions SET status = $1, version = version + 1, updated_by = $2, updated_at = now(), result_state = $4
+       WHERE id = $3 RETURNING *`, [input.status, actor.userId, sessionId, input.status === 'completed' ? 'final' : reopening ? 'reopened' : input.status === 'cancelled' ? 'provisional' : before.resultState ?? 'provisional'],
     );
     const after = mapMeetRow<DisciplineSession>(result.rows[0]);
-    await meetAudit(db, actor, eventId, after.workspaceId, 'session', sessionId, 'state_changed', before, after);
+    await meetAudit(db, actor, eventId, after.workspaceId, 'session', sessionId, reopening ? 'reopened' : input.status === 'completed' ? 'finalized' : 'state_changed', before, after);
     return after;
   });
 }
@@ -237,7 +259,8 @@ export async function withdrawEntrant(actor: MeetActor, eventId: string, target:
   await transaction(async (db) => {
     const access = await meetAccess(db, actor, eventId, true);
     if (access.helper) meetNotFound();
-    await getSession(db, eventId, target.disciplineSessionId);
+    const session = await getSession(db, eventId, target.disciplineSessionId);
+    if (['completed', 'cancelled'].includes(session.status) || access.event.status === 'cancelled') meetConflict('SESSION_CLOSED', 'Reopen the session before withdrawing an entrant');
     const before = await db.query('SELECT * FROM session_entrants WHERE event_id = $1 AND session_id = $2 AND entrant_id = $3 AND workspace_id = $4', [eventId, target.disciplineSessionId, target.entrantId, actor.workspaceId]);
     if (!before.rows[0]) meetNotFound();
     if (before.rows[0].withdrawn_at) return;

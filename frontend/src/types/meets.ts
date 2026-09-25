@@ -21,6 +21,7 @@ export interface DisciplineDefinition {
   precision: number; presentation: { label: string; unitLabel?: string }; createdAt: string; source: string;
 }
 export interface DisciplineSession {
+  resultState?: 'provisional' | 'final' | 'reopened';
   verticalConfig?: VerticalConfig | null;
   id: string; eventId: string; workspaceId: string; disciplineDefinitionId: string; label: string;
   status: EventStatus; version: number; createdBy: string; updatedBy: string; createdAt: string; updatedAt: string;
@@ -44,6 +45,7 @@ export interface SessionEntry extends SessionEntryInput, SessionTarget {
   version: number; createdAt: string; updatedAt: string; deletedAt: string | null;
 }
 export interface SessionResult extends SessionTarget {
+  finalPlace?: number | null;
   vertical?: { failuresAtBest: number; totalFailuresToBest: number; consecutiveFailures: number; eliminated: boolean };
   isPb?: boolean; isSb?: boolean;
   id: string; eventId: string; workspaceId: string; outcome: ResultOutcome; finalResult: number | null;

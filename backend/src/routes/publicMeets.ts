@@ -30,8 +30,8 @@ const snapshot: RequestHandler = async (req, res, next) => {
     })));
     res.json({ data: { disciplines: await listDisciplines(),
       entrants: safeEntrants,
-      sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, version, verticalConfig }) => ({
-        id, label, disciplineDefinitionId, status, version, verticalConfig,
+      sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, resultState, version, verticalConfig }) => ({
+        id, label, disciplineDefinitionId, status, resultState, version, verticalConfig,
         results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical })),
         entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
         entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '')),

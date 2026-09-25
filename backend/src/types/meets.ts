@@ -37,6 +37,7 @@ export interface DisciplineDefinition {
 }
 
 export interface DisciplineSession {
+  resultState?: 'provisional' | 'final' | 'reopened';
   verticalConfig?: VerticalConfig | null;
   id: string;
   eventId: string;
@@ -97,6 +98,7 @@ export interface SessionEntry extends SessionTarget {
 }
 
 export interface SessionResult extends SessionTarget {
+  finalPlace?: number | null;
   vertical?: VerticalSummary;
   isPb?: boolean;
   isSb?: boolean;

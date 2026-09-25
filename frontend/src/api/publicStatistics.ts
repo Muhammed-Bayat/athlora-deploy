@@ -20,6 +20,7 @@ export interface PublicClubSessionResults {
     id: string;
     label: string;
     status: string;
+    resultState?: string;
     disciplineCode: string;
     disciplineLabel: string;
     unit: string;

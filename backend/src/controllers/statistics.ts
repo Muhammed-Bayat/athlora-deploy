@@ -6,6 +6,15 @@ import { parseAthleteProgressionQuery } from '../validation/payloads.js';
 import { parseSeasonYear } from '../services/seasons.js';
 import { getPool } from '../db/client.js';
 import { verticalAthleteStatistics } from '../services/verticalStatistics.js';
+import { disciplineAthleteStatistics } from '../services/disciplineStatistics.js';
+
+export const getDisciplineStatistics: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const season = parseSeasonYear(req.query.year);
+    res.json({ data: await disciplineAthleteStatistics(getPool(), workspaceId, req.params.id ? String(req.params.id) : null, season.selected === 'all' ? new Date().getUTCFullYear() : Number(season.selected)) });
+  } catch (error) { next(error); }
+};
 
 export const getVerticalStatistics: RequestHandler = async (req, res, next) => {
   try {

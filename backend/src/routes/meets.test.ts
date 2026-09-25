@@ -5,6 +5,7 @@ import router from './meets.js';
 import { errorHandler } from '../middleware/errors.js';
 import * as meets from '../services/meets.js';
 import * as performances from '../services/sessionPerformances.js';
+import { notifySessionInvalidated } from '../realtime/index.js';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const workspaceId = '22222222-2222-4222-8222-222222222222';
@@ -13,8 +14,8 @@ const sessionId = '44444444-4444-4444-8444-444444444444';
 const entrantId = '55555555-5555-4555-8555-555555555555';
 let role: 'coach' | 'assistant' = 'coach';
 vi.mock('../middleware/auth.js', () => ({ getApplicationUserContext: () => ({ userId, workspaceId, workspaceRole: role }) }));
-vi.mock('../services/meets.js', () => ({ createSession: vi.fn(), createEntrant: vi.fn(), listSessions: vi.fn() }));
-vi.mock('../services/sessionPerformances.js', () => ({ createSessionEntry: vi.fn(), mutateSessionEntry: vi.fn() }));
+vi.mock('../services/meets.js', () => ({ createSession: vi.fn(), createEntrant: vi.fn(), listSessions: vi.fn(), changeSessionState: vi.fn() }));
+vi.mock('../services/sessionPerformances.js', () => ({ createSessionEntry: vi.fn(), mutateSessionEntry: vi.fn(), selectSessionResultEntry: vi.fn(), listSessionResults: vi.fn(), listSessionEntries: vi.fn() }));
 vi.mock('../realtime/index.js', () => ({ notifySessionInvalidated: vi.fn(), notifyEventInvalidated: vi.fn() }));
 const app = express();
 app.use(express.json());
@@ -23,6 +24,24 @@ app.use(errorHandler);
 beforeEach(() => { vi.clearAllMocks(); role = 'coach'; });
 
 describe('additive meet API', () => {
+  it('reviews sources, selects, retrieves places and finalizes/reopens with post-commit invalidation', async () => {
+    vi.mocked(performances.listSessionEntries).mockResolvedValue([{ id: entrantId }, { id: userId }] as never);
+    const base = `/events/${eventId}/sessions/${sessionId}`;
+    expect((await request(app).get(`${base}/entries`)).body.meta.count).toBe(2);
+    vi.mocked(performances.selectSessionResultEntry).mockResolvedValue({ selectedEntryId: userId, placing: 1 } as never);
+    expect((await request(app).put(`${base}/results/${entrantId}/selection`).send({ entryId: userId, expectedVersion: 2 })).body.data).toEqual({ selectedEntryId: userId, placing: 1 });
+    expect(notifySessionInvalidated).toHaveBeenCalledWith(eventId, sessionId, entrantId);
+    vi.mocked(performances.listSessionResults).mockResolvedValue([{ entrantId, placing: 1 }] as never);
+    expect((await request(app).get(`${base}/results`)).body.data[0].placing).toBe(1);
+    for (const [status, resultState] of [['completed', 'final'], ['in_progress', 'reopened']]) {
+      vi.mocked(meets.changeSessionState).mockResolvedValue({ id: sessionId, status, resultState } as never);
+      expect((await request(app).patch(base).send({ status, expectedVersion: 2 })).body.data.resultState).toBe(resultState);
+    }
+    role = 'assistant';
+    expect((await request(app).patch(base).send({ status: 'completed', expectedVersion: 2 })).status).toBe(403);
+    expect((await request(app).patch(base).send({ status: 'in_progress', expectedVersion: 2 })).status).toBe(403);
+    expect((await request(app).put(`${base}/results/${entrantId}/selection`).send({ entryId: userId, expectedVersion: 2 })).status).toBe(403);
+  });
   it('accepts vertical configuration and explicit height states while rejecting invalid configuration', async () => {
     vi.mocked(meets.createSession).mockResolvedValue({ id: sessionId } as never);
     const verticalConfig = { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' };

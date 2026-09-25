@@ -8,6 +8,8 @@ import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessi
 import { createTimelineEntry, listTimelineEntries, removeTimelineEntry } from './timeline.js';
 import { getAthleteStatisticsDetail } from './statistics.js';
 import { processSessionSyncBatch, type SessionSyncAction } from './sessionSync.js';
+import { disciplineAthleteStatistics } from './disciplineStatistics.js';
+import { publicClubSessionResults } from './publicResults.js';
 
 const describeDB = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 const timed: SessionEntryInput = { entryType: 'attempt', value: 11.25, unit: 'seconds', isFoul: false, incidentType: null, noteText: null, deviceId: 'test-device' };
@@ -41,7 +43,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   });
   beforeEach(async () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
-    await transaction((db) => applyMigrations(db, migrations.slice(0, -1)));
+    await transaction((db) => applyMigrations(db, migrations.filter(m => m.name < '0028_')));
     const actors = [];
     for (const name of ['Host', 'Other']) {
       const user = await pool.query("INSERT INTO users (auth0_id, name, email) VALUES ($1,$2,$3) RETURNING id", [`auth|${name}`, name, `${name}@test.example`]);
@@ -95,7 +97,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: opened.version }, transaction);
     const results = await listSessionResults(host, eventId, s.id, pool);
     expect(entrants.map(en => results.find(r => r.entrantId === en.id)?.placing)).toEqual([1, 1, 3]);
-    expect(results.every(r => r.finalResult === 1.5 && r.countsTowardsStatistics)).toBe(true);
+    expect(results.every(r => r.finalResult === 1.5 && !r.countsTowardsStatistics)).toBe(true);
     const audit = await pool.query("SELECT * FROM meet_domain_audit WHERE event_id = $1 AND entity_type = 'entry'", [eventId]);
     expect(audit.rows.length).toBe(16);
   });
@@ -205,17 +207,21 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(first.id);
     await open(second.id);
     const entry = await createSessionEntry(host, eventId, a, timed, transaction);
-    await createSessionEntry(host, eventId, b, { ...timed, value: 12 }, transaction);
+    const otherEntry = await createSessionEntry(host, eventId, b, { ...timed, value: 12 }, transaction);
+    await expect(selectSessionResultEntry(host, eventId, a, { entryId: otherEntry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ status: 404 });
+    await expect(selectSessionResultEntry(other, eventId, a, { entryId: entry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ status: 404 });
     await expect(mutateSessionEntry(host, eventId, b, entry.id, { ...timed, expectedVersion: 1 }, false, transaction)).rejects.toMatchObject({ status: 404 });
     const corrected = await mutateSessionEntry(host, eventId, a, entry.id, { ...timed, value: 11, expectedVersion: 1 }, false, transaction);
     expect(corrected.version).toBe(2);
     await expect(mutateSessionEntry(host, eventId, a, entry.id, { ...timed, expectedVersion: 1 }, false, transaction)).rejects.toMatchObject({ code: 'TIMELINE_ENTRY_VERSION_CONFLICT' });
+    await selectSessionResultEntry(host, eventId, a, { entryId: entry.id, expectedVersion: 2 }, transaction);
+    await selectSessionResultEntry(host, eventId, b, { entryId: otherEntry.id, expectedVersion: 1 }, transaction);
     expect((await listSessionResults(host, eventId, first.id, pool))[0]).toMatchObject({ ...a, finalResult: 11 });
     expect((await listSessionResults(host, eventId, second.id, pool))[0]).toMatchObject({ ...b, finalResult: 12 });
-    await overrideSessionResult(host, eventId, a, { manualOverride: 10.9, overrideReason: 'Photo', expectedVersion: 2 }, transaction);
-    expect((await sessionStatistics(host, eventId, first.id, entrant.id, pool)).best).toBe(10.9);
+    await expect(overrideSessionResult(host, eventId, a, { manualOverride: 10.9, overrideReason: 'Photo', expectedVersion: 3 }, transaction)).rejects.toMatchObject({ code: 'DERIVED_RESULT_ONLY' });
+    expect((await sessionStatistics(host, eventId, first.id, entrant.id, pool)).best).toBeNull();
     await mutateSessionEntry(host, eventId, a, entry.id, { expectedVersion: 2 }, true, transaction);
-    expect((await listSessionResults(host, eventId, first.id, pool))[0]).toMatchObject({ outcome: 'no_result', effectiveResult: 10.9, effectiveOutcome: 'valid' });
+    expect((await listSessionResults(host, eventId, first.id, pool))[0]).toMatchObject({ outcome: 'no_result', effectiveResult: null, effectiveOutcome: 'no_result' });
     const audit = await pool.query('SELECT * FROM meet_domain_audit WHERE entity_id = $1 ORDER BY created_at', [entry.id]);
     expect(audit.rows.map((row) => row.action)).toEqual(['created', 'corrected', 'undone']);
     expect(audit.rows.every((row) => row.actor_id === host.userId && row.public_logger_session_id === null)).toBe(true);
@@ -234,20 +240,22 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(session400.id);
     const first = await createSessionEntry(host, eventId, target, { ...timed, value: 62.1 }, transaction);
     const second = await createSessionEntry(host, eventId, target, { ...timed, value: 61.4 }, transaction);
-    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 61.4, selectedEntryId: null });
+    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: null, selectedEntryId: null });
     const selected = await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 2 }, transaction);
     expect(selected).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id, placing: 1 });
     await expect(selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 99 }, transaction)).rejects.toMatchObject({ code: 'RESULT_VERSION_CONFLICT' });
     await expect(selectSessionResultEntry({ ...host, role: 'assistant' as const }, eventId, target, { entryId: first.id, expectedVersion: 3 }, transaction)).rejects.toMatchObject({ status: 403 });
-    await mutateSessionEntry(host, eventId, target, second.id, { expectedVersion: 2 }, true, transaction);
+    await mutateSessionEntry(host, eventId, target, second.id, { expectedVersion: 1 }, true, transaction);
     expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id });
     expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
     const history = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(history.pb).toBeNull();
+    await changeSessionState(host, eventId, session400.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
-    await pool.query('DELETE FROM session_timeline_entries');
     await pool.query('DELETE FROM session_results');
+    await pool.query('DELETE FROM session_timeline_entries');
     const updated = await updateEntrant(host, eventId, relay.id, { name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction);
     expect(updated).toMatchObject({ name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] });
     const { athleteRelayHistory } = await import('./relayHistory.js');
@@ -266,7 +274,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 5.9 }, transaction);
     await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 6.2 }, transaction);
     await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 7, isFoul: true }, transaction);
-    expect(await sessionStatistics(host, eventId, s.id, undefined, pool)).toMatchObject({ direction: 'higher', best: 6.2, validResultCount: 1 });
+    expect((await listSessionResults(host, eventId, s.id, pool))[0]).toMatchObject({ effectiveResult: 6.2, placing: 1, countsTowardsStatistics: false });
     await withdrawEntrant(host, eventId, target, transaction);
     expect(await sessionStatistics(host, eventId, s.id, undefined, pool)).toMatchObject({ best: null, validResultCount: 0, resultCount: 1 });
     await expect(createSessionEntry(host, eventId, target, { ...timed, unit: 'metres' }, transaction)).rejects.toMatchObject({ code: 'ENTRANT_WITHDRAWN' });
@@ -295,6 +303,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     const assistant = { ...host, role: 'assistant' as const };
     const entry = await createSessionEntry(assistant, eventId, target, timed, transaction);
     await expect(mutateSessionEntry(assistant, eventId, target, entry.id, { expectedVersion: 1 }, true, transaction)).rejects.toMatchObject({ status: 403 });
+    await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
     await changeSessionState(host, eventId, target.disciplineSessionId, { status: 'completed', expectedVersion: 2 }, transaction);
     await expect(createSessionEntry(host, eventId, target, timed, transaction)).rejects.toMatchObject({ code: 'SESSION_NOT_IN_PROGRESS' });
     await pool.query("UPDATE events SET status = 'cancelled' WHERE id = $1", [eventId]);
@@ -331,5 +340,85 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(denied.receipts[0]).toMatchObject({ status: 'rejected', code: 'NOT_FOUND' });
     await pool.query("UPDATE public_logger_links SET status = 'revoked' WHERE id = $1", [link.rows[0].id]);
     await expect(processSessionSyncBatch(official, eventId, 'device', [action(target)], transaction)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('atomically finalizes official results, places and individual statistics; rolls back and reopens/refinalizes', async () => {
+    await migrate();
+    const s = await session();
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const visitor = await guest();
+    const target = { disciplineSessionId: s.id, entrantId: athlete.id };
+    const guestTarget = { disciplineSessionId: s.id, entrantId: visitor.id };
+    for (const t of [target, guestTarget]) await registerEntrant(host, eventId, t, transaction);
+    await open(s.id);
+    const first = await createSessionEntry(host, eventId, target, timed, transaction);
+    const second = await createSessionEntry(host, eventId, target, { ...timed, value: 10.9 }, transaction);
+    const visitorEntry = await createSessionEntry(host, eventId, guestTarget, { ...timed, value: 10 }, transaction);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toEqual([]);
+    await expect(changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction)).rejects.toMatchObject({ code: 'OFFICIAL_SELECTION_REQUIRED' });
+    await expect(selectSessionResultEntry(host, eventId, target, { entryId: visitorEntry.id, expectedVersion: 2 }, transaction)).rejects.toMatchObject({ status: 404 });
+    await expect(pool.query('UPDATE session_results SET selected_entry_id = $1 WHERE entrant_id = $2', [visitorEntry.id, athlete.id])).rejects.toMatchObject({ code: '23503' });
+    const selected = await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 2 }, transaction);
+    await selectSessionResultEntry(host, eventId, guestTarget, { entryId: visitorEntry.id, expectedVersion: 1 }, transaction);
+    expect(selected).toMatchObject({ effectiveResult: 11.25, placing: 1, countsTowardsStatistics: false });
+    const replaced = await selectSessionResultEntry(host, eventId, target, { entryId: second.id, expectedVersion: selected.version }, transaction);
+    expect(replaced).toMatchObject({ effectiveResult: 10.9, placing: 2 });
+    expect(await listSessionEntries(host, eventId, s.id, athlete.id, pool)).toHaveLength(2);
+    const audit = await pool.query("SELECT * FROM meet_domain_audit WHERE entity_id = $1 AND action = 'entry_selected' ORDER BY created_at", [selected.id]);
+    expect(audit.rows).toHaveLength(2);
+    expect(audit.rows[1]).toMatchObject({ actor_id: host.userId, before_state: { selected_entry_id: first.id }, after_state: { selected_entry_id: second.id } });
+    expect(audit.rows[1].created_at).toBeTruthy();
+
+    // Failure at the last audit write proves result/place/lifecycle/statistics rollback.
+    const failing: MeetTransaction = operation => transaction(db => operation({ query: async (sql: string, args?: unknown[]) => {
+      if (sql.includes('INSERT INTO meet_domain_audit') && args?.[2] === 'session' && args?.[4] === 'finalized') throw new Error('audit unavailable');
+      return db.query(sql, args);
+    } } as typeof db));
+    await expect(changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, failing)).rejects.toThrow('audit unavailable');
+    expect((await listSessions(host, eventId, pool))[0]).toMatchObject({ status: 'in_progress', resultState: 'provisional', version: 2 });
+    expect((await pool.query('SELECT final_place FROM session_results')).rows.every(r => r.final_place === null)).toBe(true);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toEqual([]);
+    const final = await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    expect(final.resultState).toBe('final');
+    expect((await listSessionResults(host, eventId, s.id, pool)).find(r => r.entrantId === athlete.id)).toMatchObject({ placing: 2, finalPlace: 2, isPb: true, isSb: true, countsTowardsStatistics: true });
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toMatchObject([{ athleteId, pb: 10.9, sb: 10.9, seasonCount: 1, seasonAverage: 10.9, resultCount: 1 }]);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2025))[0]).toMatchObject({ pb: 10.9, sb: null, seasonCount: 0 });
+    await expect(createSessionEntry(host, eventId, target, timed, transaction)).rejects.toMatchObject({ code: 'SESSION_NOT_IN_PROGRESS' });
+    await expect(selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: replaced.version }, transaction)).rejects.toMatchObject({ code: 'SESSION_NOT_IN_PROGRESS' });
+    await expect(changeSessionState({ ...host, role: 'assistant' }, eventId, s.id, { status: 'in_progress', expectedVersion: final.version }, transaction)).rejects.toMatchObject({ status: 403 });
+    const reopened = await changeSessionState(host, eventId, s.id, { status: 'in_progress', expectedVersion: final.version }, transaction);
+    expect(reopened.resultState).toBe('reopened');
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toEqual([]);
+    expect((await pool.query('SELECT final_place FROM session_results')).rows.every(r => r.final_place === null)).toBe(true);
+    const current = (await listSessionResults(host, eventId, s.id, pool)).find(r => r.entrantId === athlete.id)!;
+    await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: current.version }, transaction);
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: reopened.version }, transaction);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0].pb).toBe(11.25);
+    const lastSession = (await listSessions(host, eventId, pool))[0];
+    const correction = await changeSessionState(host, eventId, s.id, { status: 'in_progress', expectedVersion: lastSession.version }, transaction);
+    await mutateSessionEntry(host, eventId, target, first.id, { ...timed, value: 11.5, expectedVersion: first.version }, false, transaction);
+    expect((await listSessionResults(host, eventId, s.id, pool)).find(r => r.entrantId === athlete.id)?.selectedEntryId).toBeNull();
+    await createSessionEntry(host, eventId, target, { ...timed, value: null, unit: null, incidentType: 'dq' }, transaction);
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: correction.version }, transaction);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
+    const club = await pool.query("INSERT INTO clubs (workspace_id, name, public_results_enabled) VALUES ($1,'Published',true) RETURNING id", [host.workspaceId]);
+    const published = await publicClubSessionResults(club.rows[0].id, pool);
+    expect(published[0].sessions[0]).toMatchObject({ resultState: 'final', results: [{ name: 'Guest', placing: 1 }, { name: 'Host athlete', placing: null, outcome: 'dq' }] });
+  });
+
+  it.each(['100m', '200m', 'long_jump', 'triple_jump', 'shot_put', 'discus', 'javelin', 'hammer', 'high_jump', 'pole_vault'])('final individual statistics respect %s policy', async code => {
+    await migrate();
+    const d = await definition(code);
+    const s = await createSession(host, eventId, { disciplineDefinitionId: d.id, label: code, ...(d.kind === 'vertical' ? { verticalConfig: { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' as const } } : {}) }, transaction);
+    const en = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const target = { disciplineSessionId: s.id, entrantId: en.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    const value = d.kind === 'vertical' ? 1.5 : 12;
+    const entry = await createSessionEntry(host, eventId, target, { ...timed, value, unit: d.unit, ...(d.kind === 'vertical' ? { verticalState: 'clearance' as const } : {}) }, transaction);
+    if (d.defaultRules.aggregation === 'timed') await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
+    else await expect(selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ code: 'DERIVED_RESULT_ONLY' });
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ discipline: code, direction: d.direction, pb: value, sb: value });
   });
 });
