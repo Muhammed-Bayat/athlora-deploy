@@ -1,4 +1,5 @@
-.formFields { display: grid; gap: var(--space-2); width: 100%; }
+.formFields { display: grid; gap: var(--space-2); width: 100%; min-width: 0; overflow-x: clip; }
+.formFields > * { min-width: 0; max-width: 100%; }
 .formFields label { margin-top: var(--space-2); color: var(--console-teal); font-size: 0.78rem; font-weight: var(--font-weight-bold); }
 .formFields label span { color: var(--console-faint); font-weight: var(--font-weight-normal); }
 .formFields textarea { min-height: 100px; padding: var(--space-3); border: 1px solid var(--console-control-border); border-radius: var(--radius-sm); background: var(--console-control-surface); color: var(--console-control-text); resize: vertical; }
@@ -9,13 +10,28 @@
 .fieldError { color: var(--console-danger-surface); font-size: 0.75rem; }
 .formError { padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--console-danger-surface) 55%, var(--console-line)); border-radius: var(--radius-sm); background: var(--console-error-surface); color: var(--console-error-text); font-size: var(--font-size-sm); }
 .formActions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
-.goalRow { display: grid; grid-template-columns: minmax(10rem, 1fr) 7rem auto minmax(9rem, 1fr) auto auto; align-items: end; gap: var(--space-2); margin-bottom: var(--space-2); }
-.goalRow label { margin: 0; white-space: nowrap; }
+.disciplinePanel { display: grid; gap: var(--space-3); min-width: 0; margin: var(--space-3) 0 0; padding: var(--space-4); border: 1px solid var(--console-control-border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--console-control-surface) 82%, transparent); }
+.disciplinePanel legend { padding: 0 var(--space-2); color: var(--console-ink); font-size: var(--font-size-base); font-weight: var(--font-weight-bold); }
+.disciplinePanel legend span { margin-left: var(--space-1); color: var(--console-faint); font-size: 0.75rem; font-weight: var(--font-weight-normal); }
+.disciplineHeader { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
+.disciplineHeader p, .catalogueStatus { margin: 0; color: var(--console-muted); font-size: var(--font-size-sm); }
+.selectionCount { flex: none; padding: 0.25rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--console-teal) 13%, transparent); color: var(--console-teal); font-size: 0.75rem; font-weight: var(--font-weight-bold); }
+.disciplineGroup { display: grid; gap: var(--space-2); min-width: 0; }
+.disciplineGroup h3 { margin: var(--space-1) 0 0; color: var(--console-muted); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.disciplineGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-2); min-width: 0; }
+.formFields .disciplineChoice { display: flex; align-items: center; gap: var(--space-3); min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--console-control-border); border-radius: var(--radius-sm); background: var(--console-control-surface); color: var(--console-control-text); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+.disciplineChoice:hover { border-color: var(--console-teal); transform: translateY(-1px); }
+.disciplineChoice:has(input:focus-visible) { outline: 3px solid var(--console-focus); outline-offset: 2px; }
+.disciplineChoiceSelected { border-color: var(--console-teal); background: color-mix(in srgb, var(--console-teal) 10%, var(--console-control-surface)); }
+.disciplineChoice input { flex: none; width: 1rem; height: 1rem; margin: 0; accent-color: var(--console-teal); }
+.disciplineChoice span { display: grid; gap: 0.15rem; min-width: 0; }
+.disciplineChoice strong { overflow-wrap: anywhere; font-size: var(--font-size-sm); }
+.disciplineChoice small { color: var(--console-faint); font-size: 0.75rem; font-weight: var(--font-weight-normal); }
+.catalogueError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--console-danger-surface) 45%, var(--console-line)); border-radius: var(--radius-sm); background: var(--console-error-surface); color: var(--console-error-text); font-size: var(--font-size-sm); }
+.catalogueError button { flex: none; border: 0; background: transparent; color: inherit; font: inherit; font-weight: var(--font-weight-bold); text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 980px) {
-  .formFields { min-width: 0; }
   .formRow { grid-template-columns: 1fr; }
-  .goalRow { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 620px) {
@@ -26,4 +42,8 @@
     width: 100%;
     min-height: 44px;
   }
+  .disciplinePanel { padding: var(--space-3); }
+  .disciplineHeader, .catalogueError { align-items: stretch; flex-direction: column; }
+  .selectionCount { align-self: start; }
+  .disciplineGrid { grid-template-columns: 1fr; }
 }

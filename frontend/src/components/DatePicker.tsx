@@ -104,6 +104,8 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   const triggerLabel = `${ariaLabel}, ${selected ? dateLabel(selected) : 'no date selected'}`;
   const today = new Date();
   const todayIso = toIso(today);
+  const latestYear = today.getFullYear() + 10;
+  const years = Array.from({ length: latestYear - 1900 + 1 }, (_, index) => latestYear - index);
 
   return <div ref={rootRef} className={[styles.picker, open ? styles.open : '', invalid ? styles.invalid : ''].filter(Boolean).join(' ')}>
     <button
@@ -132,7 +134,12 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
     </button>
     {open && <div id={`${pickerId}-calendar`} className={styles.calendar} role="dialog" aria-label={`${ariaLabel} calendar`} onKeyDown={handleCalendarKeyDown}>
       <header>
-        <strong>{month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</strong>
+        <div className={styles.monthYear}>
+          <strong>{month.toLocaleDateString(undefined, { month: 'long' })}</strong>
+          <select aria-label="Year" value={month.getFullYear()} onChange={(event) => setMonth((current) => new Date(Number(event.target.value), current.getMonth(), 1))}>
+            {years.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </div>
         <div><button type="button" aria-label="Previous month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div>
       </header>
       <div className={styles.weekdays}>{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div>

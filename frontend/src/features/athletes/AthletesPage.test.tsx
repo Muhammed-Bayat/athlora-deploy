@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { Athlete, Squad } from '../../types';
+import type { DisciplineDefinition } from '../../types/meets';
 import { AthletesPage } from './AthletesPage';
 
 const athleteApi = vi.hoisted(() => ({
@@ -13,8 +14,9 @@ const athleteApi = vi.hoisted(() => ({
   archiveAthlete: vi.fn(),
   unarchiveAthlete: vi.fn(),
 }));
-const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
+const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteDisciplineStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
+const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
 const geminiApi = vi.hoisted(() => ({
   createGeminiToken: vi.fn(),
@@ -29,6 +31,7 @@ const geminiApi = vi.hoisted(() => ({
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
 vi.mock('../../api/squads', () => squadsApi);
+vi.mock('../../api/meets', () => meetsApi);
 vi.mock('../../api/injuries', () => injuriesApi);
 vi.mock('../../api/ai', () => ({ createGeminiToken: geminiApi.createGeminiToken }));
 vi.mock('../../api/geminiLiveSdk', () => ({
@@ -68,8 +71,14 @@ const ARI_ID = '11111111-1111-4111-8111-111111111111';
 const BEA_ID = '22222222-2222-4222-8222-222222222222';
 const SPRINT_ID = '44444444-4444-4444-8444-444444444444';
 const DEVELOPMENT_ID = '55555555-5555-4555-8555-555555555555';
+const ONE_HUNDRED_ID = '66666666-6666-4666-8666-666666666666';
+const LONG_JUMP_ID = '77777777-7777-4777-8777-777777777777';
 function squad(id: string, name: string): Squad {
   return { id, name, archivedAt: null, createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' };
+}
+
+function discipline(id: string, code: string, label: string, kind: DisciplineDefinition['kind'], unit: DisciplineDefinition['unit']): DisciplineDefinition {
+  return { id, code, version: 1, kind, unit, direction: unit === 'seconds' ? 'lower' : 'higher', defaultRules: { aggregation: unit === 'seconds' ? 'timed' : 'best', entrantType: 'individual' }, precision: 2, presentation: { label }, createdAt: '2026-08-16T10:00:00.000Z', source: 'test' };
 }
 
 function athlete(overrides: Partial<Athlete> = {}): Athlete {
@@ -110,6 +119,7 @@ const archivedBea = athlete({
 
 beforeEach(() => {
   squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(DEVELOPMENT_ID, 'Development')], meta: { count: 2 } });
+  meetsApi.listDisciplines.mockResolvedValue({ data: [discipline(ONE_HUNDRED_ID, '100m', '100m', 'track', 'seconds'), discipline(LONG_JUMP_ID, 'long_jump', 'Long jump', 'field', 'metres')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
   athleteApi.getAthlete.mockResolvedValue(ari);
@@ -124,6 +134,7 @@ beforeEach(() => {
     resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
     latest: null, recentResults: { competitions: [], training: [] },
   });
+  statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([]);
   statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ARI_ID, name: ari.name, squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
 });
 
@@ -132,6 +143,19 @@ afterEach(() => {
 });
 
 describe('AthletesPage', () => {
+  it('shows selected disciplines prominently and a clear empty state when none are selected', async () => {
+    athleteApi.listAthletes.mockResolvedValue({
+      data: [athlete({ preferredDisciplineIds: [ONE_HUNDRED_ID, LONG_JUMP_ID] }), bea],
+      meta: { count: 2 },
+    });
+
+    render(<AthletesPage />);
+
+    expect(await screen.findByText('100m, Long jump')).toBeInTheDocument();
+    expect(screen.getByText('No disciplines selected')).toBeInTheDocument();
+    expect(screen.getByText('Squads: Sprint A')).toBeInTheDocument();
+  });
+
   it('opens Athlora AI from the search controls and sends typed messages in its dialog', async () => {
     const user = userEvent.setup();
     render(<AthletesPage />);
@@ -287,7 +311,7 @@ describe('AthletesPage', () => {
     expect(screen.getByRole('button', { name: 'Add athlete' })).toBeDisabled();
     resolveList({ data: [ari], meta: { count: 1 } });
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('Athlete roster')).getAllByText('Sprint A')).toHaveLength(1);
+    expect(within(screen.getByLabelText('Athlete roster')).getByText('Squads: Sprint A')).toBeInTheDocument();
     expect(screen.queryByText(/personal best/i)).not.toBeInTheDocument();
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
@@ -374,7 +398,10 @@ describe('AthletesPage', () => {
     const genderMenu = gender.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
     expect(within(genderMenu!).getAllByRole('option')).toHaveLength(2);
     await user.click(within(genderMenu!).getByRole('option', { name: 'Female' }));
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
+    await user.click(await within(dialog).findByRole('checkbox', { name: /100m/ }));
+    await user.click(within(dialog).getByRole('checkbox', { name: /Long jump/ }));
+    expect(within(dialog).getByText('2 selected')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/season goals/i)).not.toBeInTheDocument();
     await user.type(within(dialog).getByLabelText(/coach notes/i), '  Acceleration block  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add athlete' }));
 
@@ -382,9 +409,9 @@ describe('AthletesPage', () => {
       name: 'Casey Quick',
       dob: null,
       gender: 'Female',
-      squadIds: [SPRINT_ID],
+      squadIds: [],
       notes: 'Acceleration block',
-      preferredDisciplineIds: [],
+      preferredDisciplineIds: [ONE_HUNDRED_ID, LONG_JUMP_ID],
       seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Casey Quick' })).toBeInTheDocument();

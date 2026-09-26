@@ -1,0 +1,12 @@
+.chart { display: grid; gap: var(--space-3); margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--console-line); }
+.chartHeader { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.chartHeader h3 { margin: 0; color: var(--console-ink); font-size: var(--font-size-sm); }
+.chartHeader span, .status, .empty { margin: 0; color: var(--console-muted); font-size: 0.75rem; }
+.error { margin: var(--space-5) 0 0; color: var(--console-danger-surface); font-size: var(--font-size-sm); }
+.svg { width: 100%; min-height: 180px; overflow: visible; }
+.grid { stroke: var(--chart-grid); stroke-dasharray: 4 4; }
+.axis { fill: var(--chart-axis); font: var(--font-weight-medium) 0.7rem var(--font-family-mono); }
+.line { fill: none; stroke: var(--chart-series-1); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
+.point { fill: var(--chart-series-1); }
+.pbPoint { fill: var(--chart-pb); stroke: var(--chart-pb-outline); stroke-width: 2; }
+@media (max-width: 620px) { .chartHeader { align-items: flex-start; flex-direction: column; gap: var(--space-1); } }

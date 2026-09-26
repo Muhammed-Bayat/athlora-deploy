@@ -9,6 +9,7 @@ const router = Router({ mergeParams: true });
 
 router.get('/:id/statistics', requireAthleteOwnership, statistics.getAthleteStatistics);
 router.get('/:id/statistics/vertical', requireAthleteOwnership, statistics.getVerticalStatistics);
+router.get('/:id/statistics/disciplines/:disciplineDefinitionId/progression', requireAthleteOwnership, statistics.getDisciplineProgressionStatistics);
 router.get('/:id/statistics/disciplines', requireAthleteOwnership, statistics.getDisciplineStatistics);
 router.get('/:id/statistics/relays', requireAthleteOwnership, async (req, res, next) => {
   try {

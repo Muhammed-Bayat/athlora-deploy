@@ -17,7 +17,6 @@ import { seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../u
 import styles from './DashboardPage.module.css';
 import { CustomizeDashboardDialog } from './CustomizeDashboardDialog';
 import { SavedDashboardFilters } from './SavedDashboardFilters';
-import { VerticalStatistics } from '../athletes/VerticalStatistics';
 import { useDashboardPreferences, visibleCards } from './useDashboardPreferences';
 
 export interface DashboardPageProps {
@@ -576,7 +575,6 @@ export function DashboardPage(props: DashboardPageProps) {
   const isLive = summary!.state === 'live' && summary!.activeEvent !== null;
   return (
     <section className={`${styles.dashboard} ${revealed ? styles.revealed : ''}`} aria-label="Dashboard overview">
-      <VerticalStatistics key={season} path={`/api/v1/dashboard/disciplines?year=${seasonQueryValue(season) ?? 'all'}`} />
       {isLive ? (
         <>
           <div className={styles.dashboardToolbar}>

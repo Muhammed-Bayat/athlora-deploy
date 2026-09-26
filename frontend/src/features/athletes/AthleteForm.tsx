@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { listSquads } from '../../api/squads';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { listDisciplines } from '../../api/meets';
 import { ApiError } from '../../api/client';
 import { Button, DatePicker, Input, Select } from '../../components';
-import type { Athlete, AthleteMutationPayload, AthleteSeasonGoalInput, Squad } from '../../types';
+import type { Athlete, AthleteMutationPayload, AthleteSeasonGoalInput } from '../../types';
 import type { DisciplineDefinition } from '../../types/meets';
 import { athleteErrorMessage } from './athleteError';
 import styles from './AthleteForm.module.css';
@@ -77,17 +76,25 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [squads, setSquads] = useState<Squad[]>([]);
   const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
+  const [disciplinesLoading, setDisciplinesLoading] = useState(true);
+  const [disciplinesError, setDisciplinesError] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    void listSquads(true)
-      .then(({ data }) => setSquads(data.filter((squad) => squad.archivedAt === null || athlete?.squads?.some((assigned) => assigned.id === squad.id))))
-      .catch(() => setSquads([]));
-  }, [athlete]);
+  const loadDisciplines = useCallback(async () => {
+    setDisciplinesLoading(true);
+    setDisciplinesError(false);
+    try {
+      const { data } = await listDisciplines();
+      setDisciplines(data);
+    } catch {
+      setDisciplinesError(true);
+    } finally {
+      setDisciplinesLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { void listDisciplines().then(({ data }) => setDisciplines(data)).catch(() => setDisciplines([])); }, []);
+  useEffect(() => { void loadDisciplines(); }, [loadDisciplines]);
 
   const setField = <K extends keyof AthleteDraft>(field: K, value: AthleteDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -120,12 +127,11 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
     }
   };
 
-  const updateGoal = (index: number, patch: Partial<AthleteDraft['seasonGoals'][number]>) => setField('seasonGoals', draft.seasonGoals.map((goal, goalIndex) => goalIndex === index ? { ...goal, ...patch } : goal));
-  const addGoal = () => {
-    const discipline = disciplines[0];
-    if (!discipline) return;
-    setField('seasonGoals', [...draft.seasonGoals, { disciplineDefinitionId: discipline.id, targetValue: 0, targetUnit: discipline.unit, targetDate: null, status: 'active' }]);
-  };
+  const disciplineGroups = [
+    { key: 'track', label: 'Track', items: disciplines.filter((discipline) => discipline.kind === 'track') },
+    { key: 'field', label: 'Field', items: disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical') },
+    { key: 'relay', label: 'Relays', items: disciplines.filter((discipline) => discipline.kind === 'relay') },
+  ].filter((group) => group.items.length > 0);
 
   return (
     <form className={styles.formFields} onSubmit={submit} noValidate>
@@ -147,29 +153,30 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
         </div>
       </div>
 
-       <fieldset disabled={submitting} aria-describedby={errors.squadIds ? 'athlete-squad-error' : undefined}>
-         <legend>Discipline groups / squads <span>Optional</span></legend>
-         {squads.length === 0 ? <p>No active squads available.</p> : squads.map((squad) => <label key={squad.id}><input type="checkbox" checked={draft.squadIds.includes(squad.id)} disabled={squad.archivedAt !== null} onChange={(event) => setField('squadIds', event.target.checked ? [...draft.squadIds, squad.id] : draft.squadIds.filter((id) => id !== squad.id))} /> {squad.name}{squad.archivedAt && ' (archived)'}</label>)}
+       <fieldset className={styles.disciplinePanel} disabled={submitting} aria-describedby={errors.preferredDisciplineIds ? 'athlete-disciplines-error' : 'athlete-disciplines-help'}>
+         <legend>Disciplines <span>Choose one or more</span></legend>
+         <div className={styles.disciplineHeader}>
+           <p id="athlete-disciplines-help">Select every discipline this athlete trains or competes in.</p>
+           <span className={styles.selectionCount}>{draft.preferredDisciplineIds.length} selected</span>
+         </div>
+         {disciplinesLoading ? <p className={styles.catalogueStatus} role="status">Loading disciplines...</p> : null}
+         {disciplinesError ? <div className={styles.catalogueError} role="alert"><span>Disciplines could not be loaded.</span><button type="button" onClick={() => void loadDisciplines()}>Try again</button></div> : null}
+         {!disciplinesLoading && !disciplinesError && disciplineGroups.map((group) => (
+           <section className={styles.disciplineGroup} key={group.key} aria-labelledby={`discipline-group-${group.key}`}>
+             <h3 id={`discipline-group-${group.key}`}>{group.label}</h3>
+             <div className={styles.disciplineGrid}>
+               {group.items.map((discipline) => {
+                 const checked = draft.preferredDisciplineIds.includes(discipline.id);
+                 return <label className={`${styles.disciplineChoice} ${checked ? styles.disciplineChoiceSelected : ''}`} key={discipline.id}>
+                   <input type="checkbox" checked={checked} onChange={(event) => setField('preferredDisciplineIds', event.target.checked ? [...draft.preferredDisciplineIds, discipline.id] : draft.preferredDisciplineIds.filter((id) => id !== discipline.id))} />
+                   <span><strong>{discipline.presentation.label}</strong><small>{discipline.kind === 'relay' ? 'Team relay' : discipline.unit === 'seconds' ? 'Timed event' : 'Measured event'}</small></span>
+                 </label>;
+               })}
+             </div>
+           </section>
+         ))}
        </fieldset>
-        {errors.squadIds && <span id="athlete-squad-error" className={styles.fieldError}>{errors.squadIds}</span>}
-
-       <fieldset disabled={submitting}>
-         <legend>Preferred disciplines <span>Optional</span></legend>
-         {disciplines.length === 0 ? <p>Discipline catalogue unavailable.</p> : disciplines.map((discipline) => <label key={discipline.id}><input type="checkbox" checked={draft.preferredDisciplineIds.includes(discipline.id)} onChange={(event) => setField('preferredDisciplineIds', event.target.checked ? [...draft.preferredDisciplineIds, discipline.id] : draft.preferredDisciplineIds.filter((id) => id !== discipline.id))} /> {discipline.presentation.label}</label>)}
-       </fieldset>
-
-       <fieldset disabled={submitting}>
-         <legend>Season goals <span>Optional</span></legend>
-         {draft.seasonGoals.map((goal, index) => <div className={styles.goalRow} key={goal.id ?? `${goal.disciplineDefinitionId}-${index}`}>
-           <Select aria-label={`Goal ${index + 1} discipline`} value={goal.disciplineDefinitionId} onChange={(event) => { const discipline = disciplines.find((item) => item.id === event.target.value); if (discipline) updateGoal(index, { disciplineDefinitionId: discipline.id, targetUnit: discipline.unit }); }} options={disciplines.map((discipline) => ({ value: discipline.id, label: discipline.presentation.label }))} />
-           <Input aria-label={`Goal ${index + 1} target`} type="number" min="0" step="any" value={goal.targetValue || ''} onChange={(event) => updateGoal(index, { targetValue: Number(event.target.value) })} />
-           <span>{goal.targetUnit}</span>
-           <DatePicker aria-label={`Goal ${index + 1} target date`} value={goal.targetDate ?? ''} onChange={(value) => updateGoal(index, { targetDate: value || null })} />
-           <label><input type="checkbox" checked={goal.status === 'completed'} onChange={(event) => updateGoal(index, { status: event.target.checked ? 'completed' : 'active' })} /> Completed</label>
-           <Button type="button" variant="ghost" onClick={() => setField('seasonGoals', draft.seasonGoals.filter((_, goalIndex) => goalIndex !== index))}>Remove goal</Button>
-         </div>)}
-         <Button type="button" variant="secondary" onClick={addGoal} disabled={disciplines.length === 0}>Add season goal</Button>
-       </fieldset>
+       {errors.preferredDisciplineIds && <span id="athlete-disciplines-error" className={styles.fieldError}>{errors.preferredDisciplineIds}</span>}
 
       <label htmlFor="athlete-notes">Coach notes <span>Optional</span></label>
       <textarea id="athlete-notes" value={draft.notes} onChange={(event) => setField('notes', event.target.value)} aria-invalid={Boolean(errors.notes)} aria-describedby={errors.notes ? 'athlete-notes-error' : undefined} disabled={submitting} />

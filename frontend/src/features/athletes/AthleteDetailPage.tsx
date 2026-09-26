@@ -1,6 +1,6 @@
 import { lazy, Suspense, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { getAthlete, updateAthlete, updateAthleteStatus } from '../../api/athletes';
-import { getAthleteStatistics } from '../../api/statistics';
+import { getAthleteDisciplineStatistics, getAthleteStatistics, type AthleteDisciplineStatistics } from '../../api/statistics';
 import { listInjuries } from '../../api/injuries';
 import { CompactAnatomy } from '../fitness/CompactAnatomy';
 import { Badge, Button, Card, Modal, SeasonSelector, Toast } from '../../components';
@@ -17,7 +17,7 @@ import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
 import { listDisciplines } from '../../api/meets';
 import type { DisciplineDefinition } from '../../types/meets';
-import { ProgressionChart } from './ProgressionChart';
+import { DisciplineProgressionChart } from './DisciplineProgressionChart';
 import styles from './AthleteDetailPage.module.css';
 
 interface AthleteDetailPageProps {
@@ -28,6 +28,18 @@ interface AthleteDetailPageProps {
 }
 
 type HistoryTab = 'competitions' | 'training';
+
+interface PerformanceTab {
+  id: string;
+  label: string;
+  unit: DisciplineDefinition['unit'];
+  direction: DisciplineDefinition['direction'];
+  precision: number;
+  pb: number | null;
+  sb: number | null;
+  resultCount: number;
+  seasonCount: number;
+}
 
 const historyTabs: HistoryTab[] = ['competitions', 'training'];
 const FitnessView = lazy(async () => ({ default: (await import('../fitness/FitnessView')).FitnessView }));
@@ -47,6 +59,15 @@ function outcomeVariant(outcome: ResultOutcome): 'dq' | 'dnf' | 'dns' | 'neutral
 
 function statusLabel(status: Athlete['status']): string {
   return status[0].toUpperCase() + status.slice(1);
+}
+
+function formatPerformance(value: number | null, precision: number, unit: DisciplineDefinition['unit']): string {
+  if (value === null) return 'No valid result';
+  return `${value.toFixed(precision)} ${unit === 'seconds' ? 's' : unit === 'metres' ? 'm' : 'cm'}`;
+}
+
+function normalizeDiscipline(value: string): string {
+  return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
 
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
@@ -108,8 +129,13 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const [statistics, setStatistics] = useState<AthleteStatisticsDetail | null>(null);
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [statisticsError, setStatisticsError] = useState<string | null>(null);
-  const [statisticsRetry, setStatisticsRetry] = useState(0);
+  const [disciplineStatistics, setDisciplineStatistics] = useState<AthleteDisciplineStatistics[]>([]);
+  const [disciplineStatisticsLoading, setDisciplineStatisticsLoading] = useState(true);
+  const [disciplineStatisticsError, setDisciplineStatisticsError] = useState<string | null>(null);
+  const [disciplineStatisticsRetry, setDisciplineStatisticsRetry] = useState(0);
+  const [activePerformanceTab, setActivePerformanceTab] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<HistoryTab | null>(null);
+  const [activeHistoryDiscipline, setActiveHistoryDiscipline] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const [fitnessOpen, setFitnessOpen] = useState(initialFitnessOpen);
@@ -123,6 +149,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const fitnessButtonRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<Record<HistoryTab, HTMLButtonElement | null>>({ competitions: null, training: null });
+  const performanceTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -152,7 +179,18 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
       .catch((error: unknown) => { if (current) setStatisticsError(athleteErrorMessage(error)); })
       .finally(() => { if (current) setStatisticsLoading(false); });
     return () => { current = false; };
-  }, [athleteId, season, statisticsRetry]);
+  }, [athleteId, season]);
+
+  useEffect(() => {
+    let current = true;
+    setDisciplineStatisticsLoading(true);
+    setDisciplineStatisticsError(null);
+    void getAthleteDisciplineStatistics(athleteId, seasonQueryValue(season) ?? 'all')
+      .then((value) => { if (current) setDisciplineStatistics(value); })
+      .catch((error: unknown) => { if (current) setDisciplineStatisticsError(athleteErrorMessage(error)); })
+      .finally(() => { if (current) setDisciplineStatisticsLoading(false); });
+    return () => { current = false; };
+  }, [athleteId, season, disciplineStatisticsRetry]);
 
   useEffect(() => {
     let current = true;
@@ -209,6 +247,56 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const activeEntries = statistics?.recentResults[selectedTab] ?? [];
   const activeResultType = selectedTab === 'competitions' ? 'competition' : 'training';
   const isArchived = athlete?.status === 'archived';
+  const disciplineLabels = athlete?.preferredDisciplineIds
+    .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id)
+    ?? [];
+  const performanceTabs: PerformanceTab[] = athlete?.preferredDisciplineIds.map((id) => {
+    const definition = disciplines.find((discipline) => discipline.id === id);
+    const statisticsForDiscipline = definition
+      ? disciplineStatistics.find((entry) => entry.discipline === definition.code)
+      : undefined;
+    return {
+      id,
+      label: definition?.presentation.label ?? statisticsForDiscipline?.label ?? id,
+      unit: definition?.unit ?? statisticsForDiscipline?.unit ?? 'seconds',
+      direction: definition?.direction ?? statisticsForDiscipline?.direction ?? 'lower',
+      precision: definition?.precision ?? statisticsForDiscipline?.precision ?? 2,
+      pb: statisticsForDiscipline?.pb ?? null,
+      sb: statisticsForDiscipline?.sb ?? null,
+      resultCount: statisticsForDiscipline?.resultCount ?? 0,
+      seasonCount: statisticsForDiscipline?.seasonCount ?? 0,
+    };
+  }) ?? [];
+  const selectedPerformanceTab = performanceTabs.find((tab) => tab.id === activePerformanceTab) ?? performanceTabs[0];
+  const historyDisciplines = athlete?.preferredDisciplineIds.map((id) => {
+    const definition = disciplines.find((discipline) => discipline.id === id);
+    return { id, label: definition?.presentation.label ?? id, code: definition?.code ?? id };
+  }) ?? [];
+  const selectedHistoryDiscipline = historyDisciplines.find((discipline) => discipline.id === activeHistoryDiscipline) ?? historyDisciplines[0];
+  const filteredEntries = selectedHistoryDiscipline
+    ? activeEntries.filter((entry) => normalizeDiscipline(entry.event.discipline) === normalizeDiscipline(selectedHistoryDiscipline.label)
+      || normalizeDiscipline(entry.event.discipline) === normalizeDiscipline(selectedHistoryDiscipline.code))
+    : activeEntries;
+
+  useEffect(() => {
+    if (selectedPerformanceTab && selectedPerformanceTab.id !== activePerformanceTab) {
+      setActivePerformanceTab(selectedPerformanceTab.id);
+    }
+  }, [activePerformanceTab, selectedPerformanceTab]);
+
+  useEffect(() => {
+    if (selectedHistoryDiscipline && selectedHistoryDiscipline.id !== activeHistoryDiscipline) {
+      setActiveHistoryDiscipline(selectedHistoryDiscipline.id);
+    }
+  }, [activeHistoryDiscipline, selectedHistoryDiscipline]);
+
+  const changePerformanceTab = (tabId: string, offset?: number) => {
+    const currentIndex = performanceTabs.findIndex((tab) => tab.id === tabId);
+    const next = offset === undefined ? tabId : performanceTabs[(currentIndex + offset + performanceTabs.length) % performanceTabs.length]?.id;
+    if (!next) return;
+    setActivePerformanceTab(next);
+    if (offset !== undefined) window.requestAnimationFrame(() => performanceTabRefs.current.get(next)?.focus());
+  };
 
   if (fitnessOpen) {
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
@@ -241,11 +329,14 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         <span className={styles.avatar} aria-hidden="true">{initials(displayName)}</span>
         <div className={styles.identity}>
           <p>Featured athlete</p>
+          <p className={styles.heroAge}>Age: <strong>{age === null ? 'Not provided' : `${age} years`}</strong></p>
           <h1 id="athlete-detail-heading" ref={headingRef} tabIndex={-1}>{displayName}</h1>
           <div className={styles.heroMeta}>
-            <span>100m</span>
-             <span>{athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || 'Squad not provided'}</span>
-            <span>{age === null ? 'Age not provided' : `${age} years`}</span>
+            <ul className={styles.disciplineList} aria-label="Disciplines">
+              {disciplineLabels.length > 0
+                ? disciplineLabels.map((label) => <li key={label}>{label}</li>)
+              : <li>No disciplines selected</li>}
+            </ul>
           </div>
         </div>
         <div className={styles.heroActions}>
@@ -261,25 +352,30 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         </div>
       </header>
 
-      <section className={styles.kpiStrip} aria-label="100m performance summary">
-        {statisticsLoading && <p role="status">Loading performance statistics...</p>}
-        {!statisticsLoading && statisticsError && (
-          <div className={styles.sectionError} role="alert">
-            <strong>Statistics unavailable</strong><p>{statisticsError}</p>
-            <Button onClick={() => setStatisticsRetry((value) => value + 1)}>Retry statistics</Button>
+      <Card className={styles.performanceCard}>
+        <header><div><p>Performance statistics</p><h2>Discipline results</h2></div></header>
+        {disciplineStatisticsLoading && <p role="status">Loading discipline statistics...</p>}
+        {!disciplineStatisticsLoading && disciplineStatisticsError && <div className={styles.sectionError} role="alert"><strong>Statistics unavailable</strong><p>{disciplineStatisticsError}</p><Button onClick={() => setDisciplineStatisticsRetry((value) => value + 1)}>Retry statistics</Button></div>}
+        {!disciplineStatisticsLoading && !disciplineStatisticsError && performanceTabs.length === 0 && <p>No disciplines selected. Edit this athlete to add disciplines.</p>}
+        {!disciplineStatisticsLoading && !disciplineStatisticsError && selectedPerformanceTab && <>
+          <div className={styles.performanceTabs} role="tablist" aria-label="Discipline performance statistics">
+            {performanceTabs.map((tab) => <button key={tab.id} ref={(node) => { if (node) performanceTabRefs.current.set(tab.id, node); else performanceTabRefs.current.delete(tab.id); }} type="button" role="tab" id={`performance-${tab.id}-tab`} aria-selected={selectedPerformanceTab.id === tab.id} aria-controls={`performance-${tab.id}-panel`} tabIndex={selectedPerformanceTab.id === tab.id ? 0 : -1} onClick={() => changePerformanceTab(tab.id)} onKeyDown={(event) => {
+              if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); changePerformanceTab(tab.id, 1); }
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); changePerformanceTab(tab.id, -1); }
+              if (event.key === 'Home') { event.preventDefault(); changePerformanceTab(performanceTabs[0]!.id, 0); }
+              if (event.key === 'End') { event.preventDefault(); changePerformanceTab(performanceTabs[performanceTabs.length - 1]!.id, 0); }
+            }}>{tab.label}</button>)}
           </div>
-        )}
-        {!statisticsLoading && statistics && (
-          <dl className={styles.metrics}>
-            <div><dt>Personal best</dt><dd>{statistics.pb === null ? 'No valid result' : format100mSeconds(statistics.pb)}</dd><span>100m PB</span></div>
-            <div><dt>{season === 'all' ? 'All-time best' : 'Season best'}</dt><dd>{statistics.sb === null ? (season === new Date().getUTCFullYear().toString() ? 'No valid result this year' : `No valid result in ${seasonLabel(season)}`) : format100mSeconds(statistics.sb)}</dd><span>{seasonLabel(season)}</span></div>
-            <div><dt>Valid results</dt><dd>{statistics.resultCounts.currentYear}</dd><span>{seasonLabel(season)}</span></div>
-          </dl>
-        )}
-      </section>
+          <div className={styles.performancePanel} role="tabpanel" id={`performance-${selectedPerformanceTab.id}-panel`} aria-labelledby={`performance-${selectedPerformanceTab.id}-tab`} tabIndex={0}>
+            <dl className={styles.metrics}>
+              <div><dt>Personal best</dt><dd>{formatPerformance(selectedPerformanceTab.pb, selectedPerformanceTab.precision, selectedPerformanceTab.unit)}</dd><span>All time</span></div>
+              <div><dt>Season best</dt><dd>{formatPerformance(selectedPerformanceTab.sb, selectedPerformanceTab.precision, selectedPerformanceTab.unit)}</dd><span>{seasonLabel(season)}</span></div>
+            </dl>
+            <DisciplineProgressionChart athleteId={athleteId} disciplineDefinitionId={selectedPerformanceTab.id} disciplineLabel={selectedPerformanceTab.label} direction={selectedPerformanceTab.direction} unit={selectedPerformanceTab.unit} precision={selectedPerformanceTab.precision} season={season} />
+          </div>
+        </>}
+      </Card>
 
-      <ProgressionChart athleteId={athleteId} athleteName={displayName} season={season} />
-      <VerticalStatistics key={`${athleteId}:${season}`} path={`/api/v1/athletes/${encodeURIComponent(athleteId)}/statistics/vertical?year=${season}`} names={{ [athleteId]: displayName }} />
 
       <Card className={styles.injuryCard}>
         <header><div><p>Fitness overview</p><h2>Active injury map</h2></div></header>
@@ -311,12 +407,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         )}
        </Card>
 
-       <Card className={styles.profileCard}>
-         <header><div><p>Season planning</p><h2>Season goals</h2></div></header>
-         {!profileLoading && athlete && (athlete.seasonGoals.length === 0 ? <p>No season goals set.</p> : <ul>{athlete.seasonGoals.map((goal) => <li key={goal.id}>{disciplines.find((discipline) => discipline.id === goal.disciplineDefinitionId)?.presentation.label ?? 'Catalogue discipline'}: <strong>{goal.targetValue} {goal.targetUnit}</strong>{goal.targetDate ? ` by ${formatDateOnly(goal.targetDate)}` : ''} <Badge variant={goal.status === 'completed' ? 'sb' : 'neutral'}>{goal.status === 'completed' ? 'Completed' : 'Active'}</Badge></li>)}</ul>)}
-       </Card>
-
-      <Card className={styles.historyCard}>
+       <Card className={styles.historyCard}>
         <header><div><p>Performance log</p><h2>Recent results</h2></div></header>
         {statisticsLoading && <p role="status">Loading recent results...</p>}
         {!statisticsLoading && statisticsError && <p className={styles.historyUnavailable}>Recent results are unavailable until statistics can be loaded.</p>}
@@ -344,6 +435,9 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
                 );
               })}
             </div>
+            {historyDisciplines.length > 0 && <div className={styles.historyDisciplineTabs} role="tablist" aria-label="Result history discipline">
+              {historyDisciplines.map((discipline) => <button key={discipline.id} type="button" role="tab" aria-selected={selectedHistoryDiscipline?.id === discipline.id} onClick={() => setActiveHistoryDiscipline(discipline.id)}>{discipline.label}</button>)}
+            </div>}
             <section
               className={styles.tabPanel}
               role="tabpanel"
@@ -351,9 +445,9 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
               aria-labelledby={`${selectedTab}-tab`}
               tabIndex={0}
             >
-              {activeEntries.length === 0
-                ? <p className={styles.emptyHistory}>No {activeResultType} results yet.</p>
-                : <ol>{activeEntries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}</ol>}
+              {filteredEntries.length === 0
+                ? <p className={styles.emptyHistory}>No {selectedHistoryDiscipline ? `${selectedHistoryDiscipline.label} ` : ''}{activeResultType} results yet.</p>
+                : <ol>{filteredEntries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}</ol>}
             </section>
           </>
         )}
@@ -365,4 +459,3 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     </section>
   );
 }
-import { VerticalStatistics } from './VerticalStatistics';
