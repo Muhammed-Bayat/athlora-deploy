@@ -1,4 +1,4 @@
-import type { EntryType, EventStatus, IncidentType, ResultOutcome, UserRole } from './domain.js';
+import type { EntryType, EventStatus, IncidentType, ResultOutcome, RsvpStatus, UserRole } from './domain.js';
 
 export interface SessionTarget {
   disciplineSessionId: string;
@@ -70,6 +70,9 @@ export interface SessionRegistration extends SessionTarget {
   id: string;
   eventId: string;
   workspaceId: string;
+  rsvpStatus: RsvpStatus;
+  rsvpUpdatedAt: string;
+  rsvpUpdatedBy: string | null;
   withdrawnAt: string | null;
   withdrawnBy: string | null;
   createdBy: string;
@@ -143,6 +146,7 @@ export type EntrantCreateInput =
   | { kind: 'guest'; name: string; clubName: string | null; details: string | null }
   | { kind: 'relay'; name: string; memberIds: string[] };
 export interface EntrantUpdateInput { name?: string; memberIds?: string[] }
+export interface SessionRegistrationRsvpInput { rsvpStatus: RsvpStatus }
 export interface SessionSelectionInput { entryId: string | null; expectedVersion: number }
 export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
 export interface SessionEntryInput {

@@ -3,7 +3,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { applyMigrations, loadMigrations } from '../db/migrate.js';
 import type { MeetActor, SessionEntryInput, SessionTarget } from '../types/meets.js';
-import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listSessions, registerEntrant, updateEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
+import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listRegistrations, listSessions, registerEntrant, updateEntrant, updateRegistrationRsvp, withdrawEntrant, type MeetTransaction } from './meets.js';
 import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry, overrideSessionResult, selectSessionResultEntry, sessionStatistics } from './sessionPerformances.js';
 import { createTimelineEntry, listTimelineEntries, removeTimelineEntry } from './timeline.js';
 import { getAthleteStatisticsDetail } from './statistics.js';
@@ -78,6 +78,16 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(s.id);
     return target;
   }
+  it('keeps RSVP state scoped to one session registration and audits changes', async () => {
+    await migrate();
+    const [s, en] = await Promise.all([session(), guest()]);
+    const target = { disciplineSessionId: s.id, entrantId: en.id };
+    expect((await registerEntrant(host, eventId, target, transaction)).rsvpStatus).toBe('pending');
+    expect((await updateRegistrationRsvp(host, eventId, target, 'yes', transaction)).rsvpStatus).toBe('yes');
+    expect((await listRegistrations(host, eventId, s.id, pool)).find((registration) => registration.entrantId === en.id)?.rsvpStatus).toBe('yes');
+    const audit = await pool.query("SELECT action FROM meet_domain_audit WHERE event_id = $1 AND entity_type = 'registration' ORDER BY created_at DESC LIMIT 1", [eventId]);
+    expect(audit.rows[0]?.action).toBe('rsvp_updated');
+  });
   it.each(['high_jump', 'pole_vault'])('logs, audits, finalizes and countbacks %s', async code => {
     await migrate();
     const s = await createSession(host, eventId, { disciplineDefinitionId: (await definition(code)).id, label: code, verticalConfig: { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' } }, transaction);

@@ -81,7 +81,7 @@ define(['./workbox-fbd06d59'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "/index.html",
-    "revision": "0.ni96rkl332o"
+    "revision": "0.vb0a4nckkd"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
@@ -89,6 +89,7 @@ define(['./workbox-fbd06d59'], (function (workbox) { 'use strict';
     denylist: [/^\/api\//, /^\/auth\//]
   }));
   workbox.registerRoute(/\/api\/v1\/(?:weather\/current|events\/[^/]+\/weather)(?:\?|$)/i, new workbox.NetworkOnly(), 'GET');
+  workbox.registerRoute(/\/api\/v1\/public\/logger\/.*/i, new workbox.NetworkOnly(), 'GET');
   workbox.registerRoute(/\/api\/v1\/.*/i, new workbox.NetworkFirst({
     "cacheName": "athlora-api",
     "networkTimeoutSeconds": 5,

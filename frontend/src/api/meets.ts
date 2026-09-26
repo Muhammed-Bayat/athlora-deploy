@@ -1,5 +1,5 @@
 import { request } from './client';
-import type { ApiList, EventStatus } from '../types';
+import type { ApiList, EventStatus, RsvpStatus } from '../types';
 import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetEntrant, SessionEntry, SessionEntryInput, SessionOverrideInput, SessionRegistration, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget, SessionResolution } from '../types/meets';
 
 const eventPath = (eventId: string) => `/api/v1/events/${encodeURIComponent(eventId)}`;
@@ -18,6 +18,7 @@ export const updateEntrant = (eventId: string, entrantId: string, body: EntrantU
 export const listRegistrations = (eventId: string, sessionId: string) => request<ApiList<SessionRegistration>>(`${sessionPath(eventId, sessionId)}/entrants`);
 export const registerEntrant = (eventId: string, target: SessionTarget) => mutate<SessionRegistration>(targetPath(eventId, target), 'POST', {});
 export const withdrawEntrant = (eventId: string, target: SessionTarget) => request<void>(targetPath(eventId, target), { method: 'DELETE' });
+export const updateRegistrationRsvp = (eventId: string, target: SessionTarget, rsvpStatus: RsvpStatus) => mutate<SessionRegistration>(targetPath(eventId, target), 'PATCH', { rsvpStatus });
 export const listSessionEntries = (eventId: string, sessionId: string, entrantId?: string) => request<ApiList<SessionEntry>>(`${sessionPath(eventId, sessionId)}/entries${entrantId ? `?entrantId=${encodeURIComponent(entrantId)}` : ''}`);
 export const createSessionEntry = (eventId: string, target: SessionTarget, body: SessionEntryInput) => mutate<SessionEntry>(`${targetPath(eventId, target)}/entries`, 'POST', body);
 export const replaceSessionEntry = (eventId: string, target: SessionTarget, entryId: string, body: SessionEntryInput & { expectedVersion: number }) => mutate<SessionEntry>(`${targetPath(eventId, target)}/entries/${encodeURIComponent(entryId)}`, 'PUT', body);

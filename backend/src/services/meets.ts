@@ -1,6 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
+import type { RsvpStatus } from '../types/domain.js';
 import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
@@ -271,5 +272,28 @@ export async function withdrawEntrant(actor: MeetActor, eventId: string, target:
     if (before.rows[0].withdrawn_at) return;
     const after = await db.query('UPDATE session_entrants SET withdrawn_at = now(), withdrawn_by = $1 WHERE id = $2 RETURNING *', [actor.userId, before.rows[0].id]);
     await meetAudit(db, actor, eventId, actor.workspaceId, 'registration', before.rows[0].id, 'withdrawn', before.rows[0], after.rows[0]);
+  });
+}
+
+export async function updateRegistrationRsvp(actor: MeetActor, eventId: string, target: SessionTarget, rsvpStatus: RsvpStatus, transaction: MeetTransaction = withTransaction): Promise<SessionRegistration> {
+  meetCoach(actor);
+  meetIds(target.disciplineSessionId, target.entrantId);
+  return transaction(async (db) => {
+    const access = await meetAccess(db, actor, eventId, true);
+    if (access.helper) meetNotFound();
+    const session = await getSession(db, eventId, target.disciplineSessionId);
+    if (['completed', 'cancelled'].includes(session.status) || access.event.status === 'cancelled') meetConflict('SESSION_CLOSED', 'Reopen the session before updating RSVP');
+    const before = await db.query('SELECT * FROM session_entrants WHERE event_id = $1 AND session_id = $2 AND entrant_id = $3 AND workspace_id = $4', [eventId, target.disciplineSessionId, target.entrantId, actor.workspaceId]);
+    if (!before.rows[0]) meetNotFound();
+    const result = await db.query(
+      `UPDATE session_entrants SET rsvp_status = $1, rsvp_updated_at = now(), rsvp_updated_by = $2
+       WHERE id = $3 RETURNING *`,
+      [rsvpStatus, actor.userId, before.rows[0].id],
+    );
+    const registration = mapMeetRow<SessionRegistration>(result.rows[0]);
+    if (before.rows[0].rsvp_status !== rsvpStatus) {
+      await meetAudit(db, actor, eventId, actor.workspaceId, 'registration', registration.id, 'rsvp_updated', before.rows[0], registration);
+    }
+    return registration;
   });
 }

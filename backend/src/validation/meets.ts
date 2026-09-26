@@ -1,6 +1,6 @@
 import { ApiError } from '../middleware/errors.js';
-import { ENTRY_TYPES, EVENT_STATUSES, INCIDENT_TYPES } from '../types/domain.js';
-import type { EntrantCreateInput, EntrantUpdateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionSelectionInput, SessionStateInput, SessionTarget } from '../types/meets.js';
+import { ENTRY_TYPES, EVENT_STATUSES, INCIDENT_TYPES, RSVP_STATUSES, type RsvpStatus } from '../types/domain.js';
+import type { EntrantCreateInput, EntrantUpdateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionRegistrationRsvpInput, SessionSelectionInput, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { isCanonicalUuid } from './primitives.js';
 import { parseVerticalConfig } from './verticalMeets.js';
 
@@ -46,6 +46,12 @@ export function parseSessionState(value: unknown): SessionStateInput {
   const body = object(value, ['status', 'expectedVersion']);
   if (!EVENT_STATUSES.includes(body.status as SessionStateInput['status'])) invalid('status');
   return { status: body.status as SessionStateInput['status'], expectedVersion: parseVersion(body.expectedVersion) };
+}
+
+export function parseSessionRegistrationRsvp(value: unknown): SessionRegistrationRsvpInput {
+  const body = object(value, ['rsvpStatus']);
+  if (!RSVP_STATUSES.includes(body.rsvpStatus as RsvpStatus)) invalid('rsvpStatus');
+  return { rsvpStatus: body.rsvpStatus as RsvpStatus };
 }
 
 export function parseEntrantCreate(value: unknown): EntrantCreateInput {

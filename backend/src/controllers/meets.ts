@@ -6,7 +6,7 @@ import * as meets from '../services/meets.js';
 import * as performances from '../services/sessionPerformances.js';
 import * as offlineResolution from '../services/offlineResolution.js';
 import type { MeetActor, SessionTarget } from '../types/meets.js';
-import { object, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
+import { object, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionRegistrationRsvp, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
 
 function actor(req: Request): MeetActor {
@@ -77,6 +77,13 @@ export const withdrawEntrant = handler(async (req) => {
   await meets.withdrawEntrant(actor(req), eventId, ids);
   notifySessionInvalidated(eventId, ids.disciplineSessionId, ids.entrantId);
 }, 204);
+export const updateRegistrationRsvp = handler(async (req) => {
+  const eventId = parameter(req, 'eventId');
+  const ids = target(req);
+  const registration = await meets.updateRegistrationRsvp(actor(req), eventId, ids, parseSessionRegistrationRsvp(req.body).rsvpStatus);
+  notifySessionInvalidated(eventId, ids.disciplineSessionId, ids.entrantId);
+  return registration;
+});
 export const entries = handler((req) => performances.listSessionEntries(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId'), entrantFilter(req)));
 export const createEntry = handler(async (req) => {
   const eventId = parameter(req, 'eventId');

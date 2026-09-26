@@ -14,7 +14,7 @@ const sessionId = '44444444-4444-4444-8444-444444444444';
 const entrantId = '55555555-5555-4555-8555-555555555555';
 let role: 'coach' | 'assistant' = 'coach';
 vi.mock('../middleware/auth.js', () => ({ getApplicationUserContext: () => ({ userId, workspaceId, workspaceRole: role }) }));
-vi.mock('../services/meets.js', () => ({ createSession: vi.fn(), createEntrant: vi.fn(), listSessions: vi.fn(), changeSessionState: vi.fn() }));
+vi.mock('../services/meets.js', () => ({ createSession: vi.fn(), createEntrant: vi.fn(), listSessions: vi.fn(), changeSessionState: vi.fn(), updateRegistrationRsvp: vi.fn() }));
 vi.mock('../services/sessionPerformances.js', () => ({ createSessionEntry: vi.fn(), mutateSessionEntry: vi.fn(), selectSessionResultEntry: vi.fn(), listSessionResults: vi.fn(), listSessionEntries: vi.fn() }));
 vi.mock('../realtime/index.js', () => ({ notifySessionInvalidated: vi.fn(), notifyEventInvalidated: vi.fn() }));
 const app = express();
@@ -52,6 +52,14 @@ describe('additive meet API', () => {
       expect((await request(app).post(`/events/${eventId}/sessions/${sessionId}/entrants/${entrantId}/entries`).send({ entryType: 'attempt', value: 1.5, unit: 'metres', verticalState })).status).toBe(201);
       expect(performances.createSessionEntry).toHaveBeenLastCalledWith({ userId, workspaceId, role: 'coach' }, eventId, { disciplineSessionId: sessionId, entrantId }, expect.objectContaining({ verticalState, value: 1.5 }));
     }
+  });
+  it('updates RSVP for exactly one session registration', async () => {
+    vi.mocked(meets.updateRegistrationRsvp).mockResolvedValue({ id: 'registration', rsvpStatus: 'yes' } as never);
+    const response = await request(app).patch(`/events/${eventId}/sessions/${sessionId}/entrants/${entrantId}`).send({ rsvpStatus: 'yes' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ id: 'registration', rsvpStatus: 'yes' });
+    expect(meets.updateRegistrationRsvp).toHaveBeenCalledWith({ userId, workspaceId, role: 'coach' }, eventId, { disciplineSessionId: sessionId, entrantId }, 'yes');
+    expect((await request(app).patch(`/events/${eventId}/sessions/${sessionId}/entrants/${entrantId}`).send({ rsvpStatus: 'unknown' })).status).toBe(400);
   });
   it('returns existing envelopes and passes authenticated workspace/actor separately from payload', async () => {
     vi.mocked(meets.createSession).mockResolvedValue({ id: sessionId } as never);

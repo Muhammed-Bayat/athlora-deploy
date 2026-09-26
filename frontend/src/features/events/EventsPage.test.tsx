@@ -41,6 +41,7 @@ const fixturesApi = vi.hoisted(() => ({
   listGuestFixtures: vi.fn(),
   getGuestFixture: vi.fn(),
 }));
+const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), createSession: vi.fn() }));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/participants', () => participantApi);
@@ -50,6 +51,12 @@ vi.mock('../../api/timeline', () => timelineApi);
 vi.mock('../../api/venues', () => venueApi);
 vi.mock('../../api/clubs', () => clubsApi);
 vi.mock('../../api/fixtures', () => fixturesApi);
+vi.mock('../../api/meets', async () => ({
+  ...await vi.importActual<typeof import('../../api/meets')>('../../api/meets'),
+  listDisciplines: meetsApi.listDisciplines,
+  listSessions: meetsApi.listSessions,
+  createSession: meetsApi.createSession,
+}));
 
 const TODAY = '2026-08-16';
 const CITY_ID = '11111111-1111-4111-8111-111111111111';
@@ -200,6 +207,15 @@ beforeEach(() => {
   fixturesApi.listHostedFixtureResults.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.listGuestFixtures.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixturesApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'not a guest fixture'));
+  meetsApi.listDisciplines.mockResolvedValue({ data: [
+    { id: 'track-100', kind: 'track', unit: 'seconds', presentation: { label: '100m' } },
+    { id: 'track-200', kind: 'track', unit: 'seconds', presentation: { label: '200m' } },
+    { id: 'field-shot', kind: 'field', unit: 'metres', presentation: { label: 'Shot put' } },
+    { id: 'relay-4x100', kind: 'relay', unit: 'seconds', presentation: { label: '4 x 100m relay' } },
+    { id: 'vertical-high-jump', kind: 'vertical', unit: 'cm', presentation: { label: 'High jump' } },
+  ] });
+  meetsApi.listSessions.mockResolvedValue({ data: [] });
+  meetsApi.createSession.mockResolvedValue({});
   clubsApi.listClubs.mockResolvedValue({ data: [{ id: '88888888-8888-4888-8888-888888888888', workspaceId: '99999999-9999-4999-8999-999999999999', name: 'Rival Track Club', createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' }], meta: { count: 1 } });
   clubsApi.listClubCalendarEvents.mockResolvedValue({ data: [{ club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: event({ id: '99999999-9999-4999-8999-999999999999', title: 'Rival Relay', date: '2026-08-22' }) }, { club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: city }], meta: { count: 2 } });
 });
@@ -459,8 +475,10 @@ describe('EventsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
     expect(within(dialog).getByText('Event title is required.')).toBeInTheDocument();
     expect(within(dialog).getByText('Event date is required.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Choose at least one initial discipline session.')).toBeInTheDocument();
 
     await user.type(within(dialog).getByLabelText('Event title'), '  County 100m  ');
+    await user.click(await within(dialog).findByRole('checkbox', { name: '100m Timed event' }));
     await selectDate(user, dialog, '2026-09-05');
     await selectThemedOption(user, dialog, 'Event hour', '10');
     await selectThemedOption(user, dialog, 'Event minute', '15');
@@ -469,7 +487,7 @@ describe('EventsPage', () => {
 
     await waitFor(() => expect(eventApi.createEvent).toHaveBeenCalledWith({
       type: 'competition',
-      discipline: '100m',
+      discipline: null,
       title: 'County 100m',
       date: '2026-09-05',
       time: '10:15:00',
@@ -478,7 +496,30 @@ describe('EventsPage', () => {
       longitude: null,
       status: 'scheduled',
     }));
+    await waitFor(() => expect(meetsApi.createSession).toHaveBeenCalledWith(created.id, {
+      disciplineDefinitionId: 'track-100',
+      label: '100m',
+    }));
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
+  });
+
+  it('uses grouped Athlora discipline cards when creating a multi-discipline meet', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+
+    const trackChoice = await within(dialog).findByRole('checkbox', { name: /200m/ });
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Track' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Field' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Relays' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('checkbox', { name: /High jump/ })).toBeDisabled();
+
+    await user.click(trackChoice);
+    await user.click(within(dialog).getByRole('checkbox', { name: /4 x 100m relay/ }));
+    expect(within(dialog).getByText('2 selected')).toBeInTheDocument();
   });
 
   it('uses 24-hour five-minute time wheels and clears an optional event time', async () => {
@@ -545,6 +586,7 @@ describe('EventsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add event' }));
     const dialog = screen.getByRole('dialog', { name: 'Add event' });
     await user.type(within(dialog).getByLabelText('Event title'), 'Taken Meet');
+    await user.click(await within(dialog).findByRole('checkbox', { name: '100m Timed event' }));
     await selectDate(user, dialog, '2026-09-05');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
     expect(await within(dialog).findByText('Title is unavailable')).toBeInTheDocument();

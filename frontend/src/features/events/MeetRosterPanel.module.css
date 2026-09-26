@@ -1,0 +1,315 @@
+.roster {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-4);
+  color: var(--console-ink);
+}
+
+.error,
+.empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--console-danger-surface) 55%, var(--console-line));
+  border-radius: var(--radius-sm);
+  background: var(--console-error-surface);
+  color: var(--console-error-text);
+}
+
+.empty { color: var(--console-muted); }
+
+.sessionTabs {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: 0 var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--console-line);
+}
+
+.sessionTabs button {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.15rem;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--console-muted);
+  font: var(--font-weight-bold) var(--font-size-sm) var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sessionTabs button small { color: var(--console-faint); font: 0.7rem var(--font-family-mono); }
+
+.sessionTabs button[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--console-cyan) 35%, transparent);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  box-shadow: inset 0 -2px var(--console-primary-start);
+}
+
+.sessionTabs button[aria-selected='true'] small { color: inherit; }
+
+.sessionPanel {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 2px solid var(--console-cyan);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--console-surface) 92%, #00111a);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--console-cyan) 18%, transparent);
+}
+
+.sessionPanel:focus-visible,
+.sessionTabs button:focus-visible,
+.athleteChoice:has(input:focus-visible),
+.memberChoice:has(input:focus-visible) {
+  outline: 3px solid var(--console-focus);
+  outline-offset: 2px;
+}
+
+.rosterHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rosterHeader p {
+  margin: 0 0 var(--space-1);
+  color: var(--console-cyan);
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.rosterHeader h2,
+.athletePicker h3,
+.addAthletes strong { margin: 0; color: var(--console-ink); }
+
+.rosterHeader h2 span {
+  display: inline-grid;
+  min-width: 1.9rem;
+  min-height: 1.9rem;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  font: var(--font-weight-bold) 0.72rem var(--font-family-mono);
+  vertical-align: middle;
+}
+
+.rosterFilter {
+  display: grid;
+  gap: var(--space-1);
+  min-width: min(100%, 15rem);
+  color: var(--console-muted);
+  font-size: 0.76rem;
+}
+
+.sessionAction { justify-self: start; }
+
+.addAthletes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--console-control-surface) 72%, transparent);
+}
+
+.addAthletes p,
+.athletePicker p {
+  margin: var(--space-1) 0 0;
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.athletePicker,
+.relayBuilder {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--console-surface-soft);
+}
+
+.relayBuilder legend {
+  padding: 0 var(--space-1);
+  color: var(--console-ink);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.relayBuilder legend small {
+  margin-left: var(--space-1);
+  color: var(--console-faint);
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-normal);
+}
+
+.relayBuilder > label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--console-teal);
+  font-size: 0.78rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.relayBuilder input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+  font: inherit;
+}
+
+.athleteChoices,
+.memberChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: var(--space-2);
+}
+
+.athleteChoice,
+.memberChoice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--console-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--console-control-surface);
+  color: var(--console-control-text);
+  cursor: pointer;
+}
+
+.athleteChoice:has(input:checked),
+.memberChoice:has(input:checked) {
+  border-color: var(--console-teal);
+  background: color-mix(in srgb, var(--console-teal) 10%, var(--console-control-surface));
+}
+
+.athleteChoice input,
+.memberChoice input {
+  appearance: none;
+  display: grid;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  place-content: center;
+  border: 1px solid var(--console-control-border);
+  border-radius: 0.25rem;
+  background: var(--console-row-surface);
+}
+
+.athleteChoice input::after,
+.memberChoice input::after {
+  content: '';
+  display: block;
+  width: 0.5rem;
+  height: 0.28rem;
+  border: solid var(--console-primary-text);
+  border-width: 0 0.125rem 0.125rem 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 120ms ease;
+}
+
+.athleteChoice input:checked,
+.memberChoice input:checked { border-color: var(--console-teal); background: var(--console-teal); }
+.athleteChoice input:checked::after,
+.memberChoice input:checked::after { transform: rotate(45deg) scale(1); }
+.athleteChoice span,
+.memberChoice span { display: grid; gap: 0.1rem; min-width: 0; }
+.athleteChoice small,
+.memberChoice small { color: var(--console-faint); font-size: 0.7rem; overflow-wrap: anywhere; }
+
+.pickerActions,
+.entrantActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.registrationList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.registrationList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--console-line);
+  border-radius: var(--radius-sm);
+  background: var(--console-row-surface);
+}
+
+.entrantIdentity { display: grid; gap: var(--space-1); min-width: 0; }
+.entrantIdentity strong { color: var(--console-ink); }
+.entrantIdentity small { display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--console-muted); overflow-wrap: anywhere; }
+.entrantIdentity i {
+  padding: 0.12rem 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: var(--font-weight-bold);
+}
+
+.rsvpSummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--console-line);
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.rsvpSummary strong { color: var(--console-ink); }
+
+@media (max-width: 700px) {
+  .sessionPanel { padding: var(--space-3); }
+  .rosterHeader,
+  .addAthletes,
+  .registrationList li { align-items: stretch; flex-direction: column; }
+  .rosterFilter { width: 100%; }
+  .sessionAction { width: 100%; }
+  .pickerActions,
+  .entrantActions { align-items: stretch; flex-direction: column; }
+  .pickerActions > button,
+  .entrantActions > button { width: 100%; min-height: 44px; }
+  .athleteChoices,
+  .memberChoices { grid-template-columns: 1fr; }
+  .rsvpSummary { align-items: flex-start; flex-direction: column; }
+}
