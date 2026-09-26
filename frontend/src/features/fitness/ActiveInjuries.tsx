@@ -64,7 +64,9 @@ export function ActiveInjuries({ injuries, canOperate, isArchived, onResolve, on
                           {resolvingId === injury.id ? (
                             <div className={styles.resolveForm}>
                               <input
+                                className={styles.resolutionNotes}
                                 type="text"
+                                aria-label="Resolution notes"
                                 placeholder="Resolution notes (optional)..."
                                 value={resolutionNotes}
                                 onChange={(e) => setResolutionNotes(e.target.value)}

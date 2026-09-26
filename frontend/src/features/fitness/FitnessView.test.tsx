@@ -118,6 +118,8 @@ describe('FitnessView', () => {
     await screen.findByText('Left Knee');
     expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Right Shoulder')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    expect(screen.getByRole('textbox', { name: 'Resolution notes' })).toHaveAttribute('placeholder', 'Resolution notes (optional)...');
 
     await user.click(screen.getByRole('button', { name: 'Resolved' }));
     expect(screen.getByRole('button', { name: 'Resolved' })).toHaveAttribute('aria-pressed', 'true');
