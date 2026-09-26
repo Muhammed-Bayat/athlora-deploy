@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { EventDetailPage } from './EventDetailPage';
 import { createEvent, listEvents, updateEvent } from '../../api/events';
@@ -74,7 +74,7 @@ function draftFor(event?: AthleticsEvent): EventDraft {
     locationName: event?.locationName ?? '',
     latitude: event?.latitude === null || event?.latitude === undefined ? '' : String(event.latitude),
     longitude: event?.longitude === null || event?.longitude === undefined ? '' : String(event.longitude),
-    genericMeet: event?.discipline === null,
+    genericMeet: event ? event.discipline === null : true,
   };
 }
 
@@ -268,6 +268,8 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [venueError, setVenueError] = useState<string | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<VenueSearchResult | null>(null);
   const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
+  const [disciplinesLoading, setDisciplinesLoading] = useState(true);
+  const [disciplinesError, setDisciplinesError] = useState(false);
   const [sessionDefinitionIds, setSessionDefinitionIds] = useState<string[]>([]);
   const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -320,6 +322,19 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     }
   };
 
+  const loadDisciplines = useCallback(async () => {
+    setDisciplinesLoading(true);
+    setDisciplinesError(false);
+    try {
+      const { data } = await listDisciplines();
+      setDisciplines(data);
+    } catch {
+      setDisciplinesError(true);
+    } finally {
+      setDisciplinesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const query = venueQuery.trim();
     if (query.length < 2) {
@@ -332,10 +347,13 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     return () => window.clearTimeout(timer);
   }, [venueQuery]);
 
+  useEffect(() => { void loadDisciplines(); }, [loadDisciplines]);
+
   useEffect(() => {
     let current = true;
-    void listDisciplines().then(({ data }) => { if (current) setDisciplines(data); }).catch(() => { if (current) setDisciplines([]); });
-    if (event?.discipline === null) void listSessions(event.id).then(({ data }) => { if (current) setSessionDefinitionIds(data.map((session) => session.disciplineDefinitionId)); }).catch(() => undefined);
+    if (event?.discipline === null) void listSessions(event.id)
+      .then(({ data }) => { if (current) setSessionDefinitionIds(data.map((session) => session.disciplineDefinitionId)); })
+      .catch(() => undefined);
     return () => { current = false; };
   }, [event?.discipline, event?.id]);
 
@@ -348,20 +366,39 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     setVenueError(null);
   };
 
+  const initialSessionGroups = [
+    { key: 'track', label: 'Track', items: disciplines.filter((discipline) => discipline.kind === 'track') },
+    { key: 'field', label: 'Field', items: disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical') },
+    { key: 'relay', label: 'Relays', items: disciplines.filter((discipline) => discipline.kind === 'relay') },
+  ].filter((group) => group.items.length > 0);
+
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
-      <fieldset className={styles.venueLookup} disabled={submitting || Boolean(event)}>
-        <legend>Meet format</legend>
-        <label><input type="radio" checked={!draft.genericMeet} onChange={() => setField('genericMeet', false)} /> Legacy 100m event</label>
-        <label><input type="radio" checked={draft.genericMeet} onChange={() => setField('genericMeet', true)} /> Multi-discipline meet</label>
-        <p>{draft.genericMeet ? 'Sessions and rosters are managed separately from legacy 100m participants and timeline controls.' : 'Uses the established 100m participants, timeline, and results controls.'}</p>
-        {event && event.discipline !== null && <p>Existing legacy events remain 100m to preserve their historical controls.</p>}
-      </fieldset>
-      {draft.genericMeet && <fieldset className={styles.venueLookup} disabled={submitting}>
-        <legend>Initial discipline sessions</legend>
-        <p>Select one or more catalogue disciplines. More sessions can be added from the meet roster.</p>
-        {disciplines.length === 0 ? <p role="status">Loading catalogue...</p> : disciplines.filter((discipline) => discipline.kind !== 'vertical').map((discipline) => <label key={discipline.id}><input type="checkbox" checked={sessionDefinitionIds.includes(discipline.id)} onChange={(input) => setSessionDefinitionIds((current) => input.target.checked ? [...current, discipline.id] : current.filter((id) => id !== discipline.id))} /> {discipline.presentation.label}</label>)}
+      {draft.genericMeet && <fieldset className={styles.disciplinePanel} disabled={submitting} aria-describedby="event-disciplines-help">
+        <legend>Initial discipline sessions <span>Choose one or more</span></legend>
+        <div className={styles.disciplineHeader}>
+          <p id="event-disciplines-help">Select the discipline sessions taking place at this meet. More sessions can be added from the roster.</p>
+          <span className={styles.selectionCount}>{sessionDefinitionIds.length} selected</span>
+        </div>
+        {disciplinesLoading ? <p className={styles.catalogueStatus} role="status">Loading disciplines...</p> : null}
+        {disciplinesError ? <div className={styles.catalogueError} role="alert"><span>Disciplines could not be loaded.</span><button type="button" onClick={() => void loadDisciplines()}>Try again</button></div> : null}
+        {!disciplinesLoading && !disciplinesError && initialSessionGroups.map((group) => (
+          <section className={styles.disciplineGroup} key={group.key} aria-labelledby={`event-discipline-group-${group.key}`}>
+            <h3 id={`event-discipline-group-${group.key}`}>{group.label}</h3>
+            <div className={styles.disciplineGrid}>
+              {group.items.map((discipline) => {
+                const vertical = discipline.kind === 'vertical';
+                const checked = sessionDefinitionIds.includes(discipline.id);
+                return <label className={`${styles.disciplineChoice} ${checked ? styles.disciplineChoiceSelected : ''} ${vertical ? styles.disciplineChoiceDisabled : ''}`} key={discipline.id}>
+                  <input type="checkbox" disabled={vertical} checked={checked} onChange={(input) => setSessionDefinitionIds((current) => input.target.checked ? [...current, discipline.id] : current.filter((id) => id !== discipline.id))} />
+                  <span><strong>{discipline.presentation.label}</strong><small>{vertical ? 'Requires height configuration' : discipline.kind === 'relay' ? 'Team relay' : discipline.unit === 'seconds' ? 'Timed event' : 'Measured event'}</small></span>
+                </label>;
+              })}
+            </div>
+          </section>
+        ))}
+        {!disciplinesLoading && !disciplinesError && initialSessionGroups.length === 0 ? <p className={styles.catalogueStatus}>No eligible disciplines are available.</p> : null}
         {errors.genericMeet && <span className={styles.fieldError}>{errors.genericMeet}</span>}
       </fieldset>}
 
@@ -623,6 +660,12 @@ export function ParticipantManager({
 
   return (
     <section ref={sectionRef} className={styles.participants} aria-labelledby="event-participants-heading" aria-busy={participantsLoading || athletesLoading || Boolean(busy)} tabIndex={-1}>
+      <div className={styles.legacyRosterTabs} role="tablist" aria-label="Event discipline sessions">
+        <button type="button" role="tab" id="legacy-100m-tab" aria-selected="true" aria-controls="legacy-100m-panel" tabIndex={0}>
+          <span>100m</span>
+        </button>
+      </div>
+      <div className={styles.legacyRosterPanel} role="tabpanel" id="legacy-100m-panel" aria-labelledby="legacy-100m-tab" tabIndex={0}>
       <header>
         <div><p>Event roster</p><h3 id="event-participants-heading">Assigned athletes <span>{participantsLoading ? '...' : participantsError ? 'Unavailable' : participants.length}</span></h3></div>
         {!participantsLoading && !participantsError && <div className={styles.rosterFilter}><span>Roster filter</span><Select aria-label="Roster filter" value={rsvpFilter} onChange={(event) => setRsvpFilter(event.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, { value: 'yes', label: 'Attending' }, { value: 'maybe', label: 'Maybe attending' }, { value: 'pending', label: 'Pending' }, { value: 'no', label: 'Not attending' }]} /></div>}
@@ -668,6 +711,7 @@ export function ParticipantManager({
 
       {mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}
       {feedback && <p className={styles.participantFeedback} role="status">{feedback}</p>}
+      </div>
     </section>
   );
 }

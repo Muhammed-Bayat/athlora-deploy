@@ -71,7 +71,7 @@ describe('FitnessView', () => {
       <FitnessView
         athleteId="ath-1"
         athleteName="Ari Runner"
-        athleteSquad="Sprint A"
+        athleteFocus="100m"
         athleteStatus="active"
         canOperate
         onBack={vi.fn()}
@@ -113,11 +113,15 @@ describe('FitnessView', () => {
       },
     ] satisfies Injury[]);
 
-    render(<FitnessView athleteId="ath-1" athleteName="Ari Runner" athleteSquad="Sprint A" athleteStatus="active" canOperate onBack={vi.fn()} onSetInactive={vi.fn()} />);
+    render(<FitnessView athleteId="ath-1" athleteName="Ari Runner" athleteFocus="100m" athleteStatus="active" canOperate onBack={vi.fn()} onSetInactive={vi.fn()} />);
 
     await screen.findByText('Left Knee');
     expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Right Shoulder')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    expect(screen.getByRole('textbox', { name: 'Resolution notes' })).toHaveAttribute('placeholder', 'Resolution notes (optional)...');
+    await user.click(screen.getByRole('button', { name: 'All' }));
+    expect(screen.queryByRole('textbox', { name: 'Resolution notes' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Resolved' }));
     expect(screen.getByRole('button', { name: 'Resolved' })).toHaveAttribute('aria-pressed', 'true');

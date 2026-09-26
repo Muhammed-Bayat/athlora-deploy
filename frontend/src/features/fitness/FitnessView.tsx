@@ -10,7 +10,7 @@ import styles from './FitnessView.module.css';
 interface FitnessViewProps {
   athleteId: string;
   athleteName: string;
-  athleteSquad: string | null;
+  athleteFocus: string | null;
   athleteStatus: string;
   canOperate: boolean;
   onBack: () => void;
@@ -20,7 +20,7 @@ interface FitnessViewProps {
 export function FitnessView({
   athleteId,
   athleteName,
-  athleteSquad,
+  athleteFocus,
   athleteStatus,
   canOperate,
   onBack,
@@ -109,7 +109,7 @@ export function FitnessView({
           <div>
             <p className={styles.eyebrow}>Athlete performance</p>
             <h1 id="fitness-heading">Fitness & injury map</h1>
-            <small>{athleteName} · {athleteSquad ?? 'Athletics'} squad</small>
+            <small>{athleteName} · {athleteFocus ?? 'Athletics'}</small>
           </div>
         </div>
         <div className={styles.headerActions}>
