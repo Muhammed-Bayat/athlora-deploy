@@ -20,6 +20,8 @@ router.post('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId/entries
 router.put('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId/entries/:entryId', requireCoach(), meets.replaceEntry);
 router.delete('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId/entries/:entryId', requireCoach(), meets.undoEntry);
 router.get('/:eventId/sessions/:disciplineSessionId/results', meets.results);
+router.get('/:eventId/sessions/:disciplineSessionId/resolution', requireCoach(), meets.resolution);
+router.post('/:eventId/sessions/:disciplineSessionId/conflicts/:conflictId/resolve', requireCoach(), meets.resolveConflict);
 router.put('/:eventId/sessions/:disciplineSessionId/results/:entrantId', requireCoach(), meets.overrideResult);
 router.put('/:eventId/sessions/:disciplineSessionId/results/:entrantId/selection', requireCoach(), meets.selectResultEntry);
 router.get('/:eventId/sessions/:disciplineSessionId/statistics', meets.statistics);

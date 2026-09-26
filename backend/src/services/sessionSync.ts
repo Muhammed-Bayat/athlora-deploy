@@ -94,6 +94,13 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
                  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$1,$9,$10)`,
                 [action.actionId, actorId, eventId, entryId, row.version, row.value, row.incident_type, row.note_text, action.target.disciplineSessionId, action.target.entrantId],
               );
+              await db.query(
+                `INSERT INTO offline_sync_conflicts
+                  (event_id, discipline_session_id, entrant_id, entry_id, public_logger_session_id, device_id, action_id, action_type, expected_version, actual_version, attempted_payload, canonical_state, client_timestamp)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+                [eventId, action.target.disciplineSessionId, action.target.entrantId, entryId, actorId, deviceId,
+                  action.actionId, action.actionType, expectedVersion, row.version, JSON.stringify(action.payload), JSON.stringify(row), action.clientTimestamp],
+              );
               expectedVersion = row.version;
             }
           }
@@ -113,6 +120,21 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
         await db.query('ROLLBACK TO SAVEPOINT session_action');
         if (!(error instanceof ApiError) && !(typeof error === 'object' && error !== null && 'code' in error && ['23503', '23505', '23514'].includes(String(error.code)))) throw error;
         const code = error instanceof ApiError ? error.code : 'VALIDATION_ERROR';
+        if (code === 'TIMELINE_ENTRY_VERSION_CONFLICT') {
+          const entryId = typeof action.payload.entryId === 'string' ? action.payload.entryId : null;
+          const canonical = entryId
+            ? await db.query('SELECT * FROM session_timeline_entries WHERE id = $1 AND event_id = $2 AND session_id = $3 AND entrant_id = $4', [entryId, eventId, action.target.disciplineSessionId, action.target.entrantId])
+            : { rows: [] as Record<string, unknown>[] };
+          await db.query(
+            `INSERT INTO offline_sync_conflicts
+              (event_id, discipline_session_id, entrant_id, entry_id, actor_id, public_logger_session_id, device_id, action_id, action_type, expected_version, actual_version, attempted_payload, canonical_state, client_timestamp)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+            [eventId, action.target.disciplineSessionId, action.target.entrantId, entryId,
+              isPublic ? null : actor.userId, isPublic ? actor.publicLoggerSessionId : null, deviceId,
+              action.actionId, action.actionType, action.expectedVersion ?? action.payload.expectedVersion ?? null,
+              canonical.rows[0]?.version ?? null, JSON.stringify(action.payload), canonical.rows[0] ? JSON.stringify(canonical.rows[0]) : null, action.clientTimestamp],
+          );
+        }
         // Invalid references cannot become FK-backed receipts. Valid targets retain rejected receipts.
         const target = await db.query('SELECT 1 FROM session_entrants WHERE event_id = $1 AND session_id = $2 AND entrant_id = $3', [eventId, action.target.disciplineSessionId, action.target.entrantId]);
         if (target.rows.length && code !== 'NOT_FOUND') await saveReceipt(db, table, actorColumn, actorId, eventId, deviceId, action, null, null, code);
@@ -130,8 +152,8 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
 
 async function saveReceipt(db: DbExecutor, table: string, actorColumn: string, actorId: string, eventId: string, deviceId: string, action: SessionSyncAction, entryId: string | null, version: number | null, code: string | null): Promise<void> {
   await db.query(
-    `INSERT INTO ${table} (action_id, event_id, ${actorColumn}, device_id, action_type, status, entry_id, server_version, error_code, discipline_session_id, entrant_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-    [action.actionId, eventId, actorId, deviceId, action.actionType, code ? 'rejected' : 'accepted', entryId, version, code, action.target.disciplineSessionId, action.target.entrantId],
+    `INSERT INTO ${table} (action_id, event_id, ${actorColumn}, device_id, action_type, status, entry_id, server_version, error_code, discipline_session_id, entrant_id, client_timestamp)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [action.actionId, eventId, actorId, deviceId, action.actionType, code ? 'rejected' : 'accepted', entryId, version, code, action.target.disciplineSessionId, action.target.entrantId, action.clientTimestamp],
   );
 }

@@ -59,3 +59,12 @@ export function resetPublicOfflineDB(sessionToken: string): void {
   dbInstances.get(key)?.close();
   dbInstances.delete(key);
 }
+
+/** Public-link invalidation removes queued observations and cached snapshots together. */
+export async function purgePublicOfflineDB(sessionToken: string): Promise<void> {
+  const key = getSessionHash(sessionToken);
+  const name = `athlora-public-${key}`;
+  dbInstances.get(key)?.close();
+  dbInstances.delete(key);
+  await Dexie.delete(name);
+}

@@ -1,8 +1,10 @@
 import type { Request, RequestHandler } from 'express';
 import { getApplicationUserContext } from '../middleware/auth.js';
+import { ApiError } from '../middleware/errors.js';
 import { notifyEventInvalidated, notifySessionInvalidated } from '../realtime/index.js';
 import * as meets from '../services/meets.js';
 import * as performances from '../services/sessionPerformances.js';
+import * as offlineResolution from '../services/offlineResolution.js';
 import type { MeetActor, SessionTarget } from '../types/meets.js';
 import { object, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
@@ -98,6 +100,12 @@ export const undoEntry = handler(async (req) => {
   notifySessionInvalidated(eventId, ids.disciplineSessionId, ids.entrantId);
 }, 204);
 export const results = handler((req) => performances.listSessionResults(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId')));
+export const resolution = handler((req) => offlineResolution.getSessionResolution(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId')));
+export const resolveConflict = handler((req) => {
+  const body = object(req.body, ['reason']);
+  if (typeof body.reason !== 'string') throw new ApiError(400, 'VALIDATION_ERROR', 'reason is required');
+  return offlineResolution.resolveOfflineConflict(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId'), parameter(req, 'conflictId'), body.reason);
+});
 export const overrideResult = handler(async (req) => {
   const eventId = parameter(req, 'eventId');
   const ids = target(req);

@@ -87,13 +87,13 @@ export async function processSyncBatch(
       }
 
       const existingReceipt = await client.query(
-        'SELECT status, entry_id, server_version, error_code, discipline_session_id FROM sync_action_receipts WHERE action_id = $1',
+        'SELECT status, entry_id, server_version, error_code, discipline_session_id, event_id, actor_id, device_id, action_type FROM sync_action_receipts WHERE action_id = $1',
         [action.actionId],
       );
 
       if (existingReceipt.rows.length > 0) {
         const row = existingReceipt.rows[0];
-        if (row.discipline_session_id) {
+        if (row.discipline_session_id || (row.event_id !== undefined && (row.event_id !== eventId || row.actor_id !== actorId || row.device_id !== deviceId || row.action_type !== action.actionType))) {
           receipts.push({ actionId: action.actionId, status: 'rejected', code: 'NOT_FOUND' });
           continue;
         }

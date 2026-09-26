@@ -300,6 +300,8 @@ Request body: `{ deviceId, eventId, actions }`. `eventId` must be a canonical UU
 
 Each action is processed idempotently against `sync_action_receipts`. On retry, an originally accepted action returns `duplicate` (with `entryId`/`serverVersion`); an originally rejected action returns `rejected` with the original code. Per-action rejection codes include `VERSION_CONFLICT` (stale expected version), `EVENT_NOT_IN_PROGRESS`, `INVALID_ACTION`, and `INTERNAL_ERROR`. Accepted and rejected receipts are independent — one rejected action never blocks accepted siblings in the same batch.
 
+For multi-discipline session actions, a stale edit also creates immutable offline-conflict evidence with device, action, attempted payload, expected/current versions, and source timestamps. Only an event-owning coach can review or acknowledge that evidence. Session finalization rejects unresolved conflicts with `409 OFFLINE_CONFLICT_RESOLUTION_REQUIRED`; the coach must acknowledge the conflict and use the existing official-entry selection before finalizing.
+
 Response envelope: `{ data: { receipts, recomputedResults } }`. `recomputedResults` is `true` only when at least one action was newly accepted and the server actually recomputed event results after the batch.
 
 ### 3.12 Public statistics and schedule

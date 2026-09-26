@@ -8,7 +8,7 @@ import { useCurrentUser } from '../auth/CurrentUserContext';
 import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
 import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent } from '../../types';
-import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResult } from '../../types/meets';
+import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResolution, SessionResult } from '../../types/meets';
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
@@ -41,6 +41,8 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [reloadKey, setReloadKey] = useState(0);
   const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
   const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
+  const [resolution, setResolution] = useState<SessionResolution | null>(null);
+  const [resolutionReason, setResolutionReason] = useState('');
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
 
   const session = sessions.find((item) => item.id === sessionId);
@@ -171,6 +173,15 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
 
   const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
   const completeSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'completed', session!.version));
+  const loadResolution = () => run(async () => {
+    if (sessionId) setResolution(await meets.getSessionResolution(event.id, sessionId));
+  });
+  const resolveConflict = (conflictId: string) => run(async () => {
+    if (!sessionId || !resolutionReason.trim()) return;
+    await meets.resolveSessionConflict(event.id, sessionId, conflictId, resolutionReason);
+    setResolutionReason('');
+    setResolution(await meets.getSessionResolution(event.id, sessionId));
+  });
 
   const timedSessions = sessions.filter((item) => {
     const def = definitions.find((candidate) => candidate.id === item.disciplineDefinitionId);
@@ -264,7 +275,8 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           {canFinalize && session.status === 'in_progress' && (
             <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>Finalize session</Button>
           )}
-          {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
+           {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
+           {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
           <label>
             Team
             <select value={entrantId} onChange={(input) => setEntrantId(input.target.value)}>
@@ -366,8 +378,27 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 })}
             </tbody>
           </table>
-          <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
-        </>
+           <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
+           {resolution && (
+             <section aria-label="Offline reconciliation">
+               <h3>Offline reconciliation</h3>
+               <p>{resolution.conflicts.filter((conflict) => !conflict.resolvedAt).length} unresolved conflict(s). Select the official attempt above, then record the resolution below.</p>
+               <label>
+                 Resolution reason
+                 <input value={resolutionReason} onChange={(input) => setResolutionReason(input.target.value)} maxLength={500} />
+               </label>
+               <ol>
+                 {resolution.conflicts.map((conflict) => (
+                   <li key={conflict.id}>
+                     {conflict.actionType} from device {conflict.deviceId} at {new Date(conflict.createdAt).toLocaleString()}; expected v{conflict.expectedVersion ?? '—'}, canonical v{conflict.actualVersion ?? '—'}.
+                     {conflict.resolvedAt ? ` Resolved: ${conflict.resolutionReason ?? 'Acknowledged'}.` : <Button variant="secondary" disabled={busy || !resolutionReason.trim()} onClick={() => void resolveConflict(conflict.id)}>Acknowledge resolution</Button>}
+                   </li>
+                 ))}
+                 {resolution.conflicts.length === 0 && <li>No cross-device conflicts recorded.</li>}
+               </ol>
+             </section>
+           )}
+         </>
       )}
     </section>
   );

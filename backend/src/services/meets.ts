@@ -67,6 +67,11 @@ export async function changeSessionState(actor: MeetActor, eventId: string, sess
     if (input.status === 'in_progress' && !reopening && access.event.status !== 'in_progress') meetConflict('EVENT_NOT_IN_PROGRESS', 'The event must be in progress');
     if (input.status === 'completed' && before.resultState !== 'final') {
       const definition = await getDefinition(db, before.disciplineDefinitionId);
+      const unresolvedConflicts = await db.query(
+        'SELECT 1 FROM offline_sync_conflicts WHERE event_id = $1 AND discipline_session_id = $2 AND resolved_at IS NULL LIMIT 1',
+        [eventId, sessionId],
+      );
+      if (unresolvedConflicts.rows.length) meetConflict('OFFLINE_CONFLICT_RESOLUTION_REQUIRED', 'Resolve offline conflicts before finalizing');
       const registrations = await db.query<{ entrant_id: string; workspace_id: string }>('SELECT entrant_id, workspace_id FROM session_entrants WHERE session_id = $1 AND withdrawn_at IS NULL', [sessionId]);
       for (const entrant of registrations.rows) {
         await recomputeSessionResult(db, actor, eventId, { disciplineSessionId: sessionId, entrantId: entrant.entrant_id }, entrant.workspace_id, definition);

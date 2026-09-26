@@ -66,6 +66,11 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
+            // Public sessions are revoked server-side; their reads must never outlive that decision.
+            urlPattern: /\/api\/v1\/public\/logger\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /\/api\/v1\/.*/i,
             handler: 'NetworkFirst',
             options: {
