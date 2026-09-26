@@ -24,6 +24,12 @@ export function ActiveInjuries({ injuries, canOperate, isArchived, onResolve, on
     return true;
   });
 
+  const selectFilter = (nextFilter: typeof filter) => {
+    setFilter(nextFilter);
+    setResolvingId(null);
+    setResolutionNotes('');
+  };
+
   return (
     <section className={styles.activeInjuries} aria-labelledby="active-injuries-heading">
       <header>
@@ -32,9 +38,9 @@ export function ActiveInjuries({ injuries, canOperate, isArchived, onResolve, on
           <h2 id="active-injuries-heading">Injuries & recovery</h2>
         </div>
         <div className={styles.historyFilters}>
-          <button type="button" className={filter === 'active' ? styles.activeFilter : ''} aria-pressed={filter === 'active'} onClick={() => setFilter('active')}>Active</button>
-          <button type="button" className={filter === 'resolved' ? styles.activeFilter : ''} aria-pressed={filter === 'resolved'} onClick={() => setFilter('resolved')}>Resolved</button>
-          <button type="button" className={filter === 'all' ? styles.activeFilter : ''} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button>
+          <button type="button" className={filter === 'active' ? styles.activeFilter : ''} aria-pressed={filter === 'active'} onClick={() => selectFilter('active')}>Active</button>
+          <button type="button" className={filter === 'resolved' ? styles.activeFilter : ''} aria-pressed={filter === 'resolved'} onClick={() => selectFilter('resolved')}>Resolved</button>
+          <button type="button" className={filter === 'all' ? styles.activeFilter : ''} aria-pressed={filter === 'all'} onClick={() => selectFilter('all')}>All</button>
         </div>
       </header>
       {filtered.length === 0 ? (

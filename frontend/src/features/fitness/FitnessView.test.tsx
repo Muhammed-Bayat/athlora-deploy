@@ -120,6 +120,8 @@ describe('FitnessView', () => {
     expect(screen.queryByText('Right Shoulder')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resolve' }));
     expect(screen.getByRole('textbox', { name: 'Resolution notes' })).toHaveAttribute('placeholder', 'Resolution notes (optional)...');
+    await user.click(screen.getByRole('button', { name: 'All' }));
+    expect(screen.queryByRole('textbox', { name: 'Resolution notes' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Resolved' }));
     expect(screen.getByRole('button', { name: 'Resolved' })).toHaveAttribute('aria-pressed', 'true');
