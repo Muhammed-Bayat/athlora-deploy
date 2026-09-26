@@ -20,6 +20,8 @@ import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../.
 import type { AthleteActiveInjurySummary } from '../../types';
 import { listAthleteInjurySummaries } from '../../api/injuries';
 import { listSquads } from '../../api/squads';
+import { listDisciplines } from '../../api/meets';
+import type { DisciplineDefinition } from '../../types/meets';
 import { CompactAnatomy } from '../fitness/CompactAnatomy';
 import { AthleteDetailPage } from './AthleteDetailPage';
 import { AthleteForm } from './AthleteForm';
@@ -83,6 +85,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const deferredQuery = useDeferredValue(query);
   const [squadId, setSquadId] = useState('');
   const [squads, setSquads] = useState<Squad[]>([]);
+  const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [editor, setEditor] = useState<Editor>(null);
   const [editorBusy, setEditorBusy] = useState(false);
@@ -156,6 +159,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
     return () => { current = false; };
   }, [injuryReload, reloadKey]);
   useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
+  useEffect(() => { void listDisciplines().then(({ data }) => setDisciplines(data)).catch(() => setDisciplines([])); }, []);
 
   useEffect(() => {
     return () => {
@@ -806,9 +810,12 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
                 <span className={athlete.status === 'archived' ? styles.archivedBadge : athlete.status === 'inactive' ? styles.inactiveBadge : styles.activeBadge}>
                   {statusLabel(athlete.status)}
                 </span>
-              </div>
-              <h2>{athlete.name}</h2>
-               <p className={styles.squad}>{athlete.squads?.map((squad) => squad.name).join(', ') || 'No squad assigned'}</p>
+               </div>
+               <h2>{athlete.name}</h2>
+               <p className={styles.disciplines}>{athlete.preferredDisciplineIds.length > 0
+                 ? athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ')
+                 : 'No disciplines selected'}</p>
+                {athlete.squads?.length ? <p className={styles.squad}>Squads: {athlete.squads.map((squad) => squad.name).join(', ')}</p> : null}
               <dl className={styles.details}>
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
                 <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>

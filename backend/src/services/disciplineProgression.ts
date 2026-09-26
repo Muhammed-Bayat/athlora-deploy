@@ -1,0 +1,55 @@
+import type { DbExecutor } from '../db/client.js';
+import { ApiError } from '../middleware/errors.js';
+import { isCanonicalUuid } from '../validation/primitives.js';
+import type { SeasonScope } from './seasons.js';
+
+export interface DisciplineProgressionDetail {
+  entries: Array<{ eventId: string; eventDate: string; eventTitle: string; value: number; isNewPb: boolean }>;
+  summary: { personalBest: number | null; resultCount: number };
+}
+
+export async function getDisciplineProgression(
+  db: DbExecutor,
+  workspaceId: string,
+  athleteId: string,
+  disciplineDefinitionId: string,
+  season: SeasonScope,
+): Promise<DisciplineProgressionDetail> {
+  if (![workspaceId, athleteId, disciplineDefinitionId].every(isCanonicalUuid)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
+  }
+
+  const params: unknown[] = [workspaceId, athleteId, disciplineDefinitionId];
+  const seasonCondition = season.selected === 'all'
+    ? ''
+    : `AND e.date >= $${params.push(season.startDate!)}::date AND e.date < $${params.push(season.endDate!)}::date`;
+  const result = await db.query<{
+    event_id: string; event_date: string; event_title: string; value: string; is_new_pb: boolean; personal_best: string | null; result_count: string;
+  }>(`WITH performances AS (
+    SELECT e.id AS event_id, e.date AS event_date, e.title AS event_title, r.final_result AS value, d.direction
+    FROM session_results r
+    JOIN discipline_sessions s ON s.id = r.session_id
+    JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+    JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id AND se.withdrawn_at IS NULL
+    JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+    JOIN events e ON e.id = r.event_id AND e.status <> 'cancelled'
+    WHERE r.workspace_id = $1 AND en.athlete_id = $2 AND s.discipline_definition_id = $3
+      AND s.status = 'completed' AND en.kind = 'athlete'
+      AND r.outcome = 'valid' AND r.final_result IS NOT NULL
+      ${seasonCondition}
+  ), ranked AS (
+    SELECT *, CASE WHEN direction = 'lower' THEN MIN(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
+      ELSE MAX(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) END AS prior_pb
+    FROM performances
+  ), summary AS (
+    SELECT CASE WHEN MAX(direction) = 'lower' THEN MIN(value) ELSE MAX(value) END AS personal_best, COUNT(*) AS result_count FROM performances
+  )
+  SELECT ranked.*, summary.personal_best, summary.result_count,
+    (ranked.prior_pb IS NULL OR (ranked.direction = 'lower' AND ranked.value < ranked.prior_pb) OR (ranked.direction = 'higher' AND ranked.value > ranked.prior_pb)) AS is_new_pb
+  FROM ranked CROSS JOIN summary ORDER BY event_date, event_id`, params);
+
+  return {
+    entries: result.rows.map((row) => ({ eventId: row.event_id, eventDate: row.event_date, eventTitle: row.event_title, value: Number(row.value), isNewPb: row.is_new_pb })),
+    summary: { personalBest: result.rows[0]?.personal_best === null || result.rows[0] === undefined ? null : Number(result.rows[0].personal_best), resultCount: Number(result.rows[0]?.result_count ?? 0) },
+  };
+}

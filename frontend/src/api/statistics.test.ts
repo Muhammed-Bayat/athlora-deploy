@@ -31,6 +31,24 @@ describe('statistics API', () => {
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain('?year=');
   });
 
+  it('gets discipline statistics for a selected season', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await statistics.getAthleteDisciplineStatistics('a-1', '2025');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('athletes/a-1/statistics/disciplines?year=2025');
+  });
+
+  it('gets progression for a selected discipline and season', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: { entries: [], summary: { personalBest: null, resultCount: 0 } } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await statistics.getAthleteDisciplineProgression('a-1', 'discipline-1', '2025');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('athletes/a-1/statistics/disciplines/discipline-1/progression?year=2025');
+  });
+
   it('gets athlete progression with all optional params', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       response({ data: { athleteId: 'a-1', entries: [] } }),

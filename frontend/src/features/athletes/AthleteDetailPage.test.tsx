@@ -2,12 +2,13 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
+import type { AthleteDisciplineStatistics } from '../../api/statistics';
 import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, ResultOutcome, Squad } from '../../types';
 import { AthleteDetailPage } from './AthleteDetailPage';
 
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
-const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
+const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteDisciplineStatistics: vi.fn(), getAthleteProgression: vi.fn(), getAthleteDisciplineProgression: vi.fn() }));
 const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listInjuries: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
@@ -116,7 +117,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   athleteApi.getAthlete.mockResolvedValue(athlete());
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
+  statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([]);
   statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
+  statisticsApi.getAthleteDisciplineProgression.mockResolvedValue({ entries: [], summary: { personalBest: null, resultCount: 0 } });
   injuriesApi.listInjuries.mockResolvedValue([]);
   meetsApi.listDisciplines.mockResolvedValue({ data: [], meta: { count: 0 } });
 });
@@ -133,18 +136,40 @@ describe('AthleteDetailPage', () => {
     expect(injuriesApi.listInjuries).toHaveBeenCalledWith(ATHLETE_ID, undefined, 'active');
   });
 
-  it('shows private preferred disciplines and active/completed season goals', async () => {
-    meetsApi.listDisciplines.mockResolvedValue({ data: [{ id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m', unitLabel: 's' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' }], meta: { count: 1 } });
-    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID], seasonGoals: [{ id: '55555555-5555-4555-8555-555555555555', disciplineDefinitionId: SPRINT_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'completed', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }] }));
+  it('shows selected disciplines in the header and profile', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m', unitLabel: 's' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump', unitLabel: 'm' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID, ELITE_ID], seasonGoals: [{ id: '55555555-5555-4555-8555-555555555555', disciplineDefinitionId: SPRINT_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'completed', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }] }));
     renderDetail();
 
     expect(await screen.findByText('Preferred disciplines')).toBeInTheDocument();
-    expect(screen.getAllByText('100m')).not.toHaveLength(0);
-    expect(screen.getByText('11.2 seconds')).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getAllByText('100m, Long jump')).toHaveLength(1);
+    expect(screen.getByRole('list', { name: 'Disciplines' })).toHaveTextContent('100mLong jump');
+    expect(within(screen.getByRole('tablist', { name: 'Result history discipline' })).getByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('heading', { name: 'Season goals' })).not.toBeInTheDocument();
   });
 
-  it('shows a focused identity, current-year KPIs, profile, active state, empty history, and back behavior', async () => {
+  it('shows selected disciplines as tabs, including a discipline without results', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID, ELITE_ID] }));
+    statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([{ athleteId: ATHLETE_ID, athleteName: 'Ari Runner', discipline: '100m', label: '100m', unit: 'seconds', direction: 'lower', precision: 2, pb: 10.95, sb: 11.05, resultCount: 8, seasonCount: 3, seasonAverage: 11.2, seasonTotal: 33.6, placing: 1 }]);
+    const user = userEvent.setup();
+    renderDetail();
+
+    const tablist = await screen.findByRole('tablist', { name: 'Discipline performance statistics' });
+    expect(within(tablist).getByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('10.95 s')).toBeInTheDocument();
+    await user.click(within(tablist).getByRole('tab', { name: 'Long jump' }));
+    expect(screen.getAllByText('No valid result')).toHaveLength(2);
+    expect(screen.getByText('No finalized Long jump results yet.')).toBeInTheDocument();
+  });
+
+  it('shows a focused identity, profile, active state, empty history, and back behavior', async () => {
     statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
       pb: 10.95,
       sb: 11.05,
@@ -157,11 +182,10 @@ describe('AthleteDetailPage', () => {
     expect(heading).toHaveFocus();
     expect(screen.getByText('AR')).toBeInTheDocument();
     expect(screen.getByText('Active athlete')).toBeInTheDocument();
-    expect(screen.getByText('100m')).toBeInTheDocument();
+    expect(screen.getByText('No disciplines selected')).toBeInTheDocument();
     expect(screen.getByText('29 Feb 2004')).toBeInTheDocument();
     expect(screen.getAllByText(/years/)).toHaveLength(2);
-    expect(screen.getByText('10.95s')).toBeInTheDocument();
-    expect(screen.getByText('11.05s')).toBeInTheDocument();
+    expect(screen.getByText('No disciplines selected. Edit this athlete to add disciplines.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Competitions 0' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Training 0' })).toHaveAttribute('tabindex', '-1');
     expect(screen.getByText('No competition results yet.')).toBeInTheDocument();
@@ -185,9 +209,7 @@ describe('AthleteDetailPage', () => {
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Not provided')).toHaveLength(6);
-    expect(screen.getByText('No valid result')).toBeInTheDocument();
-    expect(screen.getByText('No valid result this year')).toBeInTheDocument();
+    expect(screen.getAllByText('Not provided')).toHaveLength(7);
   });
 
   it('labels valid, PB, SB, override, cancelled, and raw result context', async () => {
@@ -278,40 +300,46 @@ describe('AthleteDetailPage', () => {
     expect(screen.getAllByText('Non-scoring')).not.toHaveLength(0);
   });
 
-  it('keeps profile useful when statistics fails and retries statistics independently', async () => {
-    statisticsApi.getAthleteStatistics
+  it('keeps the profile useful when discipline statistics fail and retries independently', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [{ id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' }], meta: { count: 1 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID] }));
+    statisticsApi.getAthleteDisciplineStatistics
       .mockRejectedValueOnce(new ApiError(500, 'INTERNAL_ERROR', 'Statistics failed'))
-      .mockResolvedValueOnce(statistics({ pb: 11.2 }));
+      .mockResolvedValueOnce([{ athleteId: ATHLETE_ID, athleteName: 'Ari Runner', discipline: '100m', label: '100m', unit: 'seconds', direction: 'lower', precision: 2, pb: 11.2, sb: 11.2, resultCount: 1, seasonCount: 1, seasonAverage: 11.2, seasonTotal: 11.2, placing: 1 }]);
     const user = userEvent.setup();
     renderDetail();
 
     expect(await screen.findByText('Statistics unavailable')).toBeInTheDocument();
     expect(screen.getByText('29 Feb 2004')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry statistics' }));
-    expect(await screen.findByText('11.20s')).toBeInTheDocument();
-    expect(statisticsApi.getAthleteStatistics).toHaveBeenCalledTimes(2);
+    expect(await screen.findAllByText('11.20 s')).toHaveLength(2);
+    expect(statisticsApi.getAthleteDisciplineStatistics).toHaveBeenCalledTimes(2);
     expect(athleteApi.getAthlete).toHaveBeenCalledOnce();
   });
 
   it('shows independent loading and retries a failed profile without refetching statistics', async () => {
-    let resolveStatistics!: (value: AthleteStatisticsDetail) => void;
+    let resolveStatistics!: (value: AthleteDisciplineStatistics[]) => void;
     athleteApi.getAthlete.mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'offline')).mockResolvedValueOnce(athlete());
-    statisticsApi.getAthleteStatistics.mockReturnValue(new Promise((resolve) => { resolveStatistics = resolve; }));
+    statisticsApi.getAthleteDisciplineStatistics.mockReturnValue(new Promise((resolve) => { resolveStatistics = resolve; }));
     const user = userEvent.setup();
     renderDetail();
 
-    expect(screen.getByText('Loading performance statistics...')).toBeInTheDocument();
+    expect(screen.getByText('Loading discipline statistics...')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Athlete performance' }).closest('section')).toHaveAttribute('aria-busy', 'true');
     expect(await screen.findByText('Profile unavailable')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry profile' }));
     expect(await screen.findByText('29 Feb 2004')).toBeInTheDocument();
-    expect(statisticsApi.getAthleteStatistics).toHaveBeenCalledOnce();
-    await act(async () => resolveStatistics(statistics()));
+    expect(statisticsApi.getAthleteDisciplineStatistics).toHaveBeenCalledOnce();
+    await act(async () => resolveStatistics([]));
     expect(await screen.findByText('No competition results yet.')).toBeInTheDocument();
   });
 
   it('edits the profile with the shared form and updates displayed data', async () => {
-    const updated = athlete({ name: 'Ari Updated', squads: [squad(ELITE_ID, 'Elite')], notes: null, updatedAt: '2026-08-17T12:00:00.000Z' });
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    const updated = athlete({ name: 'Ari Updated', notes: null, preferredDisciplineIds: [SPRINT_ID, ELITE_ID], updatedAt: '2026-08-17T12:00:00.000Z' });
     athleteApi.updateAthlete.mockResolvedValue(updated);
     const user = userEvent.setup();
     const { onAthleteUpdated } = renderDetail();
@@ -320,16 +348,16 @@ describe('AthleteDetailPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Edit athlete' });
     await user.clear(within(dialog).getByLabelText('Athlete name'));
     await user.type(within(dialog).getByLabelText('Athlete name'), 'Ari Updated');
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Sprint A' }));
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Elite' }));
+    await user.click(await within(dialog).findByRole('checkbox', { name: /100m/ }));
+    await user.click(within(dialog).getByRole('checkbox', { name: /Long jump/ }));
     await user.clear(within(dialog).getByLabelText(/coach notes/i));
     await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(athleteApi.updateAthlete).toHaveBeenCalledWith(ATHLETE_ID, {
-      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [ELITE_ID], notes: null, preferredDisciplineIds: [], seasonGoals: [],
+      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [SPRINT_ID], notes: null, preferredDisciplineIds: [SPRINT_ID, ELITE_ID], seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
-    expect(screen.getAllByText('Elite')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Disciplines' })).toHaveTextContent('100mLong jump');
     expect(onAthleteUpdated).toHaveBeenCalledWith(updated);
   });
 });
