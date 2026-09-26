@@ -9,6 +9,7 @@ import {
   updatePublicLoggerEntry,
 } from '../../api/publicLoggers';
 import { getCachedPublicSnapshot, cachePublicSnapshot } from '../../offline/publicEventCache';
+import { purgePublicOfflineDB } from '../../offline/publicDb';
 import { usePublicOfflineSync } from '../../hooks/usePublicOfflineSync';
 import type { IncidentType, PublicLoggerSnapshot } from '../../types';
 import { Button, Input, Modal, OfflineRecoverySurface } from '../../components';
@@ -68,7 +69,8 @@ export function PublicLoggerPage() {
       setSnapshot(fresh);
       await cachePublicSnapshot(eventId, fresh as unknown as Record<string, unknown>, sessionToken);
       setCacheFreshness(Date.now());
-    } catch {
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === 'PUBLIC_LOGGER_SESSION_INVALID') throw reason;
       const cached = await getCachedPublicSnapshot(eventId, sessionToken);
       if (cached) {
         setSnapshot(cached.snapshot as unknown as PublicLoggerSnapshot);
@@ -91,16 +93,18 @@ export function PublicLoggerPage() {
 
   useEffect(() => {
     if (offlineSync.sessionExpired) {
+      if (session) void purgePublicOfflineDB(session);
       clearSession(keys);
       setSession(null);
       setSnapshot(null);
       offlineSync.clearSessionExpired();
       setError('Your session has expired. Please open the logger link again.');
     }
-  }, [offlineSync.sessionExpired, keys, offlineSync.clearSessionExpired]);
+  }, [offlineSync.sessionExpired, keys, offlineSync.clearSessionExpired, session]);
 
   const handleError = (requestError: unknown, fallback: string) => {
     if (requestError instanceof ApiError && requestError.code === 'PUBLIC_LOGGER_SESSION_INVALID') {
+      if (session) void purgePublicOfflineDB(session);
       clearSession(keys); setSession(null); setSnapshot(null);
     }
     setError(requestError instanceof Error ? requestError.message : fallback);

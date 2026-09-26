@@ -194,6 +194,14 @@ For public logger. Same interface. Also provides `cacheSnapshot` for persisting 
 
 Opened multi-discipline sessions are cached with their catalogue, entrants, entries, and results. If the selected session cannot be read while offline, the logger restores that cache and shows its freshness timestamp.
 
+## Multi-device Reconciliation
+
+Concurrent creates are independent observations and are never discarded. Stale authenticated edits are rejected, while public logger edits retain their last-write-wins behaviour. Both paths retain immutable conflict evidence containing the device, actor or public session, action ID, attempted payload, expected/canonical version, and source timestamps.
+
+Coaches can read `GET /api/v1/events/:eventId/sessions/:sessionId/resolution` to review session-scoped conflicts and audit history. A coach acknowledges a conflict through `POST /api/v1/events/:eventId/sessions/:sessionId/conflicts/:conflictId/resolve` with a reason, then uses the normal official-entry selection control. A session cannot be finalized while it has unresolved offline conflicts. This preserves every source observation and keeps the existing result rules as the sole finalization authority.
+
+Public logger expiry or link revocation purges the token-scoped IndexedDB database when the browser next learns of invalidation. Public logger API routes are network-only in the service worker, so a revoked session cannot render a shared stale response. An offline browser cannot learn about revocation until it reconnects.
+
 ## Service Worker
 
 Configured via `vite-plugin-pwa`, the service worker caches:

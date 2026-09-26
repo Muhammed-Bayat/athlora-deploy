@@ -67,6 +67,26 @@ export interface EntrantUpdateInput { name?: string; memberIds?: string[] }
 export interface SessionSelectionInput { entryId: string | null; expectedVersion: number }
 export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
 export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }
+export interface OfflineResolutionConflict {
+  id: string;
+  entryId: string | null;
+  entrantId: string | null;
+  deviceId: string;
+  actionId: string;
+  actionType: string;
+  expectedVersion: number | null;
+  actualVersion: number | null;
+  attemptedPayload: Record<string, unknown>;
+  canonicalState: Record<string, unknown> | null;
+  clientTimestamp: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionReason: string | null;
+}
+export interface SessionResolution {
+  conflicts: OfflineResolutionConflict[];
+  audit: Array<{ id: string; entityType: string; entityId: string; action: string; actorId: string | null; publicLoggerSessionId: string | null; beforeState: unknown; afterState: unknown; createdAt: string }>;
+}
 export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
 
 export interface PublicMeetEntrant {

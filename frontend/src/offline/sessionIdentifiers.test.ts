@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getOfflineDB, resetOfflineDB } from './db';
-import { getPublicOfflineDB, resetPublicOfflineDB } from './publicDb';
+import { getPublicOfflineDB, purgePublicOfflineDB, resetPublicOfflineDB } from './publicDb';
 import { enqueueAction, getPendingActions } from './actionQueue';
 import { enqueuePublicAction, getPendingPublicActions } from './publicActionQueue';
 import { cacheSession, getCachedSession, cachePublicSession, getCachedPublicSession } from './sessionCache';
@@ -51,5 +51,12 @@ describe('session-aware offline storage', () => {
     await cachePublicSession(token, eventId, target.disciplineSessionId, { entries: [] });
     expect((await getCachedPublicSession(token, eventId, target.disciplineSessionId))?.snapshot).toEqual({ entries: [] });
     expect(await getCachedPublicSession(token, eventId, eventId)).toBeUndefined();
+  });
+  it('purges every token-scoped public record after session invalidation', async () => {
+    await enqueuePublicAction({ eventId, actionType: 'create_entry', payload: {}, deviceId: 'device' }, token);
+    await cachePublicSession(token, eventId, target.disciplineSessionId, { entries: [] });
+    await purgePublicOfflineDB(token);
+    expect(await getPendingPublicActions(eventId, token)).toEqual([]);
+    expect(await getCachedPublicSession(token, eventId, target.disciplineSessionId)).toBeUndefined();
   });
 });

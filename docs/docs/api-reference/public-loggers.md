@@ -57,7 +57,7 @@ Returns all links (active and revoked) for the event, ordered by creation date.
 DELETE /events/:eventId/public-loggers/:linkId
 ```
 
-Sets the link status to `revoked`. Existing sessions lose access immediately.
+Sets the link status to `revoked`. Existing sessions lose access immediately. The next online client response also removes that session's token-scoped offline queue and cached snapshots. A device that remains offline retains local data until it reconnects, but cannot submit it after revocation.
 
 ## Public Endpoints (Unauthenticated)
 
