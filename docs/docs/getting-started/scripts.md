@@ -141,9 +141,9 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 ### Event discipline selection and roster tabs — 2026-09-26
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **688 tests pass, 0 skip**. Coverage includes grouped multi-discipline selection cards, disabled vertical choices pending height configuration, keyboard session-tab navigation, session-specific roster display, and existing 100m regression behavior.
-- Backend: lint, strict typecheck, and production build pass; **707 tests pass, 70 database-gated tests skip**. Coverage includes session-specific RSVP replacement and the associated migration-backed service regression when `TEST_DATABASE_URL` is configured.
+- Backend: lint, strict typecheck, and production build pass; **706 tests pass, 69 database-gated tests skip**. Existing participant RSVP coverage applies to multi-discipline rosters without a schema or API change.
 - Documentation: Docusaurus typecheck and production build pass after product-status, frontend behavior, and verification updates.
-- E2E: not run; this change updates the authenticated session-roster API and schema, but has no credential-configured E2E coverage in this workspace.
+- E2E: not run; this change is frontend-only and does not alter the authenticated API or schema contract.
 
 ### Whole-meet public logger — 2026-09-25
 

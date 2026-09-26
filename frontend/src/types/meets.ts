@@ -1,4 +1,4 @@
-import type { EntryType, EventStatus, IncidentType, ResultOutcome, RsvpStatus } from './index';
+import type { EntryType, EventStatus, IncidentType, ResultOutcome } from './index';
 
 export interface SessionTarget { disciplineSessionId: string; entrantId: string }
 export interface DisciplineDefinition {
@@ -32,7 +32,7 @@ export interface MeetEntrant {
 }
 export interface SessionRegistration extends SessionTarget {
   id: string; eventId: string; workspaceId: string; withdrawnAt: string | null;
-  withdrawnBy: string | null; rsvpStatus: RsvpStatus; rsvpUpdatedAt: string; rsvpUpdatedBy: string | null; createdBy: string; createdAt: string;
+  withdrawnBy: string | null; createdBy: string; createdAt: string;
 }
 export interface SessionEntryInput {
   verticalState?: 'clearance' | 'failure' | 'pass' | 'void' | null;

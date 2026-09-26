@@ -14,7 +14,6 @@ router.post('/:eventId/entrants', requireCoach(), meets.createEntrant);
 router.patch('/:eventId/entrants/:entrantId', requireCoach(), meets.updateEntrant);
 router.get('/:eventId/sessions/:disciplineSessionId/entrants', meets.registrations);
 router.post('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId', requireCoach(), meets.registerEntrant);
-router.patch('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId', requireCoach(), meets.updateRegistrationRsvp);
 router.delete('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId', requireCoach(), meets.withdrawEntrant);
 router.get('/:eventId/sessions/:disciplineSessionId/entries', meets.entries);
 router.post('/:eventId/sessions/:disciplineSessionId/entrants/:entrantId/entries', requireOperationalAccess(), meets.createEntry);

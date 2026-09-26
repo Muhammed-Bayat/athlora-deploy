@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../../types';
 import { MeetRosterPanel } from './MeetRosterPanel';
 
-const api = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), createEntrant: vi.fn(), updateEntrant: vi.fn(), registerEntrant: vi.fn(), withdrawEntrant: vi.fn(), updateRegistrationRsvp: vi.fn(), changeSessionState: vi.fn() }));
+const api = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), createEntrant: vi.fn(), updateEntrant: vi.fn(), registerEntrant: vi.fn(), withdrawEntrant: vi.fn(), changeSessionState: vi.fn() }));
 const athletes = vi.hoisted(() => ({ listAthletes: vi.fn() }));
+const participants = vi.hoisted(() => ({ listEventParticipants: vi.fn(), addEventParticipant: vi.fn(), updateEventParticipant: vi.fn() }));
 vi.mock('../../api/meets', () => api);
 vi.mock('../../api/athletes', () => athletes);
+vi.mock('../../api/participants', () => participants);
 
 const event: AthleticsEvent = { id: 'event-1', createdBy: 'coach-1', type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
 
@@ -35,13 +37,14 @@ describe('MeetRosterPanel', () => {
       { id: 'team', kind: 'relay', athleteId: null, name: 'Blue relay', clubName: null, details: null, memberIds: ['athlete-entrant'] },
     ] });
     api.listRegistrations.mockImplementation(async (_eventId: string, sessionId: string) => ({ data: sessionId === 'session-track'
-      ? [{ id: 'track-registration', disciplineSessionId: 'session-track', entrantId: 'athlete-entrant', rsvpStatus: 'pending', withdrawnAt: null }]
-      : [{ id: 'relay-registration', disciplineSessionId: 'session-relay', entrantId: 'team', rsvpStatus: 'yes', withdrawnAt: null }],
+      ? [{ id: 'track-registration', disciplineSessionId: 'session-track', entrantId: 'athlete-entrant', withdrawnAt: null }]
+      : [{ id: 'relay-registration', disciplineSessionId: 'session-relay', entrantId: 'team', withdrawnAt: null }],
     }));
     athletes.listAthletes.mockResolvedValue({ data: [
       { id: 'athlete', name: 'Ari Runner', status: 'active', squads: [] },
       { id: 'athlete-2', name: 'Bea Runner', status: 'active', squads: [] },
     ] });
+    participants.listEventParticipants.mockResolvedValue({ data: [{ athleteId: 'athlete', rsvpStatus: 'pending' }] });
   });
 
   it('uses session tabs with the familiar roster rows and RSVP controls', async () => {
@@ -57,9 +60,7 @@ describe('MeetRosterPanel', () => {
     expect(screen.getByText('Pending 1 · Yes 0 · No 0 · Maybe 0')).toBeInTheDocument();
 
     await selectThemedOption(user, 'RSVP for Ari Runner', 'Attending');
-    await waitFor(() => expect(api.updateRegistrationRsvp).toHaveBeenCalledWith('event-1', {
-      disciplineSessionId: 'session-track', entrantId: 'athlete-entrant',
-    }, 'yes'));
+    await waitFor(() => expect(participants.updateEventParticipant).toHaveBeenCalledWith('event-1', 'athlete', 'yes'));
 
     await user.click(screen.getByRole('button', { name: 'Remove Ari Runner from session' }));
     await waitFor(() => expect(api.withdrawEntrant).toHaveBeenCalledWith('event-1', {
