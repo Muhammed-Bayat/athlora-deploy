@@ -16,10 +16,9 @@ import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { GeminiMicrophone } from '../../api/geminiMicrophone';
 import { Button, Card, EmptyState, Modal, SeasonSelector, Select, Toast } from '../../components';
 import { useSeasonQueryState } from '../../utils/season';
-import type { Athlete, AthleteMutationPayload, AthleteStatus, Squad } from '../../types';
+import type { Athlete, AthleteMutationPayload, AthleteStatus } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
 import { listAthleteInjurySummaries } from '../../api/injuries';
-import { listSquads } from '../../api/squads';
 import { listDisciplines } from '../../api/meets';
 import type { DisciplineDefinition } from '../../types/meets';
 import { CompactAnatomy } from '../fitness/CompactAnatomy';
@@ -83,8 +82,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const [squadId, setSquadId] = useState('');
-  const [squads, setSquads] = useState<Squad[]>([]);
+  const [disciplineId, setDisciplineId] = useState('');
   const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [editor, setEditor] = useState<Editor>(null);
@@ -158,7 +156,6 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
       .finally(() => { if (current) setInjuryLoading(false); });
     return () => { current = false; };
   }, [injuryReload, reloadKey]);
-  useEffect(() => { void listSquads(true).then(({ data }) => setSquads(data)).catch(() => setSquads([])); }, [reloadKey]);
   useEffect(() => { void listDisciplines().then(({ data }) => setDisciplines(data)).catch(() => setDisciplines([])); }, []);
 
   useEffect(() => {
@@ -200,10 +197,10 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
   const visible = athletes.filter((athlete) => {
     const statusMatches = statusFilter === 'all' || athlete.status === statusFilter;
     const queryMatches = !activeQuery || athlete.name.toLowerCase().includes(activeQuery);
-    const squadMatches = !squadId || athlete.squads?.some((squad) => squad.id === squadId);
-    return statusMatches && queryMatches && squadMatches;
+    const disciplineMatches = !disciplineId || athlete.preferredDisciplineIds.includes(disciplineId);
+    return statusMatches && queryMatches && disciplineMatches;
   });
-  const hasFilters = Boolean(query || squadId || statusFilter !== 'active');
+  const hasFilters = Boolean(query || disciplineId || statusFilter !== 'active');
   const statusCounts = {
     active: athletes.filter((athlete) => athlete.status === 'active').length,
     inactive: athletes.filter((athlete) => athlete.status === 'inactive').length,
@@ -267,7 +264,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
 
   const clearFilters = () => {
     setQuery('');
-    setSquadId('');
+    setDisciplineId('');
     setStatusFilter('active');
   };
 
@@ -723,14 +720,15 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
             <span className={styles.srOnly}>Search athletes by name</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search athletes..." />
           </label>
-          <label className={styles.srOnly} htmlFor="squad-filter">Filter by squad</label>
+          <label className={styles.srOnly} htmlFor="discipline-filter">Filter by discipline</label>
           <SeasonSelector value={season} onChange={setSeason} />
           <Select
-            id="squad-filter"
-            icon="squad"
-            value={squadId}
-            onChange={(event) => setSquadId(event.target.value)}
-            options={[{ value: '', label: 'All squads' }, ...squads.map((squad) => ({ value: squad.id, label: `${squad.name}${squad.archivedAt ? ' (archived)' : ''}` }))]}
+            id="discipline-filter"
+            value={disciplineId}
+            onChange={(event) => setDisciplineId(event.target.value)}
+            searchable
+            searchPlaceholder="Find a discipline"
+            options={[{ value: '', label: 'All disciplines' }, ...disciplines.map((discipline) => ({ value: discipline.id, label: discipline.presentation.label }))]}
           />
           <label className={styles.srOnly} htmlFor="status-filter">Filter by roster status</label>
           <Select
@@ -787,11 +785,11 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
         <div className={styles.emptyPanel}>
           <EmptyState
             title={
-                !query && !squadId && statusFilter === 'active'
+                !query && !disciplineId && statusFilter === 'active'
                 ? 'No active athletes'
-                  : !query && !squadId && statusFilter === 'inactive'
+                  : !query && !disciplineId && statusFilter === 'inactive'
                    ? 'No inactive athletes'
-                  : !query && !squadId && statusFilter === 'archived'
+                  : !query && !disciplineId && statusFilter === 'archived'
                   ? 'No archived athletes'
                   : 'No athletes match your filters'
             }
@@ -812,10 +810,9 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
                 </span>
                </div>
                <h2>{athlete.name}</h2>
-               <p className={styles.disciplines}>{athlete.preferredDisciplineIds.length > 0
-                 ? athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ')
-                 : 'No disciplines selected'}</p>
-                {athlete.squads?.length ? <p className={styles.squad}>Squads: {athlete.squads.map((squad) => squad.name).join(', ')}</p> : null}
+                <p className={styles.disciplines}>{athlete.preferredDisciplineIds.length > 0
+                  ? athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ')
+                  : 'No disciplines selected'}</p>
               <dl className={styles.details}>
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>
                 <div><dt>Gender category</dt><dd>{athlete.gender ?? 'Not recorded'}</dd></div>

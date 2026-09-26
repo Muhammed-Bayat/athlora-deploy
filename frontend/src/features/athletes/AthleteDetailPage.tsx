@@ -302,7 +302,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     return <Suspense fallback={<section className={styles.detail}><p role="status">Loading Fitness...</p></section>}><FitnessView
       athleteId={athleteId}
       athleteName={displayName}
-      athleteSquad={athlete?.squads?.map((squad) => squad.name).join(', ') || statistics?.athlete.squadNames?.join(', ') || null}
+      athleteFocus={disciplineLabels.join(', ') || null}
       athleteStatus={athlete?.status ?? 'active'}
       canOperate
       onBack={() => setFitnessOpen(false)}
@@ -398,11 +398,10 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
           <dl className={styles.profileDetails}>
             <div><dt>Date of birth</dt><dd>{formatDateOnly(athlete.dob)}</dd></div>
             <div><dt>Current age</dt><dd>{age === null ? 'Not provided' : `${age} years`}</dd></div>
-             <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
-              <div><dt>Squads</dt><dd>{athlete.squads?.map((squad) => squad.name).join(', ') || 'Not provided'}</dd></div>
-             <div><dt>Status changed</dt><dd><time dateTime={athlete.statusChangedAt}>{new Date(athlete.statusChangedAt).toLocaleDateString()}</time></dd></div>
-             <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
-             <div className={styles.notes}><dt>Preferred disciplines</dt><dd>{athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ') || 'Not provided'}</dd></div>
+              <div><dt>Gender</dt><dd>{athlete.gender ?? 'Not provided'}</dd></div>
+              <div><dt>Status changed</dt><dd><time dateTime={athlete.statusChangedAt}>{new Date(athlete.statusChangedAt).toLocaleDateString()}</time></dd></div>
+              <div className={styles.notes}><dt>Notes</dt><dd>{athlete.notes ?? 'Not provided'}</dd></div>
+              <div className={styles.notes}><dt>Discipline groups</dt><dd>{disciplineLabels.join(', ') || 'Not provided'}</dd></div>
            </dl>
         )}
        </Card>

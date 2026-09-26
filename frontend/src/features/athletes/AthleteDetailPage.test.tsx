@@ -144,7 +144,7 @@ describe('AthleteDetailPage', () => {
     athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID, ELITE_ID], seasonGoals: [{ id: '55555555-5555-4555-8555-555555555555', disciplineDefinitionId: SPRINT_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'completed', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }] }));
     renderDetail();
 
-    expect(await screen.findByText('Preferred disciplines')).toBeInTheDocument();
+    expect(await screen.findByText('Discipline groups')).toBeInTheDocument();
     expect(screen.getAllByText('100m, Long jump')).toHaveLength(1);
     expect(screen.getByRole('list', { name: 'Disciplines' })).toHaveTextContent('100mLong jump');
     expect(within(screen.getByRole('tablist', { name: 'Result history discipline' })).getByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
@@ -209,7 +209,7 @@ describe('AthleteDetailPage', () => {
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Not provided')).toHaveLength(7);
+    expect(screen.getAllByText('Not provided')).toHaveLength(6);
   });
 
   it('labels valid, PB, SB, override, cancelled, and raw result context', async () => {

@@ -155,8 +155,8 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
 
        <fieldset className={styles.disciplinePanel} disabled={submitting} aria-describedby={errors.preferredDisciplineIds ? 'athlete-disciplines-error' : 'athlete-disciplines-help'}>
          <legend>Disciplines <span>Choose one or more</span></legend>
-         <div className={styles.disciplineHeader}>
-           <p id="athlete-disciplines-help">Select every discipline this athlete trains or competes in.</p>
+          <div className={styles.disciplineHeader}>
+            <p id="athlete-disciplines-help">Select every discipline this athlete trains or competes in. These selections automatically organize the athlete in the roster.</p>
            <span className={styles.selectionCount}>{draft.preferredDisciplineIds.length} selected</span>
          </div>
          {disciplinesLoading ? <p className={styles.catalogueStatus} role="status">Loading disciplines...</p> : null}

@@ -178,13 +178,6 @@
   font-weight: var(--font-weight-bold);
 }
 
-.squad {
-  margin: calc(var(--space-4) * -1) 0 var(--space-4);
-  color: var(--console-faint);
-  font-size: 0.68rem;
-  letter-spacing: 0.03em;
-}
-
 .details {
   display: grid;
   gap: var(--space-2);

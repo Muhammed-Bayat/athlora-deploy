@@ -15,7 +15,6 @@ const athleteApi = vi.hoisted(() => ({
   unarchiveAthlete: vi.fn(),
 }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteDisciplineStatistics: vi.fn(), getAthleteProgression: vi.fn() }));
-const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listAthleteInjurySummaries: vi.fn(), listInjuries: vi.fn() }));
 const geminiApi = vi.hoisted(() => ({
@@ -30,7 +29,6 @@ const geminiApi = vi.hoisted(() => ({
 
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
-vi.mock('../../api/squads', () => squadsApi);
 vi.mock('../../api/meets', () => meetsApi);
 vi.mock('../../api/injuries', () => injuriesApi);
 vi.mock('../../api/ai', () => ({ createGeminiToken: geminiApi.createGeminiToken }));
@@ -118,7 +116,6 @@ const archivedBea = athlete({
 });
 
 beforeEach(() => {
-  squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(DEVELOPMENT_ID, 'Development')], meta: { count: 2 } });
   meetsApi.listDisciplines.mockResolvedValue({ data: [discipline(ONE_HUNDRED_ID, '100m', '100m', 'track', 'seconds'), discipline(LONG_JUMP_ID, 'long_jump', 'Long jump', 'field', 'metres')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.listAthletes.mockResolvedValue({ data: [ari, bea], meta: { count: 2 } });
@@ -153,7 +150,7 @@ describe('AthletesPage', () => {
 
     expect(await screen.findByText('100m, Long jump')).toBeInTheDocument();
     expect(screen.getByText('No disciplines selected')).toBeInTheDocument();
-    expect(screen.getByText('Squads: Sprint A')).toBeInTheDocument();
+    expect(screen.queryByText('Squads: Sprint A')).not.toBeInTheDocument();
   });
 
   it('opens Athlora AI from the search controls and sends typed messages in its dialog', async () => {
@@ -311,7 +308,6 @@ describe('AthletesPage', () => {
     expect(screen.getByRole('button', { name: 'Add athlete' })).toBeDisabled();
     resolveList({ data: [ari], meta: { count: 1 } });
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('Athlete roster')).getByText('Squads: Sprint A')).toBeInTheDocument();
     expect(screen.queryByText(/personal best/i)).not.toBeInTheDocument();
     expect(athleteApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
   });
@@ -360,9 +356,9 @@ describe('AthletesPage', () => {
     expect(screen.getByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
   });
 
-  it('filters the loaded roster by name, squad, and archive state', async () => {
+  it('filters the loaded roster by name, discipline, and archive state', async () => {
     athleteApi.listAthletes.mockResolvedValueOnce({
-      data: [ari, archivedBea],
+      data: [athlete({ preferredDisciplineIds: [ONE_HUNDRED_ID, LONG_JUMP_ID] }), athlete({ ...archivedBea, preferredDisciplineIds: [LONG_JUMP_ID] })],
       meta: { count: 2 },
     });
     const user = userEvent.setup();
@@ -371,8 +367,10 @@ describe('AthletesPage', () => {
 
     await user.selectOptions(screen.getByLabelText('Filter by roster status'), 'all');
     expect(screen.getByRole('heading', { name: 'Bea Fast' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Filter by squad'), DEVELOPMENT_ID);
-    expect(screen.queryByRole('heading', { name: 'Ari Runner' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'All disciplines' }));
+    expect(screen.getByRole('option', { name: '100m' })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: 'Long jump' }));
+    expect(screen.getByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
     await user.clear(screen.getByRole('textbox', { name: 'Search athletes by name' }));
     await user.type(screen.getByRole('textbox', { name: 'Search athletes by name' }), 'bea');
     expect(screen.getByRole('heading', { name: 'Bea Fast' })).toBeInTheDocument();
@@ -401,6 +399,7 @@ describe('AthletesPage', () => {
     await user.click(await within(dialog).findByRole('checkbox', { name: /100m/ }));
     await user.click(within(dialog).getByRole('checkbox', { name: /Long jump/ }));
     expect(within(dialog).getByText('2 selected')).toBeInTheDocument();
+    expect(within(dialog).getByText(/automatically organize the athlete in the roster/i)).toBeInTheDocument();
     expect(within(dialog).queryByText(/season goals/i)).not.toBeInTheDocument();
     await user.type(within(dialog).getByLabelText(/coach notes/i), '  Acceleration block  ');
     await user.click(within(dialog).getByRole('button', { name: 'Add athlete' }));
