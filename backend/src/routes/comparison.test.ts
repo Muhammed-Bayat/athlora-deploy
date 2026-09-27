@@ -67,6 +67,7 @@ describe('comparison API route', () => {
           consistency: 0.12,
           improvement: 0.30,
           progression: [],
+          disciplines: [],
         },
         {
           athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', squadNames: [], archivedAt: null },
@@ -79,8 +80,10 @@ describe('comparison API route', () => {
           consistency: null,
           improvement: null,
           progression: [],
+          disciplines: [],
         },
       ],
+      availableDisciplines: [],
     };
 
     query.mockResolvedValueOnce(synchronizedUser());
@@ -116,13 +119,16 @@ describe('comparison API route', () => {
           athlete: { id: ATHLETE_1_ID, name: 'Athlete One', squadNames: [], archivedAt: null },
           pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
           totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+          disciplines: [],
         },
         {
           athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', squadNames: [], archivedAt: null },
           pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
           totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+          disciplines: [],
         },
       ],
+      availableDisciplines: [],
     };
     query.mockResolvedValueOnce(synchronizedUser());
     vi.mocked(getCrossClubAthleteComparison).mockResolvedValue(comparison);
@@ -156,7 +162,7 @@ describe('comparison API route', () => {
   });
 
   it('returns a multi-athlete comparison for repeated athleteId parameters', async () => {
-    const comparison = { athletes: [] };
+    const comparison = { athletes: [], availableDisciplines: [] };
     query.mockResolvedValueOnce(synchronizedUser());
     vi.mocked(getMultiAthleteComparison).mockResolvedValue(comparison);
 
@@ -171,7 +177,7 @@ describe('comparison API route', () => {
 
   it('uses cross-club scope for multi-athlete comparisons', async () => {
     query.mockResolvedValueOnce(synchronizedUser());
-    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [] });
+    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [], availableDisciplines: [] });
 
     const response = await request(app)
       .get(`/api/v1/athletes/comparison/multi?athleteId=${ATHLETE_1_ID}&athleteId=${ATHLETE_2_ID}&scope=cross-club`)
@@ -183,7 +189,7 @@ describe('comparison API route', () => {
 
   it('forwards all-time season scope to cross-club multi-athlete comparisons', async () => {
     query.mockResolvedValueOnce(synchronizedUser());
-    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [] });
+    vi.mocked(getCrossClubMultiAthleteComparison).mockResolvedValue({ athletes: [], availableDisciplines: [] });
 
     const response = await request(app)
       .get(`/api/v1/athletes/comparison/multi?athleteId=${ATHLETE_1_ID}&athleteId=${ATHLETE_2_ID}&scope=cross-club&year=all`)

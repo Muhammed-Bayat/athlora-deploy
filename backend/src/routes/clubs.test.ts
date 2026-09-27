@@ -88,6 +88,7 @@ describe('club routes', () => {
       averageValidTime: null,
       medianValidTime: null,
       populationStandardDeviation: null,
+      availableDisciplines: [],
     });
     vi.mocked(clubService.getClubComparison).mockResolvedValue({ clubs: [
       {
@@ -101,6 +102,7 @@ describe('club routes', () => {
         averageValidTime: null,
         medianValidTime: null,
         populationStandardDeviation: null,
+        availableDisciplines: [],
       },
       {
         club: { id: REQUEST_ID, name: 'Rivals' },
@@ -113,6 +115,7 @@ describe('club routes', () => {
         averageValidTime: null,
         medianValidTime: null,
         populationStandardDeviation: null,
+        availableDisciplines: [],
       },
     ] });
     vi.mocked(clubService.getClubMultiComparison).mockResolvedValue({ clubs: [] });

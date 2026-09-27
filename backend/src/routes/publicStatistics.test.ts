@@ -37,7 +37,7 @@ describe('public statistics routes', () => {
       averageValidTime: 11.4,
       medianValidTime: 11.35,
       populationStandardDeviation: 0.18,
-      athletes: [{ athlete: { id: '44444444-4444-4444-8444-444444444444', name: 'Ari Runner' }, pb: 10.91, latestEffectiveResult: 11.02, validResultCount: 3, totalResultCount: 3, average: 11.1, consistency: 0.13, improvement: 0.24 }],
+      athletes: [{ athlete: { id: '44444444-4444-4444-8444-444444444444', name: 'Ari Runner' }, pb: 10.91, latestEffectiveResult: 11.02, validResultCount: 3, totalResultCount: 3, average: 11.1, consistency: 0.13, improvement: 0.24, disciplines: [] }], availableDisciplines: [],
     });
 
     const response = await request(app).get(`/api/v1/public/statistics/clubs/${CLUB_ID}`);

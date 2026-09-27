@@ -76,7 +76,7 @@ export function Select({
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedSearch));
   }, [options, search, searchable]);
-  const scrollableOptions = searchable && visibleOptions.length > 6;
+  const scrollableOptions = visibleOptions.length > 6;
 
   if (variant === 'field') {
     return (

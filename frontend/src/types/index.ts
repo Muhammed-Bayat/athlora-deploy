@@ -169,6 +169,23 @@ export interface ClubStatistics {
   averageValidTime: number | null;
   medianValidTime: number | null;
   populationStandardDeviation: number | null;
+  availableDisciplines?: PublicDiscipline[];
+  disciplines?: ClubDisciplineStatistics[];
+}
+
+export interface ClubDisciplineStatistics extends PublicDiscipline {
+  rosterAthleteCount: number;
+  activeAthleteCount: number;
+  inactiveAthleteCount: number;
+  archivedAthleteCount: number;
+  distinctAthletesWithValidResults: number;
+  totalResultCount: number;
+  validResultCount: number;
+  fastestValidResult: number | null;
+  latestValidResult: number | null;
+  averageValidResult: number | null;
+  medianValidResult: number | null;
+  populationStandardDeviation: number | null;
 }
 
 export interface ClubComparisonDetail {
@@ -216,10 +233,35 @@ export interface PublicAthleteStatistics {
   average: number | null;
   consistency: number | null;
   improvement: number | null;
+  disciplines?: PublicAthleteDisciplineStatistics[];
+}
+
+export interface PublicAthleteDisciplineStatistics {
+  discipline: string;
+  label: string;
+  unit: 'seconds' | 'metres' | 'cm';
+  precision: number;
+  direction: 'lower' | 'higher';
+  pb: number | null;
+  latestEffectiveResult: number | null;
+  validResultCount: number;
+  average: number | null;
+  consistency: number | null;
+  improvement: number | null;
+  progression: PublicAthleteComparisonEntry[];
 }
 
 export interface PublicClubStatistics extends ClubStatistics {
   athletes: PublicAthleteStatistics[];
+  availableDisciplines?: PublicDiscipline[];
+}
+
+export interface PublicDiscipline {
+  discipline: string;
+  label: string;
+  unit: 'seconds' | 'metres' | 'cm';
+  precision: number;
+  direction: 'lower' | 'higher';
 }
 
 export interface PublicAthleteComparisonEntry {
@@ -753,13 +795,16 @@ export interface ComparisonAthleteAggregate {
   consistency: number | null;
   improvement: number | null;
   progression: ProgressionEntry[];
+  disciplines?: PublicAthleteDisciplineStatistics[];
 }
 
 export interface ComparisonDetail {
   athletes: [ComparisonAthleteAggregate, ComparisonAthleteAggregate];
+  availableDisciplines?: PublicDiscipline[];
 }
 
 export interface MultiComparisonDetail {
   athletes: ComparisonAthleteAggregate[];
+  availableDisciplines?: PublicDiscipline[];
 }
 export type { SessionTarget, DisciplineDefinition, DisciplineSession, MeetEntrant, SessionRegistration, SessionEntry, SessionResult, SessionStatistics } from './meets';

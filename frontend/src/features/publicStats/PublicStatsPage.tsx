@@ -1,14 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../../api/publicStatistics';
 import { SeasonSelector, Select, ClubBadge } from '../../components';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
-import type { PublicAthleteComparison, PublicAthleteStatistics, PublicClub, PublicClubStatistics } from '../../types';
-import { format100mSeconds } from '../../utils/formatting';
-import { chartSeriesById } from '../../utils/chartSeries';
+import type { PublicAthleteComparison, PublicAthleteDisciplineStatistics, PublicAthleteStatistics, PublicClub, PublicClubStatistics, PublicDiscipline } from '../../types';
 import styles from './PublicStatsPage.module.css';
 
 const StaticTrack = lazy(() => import('./StaticTrack').then((module) => ({ default: module.StaticTrack })));
-const PublicSessionResults = lazy(() => import('./PublicSessionResults').then((module) => ({ default: module.PublicSessionResults })));
 
 type StatsMode = 'club' | 'club-comparison' | 'athlete-comparison';
 
@@ -18,8 +15,9 @@ const modeOptions: Array<{ value: StatsMode; label: string }> = [
   { value: 'athlete-comparison', label: 'Compare athletes' },
 ];
 
-function formatMetric(value: number | null) {
-  return value === null ? '-' : format100mSeconds(value);
+function formatDisciplineMetric(value: number | null, discipline: Pick<PublicAthleteDisciplineStatistics, 'precision' | 'unit'>): string {
+  if (value === null) return '-';
+  return `${value.toFixed(discipline.precision)} ${discipline.unit === 'seconds' ? 's' : discipline.unit === 'metres' ? 'm' : 'cm'}`;
 }
 
 function setTilt(event: PointerEvent<HTMLElement>) {
@@ -40,15 +38,8 @@ function resetTilt(event: PointerEvent<HTMLElement>) {
   event.currentTarget.style.setProperty('--glow-y', '50%');
 }
 
-function AthleteStatCard({ athlete, season }: { athlete: PublicAthleteStatistics; season: SeasonValue }) {
-  const metrics = [
-    ['PB', formatMetric(athlete.pb)],
-    ['Latest', formatMetric(athlete.latestEffectiveResult)],
-    ['Average', formatMetric(athlete.average)],
-    ['Consistency', formatMetric(athlete.consistency)],
-    ['Improvement', formatMetric(athlete.improvement)],
-    ['Results', String(athlete.validResultCount)],
-  ];
+function AthleteStatCard({ athlete, season, disciplineCode }: { athlete: PublicAthleteStatistics; season: SeasonValue; disciplineCode: string }) {
+  const disciplines = (athlete.disciplines ?? []).filter((discipline) => discipline.discipline === disciplineCode);
   const initials = athlete.athlete.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 
   return (
@@ -59,66 +50,81 @@ function AthleteStatCard({ athlete, season }: { athlete: PublicAthleteStatistics
         <img src="/WLogo.png" alt="" />
       </div>
       <div className={styles.athleteContent}>
-        <p className={styles.cardEyebrow}>100m athlete</p>
+        <p className={styles.cardEyebrow}>Published disciplines</p>
         <h3>{athlete.athlete.name}</h3>
-        <div className={styles.athleteMetrics} aria-label={`${athlete.athlete.name} ${seasonLabel(season).toLowerCase()} 100m metrics`}>
-          {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+        <div className={styles.athleteMetrics} aria-label={`${athlete.athlete.name} ${seasonLabel(season).toLowerCase()} discipline metrics`}>
+          {disciplines.length > 0 ? disciplines.map((discipline) => <div key={discipline.discipline}><span>{discipline.label}</span><strong>{formatDisciplineMetric(discipline.pb, discipline)}</strong><small>{discipline.validResultCount} result{discipline.validResultCount === 1 ? '' : 's'}</small></div>) : <div><span>No published disciplines</span><strong>-</strong></div>}
         </div>
       </div>
     </article>
   );
 }
 
-function PublicAthleteComparisonPanel({ comparison, season }: { comparison: PublicAthleteComparison; season: SeasonValue }) {
-  const [view, setView] = useState<'chart' | 'table'>('chart');
-  const [hoveredPoint, setHoveredPoint] = useState<{ athleteIndex: number; entry: { date: string; result: number } } | null>(null);
-  const seriesByAthleteId = useMemo(
-    () => chartSeriesById(comparison.athletes.map((athlete) => athlete.athlete.id)),
-    [comparison.athletes],
-  );
-  const points = comparison.athletes.flatMap((athlete) => athlete.progression.map((entry) => ({ ...entry, athleteId: athlete.athlete.id })));
+function PublicAllDisciplineComparisonPanel({ comparison, season, disciplines }: { comparison: PublicAthleteComparison; season: SeasonValue; disciplines: PublicDiscipline[] }) {
+  const [selectedCode, setSelectedCode] = useState('');
+  const [view, setView] = useState<'table' | 'graph'>('table');
+  const selected = disciplines.find((discipline) => discipline.discipline === selectedCode) ?? disciplines[0];
+
+  useEffect(() => { if (selected && selected.discipline !== selectedCode) setSelectedCode(selected.discipline); }, [selected, selectedCode]);
+
+  if (!selected) return <p className={styles.emptyState}>The selected clubs have no available disciplines for {seasonLabel(season).toLowerCase()}.</p>;
+  const rows = comparison.athletes.map((athlete) => ({ athlete, discipline: (athlete.disciplines ?? []).find((discipline) => discipline.discipline === selected.discipline) }));
+  const points = rows.flatMap(({ athlete, discipline }, athleteIndex) => (discipline?.progression ?? []).map((entry) => ({ ...entry, athlete, athleteIndex })));
   const dates = points.map((point) => new Date(`${point.date}T00:00:00Z`).getTime());
   const results = points.map((point) => point.result);
   const minDate = Math.min(...dates);
   const maxDate = Math.max(...dates);
   const minResult = Math.min(...results);
   const maxResult = Math.max(...results);
-  const resultPadding = Math.max((maxResult - minResult) * 0.12, 0.08);
-  const x = (date: string) => 58 + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * 618;
-  const y = (result: number) => 30 + ((result - (minResult - resultPadding)) / Math.max(maxResult - minResult + resultPadding * 2, 1)) * 236;
-  const rows: Array<{ label: string; value: (athlete: PublicAthleteComparison['athletes'][number]) => string }> = [
-    { label: 'Club', value: (athlete) => athlete.club.name },
-    { label: 'PB', value: (athlete) => formatMetric(athlete.pb) },
-    { label: 'Latest effective result', value: (athlete) => formatMetric(athlete.latestEffectiveResult) },
-    { label: 'Valid result count', value: (athlete) => String(athlete.validResultCount) },
-    { label: 'Average', value: (athlete) => formatMetric(athlete.average) },
-    { label: 'Consistency (SD)', value: (athlete) => formatMetric(athlete.consistency) },
-    { label: 'Improvement', value: (athlete) => formatMetric(athlete.improvement) },
-  ];
-
+  const colors = ['#8ae9f2', '#ffb86b', '#b2f58a', '#c9a7ff', '#ff9cbd'];
+  const x = (date: string) => 52 + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * 628;
+  const y = (result: number) => {
+    const ratio = (result - minResult) / Math.max(maxResult - minResult, 1);
+    return selected.direction === 'lower' ? 32 + ratio * 220 : 252 - ratio * 220;
+  };
   return <section className={styles.comparisonPanel} aria-label="Athlete comparison results">
-    <div className={styles.comparisonToolbar}><h2>{seasonLabel(season)} 100m comparison</h2><div><button type="button" onClick={() => setView('chart')} aria-pressed={view === 'chart'}>Chart</button><button type="button" onClick={() => setView('table')} aria-pressed={view === 'table'}>Table</button></div></div>
-    {view === 'chart' && (points.length === 0 ? <p className={styles.emptyState}>None of the selected athletes has a valid 100m result to chart.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 320" role="img" aria-label={`100m progression chart comparing ${comparison.athletes.map((athlete) => athlete.athlete.name).join(', ')}`}><line x1="58" y1="30" x2="58" y2="266" /><line x1="58" y1="266" x2="676" y2="266" />{comparison.athletes.map((athlete, athleteIndex) => {
-      const series = seriesByAthleteId.get(athlete.athlete.id)!;
-      return <g key={athlete.athlete.id}>{athlete.progression.length > 1 && <polyline data-series={series.label} data-series-color={series.color} points={athlete.progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: series.color, strokeDasharray: series.dashArray }} />}{athlete.progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: series.color }} tabIndex={0} role="img" aria-label={`${series.label}: ${athlete.athlete.name}, ${format100mSeconds(entry.result)} on ${entry.date}`} onPointerEnter={() => setHoveredPoint({ athleteIndex, entry })} onPointerLeave={() => setHoveredPoint(null)} onFocus={() => setHoveredPoint({ athleteIndex, entry })} onBlur={() => setHoveredPoint(null)}><title>{`${series.label}: ${athlete.athlete.name}: ${format100mSeconds(entry.result)} on ${entry.date}`}</title></circle>)}</g>;
-    })}{hoveredPoint && <g role="tooltip" className={styles.chartTooltip} transform={`translate(${Math.min(x(hoveredPoint.entry.date) + 12, 510)} ${Math.max(y(hoveredPoint.entry.result) - 44, 30)})`}><rect width="200" height="38" rx="6" /><text x="10" y="15">{`${seriesByAthleteId.get(comparison.athletes[hoveredPoint.athleteIndex].athlete.id)!.label}: ${comparison.athletes[hoveredPoint.athleteIndex].athlete.name}`}</text><text x="10" y="29">{`${hoveredPoint.entry.date} - ${format100mSeconds(hoveredPoint.entry.result)}`}</text></g>}</svg><div className={styles.chartLegend} role="list" aria-label="Chart legend">{comparison.athletes.map((athlete) => {
-      const series = seriesByAthleteId.get(athlete.athlete.id)!;
-      return <span key={athlete.athlete.id} role="listitem"><svg className={styles.legendMarker} viewBox="0 0 24 6" aria-hidden="true"><line x1="0" y1="3" x2="24" y2="3" style={{ stroke: series.color, strokeDasharray: series.dashArray }} /></svg>{athlete.athlete.name} <small>{`${series.label} · ${athlete.club.name}`}</small></span>;
-    })}</div></>)}
-    {view === 'table' && <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label="Public athlete comparison metrics"><thead><tr><th scope="col">Metric</th>{comparison.athletes.map((athlete) => <th key={athlete.athlete.id} scope="col">{athlete.athlete.name}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{comparison.athletes.map((athlete) => <td key={athlete.athlete.id}>{row.value(athlete)}</td>)}</tr>)}</tbody></table></div>}
+    <div className={styles.comparisonToolbar}><h2>{seasonLabel(season)} discipline comparison <span>{selected.label}</span></h2><div><button type="button" onClick={() => setView('table')} aria-pressed={view === 'table'}>Table</button><button type="button" onClick={() => setView('graph')} aria-pressed={view === 'graph'}>Graph</button></div></div>
+    <div className={styles.disciplineTabs} role="tablist" aria-label="Comparison discipline">
+      {disciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selected.discipline} onClick={() => setSelectedCode(discipline.discipline)}>{discipline.label}</button>)}
+    </div>
+    {view === 'table' ? <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label={`${selected.label} public athlete comparison`}><thead><tr><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">PB</th><th scope="col">Latest</th><th scope="col">Average</th><th scope="col">Results</th></tr></thead><tbody>{rows.map(({ athlete, discipline }) => <tr key={athlete.athlete.id}><th scope="row">{athlete.athlete.name}</th><td>{athlete.club.name}</td>{discipline ? <><td>{formatDisciplineMetric(discipline.pb, discipline)}</td><td>{formatDisciplineMetric(discipline.latestEffectiveResult, discipline)}</td><td>{formatDisciplineMetric(discipline.average, discipline)}</td><td>{discipline.validResultCount}</td></> : <td colSpan={4}>No published {selected.label} results</td>}</tr>)}</tbody></table></div> : points.length === 0 ? <p className={styles.emptyState}>No published {selected.label} results are available to graph.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 284" role="img" aria-label={`${selected.label} progression graph`}><line x1="52" y1="252" x2="680" y2="252" /><line x1="52" y1="32" x2="52" y2="252" />{rows.map(({ athlete, discipline }, athleteIndex) => { const progression = discipline?.progression ?? []; const color = colors[athleteIndex % colors.length]; return <g key={athlete.athlete.id}>{progression.length > 1 && <polyline points={progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: color }} />}{progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: color }}><title>{`${athlete.athlete.name}: ${formatDisciplineMetric(entry.result, selected)} on ${entry.date}`}</title></circle>)}</g>; })}</svg><div className={styles.chartLegend} role="list">{rows.map(({ athlete }, index) => <span key={athlete.athlete.id} role="listitem"><i style={{ backgroundColor: colors[index % colors.length] }} />{athlete.athlete.name}<small>{athlete.club.name}</small></span>)}</div></>}
   </section>;
 }
 
-function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics; season: SeasonValue }) {
+function PublicClubDisciplineComparisonPanel({ clubs, season, disciplines }: { clubs: PublicClubStatistics[]; season: SeasonValue; disciplines: PublicDiscipline[] }) {
+  const [selectedCode, setSelectedCode] = useState('');
+  const selected = disciplines.find((discipline) => discipline.discipline === selectedCode) ?? disciplines[0];
+
+  useEffect(() => { if (selected && selected.discipline !== selectedCode) setSelectedCode(selected.discipline); }, [selected, selectedCode]);
+  if (!selected) return <p className={styles.emptyState}>The selected clubs have no published discipline results for {seasonLabel(season).toLowerCase()}.</p>;
+  const rows = clubs.map((club) => {
+    const results = club.athletes.flatMap((athlete) => athlete.disciplines ?? []).filter((discipline) => discipline.discipline === selected.discipline);
+    const resultCount = results.reduce((total, discipline) => total + discipline.validResultCount, 0);
+    const pb = results.length === 0 ? null : selected.direction === 'lower' ? Math.min(...results.map((discipline) => discipline.pb ?? Infinity)) : Math.max(...results.map((discipline) => discipline.pb ?? -Infinity));
+    return { club, resultCount, athletes: results.length, pb: Number.isFinite(pb) ? pb : null };
+  });
+  return <section className={styles.comparisonPanel} aria-label="Club comparison results">
+    <div className={styles.comparisonToolbar}><h2>{seasonLabel(season)} club comparison <span>{selected.label}</span></h2></div>
+    <div className={styles.disciplineTabs} role="tablist" aria-label="Club comparison discipline">
+      {disciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selected.discipline} onClick={() => setSelectedCode(discipline.discipline)}>{discipline.label}</button>)}
+    </div>
+    <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label={`${selected.label} public club comparison`}><thead><tr><th scope="col">Club</th><th scope="col">Athletes with results</th><th scope="col">Best performance</th><th scope="col">Finalized results</th></tr></thead><tbody>{rows.map((row) => <tr key={row.club.club.id}><th scope="row">{row.club.club.name}</th><td>{row.athletes}</td><td>{formatDisciplineMetric(row.pb, selected)}</td><td>{row.resultCount}</td></tr>)}</tbody></table></div>
+  </section>;
+}
+
+function ClubStatCard({ statistics, season, discipline }: { statistics: PublicClubStatistics; season: SeasonValue; discipline: PublicDiscipline }) {
   const branding = statistics.club.branding;
   const accentColor = branding?.accentColor ?? undefined;
+  const disciplineResults = statistics.athletes.flatMap((athlete) => athlete.disciplines ?? []).filter((entry) => entry.discipline === discipline.discipline);
+  const resultCount = disciplineResults.reduce((total, entry) => total + entry.validResultCount, 0);
+  const best = disciplineResults.length === 0 ? null : discipline.direction === 'lower'
+    ? Math.min(...disciplineResults.map((entry) => entry.pb ?? Infinity))
+    : Math.max(...disciplineResults.map((entry) => entry.pb ?? -Infinity));
   const metrics = [
-    ['Roster', String(statistics.roster.total)],
-    ['With results', String(statistics.distinctAthletesWithValidResults)],
-    ['Fastest', formatMetric(statistics.fastestValidTime)],
-    ['Latest', formatMetric(statistics.latestValidTime)],
-    ['Average', formatMetric(statistics.averageValidTime)],
-    ['Consistency', formatMetric(statistics.populationStandardDeviation)],
+    ['Discipline', discipline.label],
+    ['Athletes', String(disciplineResults.length)],
+    ['Best', Number.isFinite(best) ? formatDisciplineMetric(best, discipline) : '-'],
+    ['Finalized results', String(resultCount)],
   ];
 
   return (
@@ -130,7 +136,7 @@ function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics
     >
       <div className={styles.cardSheen} aria-hidden="true" />
       <div className={styles.clubIdentity}>
-        <span>ATHLORA / CLUB</span>
+        <span>ATHLORA / CLUB RESULTS</span>
         <i aria-hidden="true" style={accentColor ? { background: accentColor, boxShadow: `0 0 14px ${accentColor}` } : undefined} />
         <h2>
           <ClubBadge name={statistics.club.name} branding={branding} size="lg" decorative />
@@ -138,15 +144,14 @@ function ClubStatCard({ statistics, season }: { statistics: PublicClubStatistics
         </h2>
         {branding?.description && <p className={styles.clubDescription}>{branding.description}</p>}
       </div>
-      <div className={styles.clubMetrics} aria-label={`${statistics.club.name} ${seasonLabel(season).toLowerCase()} 100m metrics`}>
+        <div className={styles.clubMetrics} aria-label={`${statistics.club.name} ${seasonLabel(season).toLowerCase()} published results`}>
         {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
       </div>
-      <p className={styles.clubScheduleLink}><a href={`/schedule/${encodeURIComponent(statistics.club.id)}`}>View public schedule →</a></p>
     </article>
   );
 }
 
-function AthleteGallery({ athletes, season }: { athletes: PublicAthleteStatistics[]; season: SeasonValue }) {
+function AthleteGallery({ athletes, season, disciplineCode, disciplineLabel }: { athletes: PublicAthleteStatistics[]; season: SeasonValue; disciplineCode: string; disciplineLabel: string }) {
   const [active, setActive] = useState(0);
   const dragStart = useRef<number | null>(null);
   const wheelDelta = useRef(0);
@@ -157,7 +162,7 @@ function AthleteGallery({ athletes, season }: { athletes: PublicAthleteStatistic
   }, [athletes.length]);
 
   if (athletes.length === 0) {
-    return <p className={styles.emptyState}>This club has no current athletes to show publicly.</p>;
+    return <p className={styles.emptyState}>No athletes are selected for {disciplineLabel}.</p>;
   }
 
   const move = (amount: number) => setActive((current) => (current + amount + athletes.length) % athletes.length);
@@ -202,7 +207,7 @@ function AthleteGallery({ athletes, season }: { athletes: PublicAthleteStatistic
         {athletes.map((athlete, index) => {
           const offset = offsetFor(index);
           const distance = Math.abs(offset);
-          return <div key={athlete.athlete.id} className={styles.gallerySlot} aria-hidden={distance > 2} style={{ '--gallery-x': `${offset * 31}%`, '--gallery-y': `${distance * 28}px`, '--gallery-rotation': `${offset * -12}deg`, '--gallery-scale': String(1 - distance * 0.09), '--gallery-z': String(20 - distance) } as CSSProperties}><AthleteStatCard athlete={athlete} season={season} /></div>;
+          return <div key={athlete.athlete.id} className={styles.gallerySlot} aria-hidden={distance > 2} style={{ '--gallery-x': `${offset * 31}%`, '--gallery-y': `${distance * 28}px`, '--gallery-rotation': `${offset * -12}deg`, '--gallery-scale': String(1 - distance * 0.09), '--gallery-z': String(20 - distance) } as CSSProperties}><AthleteStatCard athlete={athlete} season={season} disciplineCode={disciplineCode} /></div>;
         })}
       </div>
     </section>
@@ -224,6 +229,7 @@ export function PublicStatsPage() {
   const [clubsLoading, setClubsLoading] = useState(true);
   const [clubsError, setClubsError] = useState<string | null>(null);
   const [club1Id, setClub1Id] = useState('');
+  const [clubDisciplineCode, setClubDisciplineCode] = useState('');
   const [comparisonClubIds, setComparisonClubIds] = useState<string[]>([]);
   const [comparisonAthleteIds, setComparisonAthleteIds] = useState<string[]>([]);
   const [details, setDetails] = useState<Record<string, PublicClubStatistics>>({});
@@ -297,7 +303,10 @@ export function PublicStatsPage() {
   }, [comparisonAthleteIds.join(','), mode, season]);
 
   const club1 = details[`${club1Id}:${season}`];
+  const clubDisciplines = club1?.availableDisciplines ?? [];
+  const selectedClubDiscipline = clubDisciplines.find((discipline) => discipline.discipline === clubDisciplineCode) ?? clubDisciplines[0];
   const comparedClubs = comparisonClubIds.map((id) => details[`${id}:${season}`]).filter((club): club is PublicClubStatistics => Boolean(club));
+  const comparisonDisciplines = [...new Map(comparedClubs.flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()].sort((left, right) => left.label.localeCompare(right.label));
   const comparedAthletes = comparedClubs.flatMap((club) => club.athletes).filter((athlete) => comparisonAthleteIds.includes(athlete.athlete.id));
   const selectedAthleteClubIds = comparedClubs.filter((club) => club.athletes.some((athlete) => comparisonAthleteIds.includes(athlete.athlete.id))).map((club) => club.club.id);
   const loadingStatistics = loadingIds.length > 0;
@@ -306,13 +315,18 @@ export function PublicStatsPage() {
   const modeChange = (value: StatsMode) => {
     setMode(value);
     setClub1Id('');
+    setClubDisciplineCode('');
     setComparisonClubIds([]);
     setComparisonAthleteIds([]);
     setStatisticsError(null);
   };
   const selectClub1 = (value: string) => {
     setClub1Id(value);
+    setClubDisciplineCode('');
   };
+  useEffect(() => {
+    if (selectedClubDiscipline && selectedClubDiscipline.discipline !== clubDisciplineCode) setClubDisciplineCode(selectedClubDiscipline.discipline);
+  }, [clubDisciplineCode, selectedClubDiscipline]);
   const addComparisonClub = (clubId: string) => {
     if (clubId) setComparisonClubIds((current) => current.includes(clubId) || current.length === 5 ? current : [...current, clubId]);
     setComparisonAthleteIds([]);
@@ -331,22 +345,22 @@ export function PublicStatsPage() {
           <div className={styles.heroCopy}>
             <p className={styles.kicker}>Public performance index</p>
             <h1 id="public-stats-heading">The track, <em>in numbers.</em></h1>
-            <p>Explore {seasonLabel(season).toLowerCase()} 100m performance from clubs that choose to publish their results on Athlora.</p>
+            <p>Explore {seasonLabel(season).toLowerCase()} results across every discipline from clubs that choose to publish on Athlora.</p>
           </div>
           <div className={styles.heroVisual}>
             <div className={styles.seasonControl}><span>Performance season</span><SeasonSelector value={season} onChange={setSeason} availableYears={availableSeasons} publicView /></div>
-            <Suspense fallback={<figure className={styles.trackFigure} aria-label="Performance track loading" />}><StaticTrack caption={`${seasonLabel(season)} 100m performance, arranged around the track.`} /></Suspense>
+            <Suspense fallback={<figure className={styles.trackFigure} aria-label="Performance track loading" />}><StaticTrack caption={`${seasonLabel(season)} published performance across every discipline.`} /></Suspense>
           </div>
         </section>
 
-        <section className={styles.explorer} aria-labelledby="explorer-heading"><div className={styles.explorerHeading}><div><p className={styles.kicker}>Explore</p><h2 id="explorer-heading">Find a performance story</h2></div><p>All statistics are {seasonLabel(season).toLowerCase()} 100m results. Only clubs that publish their results appear here.</p></div>
+        <section className={styles.explorer} aria-labelledby="explorer-heading"><div className={styles.explorerHeading}><div><p className={styles.kicker}>Explore</p><h2 id="explorer-heading">Find a performance story</h2></div><p>All published discipline results are shown for {seasonLabel(season).toLowerCase()}. Only clubs that opt in appear here.</p></div>
           <div className={styles.selectors}>
             <div className={styles.selector}><label htmlFor="public-stat-mode">View</label><Select id="public-stat-mode" value={mode} onChange={(event) => modeChange(event.target.value as StatsMode)} options={modeOptions} aria-label="Public statistics view" /></div>
-            {mode === 'club' ? <div className={styles.selector}><label htmlFor="public-club-one">Club</label><Select id="public-club-one" value={club1Id} onChange={(event) => selectClub1(event.target.value)} options={clubOptions(clubs)} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading} aria-label="Select first club" /></div> : <div className={styles.selector}><label htmlFor="public-club-add">Add clubs (up to 5)</label><Select id="public-club-add" value="" onChange={(event) => addComparisonClub(event.target.value)} options={[{ value: '', label: 'Add a published club...' }, ...clubs.filter((club) => !comparisonClubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading || comparisonClubIds.length === 5} aria-label="Add club to comparison" /></div>}
+            {mode === 'club' ? <><div className={styles.selector}><label htmlFor="public-club-one">Club</label><Select id="public-club-one" value={club1Id} onChange={(event) => selectClub1(event.target.value)} options={clubOptions(clubs)} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading} aria-label="Select first club" /></div>{club1 && <div className={`${styles.selector} ${styles.disciplinePicker}`}><label>Discipline {selectedClubDiscipline && <span className={styles.selectedDiscipline}>Selected: {selectedClubDiscipline.label}</span>}</label><div className={styles.disciplineTabs} role="tablist" aria-label="Select club discipline">{clubDisciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selectedClubDiscipline?.discipline} onClick={() => setClubDisciplineCode(discipline.discipline)}>{discipline.label}</button>)}</div></div>}</> : <div className={`${styles.selector} ${styles.comparisonClubPicker}`}><label htmlFor="public-club-add">Build your comparison <span>{comparisonClubIds.length} / 5</span></label><Select id="public-club-add" value="" onChange={(event) => addComparisonClub(event.target.value)} options={[{ value: '', label: comparisonClubIds.length === 5 ? 'Five clubs selected' : 'Add a published club...' }, ...clubs.filter((club) => !comparisonClubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" disabled={clubsLoading || comparisonClubIds.length === 5} aria-label="Add club to comparison" /><p>Select two to five clubs. You can remove or replace any selection below.</p></div>}
           </div>
-          {mode !== 'club' && comparisonClubIds.length > 0 && <ul className={styles.comparisonSelection} aria-label="Selected clubs">{comparisonClubIds.map((id) => <li key={id}>{details[`${id}:${season}`]?.club.name ?? clubs.find((club) => club.id === id)?.name}<button type="button" aria-label={`Remove ${details[`${id}:${season}`]?.club.name ?? 'club'}`} onClick={() => { setComparisonClubIds((current) => current.filter((selected) => selected !== id)); setComparisonAthleteIds([]); }}>×</button></li>)}</ul>}
+          {mode !== 'club' && comparisonClubIds.length > 0 && <section className={styles.comparisonSelectionSection} aria-label="Selected clubs"><div><p className={styles.kicker}>Comparison roster</p><strong>{comparisonClubIds.length === 1 ? 'Add one more club to compare.' : `${comparisonClubIds.length} clubs ready to compare.`}</strong></div><ul className={styles.comparisonSelection}>{comparisonClubIds.map((id) => { const club = details[`${id}:${season}`]?.club ?? clubs.find((candidate) => candidate.id === id); return <li key={id}><ClubBadge name={club?.name ?? 'Club'} branding={club?.branding} size="sm" decorative /><span>{club?.name ?? 'Loading club...'}</span><button type="button" aria-label={`Remove ${club?.name ?? 'club'}`} onClick={() => { setComparisonClubIds((current) => current.filter((selected) => selected !== id)); setComparisonAthleteIds([]); }}>Remove</button></li>; })}</ul></section>}
             {athleteComparisonMode && <div className={styles.selectors}><div className={styles.selector}><label htmlFor="public-athlete-add">Add athletes from different clubs (up to 5)</label><Select id="public-athlete-add" value="" onChange={(event) => addComparisonAthlete(event.target.value)} options={[{ value: '', label: comparisonClubIds.length ? 'Add an athlete...' : 'Add clubs first...' }, ...comparedClubs.filter((club) => !selectedAthleteClubIds.includes(club.club.id)).flatMap((club) => club.athletes).filter((athlete) => !comparisonAthleteIds.includes(athlete.athlete.id)).map((athlete) => ({ value: athlete.athlete.id, label: athlete.athlete.name }))]} searchable searchPlaceholder="Search selected club athletes" emptyMessage="No eligible athletes match" disabled={comparisonClubIds.length === 0 || comparisonAthleteIds.length === 5} aria-label="Add athlete to comparison" /></div></div>}
-          {athleteComparisonMode && comparisonAthleteIds.length > 0 && <ul className={styles.comparisonSelection} aria-label="Selected athletes">{comparedAthletes.map((athlete) => <li key={athlete.athlete.id}>{athlete.athlete.name}<button type="button" aria-label={`Remove ${athlete.athlete.name}`} onClick={() => setComparisonAthleteIds((current) => current.filter((selected) => selected !== athlete.athlete.id))}>×</button></li>)}</ul>}
+          {athleteComparisonMode && comparisonAthleteIds.length > 0 && <section className={`${styles.comparisonSelectionSection} ${styles.athleteComparisonSelectionSection}`} aria-label="Selected athletes"><div><p className={styles.kicker}>Athlete roster</p><strong>{comparisonAthleteIds.length === 1 ? 'Add an athlete from another club to compare.' : `${comparisonAthleteIds.length} athletes ready to compare.`}</strong></div><ul className={styles.comparisonSelection}>{comparedAthletes.map((athlete) => { const club = comparedClubs.find((candidate) => candidate.athletes.some((candidate) => candidate.athlete.id === athlete.athlete.id))?.club; return <li key={athlete.athlete.id}><ClubBadge name={club?.name ?? 'Club'} branding={club?.branding} size="sm" decorative /><span className={styles.selectedAthlete}><strong>{athlete.athlete.name}</strong><small>{club?.name ?? 'Loading club...'}</small></span><button type="button" aria-label={`Remove ${athlete.athlete.name}`} onClick={() => setComparisonAthleteIds((current) => current.filter((selected) => selected !== athlete.athlete.id))}>Remove</button></li>; })}</ul></section>}
           {clubsError && <p className={styles.error} role="alert">{clubsError}</p>}
          {statisticsError && <p className={styles.error} role="alert">{statisticsError}</p>}
           {athleteComparisonError && <p className={styles.error} role="alert">{athleteComparisonError}</p>}
@@ -356,14 +370,14 @@ export function PublicStatsPage() {
         {(loadingStatistics || athleteComparisonLoading) && <p className={styles.loading} role="status">Reading the results...</p>}
         {!clubsLoading && !clubsError && clubs.length === 0 && <p className={styles.emptyState}>No clubs have published results yet. Check back after the next time trial.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && !club1 && clubs.length > 0 && <p className={styles.emptyState}>Select a club to open its public performance gallery.</p>}
-        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} /></section><AthleteGallery athletes={club1.athletes} season={season} /><VerticalStatistics key={`${club1.club.id}:${season}`} path={`/api/v1/public/statistics/clubs/${encodeURIComponent(club1.club.id)}/vertical?year=${season}`} names={Object.fromEntries(club1.athletes.map(a => [a.athlete.id, a.athlete.name]))} /><Suspense fallback={<p className={styles.loading} role="status">Loading session results...</p>}><PublicSessionResults clubId={club1.club.id} /></Suspense></>}
+        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && !selectedClubDiscipline && <p className={styles.emptyState}>This club has no published discipline results for {seasonLabel(season).toLowerCase()}.</p>}
+        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && selectedClubDiscipline && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} discipline={selectedClubDiscipline} /></section><AthleteGallery athletes={club1.athletes.filter((athlete) => (athlete.disciplines ?? []).some((discipline) => discipline.discipline === selectedClubDiscipline.discipline))} season={season} disciplineCode={selectedClubDiscipline.discipline} disciplineLabel={selectedClubDiscipline.label} /></>}
         {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length < 2 && <p className={styles.emptyState}>Select at least two clubs to compare their {seasonLabel(season).toLowerCase()} performance.</p>}
-        {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length >= 2 && <section className={styles.comparisonCards} aria-label="Club comparison">{comparedClubs.map((club) => <ClubStatCard key={club.club.id} statistics={club} season={season} />)}</section>}
+        {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length >= 2 && <PublicClubDisciplineComparisonPanel clubs={comparedClubs} season={season} disciplines={comparisonDisciplines} />}
         {!loadingStatistics && !athleteComparisonLoading && !statisticsError && !athleteComparisonError && athleteComparisonMode && comparedAthletes.length < 2 && <p className={styles.emptyState}>Select at least two athletes from different published clubs to compare their progression.</p>}
-        {!loadingStatistics && !athleteComparisonLoading && !statisticsError && !athleteComparisonError && athleteComparisonMode && athleteComparison && <PublicAthleteComparisonPanel comparison={athleteComparison} season={season} />}
+        {!loadingStatistics && !athleteComparisonLoading && !statisticsError && !athleteComparisonError && athleteComparisonMode && athleteComparison && <PublicAllDisciplineComparisonPanel comparison={athleteComparison} season={season} disciplines={comparisonDisciplines} />}
       </main>
       <footer className={styles.footer}><span>ATHLORA / PUBLIC PERFORMANCE INDEX</span><p>Published by participating clubs.</p></footer>
     </div>
   );
 }
-import { VerticalStatistics } from '../athletes/VerticalStatistics';

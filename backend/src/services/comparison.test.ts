@@ -190,6 +190,36 @@ describe('getTwoAthleteComparison', () => {
     expect(sql).toContain("fw.status = 'accepted'");
   });
 
+  it('includes catalogue metadata and per-discipline metrics for every athlete', async () => {
+    const query = vi.fn((sql: string, parameters: unknown[] = []) => {
+      if (sql.includes('WHERE a.id = $1 AND a.workspace_id = $2')) {
+        return Promise.resolve({ rows: [athleteRow({ id: parameters[0] as string, name: parameters[0] === ATHLETE_1_ID ? 'Athlete One' : 'Athlete Two' })] });
+      }
+      if (sql.includes('FROM athlete_preferred_disciplines')) {
+        return Promise.resolve({ rows: [{ code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
+      }
+      if (sql.includes('SELECT r.discipline, definitions.presentation')) {
+        return Promise.resolve({ rows: [{ discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-01-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_1_ID, result: '6.10' }, { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-02-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_2_ID, result: '6.25' }] });
+      }
+      if (sql.includes("SELECT code, presentation->>'label' AS label, unit, precision, direction")) {
+        return Promise.resolve({ rows: [{ code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' }, { code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
+      }
+      if (sql.includes('WITH effective')) return Promise.resolve({ rows: [] });
+      return Promise.resolve({ rows: [athleteRow({ id: parameters[0] as string, name: parameters[0] === ATHLETE_1_ID ? 'Athlete One' : 'Athlete Two' })] });
+    });
+
+    const comparison = await getTwoAthleteComparison(USER_ID, ATHLETE_1_ID, ATHLETE_2_ID, runner(query));
+
+    expect(comparison.availableDisciplines).toEqual([
+      { discipline: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
+      { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' },
+    ]);
+    expect(comparison.athletes[0].disciplines).toEqual([expect.objectContaining({
+      discipline: 'long_jump', pb: 6.25, latestEffectiveResult: 6.25, validResultCount: 2,
+      average: 6.18, improvement: 0.15, progression: [{ date: '2026-01-01', result: 6.1 }, { date: '2026-02-01', result: 6.25 }],
+    })]);
+  });
+
   it('bounds each athlete progression query to the requested season', async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [athleteRow({ id: ATHLETE_1_ID })] })
@@ -503,7 +533,7 @@ describe('getMultiAthleteComparison', () => {
   });
 
   it('reuses aggregates in requested order', async () => {
-    const query = vi.fn((sql: string, parameters: unknown[]) => {
+    const query = vi.fn((sql: string, parameters: unknown[] = []) => {
       const athleteId = parameters[0];
       if (sql.includes('WITH effective')) return Promise.resolve({ rows: [] });
       if (athleteId === ATHLETE_1_ID) {

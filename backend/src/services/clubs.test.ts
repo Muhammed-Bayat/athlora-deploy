@@ -192,7 +192,9 @@ describe('club comparison data', () => {
         distinct_athletes_with_valid_results: '2', total_100m_result_count: '5',
         valid_100m_result_count: '3', fastest_valid_time: '10.90', latest_valid_time: '11.20',
         average_valid_time: '11.10', median_valid_time: '11.20', population_standard_deviation: '0.12',
-      }]));
+      }]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]));
 
     const statistics = await getClubStatistics(CLUB_ID);
 
@@ -217,6 +219,8 @@ describe('club comparison data', () => {
       averageValidTime: 11.1,
       medianValidTime: 11.2,
       populationStandardDeviation: 0.12,
+      availableDisciplines: [],
+      disciplines: [],
     });
     const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain("e.status <> 'cancelled'");
@@ -243,11 +247,46 @@ describe('club comparison data', () => {
         distinct_athletes_with_valid_results: '1', total_100m_result_count: '1',
         valid_100m_result_count: '1', fastest_valid_time: '11.20', latest_valid_time: '11.20',
         average_valid_time: '11.20', median_valid_time: '11.20', population_standard_deviation: null,
-      }]));
+      }]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]));
 
     await expect(getClubStatistics(CLUB_ID)).resolves.toMatchObject({
       populationStandardDeviation: null,
     });
+  });
+
+  it('returns direction-aware aggregates for every available discipline', async () => {
+    query
+      .mockResolvedValueOnce(poolRow([{
+        id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters', description: null,
+        primary_color: null, accent_color: null, logo_key: null, cover_key: null,
+      }]))
+      .mockResolvedValueOnce(poolRow([{
+        active_count: '1', inactive_count: '0', archived_count: '0', total_count: '1',
+        distinct_athletes_with_valid_results: '1', total_100m_result_count: '0', valid_100m_result_count: '0',
+        fastest_valid_time: null, latest_valid_time: null, average_valid_time: null, median_valid_time: null, population_standard_deviation: null,
+      }]))
+      .mockResolvedValueOnce(poolRow([
+        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-01-10', event_time: null, event_created_at: '2026-01-10T10:00:00Z', event_id: 'event-1', effective_result: '6.40', effective_outcome: 'valid' },
+        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-02-10', event_time: null, event_created_at: '2026-02-10T10:00:00Z', event_id: 'event-2', effective_result: '6.55', effective_outcome: 'valid' },
+      ]))
+      .mockResolvedValueOnce(poolRow([{ code: 'long_jump', label: 'Long jump', unit: 'metres', precision: '2', direction: 'higher' }]))
+      .mockResolvedValueOnce(poolRow([{ athlete_id: 'unrecorded-athlete', lifecycle_status: 'active', discipline: 'long_jump' }]));
+
+    const statistics = await getClubStatistics(CLUB_ID);
+
+    expect(statistics.disciplines).toEqual([expect.objectContaining({
+      discipline: 'long_jump',
+      fastestValidResult: 6.55,
+      latestValidResult: 6.55,
+      validResultCount: 2,
+      distinctAthletesWithValidResults: 1,
+      rosterAthleteCount: 2,
+      activeAthleteCount: 2,
+      inactiveAthleteCount: 0,
+      archivedAthleteCount: 0,
+    })]);
   });
 
   it('returns side-by-side statistics for two distinct clubs', async () => {
@@ -272,8 +311,14 @@ describe('club comparison data', () => {
     query
       .mockResolvedValueOnce(poolRow([clubRow(CLUB_ID, WORKSPACE_ID, 'Sprinters')]))
       .mockResolvedValueOnce(poolRow([statisticsRow]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]))
       .mockResolvedValueOnce(poolRow([clubRow(otherClubId, otherWorkspaceId, 'Harriers')]))
-      .mockResolvedValueOnce(poolRow([statisticsRow]));
+      .mockResolvedValueOnce(poolRow([statisticsRow]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]))
+      .mockResolvedValueOnce(poolRow([]));
 
     await expect(getClubComparison(CLUB_ID, otherClubId)).resolves.toMatchObject({
       clubs: [
