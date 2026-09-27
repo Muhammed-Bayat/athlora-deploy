@@ -69,6 +69,18 @@ export interface LeaderboardEntry {
   age: number | null;
 }
 
+export interface PublicClubStanding {
+  clubId: string;
+  clubName: string;
+  totalPoints: number;
+  fixtures: number;
+  wins: number;
+  seconds: number;
+  thirds: number;
+  scoredResults: number;
+  rank: number;
+}
+
 export interface PublicStatisticsReportEntry {
   athleteId: string;
   athleteName: string;
@@ -102,6 +114,12 @@ export async function getPublicLeaderboard(filters: Record<string, string | unde
   }
   const query = params.toString() ? `?${params.toString()}` : '';
   const response = await requestPublic<{ data: LeaderboardEntry[] }>(`/api/v1/public/statistics/leaderboard${query}`, { signal });
+  return response.data;
+}
+
+export async function getPublicClubStandings(season: string, signal?: AbortSignal): Promise<PublicClubStanding[]> {
+  const query = season ? `?season=${encodeURIComponent(season)}` : '';
+  const response = await requestPublic<{ data: PublicClubStanding[] }>(`/api/v1/public/statistics/standings${query}`, { signal });
   return response.data;
 }
 

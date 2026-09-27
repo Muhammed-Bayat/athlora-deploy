@@ -315,7 +315,8 @@ The publication owner controls two independent flags through `GET|PUT /clubs/pub
 | `GET /public/statistics/clubs/:clubId` | Get published club 100m statistics |
 | `GET /public/statistics/comparison` | Compare published athlete performance |
 | `GET /public/statistics/leaderboard` | List finalized individual public leaderboard rows |
-| `GET /public/statistics/report/disciplines` | List canonical disciplines with reportable published results |
+| `GET /public/statistics/standings` | List public shared-fixture club standings using 5/3/1 placement points |
+| `GET /public/statistics/report/disciplines` | List canonical configured disciplines for public report and leaderboard filters |
 | `GET /public/statistics/report` | List live detailed, filterable published performance rows for public CSV/PDF reports |
 
 When a club has enabled schedule publication (regardless of the results flag), these unauthenticated, read-only schedule endpoints are available:

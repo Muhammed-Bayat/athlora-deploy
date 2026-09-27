@@ -28,5 +28,7 @@ describe('public leaderboard service', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toEqual(expect.objectContaining({ athleteName: 'Fast Runner', performance: 10.5, place: 1, discipline: '100m' }));
     expect(mockQuery).toHaveBeenCalledOnce();
+    expect(mockQuery.mock.calls[0]?.[0]).toContain('FROM results r');
+    expect(mockQuery.mock.calls[0]?.[0]).toContain("s.result_state = 'final'");
   });
 });

@@ -16,6 +16,7 @@ router.get('/seasons', publicStatistics.listSeasons);
 router.get('/clubs', publicStatistics.listClubs);
 router.get('/comparison', publicStatistics.athleteComparison);
 router.get('/leaderboard', leaderboard);
+router.get('/standings', publicStatistics.clubStandings);
 router.get('/report/disciplines', publicStatisticsReportDisciplines);
 router.get('/report', publicStatisticsReport);
 router.get('/clubs/:clubId', publicStatistics.clubStatistics);

@@ -2,12 +2,14 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app.js';
 import * as publicStatisticsService from '../services/publicStatistics.js';
+import * as standingsService from '../services/standings.js';
 
 vi.mock('../services/publicStatistics.js', () => ({
   getPublicClubStatistics: vi.fn(),
   getPublicAthleteComparison: vi.fn(),
   listPublicClubs: vi.fn(),
 }));
+vi.mock('../services/standings.js', () => ({ getPublicClubStandings: vi.fn() }));
 
 const CLUB_ID = '33333333-3333-4333-8333-333333333333';
 const app = createApp();
@@ -57,5 +59,20 @@ describe('public statistics routes', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: { athletes: [] } });
     expect(publicStatisticsService.getPublicAthleteComparison).toHaveBeenCalledWith([athleteId, otherAthleteId], expect.objectContaining({ selected: 2025 }));
+  });
+
+  it('returns public club standings without authentication', async () => {
+    vi.mocked(standingsService.getPublicClubStandings).mockResolvedValue([{
+      clubId: CLUB_ID, clubName: 'Open Track Club', totalPoints: 5, fixtures: 1, wins: 1,
+      seconds: 0, thirds: 0, scoredResults: 1, rank: 1,
+    }]);
+
+    const response = await request(app).get('/api/v1/public/statistics/standings');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [{
+      clubId: CLUB_ID, clubName: 'Open Track Club', totalPoints: 5, fixtures: 1, wins: 1,
+      seconds: 0, thirds: 0, scoredResults: 1, rank: 1,
+    }], meta: { count: 1 } });
   });
 });

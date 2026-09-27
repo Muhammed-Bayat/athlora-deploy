@@ -67,8 +67,6 @@ The following Discord screenshots provide evidence of the team's communication w
 
 ![Client chat 1](./screenshots/client%20chat%201.jpeg)
 
-![Client chat 2](./screenshots/client%20chat%202.jpeg)
-
 ![Client chat 3](./screenshots/client%20chat%203.jpeg)
 
 ![Client chat 4](./screenshots/client%20chat%204.jpeg)

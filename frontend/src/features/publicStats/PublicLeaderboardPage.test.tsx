@@ -10,10 +10,7 @@ vi.mock('../../api/publicStatistics', () => ({
   getPublicLeaderboard: (...args: unknown[]) => getLeaderboard(...args),
   listPublicClubs: vi.fn().mockResolvedValue({ data: [{ id: 'club', name: 'Open Track' }] }),
   listPublicSeasons: vi.fn().mockResolvedValue([2026]),
-}));
-
-vi.mock('../../api/meets', () => ({
-  listDisciplines: vi.fn().mockResolvedValue({ data: [{ id: '100m', code: '100m', presentation: { label: '100m' } }] }),
+  listPublicStatisticsReportDisciplines: vi.fn().mockResolvedValue([{ code: '100m', label: '100m' }]),
 }));
 
 describe('PublicLeaderboardPage', () => {

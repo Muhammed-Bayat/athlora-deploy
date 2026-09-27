@@ -4,11 +4,12 @@ import { PublicNavigation } from './PublicNavigation';
 
 describe('PublicNavigation', () => {
   it.each([
-    ['home', ['Stats', 'Leaderboard', 'Reports', 'Schedule']],
-    ['stats', ['Home', 'Leaderboard', 'Reports', 'Schedule']],
-    ['leaderboard', ['Home', 'Stats', 'Reports', 'Schedule']],
-    ['reports', ['Home', 'Stats', 'Leaderboard', 'Schedule']],
-    ['schedule', ['Home', 'Stats', 'Leaderboard', 'Reports']],
+    ['home', ['Stats', 'Leaderboard', 'Standings', 'Reports', 'Schedule']],
+    ['stats', ['Home', 'Leaderboard', 'Standings', 'Reports', 'Schedule']],
+    ['leaderboard', ['Home', 'Stats', 'Standings', 'Reports', 'Schedule']],
+    ['standings', ['Home', 'Stats', 'Leaderboard', 'Reports', 'Schedule']],
+    ['reports', ['Home', 'Stats', 'Leaderboard', 'Standings', 'Schedule']],
+    ['schedule', ['Home', 'Stats', 'Leaderboard', 'Standings', 'Reports']],
   ] as const)('lists every destination except %s', (current, expectedLinks) => {
     render(<PublicNavigation current={current} />);
 
