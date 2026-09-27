@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as meets from '../../api/meets';
-import { Button, OfflineRecoverySurface } from '../../components';
+import { Button, OfflineRecoverySurface, Select } from '../../components';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { useSessionOffline } from '../../hooks/useSessionOffline';
@@ -261,10 +261,12 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       {error && <p role="alert">{error}</p>}
       <label>
         Session
-        <select value={sessionId} onChange={(input) => { setSessionId(input.target.value); setEntrantId(''); }}>
-          <option value="">Choose session</option>
-          {timedSessions.map((item) => <option key={item.id} value={item.id}>{item.label} ({item.status})</option>)}
-        </select>
+        <Select
+          aria-label="Session"
+          value={sessionId}
+          onChange={(input) => { setSessionId(input.target.value); setEntrantId(''); }}
+          options={[{ value: '', label: 'Choose session' }, ...timedSessions.map((item) => ({ value: item.id, label: `${item.label} (${item.status})` }))]}
+        />
       </label>
       {session && definition && (
         <>
@@ -279,12 +281,17 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
            {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
           <label>
             Team
-            <select value={entrantId} onChange={(input) => setEntrantId(input.target.value)}>
-              <option value="">Choose team</option>
-              {entrants
-                .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
-                .map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            <Select
+              aria-label="Team"
+              value={entrantId}
+              onChange={(input) => setEntrantId(input.target.value)}
+              options={[
+                { value: '', label: 'Choose team' },
+                ...entrants
+                  .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
+                  .map((item) => ({ value: item.id, label: item.name })),
+              ]}
+            />
           </label>
           {selectedEntrant?.kind === 'relay' && (
             <p aria-label="Team members">Legs: {memberSummary(selectedEntrant, entrants) || 'Members not listed'}</p>
@@ -306,14 +313,19 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
               {!timed && <label><input type="checkbox" checked={isFoul} onChange={e => setIsFoul(e.target.checked)} />Foul</label>}
               <label>
                 Incident
-                <select value={incidentType} onChange={(input) => { setIncidentType(input.target.value); if (input.target.value) setValue(''); }}>
-                  <option value="">None</option>
-                  <option value="false_start">False start</option>
-                  <option value="dq">DQ</option>
-                  <option value="dnf">DNF</option>
-                  <option value="dns">DNS</option>
-                  <option value="lane_infringement">Lane infringement</option>
-                </select>
+                <Select
+                  aria-label="Incident"
+                  value={incidentType}
+                  onChange={(input) => { setIncidentType(input.target.value); if (input.target.value) setValue(''); }}
+                  options={[
+                    { value: '', label: 'None' },
+                    { value: 'false_start', label: 'False start' },
+                    { value: 'dq', label: 'DQ' },
+                    { value: 'dnf', label: 'DNF' },
+                    { value: 'dns', label: 'DNS' },
+                    { value: 'lane_infringement', label: 'Lane infringement' },
+                  ]}
+                />
               </label>
               <label>
                 Note

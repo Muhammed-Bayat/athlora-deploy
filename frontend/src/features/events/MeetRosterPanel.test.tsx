@@ -33,23 +33,23 @@ describe('MeetRosterPanel', () => {
       { id: 'session-relay', disciplineDefinitionId: 'relay', label: '4 x 100m relay', status: 'scheduled', version: 1 },
     ] });
     api.listEntrants.mockResolvedValue({ data: [
-      { id: 'athlete-entrant', kind: 'athlete', athleteId: 'athlete', name: 'Ari Runner', clubName: null, details: null, memberIds: [] },
-      { id: 'team', kind: 'relay', athleteId: null, name: 'Blue relay', clubName: null, details: null, memberIds: ['athlete-entrant'] },
+      { id: 'athlete-entrant', workspaceId: 'host-workspace', kind: 'athlete', athleteId: 'athlete', name: 'Ari Runner', clubName: null, details: null, memberIds: [] },
+      { id: 'team', workspaceId: 'host-workspace', kind: 'relay', athleteId: null, name: 'Blue relay', clubName: null, details: null, memberIds: ['athlete-entrant'] },
     ] });
     api.listRegistrations.mockImplementation(async (_eventId: string, sessionId: string) => ({ data: sessionId === 'session-track'
       ? [{ id: 'track-registration', disciplineSessionId: 'session-track', entrantId: 'athlete-entrant', withdrawnAt: null }]
       : [{ id: 'relay-registration', disciplineSessionId: 'session-relay', entrantId: 'team', withdrawnAt: null }],
     }));
     athletes.listAthletes.mockResolvedValue({ data: [
-      { id: 'athlete', name: 'Ari Runner', status: 'active', squads: [] },
-      { id: 'athlete-2', name: 'Bea Runner', status: 'active', squads: [] },
+      { id: 'athlete', name: 'Ari Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'], squads: [] },
+      { id: 'athlete-2', name: 'Bea Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'], squads: [] },
     ] });
     participants.listEventParticipants.mockResolvedValue({ data: [{ athleteId: 'athlete', rsvpStatus: 'pending' }] });
   });
 
   it('uses session tabs with the familiar roster rows and RSVP controls', async () => {
     const user = userEvent.setup();
-    render(<MeetRosterPanel event={event} canOperate isCoach />);
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
 
     const trackTab = await screen.findByRole('tab', { name: /200m/i, selected: true });
     expect(screen.queryByText(/Generic meet sessions/i)).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('MeetRosterPanel', () => {
 
   it('shows relay creation only for a selected relay session and never exposes guest entry', async () => {
     const user = userEvent.setup();
-    render(<MeetRosterPanel event={event} canOperate isCoach />);
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
 
     await screen.findByRole('tabpanel');
     expect(screen.queryByRole('button', { name: 'Add relay' })).not.toBeInTheDocument();
@@ -85,5 +85,42 @@ describe('MeetRosterPanel', () => {
     expect(screen.getByRole('button', { name: 'Add relay athletes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add relay' })).toBeInTheDocument();
     expect(screen.queryByText('Guest entrant')).not.toBeInTheDocument();
+  });
+
+  it('only offers athletes whose selected discipline matches the active session tab', async () => {
+    const user = userEvent.setup();
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'hammer', kind: 'field', presentation: { label: 'Hammer throw' }, defaultRules: { entrantType: 'individual' } }] });
+    api.listSessions.mockResolvedValue({ data: [{ id: 'hammer-session', disciplineDefinitionId: 'hammer', label: 'Hammer throw', status: 'scheduled', version: 1 }] });
+    api.listEntrants.mockResolvedValue({ data: [] });
+    api.listRegistrations.mockResolvedValue({ data: [] });
+    athletes.listAthletes.mockResolvedValue({ data: [
+      { id: 'hammer-athlete', name: 'Hana Hammer', status: 'active', preferredDisciplineIds: ['hammer'], squads: [] },
+      { id: 'sprinter', name: 'Sami Sprinter', status: 'active', preferredDisciplineIds: ['track'], squads: [] },
+    ] });
+
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add athletes' }));
+    expect(screen.getByText('Hana Hammer')).toBeInTheDocument();
+    expect(screen.queryByText('Sami Sprinter')).not.toBeInTheDocument();
+  });
+
+  it('lets an accepted guest use meet registration without calling legacy participant APIs', async () => {
+    const user = userEvent.setup();
+    api.listSessions.mockResolvedValue({ data: [{ id: 'session-track', disciplineDefinitionId: 'track', label: '200m', status: 'scheduled', version: 1 }] });
+    api.listEntrants.mockResolvedValue({ data: [] });
+    api.listRegistrations.mockResolvedValue({ data: [] });
+    athletes.listAthletes.mockResolvedValue({ data: [{ id: 'guest-athlete', name: 'Gia Guest', status: 'active', preferredDisciplineIds: ['track'], squads: [] }] });
+    api.createEntrant.mockResolvedValue({ id: 'guest-entrant', workspaceId: 'guest-workspace', kind: 'athlete', athleteId: 'guest-athlete', name: 'Gia Guest', clubName: null, details: null, memberIds: [] });
+
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="guest-workspace" isGuest />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add athletes' }));
+    await user.click(screen.getByRole('checkbox', { name: /Gia Guest/i }));
+    await user.click(screen.getByRole('button', { name: 'Add 1 athlete' }));
+    await waitFor(() => expect(api.registerEntrant).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-track', entrantId: 'guest-entrant' }));
+    expect(participants.listEventParticipants).not.toHaveBeenCalled();
+    expect(participants.addEventParticipant).not.toHaveBeenCalled();
+    expect(screen.queryByText('Roster filter')).not.toBeInTheDocument();
   });
 });

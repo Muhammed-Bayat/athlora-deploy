@@ -62,7 +62,17 @@ describeDB('multi-discipline migration and domain integration', () => {
     await pool.end();
   });
 
-  async function migrate() { await transaction((db) => applyMigrations(db, migrations)); }
+  async function migrate() {
+    await transaction((db) => applyMigrations(db, migrations));
+    await pool.query(
+      `INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id)
+       SELECT seeded.athlete_id, definition.id
+       FROM unnest($1::uuid[]) AS seeded(athlete_id)
+       CROSS JOIN discipline_definitions definition
+       ON CONFLICT DO NOTHING`,
+      [[athleteId, otherAthleteId]],
+    );
+  }
   async function definition(code = '100m') { return (await listDisciplines(pool)).find((row) => row.code === code)!; }
   async function session(code = '100m', label = 'Session') { return createSession(host, eventId, { disciplineDefinitionId: (await definition(code)).id, label }, transaction); }
   async function guest(name = 'Guest') { return createEntrant(host, eventId, { kind: 'guest', name, clubName: null, details: null }, transaction); }
@@ -182,6 +192,23 @@ describeDB('multi-discipline migration and domain integration', () => {
     await registerEntrant(host, eventId, { disciplineSessionId: relaySession.id, entrantId: relay.id }, transaction);
     await expect(registerEntrant(host, eventId, { disciplineSessionId: relaySession.id, entrantId: athlete.id }, transaction)).rejects.toMatchObject({ code: 'ENTRANT_KIND_MISMATCH' });
     expect((await pool.query("SELECT * FROM meet_domain_audit WHERE entity_type = 'relay_member'")).rows).toHaveLength(4);
+  });
+
+  it('requires athletes to select the discipline before registering for its session', async () => {
+    await migrate();
+    const hammer = await definition('hammer');
+    const hammerSession = await createSession(host, eventId, { disciplineDefinitionId: hammer.id, label: 'Hammer throw' }, transaction);
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    await pool.query('DELETE FROM athlete_preferred_disciplines WHERE athlete_id = $1', [athleteId]);
+
+    await expect(registerEntrant(host, eventId, { disciplineSessionId: hammerSession.id, entrantId: athlete.id }, transaction)).rejects.toMatchObject({
+      code: 'ATHLETE_DISCIPLINE_MISMATCH',
+    });
+
+    await pool.query('INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) VALUES ($1,$2)', [athleteId, hammer.id]);
+    await expect(registerEntrant(host, eventId, { disciplineSessionId: hammerSession.id, entrantId: athlete.id }, transaction)).resolves.toMatchObject({
+      entrantId: athlete.id,
+    });
   });
 
   it('rejects wrong parents, unregistered/cross-workspace targets and missing required result identity in the database', async () => {

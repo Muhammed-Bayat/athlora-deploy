@@ -19,6 +19,7 @@ import { getClubBranding } from '../../api/clubBranding';
 import { InstallButton } from '../../components/InstallButton';
 import { OfflineIndicator } from '../../components/OfflineIndicator';
 import { ClubBadge } from '../../components/ClubBadge';
+import { Select } from '../../components';
 import type { ClubBrandSummary } from '../../types';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
@@ -519,9 +520,7 @@ export function CoachConsole() {
         <span>Club</span>
         <div className={styles.workspaceSelectRow}>
           <ClubBadge name={activeWorkspace.name} branding={clubBranding} size="sm" decorative className={styles.switcherBadge} />
-          <select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club">
-            {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-          </select>
+          <Select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club" options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))} />
         </div>
       </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>

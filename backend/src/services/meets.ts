@@ -235,13 +235,31 @@ export async function registerEntrant(actor: MeetActor, eventId: string, target:
     if (access.helper) meetNotFound();
     const session = await getSession(db, eventId, target.disciplineSessionId);
     if (session.status !== 'scheduled' || !['scheduled', 'in_progress'].includes(access.event.status)) meetConflict('ROSTER_LOCKED', 'Session registration is closed');
-    const entrant = await db.query<{ kind: string }>('SELECT kind FROM meet_entrants WHERE id = $1 AND event_id = $2 AND workspace_id = $3', [target.entrantId, eventId, actor.workspaceId]);
+    const entrant = await db.query<{ kind: string; athlete_id: string | null }>('SELECT kind, athlete_id FROM meet_entrants WHERE id = $1 AND event_id = $2 AND workspace_id = $3', [target.entrantId, eventId, actor.workspaceId]);
     if (!entrant.rows[0]) meetNotFound();
     const definition = await getDefinition(db, session.disciplineDefinitionId);
     if ((entrant.rows[0].kind === 'relay') !== (definition.defaultRules.entrantType === 'relay')) meetConflict('ENTRANT_KIND_MISMATCH', 'Entrant type does not match the discipline');
+    if (entrant.rows[0].kind === 'athlete') {
+      const preferred = await db.query('SELECT 1 FROM athlete_preferred_disciplines WHERE athlete_id = $1 AND discipline_definition_id = $2', [entrant.rows[0].athlete_id, session.disciplineDefinitionId]);
+      if (!preferred.rows[0]) meetConflict('ATHLETE_DISCIPLINE_MISMATCH', 'Athlete does not have this discipline selected');
+    }
     if (definition.defaultRules.teamSize) {
       const members = await db.query('SELECT id FROM relay_members WHERE relay_id = $1', [target.entrantId]);
       if (members.rows.length !== definition.defaultRules.teamSize) meetConflict('RELAY_SIZE_MISMATCH', 'Relay size does not match the discipline');
+      const ineligibleMember = await db.query(
+        `SELECT 1
+         FROM relay_members rm
+         JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
+         WHERE rm.relay_id = $1
+           AND member.kind = 'athlete'
+           AND NOT EXISTS (
+             SELECT 1 FROM athlete_preferred_disciplines apd
+             WHERE apd.athlete_id = member.athlete_id AND apd.discipline_definition_id = $2
+           )
+         LIMIT 1`,
+        [target.entrantId, session.disciplineDefinitionId],
+      );
+      if (ineligibleMember.rows[0]) meetConflict('ATHLETE_DISCIPLINE_MISMATCH', 'Every relay athlete must have this discipline selected');
     }
     const existing = await db.query('SELECT * FROM session_entrants WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
     if (existing.rows[0]) {

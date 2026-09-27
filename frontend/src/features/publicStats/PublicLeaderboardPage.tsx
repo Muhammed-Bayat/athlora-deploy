@@ -2,6 +2,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getPublicLeaderboard, listPublicClubs, listPublicSeasons, type LeaderboardEntry } from '../../api/publicStatistics';
 import { listDisciplines } from '../../api/meets';
+import { Input, Select } from '../../components';
 import type { DisciplineDefinition, PublicClub } from '../../types';
 import styles from './PublicStatsPage.module.css';
 
@@ -84,36 +85,23 @@ export function PublicLeaderboardPage() {
         <div className={styles.filtersBar} aria-label="Leaderboard filters">
           <label>
             Discipline
-            <select value={discipline} onChange={(e) => updateFilter('discipline', e.target.value)}>
-              <option value="">All disciplines</option>
-              {disciplines.map((d) => <option key={d.id} value={d.code}>{d.presentation.label}</option>)}
-            </select>
+            <Select aria-label="Discipline" value={discipline} onChange={(e) => updateFilter('discipline', e.target.value)} options={[{ value: '', label: 'All disciplines' }, ...disciplines.map((d) => ({ value: d.code, label: d.presentation.label }))]} />
           </label>
           <label>
             Season
-            <select value={season} onChange={(e) => updateFilter('season', e.target.value)}>
-              <option value="">All seasons</option>
-              {seasons.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-            </select>
+            <Select aria-label="Season" value={season} onChange={(e) => updateFilter('season', e.target.value)} options={[{ value: '', label: 'All seasons' }, ...seasons.map((yr) => ({ value: String(yr), label: String(yr) }))]} />
           </label>
           <label>
             Club
-            <select value={club} onChange={(e) => updateFilter('club', e.target.value)}>
-              <option value="">All published clubs</option>
-              {clubs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <Select aria-label="Club" value={club} onChange={(e) => updateFilter('club', e.target.value)} options={[{ value: '', label: 'All published clubs' }, ...clubs.map((c) => ({ value: c.id, label: c.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" />
           </label>
           <label>
             Gender
-            <select value={gender} onChange={(e) => updateFilter('gender', e.target.value)}>
-              <option value="">All genders</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
+            <Select aria-label="Gender" value={gender} onChange={(e) => updateFilter('gender', e.target.value)} options={[{ value: '', label: 'All genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
           </label>
           <label>
             Age category
-            <input type="number" min="5" max="100" placeholder="Exact age" value={age} onChange={(e) => updateFilter('age', e.target.value)} />
+            <Input type="number" min="5" max="100" placeholder="Exact age" value={age} onChange={(e) => updateFilter('age', e.target.value)} />
           </label>
         </div>
 
@@ -125,7 +113,7 @@ export function PublicLeaderboardPage() {
         )}
 
         {!loading && !error && entries.length > 0 && (
-          <div className={styles.tableScroll}>
+          <div className={`${styles.resultsTable} ${styles.tableScroll}`}>
             <table className={styles.comparisonTable} aria-label="Athlete performance leaderboard">
               <thead>
                 <tr>

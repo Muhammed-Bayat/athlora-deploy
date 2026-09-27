@@ -412,7 +412,7 @@ time (HH:mm:ss|null), locationName (string|null), latitude (number|null), longit
 status, createdAt, updatedAt
 ```
 
-`discipline: '100m'` is the existing event contract and keeps the participant, timeline, and result controls. `discipline: null` is a multi-discipline meet: its catalogue-backed sessions, shared entrant pool, relay legs, and per-session registrations are available only through protected meet endpoints. Athlete preferences, goals, notes, and other private profile fields are never present in those or public meet responses.
+`discipline: '100m'` is the existing event contract and keeps the participant, timeline, and result controls. `discipline: null` is a multi-discipline meet: its catalogue-backed sessions, shared entrant pool, relay legs, and per-session registrations are available only through protected meet endpoints. An athlete can register only for a session whose catalogue definition is in their preferred disciplines (`409 ATHLETE_DISCIPLINE_MISMATCH` otherwise); sessions intentionally allow zero registrations. Accepted fixture guests read and mutate only their own entrants and registrations, while the host can read every club's session roster. Athlete preferences, goals, notes, and other private profile fields are never present in those or public meet responses.
 
 | Method & path | Purpose |
 |---|---|

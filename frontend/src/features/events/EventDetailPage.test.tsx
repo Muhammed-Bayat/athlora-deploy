@@ -18,6 +18,8 @@ vi.mock('./EventWeatherPanel', () => ({ EventWeatherPanel: () => <p>Weather fore
 vi.mock('./VenuePreview', () => ({ VenuePreview: () => <p>Venue map</p> }));
 vi.mock('./PublicLoggerPanel', () => ({ PublicLoggerPanel: () => <section aria-label="Public logger links">Public logger links</section> }));
 vi.mock('./FixtureHostPanel', () => ({ FixtureHostPanel: () => <section aria-label="Host fixture controls">Host fixture controls</section> }));
+vi.mock('./MeetRosterPanel', () => ({ MeetRosterPanel: ({ isGuest }: { isGuest: boolean }) => <section aria-label="Multi-discipline roster">{isGuest ? 'Guest discipline tabs' : 'Host discipline tabs'}</section> }));
+vi.mock('./SessionLivePanel', () => ({ SessionLivePanel: () => <section aria-label="Session live logger">Session live logger</section> }));
 vi.mock('./GuestRosterPanel', () => ({ GuestRosterPanel: ({ scheduled }: { scheduled: boolean }) => <section aria-label="Guest roster">Guest roster {scheduled ? 'editable' : 'read only'}</section> }));
 vi.mock('../results/EventResultsSection', () => ({ EventResultsSection: () => <section aria-label="Event results">Event results</section> }));
 vi.mock('../results/ResultCorrectionForm', () => ({ ResultCorrectionForm: () => null }));
@@ -104,6 +106,21 @@ describe('EventDetailPage', () => {
     expect(screen.queryByRole('region', { name: 'Host fixture controls' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit event' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start event' })).toBeInTheDocument();
+  });
+
+  it('puts fixture invitations and the guest-owned tabbed roster on a multi-discipline meet', async () => {
+    const multiDisciplineEvent = { ...event, discipline: null, title: 'Field day' };
+    render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
+
+    expect(await screen.findByRole('region', { name: 'Host fixture controls' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Multi-discipline roster' })).toHaveTextContent('Host discipline tabs');
+
+    workspace.id = 'guest-workspace';
+    fixtureApi.getGuestFixture.mockResolvedValue({});
+    render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByRole('region', { name: 'Multi-discipline roster' })[1]).toHaveTextContent('Guest discipline tabs'));
+    await waitFor(() => expect(screen.queryAllByRole('region', { name: 'Host fixture controls' })).toHaveLength(1));
   });
 
   it('hides lifecycle controls when shared-fixture roster lookup fails for a competition', async () => {

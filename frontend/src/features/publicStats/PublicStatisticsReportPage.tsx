@@ -1,12 +1,18 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getPublicStatisticsReport, listPublicClubs, listPublicSeasons, type PublicStatisticsReport } from '../../api/publicStatistics';
+import { Button, Input, Select } from '../../components';
 import type { PublicClub } from '../../types';
 import { downloadFile, reportCsv, reportPdf } from './reportExport';
 import styles from './PublicStatsPage.module.css';
 
 const filterKeys = ['discipline', 'season', 'club', 'gender', 'age'] as const;
 type FilterKey = typeof filterKeys[number];
+const genderOptions = [
+  { value: '', label: 'All genders' },
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+];
 
 export function PublicStatisticsReportPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,17 +55,17 @@ export function PublicStatisticsReportPage() {
     <main className={styles.main}>
       <div className={styles.explorerHeading}><div><p className={styles.kicker}>Live published results</p><h1>Detailed statistics report</h1></div><p>Share this URL to show the same current, finalized public performances. Downloads always match these filters.</p></div>
       <div className={styles.filtersBar} aria-label="Report filters">
-        <label>Discipline<input value={filters.discipline} placeholder="e.g. 100m" onChange={(event) => updateFilter('discipline', event.target.value)} /></label>
-        <label>Season<select value={filters.season} onChange={(event) => updateFilter('season', event.target.value)}><option value="">All seasons</option>{seasons.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
-        <label>Club<select value={filters.club} onChange={(event) => updateFilter('club', event.target.value)}><option value="">All published clubs</option>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
-        <label>Gender<select value={filters.gender} onChange={(event) => updateFilter('gender', event.target.value)}><option value="">All genders</option><option value="male">Male</option><option value="female">Female</option></select></label>
-        <label>Age category<input type="number" min="5" max="100" value={filters.age} onChange={(event) => updateFilter('age', event.target.value)} /></label>
+        <label>Discipline<Input value={filters.discipline} placeholder="e.g. 100m" onChange={(event) => updateFilter('discipline', event.target.value)} /></label>
+        <label>Season<Select aria-label="Season" value={filters.season} onChange={(event) => updateFilter('season', event.target.value)} options={[{ value: '', label: 'All seasons' }, ...seasons.map((year) => ({ value: String(year), label: String(year) }))]} /></label>
+        <label>Club<Select aria-label="Club" value={filters.club} onChange={(event) => updateFilter('club', event.target.value)} options={[{ value: '', label: 'All published clubs' }, ...clubs.map((club) => ({ value: club.id, label: club.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" /></label>
+        <label>Gender<Select aria-label="Gender" value={filters.gender} onChange={(event) => updateFilter('gender', event.target.value)} options={genderOptions} /></label>
+        <label>Age category<Input type="number" min="5" max="100" value={filters.age} onChange={(event) => updateFilter('age', event.target.value)} /></label>
       </div>
-      <div className={styles.comparisonToolbar}><p aria-live="polite">{loading ? 'Loading report...' : `${report.meta.count} published performance${report.meta.count === 1 ? '' : 's'}`}</p><div><button type="button" onClick={exportCsv} disabled={loading || !report.data.length || exporting !== null}>Download CSV</button><button type="button" onClick={() => void exportPdf()} disabled={loading || !report.data.length || exporting !== null}>Download PDF</button></div></div>
-      {exporting && <p role="status">Preparing {exporting.toUpperCase()} download...</p>}
+      <div className={styles.reportToolbar}><p aria-live="polite">{loading ? 'Loading report...' : `${report.meta.count} published performance${report.meta.count === 1 ? '' : 's'}`}</p><div className={styles.exportActions}><Button variant="secondary" onClick={exportCsv} disabled={loading || !report.data.length || exporting !== null}>Download CSV</Button><Button onClick={() => void exportPdf()} disabled={loading || !report.data.length || exporting !== null}>Download PDF</Button></div></div>
+      {exporting && <p className={styles.loading} role="status">Preparing {exporting.toUpperCase()} download...</p>}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {!loading && !error && !report.data.length && <p className={styles.empty} role="status">No matching published performances found.</p>}
-      {!loading && !error && report.data.length > 0 && <><div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label="Athlete report metrics"><thead><tr><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Personal best</th><th scope="col">Finalized results</th></tr></thead><tbody>{athleteMetrics.map((metric) => <tr key={`${metric.athleteName}:${metric.label}`}><td>{metric.athleteName}</td><td>{metric.clubName}</td><td>{metric.label}</td><td>{metric.pb.toFixed(metric.precision)} {metric.unit === 'seconds' ? 's' : metric.unit}</td><td>{metric.count}</td></tr>)}</tbody></table></div><div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label="Detailed public statistics report"><caption>Performance history and live leaderboard context</caption><thead><tr><th scope="col">Place</th><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Performance</th><th scope="col">Event</th><th scope="col">Date</th></tr></thead><tbody>{report.data.map((entry) => <tr key={`${entry.athleteId}:${entry.discipline}:${entry.eventDate}:${entry.performance}`}><td>{entry.place}</td><td>{entry.athleteName}</td><td>{entry.clubName}</td><td>{entry.label}</td><td>{entry.performance.toFixed(entry.precision)} {entry.unit === 'seconds' ? 's' : entry.unit}</td><td>{entry.eventTitle}</td><td><time dateTime={entry.eventDate}>{entry.eventDate}</time></td></tr>)}</tbody></table></div></>}
+      {!loading && !error && report.data.length > 0 && <><div className={`${styles.resultsTable} ${styles.tableScroll}`}><table className={styles.comparisonTable} aria-label="Athlete report metrics"><thead><tr><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Personal best</th><th scope="col">Finalized results</th></tr></thead><tbody>{athleteMetrics.map((metric) => <tr key={`${metric.athleteName}:${metric.label}`}><td>{metric.athleteName}</td><td>{metric.clubName}</td><td>{metric.label}</td><td>{metric.pb.toFixed(metric.precision)} {metric.unit === 'seconds' ? 's' : metric.unit}</td><td>{metric.count}</td></tr>)}</tbody></table></div><div className={`${styles.resultsTable} ${styles.tableScroll}`}><table className={styles.comparisonTable} aria-label="Detailed public statistics report"><caption>Performance history and live leaderboard context</caption><thead><tr><th scope="col">Place</th><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Performance</th><th scope="col">Event</th><th scope="col">Date</th></tr></thead><tbody>{report.data.map((entry) => <tr key={`${entry.athleteId}:${entry.discipline}:${entry.eventDate}:${entry.performance}`}><td>{entry.place}</td><td>{entry.athleteName}</td><td>{entry.clubName}</td><td>{entry.label}</td><td>{entry.performance.toFixed(entry.precision)} {entry.unit === 'seconds' ? 's' : entry.unit}</td><td>{entry.eventTitle}</td><td><time dateTime={entry.eventDate}>{entry.eventDate}</time></td></tr>)}</tbody></table></div></>}
     </main>
   </div>;
 }

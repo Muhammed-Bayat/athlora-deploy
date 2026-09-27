@@ -102,6 +102,20 @@ describe('FixtureHostPanel', () => {
     expect(screen.getAllByText('PB').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('directs multi-discipline fixture teams to the session roster tabs', async () => {
+    vi.mocked(listFixtureRosters).mockResolvedValue({
+      data: [{
+        team: { workspaceId: 'guest', workspaceName: 'Guest Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null },
+        participants: [],
+      }],
+      meta: { count: 1 },
+    });
+
+    render(<FixtureHostPanel event={{ ...event, discipline: null }} canOperate isCoach usesSessionRosters />);
+
+    expect(await screen.findByText('Their discipline entries appear in the event roster tabs.')).toBeInTheDocument();
+  });
+
   it('lets assistants operate host fixture controls but not record team withdrawals', async () => {
     vi.mocked(listFixtureRosters).mockResolvedValue({
       data: [

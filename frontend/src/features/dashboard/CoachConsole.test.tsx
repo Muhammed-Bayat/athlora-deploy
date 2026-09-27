@@ -143,11 +143,26 @@ describe('CoachConsole dashboard navigation', () => {
       </WorkspaceContext.Provider>,
     );
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Active Club' }), 'workspace-2');
+    await user.click(screen.getByRole('button', { name: 'Active Club' }));
+    await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Relay Club' }));
 
     expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
-    expect(screen.getByRole('combobox', { name: 'Active Club' })).toHaveClass(/workspaceSelect/);
+    expect(screen.getByRole('button', { name: 'Active Club' }).parentElement).toHaveClass(/workspaceSelect/);
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
+  });
+
+  it('shows the active Club option when it is the only workspace', async () => {
+    const user = userEvent.setup();
+    const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
+    render(
+      <WorkspaceContext.Provider value={{ activeWorkspace: personalWorkspace, workspaces: [personalWorkspace], selectWorkspace: vi.fn(), refreshWorkspaces: async () => undefined }}>
+        <MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>
+      </WorkspaceContext.Provider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Active Club' }));
+
+    expect(within(screen.getByRole('listbox')).getByRole('option', { name: 'Personal workspace' })).toBeVisible();
   });
 
   it('closes the weather preview when the page is clicked', async () => {
