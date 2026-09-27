@@ -118,6 +118,10 @@ async function sendRequest<T>(path: string, init: RequestInit | undefined, heade
     });
     recordNetworkSuccess();
   } catch (error) {
+    // Filter updates cancel superseded reads. They are not connectivity failures.
+    if (init?.signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw error;
+    }
     recordNetworkFailure();
     throw new ApiError(0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Network request failed');
   }

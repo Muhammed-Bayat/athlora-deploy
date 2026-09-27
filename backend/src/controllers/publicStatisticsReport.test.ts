@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app.js';
 import * as dbClient from '../db/client.js';
 import * as reportService from '../services/publicStatisticsReport.js';
+import * as disciplineCatalog from '../services/disciplineCatalog.js';
 
 vi.mock('../services/publicStatisticsReport.js', () => ({ getPublicStatisticsReport: vi.fn() }));
+vi.mock('../services/disciplineCatalog.js', () => ({ listAvailableDisciplines: vi.fn() }));
 vi.mock('../db/client.js', () => ({ getPool: vi.fn() }));
 
 describe('public statistics report route', () => {
@@ -19,5 +21,15 @@ describe('public statistics report route', () => {
     expect(response.body.data).toEqual([]);
     expect(response.body.meta.count).toBe(0);
     expect(reportService.getPublicStatisticsReport).toHaveBeenCalledWith(expect.objectContaining({ discipline: '100m', season: '2026' }), expect.anything());
+  });
+
+  it('returns all configured disciplines without authentication', async () => {
+    vi.mocked(dbClient.getPool).mockReturnValue({} as never);
+    vi.mocked(disciplineCatalog.listAvailableDisciplines).mockResolvedValue([{ discipline: '100m', label: '100 metres', unit: 'seconds', precision: 2, direction: 'lower' }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, direction: 'higher' }]);
+
+    const response = await request(createApp()).get('/api/v1/public/statistics/report/disciplines');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: [{ code: '100m', label: '100 metres' }, { code: 'long_jump', label: 'Long jump' }], meta: { count: 2 } });
   });
 });

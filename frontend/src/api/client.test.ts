@@ -10,6 +10,7 @@ import {
   setAccessTokenGetter,
   syncCurrentUser,
 } from './client';
+import { isDeviceOnline, resetNetworkStatus } from '../offline/networkStatus';
 
 const synchronizedUser: User = {
   id: 'user-1',
@@ -26,6 +27,7 @@ const synchronizedUser: User = {
 afterEach(() => {
   setAccessTokenGetter(undefined);
   setActiveWorkspaceId(undefined);
+  resetNetworkStatus();
   vi.unstubAllGlobals();
 });
 
@@ -146,6 +148,15 @@ describe('API client', () => {
       code: 'NETWORK_ERROR',
       message: 'Failed to fetch',
     });
+  });
+
+  it('does not mark the device offline when a public request is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new DOMException('Aborted', 'AbortError')));
+
+    await expect(requestPublic('/api/v1/public/statistics/report', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(isDeviceOnline()).toBe(true);
   });
 
   it('handles malformed JSON responses as ApiError with code MALFORMED_RESPONSE', async () => {

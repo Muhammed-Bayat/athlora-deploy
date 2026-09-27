@@ -128,9 +128,10 @@ Relay `members` expose only ordered leg number, display name, and guest flag. Ra
 
 ```
 GET /api/v1/public/statistics/report?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={age|under-age}
+GET /api/v1/public/statistics/report/disciplines
 ```
 
-The unauthenticated `/stats/report` page keeps these filters in its shareable URL and reads the endpoint live, so it never serves a stored private snapshot. The response includes completed legacy 100m results and completed/final individual session performances. Each row contains safe athlete and club names, discipline presentation, performance, public standing, event title and date. Cancelled events, archived athletes, provisional sessions, invalid outcomes, withdrawn registrations, guests, relays and unpublished clubs are excluded.
+The unauthenticated `/stats/report` page keeps these filters in its shareable URL and reads the endpoint live, so it never serves a stored private snapshot. Its discipline autocomplete reads `/report/disciplines`, which returns only canonical `{ code, label }` values with reportable published results; a unique prefix such as `100` resolves to `100m`. Clearing the filter removes only `discipline` from the URL and reloads all matching published results. The report response includes completed legacy 100m results and completed/final individual session performances. Each row contains safe athlete and club names, discipline presentation, performance, public standing, event title and date. Cancelled events, archived athletes, provisional sessions, invalid outcomes, withdrawn registrations, guests, relays and unpublished clubs are excluded.
 
 The report page generates matching CSV and branded PDF downloads in the browser. CSV cells are quoted and values beginning with spreadsheet formulas are escaped. PDF and CSV exports contain the same filtered data displayed in the report.
 

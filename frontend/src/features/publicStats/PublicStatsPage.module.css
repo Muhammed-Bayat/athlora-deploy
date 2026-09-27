@@ -189,7 +189,6 @@
   .header, .content, .main, .footer { width: min(100% - 32px, 640px); }
   .header { min-height: 72px; }
   .header nav { gap: 13px; font-size: 0.64rem; }
-  .header nav > a:first-child { display: none; }
   .hero { grid-template-columns: 1fr; gap: 30px; min-height: 0; }
   .heroCopy { padding-bottom: 0; }
   .seasonControl { align-self: stretch; width: 100%; margin-bottom: 0; }

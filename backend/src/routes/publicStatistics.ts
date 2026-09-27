@@ -8,7 +8,7 @@ import { disciplineAthleteStatistics } from '../services/disciplineStatistics.js
 import { publicClubSessionResults } from '../services/publicResults.js';
 import { parseSeasonYear } from '../services/seasons.js';
 import { leaderboard } from '../controllers/leaderboard.js';
-import { publicStatisticsReport } from '../controllers/publicStatisticsReport.js';
+import { publicStatisticsReport, publicStatisticsReportDisciplines } from '../controllers/publicStatisticsReport.js';
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.get('/seasons', publicStatistics.listSeasons);
 router.get('/clubs', publicStatistics.listClubs);
 router.get('/comparison', publicStatistics.athleteComparison);
 router.get('/leaderboard', leaderboard);
+router.get('/report/disciplines', publicStatisticsReportDisciplines);
 router.get('/report', publicStatisticsReport);
 router.get('/clubs/:clubId', publicStatistics.clubStatistics);
 router.get('/clubs/:clubId/session-results', async (req, res, next) => {

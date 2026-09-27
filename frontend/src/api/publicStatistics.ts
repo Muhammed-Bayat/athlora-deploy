@@ -90,6 +90,11 @@ export interface PublicStatisticsReport {
   meta: { count: number; generatedAt: string };
 }
 
+export interface PublicStatisticsReportDiscipline {
+  code: string;
+  label: string;
+}
+
 export async function getPublicLeaderboard(filters: Record<string, string | undefined>, signal?: AbortSignal): Promise<LeaderboardEntry[]> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -107,6 +112,11 @@ export async function getPublicStatisticsReport(filters: Record<string, string |
   }
   const query = params.toString() ? `?${params.toString()}` : '';
   return requestPublic<PublicStatisticsReport>(`/api/v1/public/statistics/report${query}`, { signal });
+}
+
+export async function listPublicStatisticsReportDisciplines(signal?: AbortSignal): Promise<PublicStatisticsReportDiscipline[]> {
+  const response = await requestPublic<{ data: PublicStatisticsReportDiscipline[] }>('/api/v1/public/statistics/report/disciplines', { signal });
+  return response.data;
 }
 
 export async function getPublicClubSessionResults(clubId: string, signal?: AbortSignal): Promise<PublicClubSessionResults[]> {
