@@ -14,6 +14,10 @@ import type { User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
 import { WorkspaceContext } from '../auth/WorkspaceContext';
 
+const { sessionLivePanelStub } = vi.hoisted(() => ({
+  sessionLivePanelStub: vi.fn(() => null),
+}));
+
 vi.mock('../../api/events');
 vi.mock('../../api/athletes');
 vi.mock('../../api/participants');
@@ -22,6 +26,7 @@ vi.mock('../../api/results');
 vi.mock('../../api/fixtures', () => ({ getGuestFixture: vi.fn() }));
 vi.mock('../../api/eventHelpers');
 vi.mock('../events/PublicLoggerPanel', () => ({ PublicLoggerPanel: () => null }));
+vi.mock('../events/SessionLivePanel', () => ({ SessionLivePanel: sessionLivePanelStub }));
 
 describe('LiveLoggingPage', () => {
   const currentUser: User = {
@@ -38,6 +43,7 @@ describe('LiveLoggingPage', () => {
 
   const mockEvent = {
     id: 'ev-1',
+    workspaceId: 'workspace-1',
     createdBy: 'user-1',
     type: 'competition' as const,
     discipline: '100m' as const,
@@ -774,5 +780,66 @@ describe('LiveLoggingPage', () => {
     expect(within(board).getByText('Archived')).toBeInTheDocument();
     expect(within(board).getByText('Historical result')).toBeInTheDocument();
     expect(athletesApi.listAthletes).toHaveBeenCalledWith({ includeArchived: true });
+  });
+
+  it('opens the tabbed meet logger for a multi-discipline event', async () => {
+    const meetEvent = {
+      ...mockEvent,
+      id: 'ev-meet',
+      discipline: null,
+      title: 'Spring Multi Meet',
+      status: 'in_progress' as const,
+    };
+    vi.mocked(eventsApi.getEvent).mockResolvedValue(meetEvent);
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [meetEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+
+    renderPage(meetEvent.id);
+
+    expect(await screen.findByRole('heading', { name: 'Spring Multi Meet' })).toBeInTheDocument();
+    expect(screen.getByText(/Main Stadium · Multi-discipline meet · 1 assigned athletes/)).toBeInTheDocument();
+    expect(sessionLivePanelStub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ id: 'ev-meet', discipline: null }),
+        canOperate: true,
+        isCoach: true,
+      }),
+      expect.anything(),
+    );
+    expect(screen.queryByLabelText(/Finish time for/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record' })).not.toBeInTheDocument();
+  });
+
+  it('starts a scheduled meet event without forcing a 100m discipline', async () => {
+    const meetEvent = {
+      ...mockEvent,
+      id: 'ev-meet',
+      discipline: null,
+      title: 'Spring Multi Meet',
+    };
+    const activeMeet = { ...meetEvent, status: 'in_progress' as const };
+    vi.mocked(eventsApi.getEvent).mockResolvedValue(activeMeet);
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [meetEvent], meta: { count: 1 } });
+    vi.mocked(eventsApi.updateEvent).mockResolvedValue(activeMeet);
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(await screen.findByText(/Main Stadium · Multi-discipline meet/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Start Event/i }));
+
+    await waitFor(() => {
+      expect(eventsApi.updateEvent).toHaveBeenCalledWith('ev-meet', expect.objectContaining({
+        discipline: null,
+        status: 'in_progress',
+      }));
+    });
+    expect(await screen.findByRole('heading', { name: 'Spring Multi Meet' })).toBeInTheDocument();
+    expect(sessionLivePanelStub).toHaveBeenCalled();
   });
 });

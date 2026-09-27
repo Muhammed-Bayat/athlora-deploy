@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as meets from '../../api/meets';
+import { listEventParticipants } from '../../api/participants';
 import { Button, OfflineRecoverySurface, Select } from '../../components';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
@@ -8,7 +9,8 @@ import { useCurrentUser } from '../auth/CurrentUserContext';
 import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
 import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent } from '../../types';
-import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResolution, SessionResult } from '../../types/meets';
+import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
+import styles from './SessionLivePanel.module.css';
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
@@ -43,29 +45,42 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
   const [resolution, setResolution] = useState<SessionResolution | null>(null);
   const [resolutionReason, setResolutionReason] = useState('');
+  const [declinedAthleteIds, setDeclinedAthleteIds] = useState<Set<string>>(new Set());
+  const [registrations, setRegistrations] = useState<{ sessionId: string; rows: SessionRegistration[] }>({ sessionId: '', rows: [] });
+  const [height, setHeight] = useState('');
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
+  const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
+  const timedSessions = sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId));
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
   const selectedEntrant = entrants.find((item) => item.id === entrantId);
   const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
   const timed = definition?.defaultRules.aggregation === 'timed';
+  const vertical = definition?.kind === 'vertical';
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
+  const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
+  const registeredEntrantIds = new Set(sessionRegistrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId));
+  const selectedRegistered = registeredEntrantIds.has(entrantId);
+  const selectedEliminated = Boolean(results.find((row) => row.entrantId === entrantId)?.vertical?.eliminated);
 
   const reload = useCallback(async () => {
     try {
-      const [catalogue, nextSessions, nextEntrants] = await Promise.all([
-        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
+      const [catalogue, nextSessions, nextEntrants, participantResponse] = await Promise.all([
+        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id), listEventParticipants(event.id),
       ]);
       setDefinitions(catalogue.data);
       setSessions(nextSessions.data);
       const normalizedEntrants = nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] }));
       setEntrants(normalizedEntrants);
+      setDeclinedAthleteIds(new Set(participantResponse.data.filter((participant) => participant.rsvpStatus === 'no').map((participant) => participant.athleteId)));
       if (sessionId) {
-        const [history, board] = await Promise.all([
+        const [history, board, registrationList] = await Promise.all([
           meets.listSessionEntries(event.id, sessionId),
           meets.listSessionResults(event.id, sessionId),
+          meets.listRegistrations(event.id, sessionId),
         ]);
+        setRegistrations({ sessionId, rows: registrationList.data });
         const nextEntries = history.data.filter((entry) => !entrantId || entry.entrantId === entrantId);
         setEntries(nextEntries);
         setResults(board.data);
@@ -125,6 +140,25 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     }
   }, [event.id, offline, offline.isOnline, offline.queueStatus.pending]);
 
+  useEffect(() => {
+    if (timedSessions.some((item) => item.id === sessionId)) return;
+    setSessionId(timedSessions[0]?.id ?? '');
+  }, [sessionId, timedSessions]);
+
+  const selectSession = (nextSessionId: string, focus = false) => {
+    setSessionId(nextSessionId);
+    setEntrantId('');
+    const nextSession = sessions.find((item) => item.id === nextSessionId);
+    setHeight(nextSession?.verticalConfig ? String(nextSession.verticalConfig.startingHeight) : '');
+    if (focus) window.requestAnimationFrame(() => sessionTabRefs.current.get(nextSessionId)?.focus());
+  };
+
+  const moveSessionTab = (currentId: string, offset: number) => {
+    const currentIndex = timedSessions.findIndex((item) => item.id === currentId);
+    const next = timedSessions[(currentIndex + offset + timedSessions.length) % timedSessions.length];
+    if (next) selectSession(next.id, true);
+  };
+
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -171,6 +205,39 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     if (!queued) await meets.undoSessionEntry(event.id, target, entry.id, entry.version);
   });
 
+  const logVerticalAttempt = (verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
+    if (!sessionId || !entrantId || !definition || height === '') return;
+    await meets.createSessionEntry(event.id, target, {
+      entryType: 'attempt',
+      value: Number(height),
+      unit: definition.unit,
+      verticalState,
+      isFoul: false,
+      incidentType: null,
+      noteText: null,
+      deviceId: null,
+    });
+  });
+
+  const voidEntry = (entry: SessionEntry) => run(async () => {
+    await meets.replaceSessionEntry(event.id, target, entry.id, {
+      entryType: entry.entryType,
+      value: entry.value,
+      unit: entry.unit,
+      isFoul: entry.isFoul,
+      incidentType: entry.incidentType,
+      noteText: entry.noteText,
+      deviceId: null,
+      verticalState: 'void',
+      expectedVersion: entry.version,
+    });
+  });
+
+  const registerSelected = () => run(async () => {
+    if (!sessionId || !entrantId) return;
+    await meets.registerEntrant(event.id, target);
+  });
+
   const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
   const completeSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'completed', session!.version));
   const loadResolution = () => run(async () => {
@@ -183,10 +250,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     setResolution(await meets.getSessionResolution(event.id, sessionId));
   });
 
-  const timedSessions = sessions.filter((item) => {
-    const def = definitions.find((candidate) => candidate.id === item.disciplineDefinitionId);
-    return def && def.kind !== 'vertical';
-  });
   const recoveryActions = (offline.queueActions ?? []).map((action) => {
     const targetEntrant = action.target?.entrantId ? entrants.find((entrant) => entrant.id === action.target?.entrantId) : null;
     const targetSession = action.target?.disciplineSessionId ? sessions.find((item) => item.id === action.target?.disciplineSessionId) : null;
@@ -218,20 +281,35 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
 
   function exportResults() {
     const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
-    const rows = [
-      ['Place', 'Team', 'Members', 'Result', 'Outcome', 'Official entry'],
-      ...results.map((row) => {
-        const entrant = entrants.find((item) => item.id === row.entrantId);
-        return [
-          row.placing ?? '',
-          entrant?.name ?? '',
-          memberSummary(entrant, entrants),
-          row.effectiveResult === null ? '' : row.effectiveResult.toFixed(definition?.precision ?? 2),
-          row.effectiveOutcome,
-          row.selectedEntryId ? 'selected' : '',
-        ];
-      }),
-    ];
+    const rows = vertical
+      ? [
+        ['Place', 'Entrant', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
+        ...results.map((row) => {
+          const entrant = entrants.find((item) => item.id === row.entrantId);
+          return [
+            row.placing ?? '',
+            entrant?.name ?? '',
+            row.effectiveResult === null ? 'NH' : row.effectiveResult.toFixed(definition?.precision ?? 2),
+            row.vertical?.failuresAtBest ?? '',
+            row.vertical?.totalFailuresToBest ?? '',
+            row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome,
+          ];
+        }),
+      ]
+      : [
+        ['Place', 'Team', 'Members', 'Result', 'Outcome', 'Official entry'],
+        ...results.map((row) => {
+          const entrant = entrants.find((item) => item.id === row.entrantId);
+          return [
+            row.placing ?? '',
+            entrant?.name ?? '',
+            memberSummary(entrant, entrants),
+            row.effectiveResult === null ? '' : row.effectiveResult.toFixed(definition?.precision ?? 2),
+            row.effectiveOutcome,
+            row.selectedEntryId ? 'selected' : '',
+          ];
+        }),
+      ];
     const url = URL.createObjectURL(new Blob([rows.map((row) => row.map(quote).join(',')).join('\n')], { type: 'text/csv' }));
     const link = document.createElement('a');
     link.href = url;
@@ -245,7 +323,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   return (
     <section aria-label="Session live logging" aria-busy={busy}>
       <h2>Session live logger</h2>
-      <p>Timed results require coach selection. Jumps and throws use the automatic best legal attempt. Offline attempts queue and sync when reconnecting.</p>
+      <p>Timed results require coach selection. Jumps and throws use the automatic best legal attempt. High jump and pole vault progress by height with countback rankings. Entrants must be registered to a session before logging. Offline attempts queue and sync when reconnecting.</p>
       <OfflineRecoverySurface
         isOnline={offline.isOnline}
         actions={recoveryActions}
@@ -259,17 +337,38 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
         }}
       />
       {error && <p role="alert">{error}</p>}
-      <label>
-        Session
-        <Select
-          aria-label="Session"
-          value={sessionId}
-          onChange={(input) => { setSessionId(input.target.value); setEntrantId(''); }}
-          options={[{ value: '', label: 'Choose session' }, ...timedSessions.map((item) => ({ value: item.id, label: `${item.label} (${item.status})` }))]}
-        />
-      </label>
+      {timedSessions.length === 0 && <p>No timed discipline sessions have been added to this event yet.</p>}
+      {timedSessions.length > 0 && (
+        <div className={styles.sessionTabs} role="tablist" aria-label="Discipline sessions">
+          {timedSessions.map((item) => {
+            const active = item.id === sessionId;
+            return (
+              <button
+                key={item.id}
+                ref={(node) => { if (node) sessionTabRefs.current.set(item.id, node); else sessionTabRefs.current.delete(item.id); }}
+                type="button"
+                role="tab"
+                id={`live-session-${item.id}-tab`}
+                aria-selected={active}
+                aria-controls={`live-session-${item.id}-panel`}
+                tabIndex={active ? 0 : -1}
+                onClick={() => selectSession(item.id)}
+                onKeyDown={(keyboardEvent) => {
+                  if (keyboardEvent.key === 'ArrowRight' || keyboardEvent.key === 'ArrowDown') { keyboardEvent.preventDefault(); moveSessionTab(item.id, 1); }
+                  if (keyboardEvent.key === 'ArrowLeft' || keyboardEvent.key === 'ArrowUp') { keyboardEvent.preventDefault(); moveSessionTab(item.id, -1); }
+                  if (keyboardEvent.key === 'Home') { keyboardEvent.preventDefault(); selectSession(timedSessions[0]!.id, true); }
+                  if (keyboardEvent.key === 'End') { keyboardEvent.preventDefault(); selectSession(timedSessions[timedSessions.length - 1]!.id, true); }
+                }}
+              >
+                <span>{item.label}</span>
+                <small>{item.status.replace('_', ' ')}</small>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {session && definition && (
-        <>
+        <div className={styles.sessionPanel} role="tabpanel" id={`live-session-${session.id}-panel`} aria-labelledby={`live-session-${session.id}-tab`} tabIndex={0}>
           <p>{definition.presentation.label}: {session.status} — {session.resultState ?? 'provisional'}</p>
           {canFinalize && session.status === 'scheduled' && event.status === 'in_progress' && (
             <Button onClick={() => void startSession()} disabled={busy}>Start session</Button>
@@ -289,15 +388,45 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 { value: '', label: 'Choose team' },
                 ...entrants
                   .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
-                  .map((item) => ({ value: item.id, label: item.name })),
+                  .filter((item) => item.kind === 'relay' || !item.athleteId || !declinedAthleteIds.has(item.athleteId))
+                  .map((item) => ({ value: item.id, label: registeredEntrantIds.has(item.id) ? item.name : `${item.name} (not registered)` })),
               ]}
             />
           </label>
           {selectedEntrant?.kind === 'relay' && (
             <p aria-label="Team members">Legs: {memberSummary(selectedEntrant, entrants) || 'Members not listed'}</p>
           )}
-          {live && entrantId && (
-            <fieldset disabled={busy}>
+          {selectedEntrant && !selectedRegistered && (
+            <p role="status">{selectedEntrant.name} is not registered for this session.</p>
+          )}
+          {isCoach && selectedEntrant && !selectedRegistered && selectedEntrant.workspaceId === activeWorkspace.id && session.status === 'scheduled' && ['scheduled', 'in_progress'].includes(event.status) && (
+            <Button onClick={() => void registerSelected()} disabled={busy}>Register entrant</Button>
+          )}
+          {vertical && session.verticalConfig && (
+            <p>{session.verticalConfig.round}: starts at {session.verticalConfig.startingHeight.toFixed(2)} m, then +{session.verticalConfig.heightIncrement.toFixed(2)} m per height. {session.verticalConfig.failureLimit} consecutive failures eliminate an entrant.</p>
+          )}
+          {live && entrantId && vertical && (
+            <fieldset disabled={busy || !selectedRegistered || selectedEliminated}>
+              <legend>Log vertical attempt</legend>
+              <label>
+                Target height (m)
+                <input
+                  type="number"
+                  min={session.verticalConfig?.startingHeight ?? 0.01}
+                  step={session.verticalConfig?.heightIncrement ?? 0.01}
+                  value={height}
+                  onChange={(input) => setHeight(input.target.value)}
+                />
+              </label>
+              <Button variant="secondary" onClick={() => setHeight(((height === '' ? (session.verticalConfig?.startingHeight ?? 0) : Number(height)) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2))}>Next height</Button>
+              {(['clearance', 'failure', 'pass'] as const).map((state) => (
+                <Button key={state} disabled={busy || height === ''} onClick={() => void logVerticalAttempt(state)}>{state}</Button>
+              ))}
+              {selectedEliminated && <p>{selectedEntrant?.name} is eliminated.</p>}
+            </fieldset>
+          )}
+          {live && entrantId && !vertical && (
+            <fieldset disabled={busy || !selectedRegistered}>
               <legend>Log attempt</legend>
               <label>
                 {timed ? 'Time (s)' : `Mark (${definition.unit})`}
@@ -338,8 +467,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           <ol>
             {teamEntries.map((entry, index) => (
               <li key={entry.id}>
-                #{index + 1} {formatResult(entry.value, definition)} {entry.incidentType ?? ''} {entry.isFoul && 'Foul'}
-                {selectedResult?.selectedEntryId === entry.id && ' · official'}
+                #{entry.attemptOrder ?? index + 1} {vertical
+                  ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
+                  : `${formatResult(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}
+                {!vertical && selectedResult?.selectedEntryId === entry.id && ' · official'}
                 {isCoach && live && (
                   <>
                     {' '}
@@ -350,6 +481,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                     >
                       Make official
                     </Button>}
+                    {vertical && entry.verticalState && entry.verticalState !== 'void' && (
+                      <Button variant="secondary" disabled={busy} onClick={() => void voidEntry(entry)}>Void attempt {entry.attemptOrder}</Button>
+                    )}
                     <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entry)}>Undo</Button>
                   </>
                 )}
@@ -368,8 +502,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 <th scope="col">Team</th>
                 <th scope="col">Members</th>
                 <th scope="col">Result</th>
+                {vertical && <th scope="col">Countback</th>}
                 <th scope="col">Status</th>
-                <th scope="col">Official entry</th>
+                {!vertical && <th scope="col">Official entry</th>}
               </tr>
             </thead>
             <tbody>
@@ -382,9 +517,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                       <td>{row.placing ?? '—'}</td>
                       <td>{entrant?.name ?? 'Team'}</td>
                       <td>{memberSummary(entrant, entrants)}</td>
-                      <td>{formatResult(row.effectiveResult, definition)}</td>
-                      <td>{row.effectiveOutcome}</td>
-                      <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>
+                      <td>{vertical && row.effectiveResult === null ? 'NH' : formatResult(row.effectiveResult, definition)} {row.isPb && 'PB'} {row.isSb && 'SB'}</td>
+                      {vertical && <td>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
+                      <td>{row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome}</td>
+                      {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
                     </tr>
                   );
                 })}
@@ -410,7 +546,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                </ol>
              </section>
            )}
-         </>
+         </div>
       )}
     </section>
   );

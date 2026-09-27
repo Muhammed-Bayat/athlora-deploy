@@ -1,0 +1,54 @@
+.sessionTabs {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: 0 var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--console-line);
+}
+
+.sessionTabs button {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.15rem;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--console-muted);
+  font: var(--font-weight-bold) var(--font-size-sm) var(--font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sessionTabs button small { color: var(--console-faint); font: 0.7rem var(--font-family-mono); }
+
+.sessionTabs button[aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--console-cyan) 35%, transparent);
+  background: var(--console-selected-surface);
+  color: var(--console-selected-text);
+  box-shadow: inset 0 -2px var(--console-primary-start);
+}
+
+.sessionTabs button[aria-selected='true'] small { color: inherit; }
+
+.sessionPanel {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 2px solid var(--console-cyan);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--console-surface) 92%, #00111a);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--console-cyan) 18%, transparent);
+}
+
+.sessionPanel:focus-visible,
+.sessionTabs button:focus-visible {
+  outline: 3px solid var(--console-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .sessionPanel { padding: var(--space-3); }
+}

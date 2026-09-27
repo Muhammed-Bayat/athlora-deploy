@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as meets from '../../api/meets';
 import { listAthletes } from '../../api/athletes';
 import { addEventParticipant, listEventParticipants, updateEventParticipant } from '../../api/participants';
+import { addGuestFixtureParticipant, listGuestFixtureParticipants, updateGuestFixtureParticipant } from '../../api/fixtures';
 import { Button, Select } from '../../components';
 import type { Athlete, AthleticsEvent, EventParticipantSummary, RsvpStatus } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionRegistration } from '../../types/meets';
@@ -52,7 +53,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   const reload = useCallback(async () => {
     const request = ++reloadRequestRef.current;
     const [catalogue, nextSessions, nextEntrants, roster, eventParticipants] = await Promise.all([
-      meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id), listAthletes({ status: 'active' }), isGuest ? Promise.resolve({ data: [] as EventParticipantSummary[] }) : listEventParticipants(event.id),
+      meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id), listAthletes({ status: 'active' }), isGuest ? listGuestFixtureParticipants(event.id) : listEventParticipants(event.id),
     ]);
     if (request !== reloadRequestRef.current) return;
     setDefinitions(catalogue.data);
@@ -132,7 +133,10 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   const addSelectedAthletes = () => run(async () => {
     for (const athleteId of selectedAthleteIds) {
       const entrant = entrants.find((item) => item.athleteId === athleteId) ?? await meets.createEntrant(event.id, { kind: 'athlete', athleteId });
-      if (!isGuest && !participants.some((participant) => participant.athleteId === athleteId)) await addEventParticipant(event.id, athleteId);
+      if (!participants.some((participant) => participant.athleteId === athleteId)) {
+        if (isGuest) await addGuestFixtureParticipant(event.id, athleteId);
+        else await addEventParticipant(event.id, athleteId);
+      }
       if (!relaySession && selected && !registeredEntrantIds.has(entrant.id)) {
         await meets.registerEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id });
       }
@@ -151,8 +155,13 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
 
   const updateRsvp = (entrant: MeetEntrant, rsvpStatus: RsvpStatus) => run(async () => {
     if (!entrant.athleteId) return;
-    if (!participantFor(entrant)) await addEventParticipant(event.id, entrant.athleteId);
-    await updateEventParticipant(event.id, entrant.athleteId, rsvpStatus);
+    if (isGuest) {
+      if (!participantFor(entrant)) await addGuestFixtureParticipant(event.id, entrant.athleteId);
+      await updateGuestFixtureParticipant(event.id, entrant.athleteId, rsvpStatus);
+    } else {
+      if (!participantFor(entrant)) await addEventParticipant(event.id, entrant.athleteId);
+      await updateEventParticipant(event.id, entrant.athleteId, rsvpStatus);
+    }
   });
 
   const beginEditRelay = (relay: MeetEntrant) => {
@@ -188,7 +197,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
     {selected && <div className={styles.sessionPanel} role="tabpanel" id={`meet-session-${selected.id}-panel`} aria-labelledby={`meet-session-${selected.id}-tab`} tabIndex={0}>
       <header className={styles.rosterHeader}>
         <div><p>Event roster</p><h2>Assigned {relaySession ? 'teams' : 'athletes'} <span>{activeRegistrations.length}</span></h2></div>
-        {!relaySession && !isGuest && <div className={styles.rosterFilter}><span>Roster filter</span><Select aria-label="Roster filter" value={rsvpFilter} onChange={(input) => setRsvpFilter(input.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, ...RSVP_OPTIONS]} /></div>}
+        {!relaySession && <div className={styles.rosterFilter}><span>Roster filter</span><Select aria-label="Roster filter" value={rsvpFilter} onChange={(input) => setRsvpFilter(input.target.value as RsvpStatus | 'all')} options={[{ value: 'all', label: 'All athletes' }, ...RSVP_OPTIONS]} /></div>}
       </header>
 
       {!isGuest && canOperate && selected.status === 'scheduled' && event.status === 'in_progress' && <Button className={styles.sessionAction} onClick={() => void run(async () => { await meets.changeSessionState(event.id, selected.id, 'in_progress', selected.version); })} disabled={busy}>Start session</Button>}
@@ -221,7 +230,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
         const athlete = entrant.athleteId ? athletes.find((item) => item.id === entrant.athleteId) : undefined;
         return <li key={registration.id}>
           <span className={styles.entrantIdentity}><strong>{entrant.name}</strong><small>{entrantDescription(entrant, athlete, entrants)}{athlete && <i data-status={athlete.status}>{athlete.status[0].toUpperCase() + athlete.status.slice(1)}</i>}</small></span>
-          <div className={styles.entrantActions}>{!isGuest && canManageEntrant(entrant) && !relaySession && entrant.athleteId && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
+          <div className={styles.entrantActions}>{canManageEntrant(entrant) && !relaySession && entrant.athleteId && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
             {canAddToRoster && canManageEntrant(entrant) && entrant.kind === 'relay' && relaySession && editingRelayId !== entrant.id && <Button variant="secondary" onClick={() => beginEditRelay(entrant)} disabled={busy}>Edit team</Button>}
             {canManageEntrant(entrant) && <Button variant="ghost" aria-label={`Remove ${entrant.name} from session`} onClick={() => void run(async () => { await meets.withdrawEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id }); })} disabled={busy}>Remove</Button>}
           </div>
@@ -229,7 +238,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       })}</ul>}
       {activeRegistrations.length > 0 && visibleRegistrations.length === 0 && <p className={styles.empty}>No {relaySession ? 'teams' : 'athletes'} match this RSVP filter.</p>}
 
-      {!relaySession && !isGuest && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
+      {!relaySession && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
 
       {relaySession && editingRelayId && (() => {
         const relay = entrants.find((item) => item.id === editingRelayId);

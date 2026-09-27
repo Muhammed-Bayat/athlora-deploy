@@ -153,6 +153,7 @@ function synchronizedUser(): { rows: Array<{ user_id: string; auth0_id: string; 
 function eventRow(overrides: Partial<EventRow> = {}): EventRow {
   return {
     id: EVENT_ID,
+    workspace_id: USER_ID,
     created_by: USER_ID,
     type: 'competition',
     discipline: '100m',
@@ -531,7 +532,7 @@ describe('event weather', () => {
 describe('fixture host-only lifecycle', () => {
   it('rejects non-host workspace from starting a fixture event', async () => {
     configureAuth();
-    const eventData = { id: EVENT_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', time: null, location_name: null, latitude: null, longitude: null, status: 'scheduled', created_at: new Date(), updated_at: new Date(), fixture_revision: 1 };
+    const eventData = { id: EVENT_ID, workspace_id: USER_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Meet', date: '2026-09-01', time: null, location_name: null, latitude: null, longitude: null, status: 'scheduled', created_at: new Date(), updated_at: new Date(), fixture_revision: 1 };
     query.mockImplementation(async (sql: string) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
       if (sql.includes('auth0_id')) return synchronizedUser();

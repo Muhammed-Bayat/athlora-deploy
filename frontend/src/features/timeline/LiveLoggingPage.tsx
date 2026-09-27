@@ -14,6 +14,7 @@ import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { EventResultsView } from '../results/EventResultsView';
 import { PublicLoggerPanel } from '../events/PublicLoggerPanel';
+import { SessionLivePanel } from '../events/SessionLivePanel';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import { useEventOffline } from '../../hooks/useEventOffline';
 import { isDeviceOnline } from '../../offline/networkStatus';
@@ -138,7 +139,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     setError(null);
     try {
       const res = await listEvents();
-      setEvents(res.data.filter((item) => item.discipline !== null));
+      setEvents(res.data);
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events');
@@ -314,7 +315,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     try {
       const updated = await updateEvent(event.id, {
         type: event.type,
-        discipline: '100m',
+        discipline: event.discipline,
         title: event.title,
         date: event.date,
         time: event.time,
@@ -339,7 +340,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
     try {
       const updated = await updateEvent(activeEvent.id, {
         type: activeEvent.type,
-        discipline: '100m',
+        discipline: activeEvent.discipline,
         title: activeEvent.title,
         date: activeEvent.date,
         time: activeEvent.time,
@@ -598,7 +599,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       <div className={styles.container}>
         <div className={styles.header}>
           <h1 ref={pageHeadingRef} tabIndex={-1}>Live Race Logger</h1>
-          <p>Select an in-progress or scheduled 100m event to launch track-side recording.</p>
+          <p>Select an in-progress or scheduled event to launch track-side recording. Meets open one logger with a tab per discipline.</p>
           <OfflineIndicator />
         </div>
         {error && <div className={styles.errorAlert} role="alert">{error}</div>}
@@ -609,7 +610,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         ) : activeOrScheduled.length === 0 ? (
           <EmptyState
             title="No events available"
-            description="Create or schedule a 100m event from the Events view to begin live logging."
+            description="Create or schedule an event from the Events view to begin live logging."
           />
         ) : (
           <div className={styles.eventGrid}>
@@ -622,7 +623,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                   <span className={styles.date}>{ev.date}</span>
                 </div>
                 <h3>{ev.title}</h3>
-                <p>{ev.locationName ?? 'Track & Field Arena'} · 100m</p>
+                <p>{ev.locationName ?? 'Track & Field Arena'} · {ev.discipline === null ? 'Multi-discipline meet' : '100m'}</p>
                 <div className={styles.eventActions}>
                   {ev.status === 'in_progress' ? (
                     <Button
@@ -656,6 +657,9 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   }
 
   const availableParticipants = participants.filter((participant) => participant.rsvpStatus !== 'no');
+  const isMeetEvent = activeEvent.discipline === null;
+  const isCoachWorkspace = activeWorkspace.role === 'coach';
+  const canOperateLive = isCoachWorkspace || activeWorkspace.role === 'assistant';
   const recoveryActions = queueActions.map((action) => {
     const athleteId = typeof action.payload.athleteId === 'string' ? action.payload.athleteId : null;
     const athlete = athleteId ? participants.find((participant) => participant.athleteId === athleteId)?.athlete.name : null;
@@ -701,7 +705,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
         <div>
           <span className={styles.eyebrow}>Live Session Active</span>
           <h2 ref={pageHeadingRef} tabIndex={-1}>{activeEvent.title}</h2>
-          <p>{activeEvent.locationName ?? 'Track'} · 100m · {availableParticipants.length} assigned athletes</p>
+          <p>{activeEvent.locationName ?? 'Track'} · {isMeetEvent ? 'Multi-discipline meet' : '100m'} · {availableParticipants.length} assigned athletes</p>
         </div>
         <div className={styles.headerButtons}>
           <OfflineIndicator />
@@ -723,21 +727,23 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           </Button>}
         </div>
       </div>
-      <OfflineRecoverySurface
-        isOnline={isOnline && isDeviceOnline()}
-        actions={recoveryActions}
-        cacheFreshness={cacheFreshness}
-        designation={designation}
-        onRefresh={async () => {
-          if (selectedEventId) await loadEventData(selectedEventId);
-        }}
-        onSyncNow={syncOfflineChanges}
-        onRetryAction={async (actionId) => {
-          if (!selectedEventId) return;
-          await retryFailedAction(actionId, selectedEventId);
-          await syncOfflineChanges();
-        }}
-      />
+      {!isMeetEvent && (
+        <OfflineRecoverySurface
+          isOnline={isOnline && isDeviceOnline()}
+          actions={recoveryActions}
+          cacheFreshness={cacheFreshness}
+          designation={designation}
+          onRefresh={async () => {
+            if (selectedEventId) await loadEventData(selectedEventId);
+          }}
+          onSyncNow={syncOfflineChanges}
+          onRetryAction={async (actionId) => {
+            if (!selectedEventId) return;
+            await retryFailedAction(actionId, selectedEventId);
+            await syncOfflineChanges();
+          }}
+        />
+      )}
       <div className={styles.publicLogger}><PublicLoggerPanel event={activeEvent} /></div>
 
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
@@ -745,6 +751,9 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
       {secondaryError && <div className={styles.conflictAlert} role="status">{secondaryError}</div>}
       {toast && <Toast onDismiss={() => setToast(null)}>{toast}</Toast>}
 
+      {isMeetEvent ? (
+        <SessionLivePanel event={activeEvent} canOperate={canOperateLive} isCoach={isCoachWorkspace} />
+      ) : (
       <div className={styles.workspace}>
         {/* Left: Athlete Logging Console */}
         <section className={styles.consoleSection} aria-label="Athlete logging console">
@@ -923,6 +932,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           </div>
         </aside>
       </div>
+      )}
 
       {/* Edit Entry Modal */}
       <Modal open={Boolean(editingEntry)} title="Edit Timeline Entry" onClose={() => { if (!editBusy) { setEditingEntry(null); setEditError(null); } }} closeDisabled={editBusy}>

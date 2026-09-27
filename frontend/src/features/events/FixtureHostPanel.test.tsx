@@ -27,6 +27,7 @@ vi.mock('../auth/WorkspaceContext', () => ({ useWorkspace: () => ({ activeWorksp
 
 const event: AthleticsEvent = {
   id: '11111111-1111-4111-8111-111111111111',
+  workspaceId: 'host-workspace',
   createdBy: '22222222-2222-4222-8222-222222222222',
   type: 'competition',
   discipline: '100m',
@@ -126,6 +127,37 @@ describe('FixtureHostPanel', () => {
 
     expect(await screen.findByText('Host Runner')).toBeInTheDocument();
     expect(screen.queryByText('Guest Runner')).not.toBeInTheDocument();
+  });
+
+  it('lists accepted clubs while the fixture is still scheduled and lets the coach record a withdrawal', async () => {
+    vi.mocked(listFixtureRosters).mockResolvedValue({
+      data: [
+        { team: { workspaceId: 'host-workspace', workspaceName: 'Host Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
+        { team: { workspaceId: 'guest-workspace', workspaceName: 'Guest Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
+      ],
+      meta: { count: 2 },
+    });
+
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
+
+    expect(await screen.findByRole('heading', { name: 'Accepted' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toHaveTextContent('Guest Team · Accepted');
+    expect(screen.getByRole('button', { name: 'Record withdrawal' })).toBeInTheDocument();
+  });
+
+  it('flags accepted clubs that must re-accept updated fixture terms', async () => {
+    vi.mocked(listFixtureRosters).mockResolvedValue({
+      data: [
+        { team: { workspaceId: 'guest-workspace', workspaceName: 'Guest Team', status: 'reacceptance_required', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
+      ],
+      meta: { count: 1 },
+    });
+
+    render(<FixtureHostPanel event={event} canOperate isCoach />);
+
+    expect(await screen.findByRole('heading', { name: 'Re-acceptance required' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toHaveTextContent('Guest Team · Awaiting re-acceptance of updated terms');
+    expect(screen.queryByRole('button', { name: 'Record withdrawal' })).not.toBeInTheDocument();
   });
 
   it('lets assistants operate host fixture controls but not record team withdrawals', async () => {

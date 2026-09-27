@@ -30,7 +30,7 @@ describe('fixtures', () => {
     await expect(listGuestFixtures(WORKSPACE_ID)).resolves.toEqual([]);
 
     const sql = query.mock.calls[0][0] as string;
-    expect(sql).toContain('e.id, e.created_by, e.type');
+    expect(sql).toContain('e.id, e.workspace_id, e.created_by, e.type');
     expect(sql).toContain('e.status, e.created_at, e.updated_at');
     expect(sql).toContain('fw.status AS fixture_status');
     expect(query).toHaveBeenCalledWith(expect.any(String), [WORKSPACE_ID]);

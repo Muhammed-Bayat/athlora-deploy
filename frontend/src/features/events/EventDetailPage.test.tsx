@@ -2,11 +2,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { AthleticsEvent, FixtureTeamRoster } from '../../types';
+import type { AthleticsEvent } from '../../types';
 import { EventDetailPage } from './EventDetailPage';
 
 const eventApi = vi.hoisted(() => ({ getEvent: vi.fn(), updateEvent: vi.fn(), cancelEvent: vi.fn() }));
-const fixtureApi = vi.hoisted(() => ({ listFixtureRosters: vi.fn(), getGuestFixture: vi.fn() }));
+const fixtureApi = vi.hoisted(() => ({ getGuestFixture: vi.fn() }));
 const workspace = vi.hoisted(() => ({ role: 'coach', id: 'host-workspace' }));
 
 vi.mock('../../api/events', () => eventApi);
@@ -34,22 +34,16 @@ vi.mock('./EventsPage', () => ({
 }));
 
 const event: AthleticsEvent = {
-  id: 'event-1', createdBy: 'coach-1', type: 'competition', discipline: '100m', title: 'City Sprint Meet',
+  id: 'event-1', workspaceId: 'host-workspace', createdBy: 'coach-1', type: 'competition', discipline: '100m', title: 'City Sprint Meet',
   date: '2026-09-01', time: '09:30:00', locationName: 'Central Stadium', latitude: null, longitude: null,
   status: 'scheduled', createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
 };
-
-const hostAndGuest: FixtureTeamRoster[] = [
-  { team: { workspaceId: 'host-workspace', workspaceName: 'Host', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
-  { team: { workspaceId: 'guest-workspace', workspaceName: 'Guest', status: 'accepted', acceptedRevision: 1, withdrawnAt: null }, participants: [] },
-];
 
 beforeEach(() => {
   vi.clearAllMocks();
   workspace.id = 'host-workspace';
   workspace.role = 'coach';
   eventApi.getEvent.mockResolvedValue(event);
-  fixtureApi.listFixtureRosters.mockResolvedValue({ data: [], meta: { count: 0 } });
   fixtureApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Not a guest fixture'));
 });
 
@@ -76,7 +70,6 @@ describe('EventDetailPage', () => {
   });
 
   it('lets the host edit and start a shared fixture, then reports the updated calendar state', async () => {
-    fixtureApi.listFixtureRosters.mockResolvedValue({ data: hostAndGuest, meta: { count: 2 } });
     eventApi.updateEvent
       .mockResolvedValueOnce({ ...event, title: 'Updated meet' })
       .mockResolvedValueOnce({ ...event, title: 'Updated meet', status: 'in_progress' });
@@ -96,16 +89,17 @@ describe('EventDetailPage', () => {
     expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'in_progress' }));
   });
 
-  it('shows the guest roster and prevents a guest workspace from operating a shared fixture', async () => {
+  it('shows the guest roster and hides host-only controls from a guest workspace on a shared fixture', async () => {
     workspace.id = 'guest-workspace';
-    fixtureApi.listFixtureRosters.mockResolvedValue({ data: hostAndGuest, meta: { count: 2 } });
     fixtureApi.getGuestFixture.mockResolvedValue({});
     render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} />);
 
     expect(await screen.findByRole('region', { name: 'Guest roster' })).toHaveTextContent('editable');
     expect(screen.queryByRole('region', { name: 'Host fixture controls' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Edit event' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start event' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit event' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start event' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark completed' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel event' })).not.toBeInTheDocument();
   });
 
   it('puts fixture invitations and the guest-owned tabbed roster on a multi-discipline meet', async () => {
@@ -123,12 +117,12 @@ describe('EventDetailPage', () => {
     await waitFor(() => expect(screen.queryAllByRole('region', { name: 'Host fixture controls' })).toHaveLength(1));
   });
 
-  it('does not expose session or public logging controls in either team event view', async () => {
+  it('shows the session live logger in both team event views while keeping public logger links hidden', async () => {
     const multiDisciplineEvent = { ...event, discipline: null };
     render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
 
     await screen.findByRole('region', { name: 'Multi-discipline roster' });
-    expect(screen.queryByRole('region', { name: 'Session live logger' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Session live logger' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
 
     workspace.id = 'guest-workspace';
@@ -136,16 +130,25 @@ describe('EventDetailPage', () => {
     render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
 
     await waitFor(() => expect(screen.getAllByRole('region', { name: 'Multi-discipline roster' })).toHaveLength(2));
-    expect(screen.queryByRole('region', { name: 'Session live logger' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Session live logger' })).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
   });
 
-  it('hides lifecycle controls when shared-fixture roster lookup fails for a competition', async () => {
-    fixtureApi.listFixtureRosters.mockRejectedValue(new Error('offline'));
-    render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} />);
+  it('shows lifecycle controls to the host workspace on a training event', async () => {
+    const trainingEvent = { ...event, type: 'training' as const };
+    render(<EventDetailPage eventId={event.id} initialEvent={trainingEvent} onBack={vi.fn()} />);
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Start event' })).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Cancel event' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Start event' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel event' })).toBeInTheDocument();
+  });
+
+  it('detects the guest workspace on a training meet so roster edits use the fixture guest API', async () => {
+    const trainingMeet = { ...event, type: 'training' as const, discipline: null };
+    workspace.id = 'guest-workspace';
+    fixtureApi.getGuestFixture.mockResolvedValue({});
+    render(<EventDetailPage eventId={event.id} initialEvent={trainingMeet} onBack={vi.fn()} />);
+
+    expect(await screen.findByRole('region', { name: 'Multi-discipline roster' })).toHaveTextContent('Guest discipline tabs');
   });
 
   it('disables lifecycle controls and reports busy work from the participant panel', async () => {

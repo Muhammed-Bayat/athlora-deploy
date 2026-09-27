@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cancelEvent, getEvent, updateEvent } from '../../api/events';
-import { getGuestFixture, listFixtureRosters } from '../../api/fixtures';
+import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import { Button, Modal, Toast } from '../../components';
 import { useCurrentUser } from '../auth/CurrentUserContext';
@@ -9,15 +9,16 @@ import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { EventResultsSection } from '../results/EventResultsSection';
 import { type ResultCorrectionTarget } from '../results/EventResultsView';
 import { ResultCorrectionForm } from '../results/ResultCorrectionForm';
-import type { AthleticsEvent, EventMutationPayload, EventStatus, FixtureTeamRoster } from '../../types';
+import type { AthleticsEvent, EventMutationPayload, EventStatus } from '../../types';
 import { EventWeatherPanel } from './EventWeatherPanel';
 import { VenuePreview } from './VenuePreview';
 import { FixtureHostPanel } from './FixtureHostPanel';
 import { GuestRosterPanel } from './GuestRosterPanel';
-import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement } from './EventsPage';
+import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement, type SessionDefinitionSelection } from './EventsPage';
 import styles from './EventsPage.module.css';
 import { VerticalEventsPanel } from './VerticalEventsPanel';
 import { MeetRosterPanel } from './MeetRosterPanel';
+import { SessionLivePanel } from './SessionLivePanel';
 import { createSession, listDisciplines, listSessions } from '../../api/meets';
 
 type LifecycleAction = 'start' | 'complete' | 'cancel';
@@ -44,8 +45,6 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const [notice, setNotice] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [fixtureTeams, setFixtureTeams] = useState<FixtureTeamRoster[]>([]);
-  const [rosterState, setRosterState] = useState<'idle' | 'loaded' | 'failed'>('idle');
   const [isGuest, setIsGuest] = useState(false);
   const [showVertical, setShowVertical] = useState(false);
 
@@ -69,15 +68,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   }, [activeWorkspace.id, eventId, initialEvent, reloadKey]);
 
   useEffect(() => {
-    if (!event || event.type !== 'competition') { setRosterState('loaded'); return; }
-    void listFixtureRosters(event.id).then((response) => {
-      setFixtureTeams(response.data);
-      setRosterState('loaded');
-    }).catch(() => { setRosterState('failed'); });
-  }, [event?.id, event?.type]);
-
-  useEffect(() => {
-    if (!event || event.type !== 'competition') { setIsGuest(false); return; }
+    if (!event) { setIsGuest(false); return; }
     let current = true;
     void getGuestFixture(event.id).then(() => { if (current) setIsGuest(true); }).catch(() => { if (current) setIsGuest(false); });
     return () => { current = false; };
@@ -93,14 +84,14 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     },
   });
 
-  const saveEditor = async (payload: EventMutationPayload, sessionDefinitionIds: string[]) => {
+  const saveEditor = async (payload: EventMutationPayload, sessionDefinitions: SessionDefinitionSelection[] = []) => {
     if (!event) return;
     const updated = await updateEvent(event.id, payload);
     if (payload.discipline === null) {
       const [catalogue, existing] = await Promise.all([listDisciplines(), listSessions(updated.id)]);
-      for (const definitionId of sessionDefinitionIds.filter((id) => !existing.data.some((session) => session.disciplineDefinitionId === id))) {
-        const label = catalogue.data.find((definition) => definition.id === definitionId)?.presentation.label ?? 'Catalogue session';
-        await createSession(updated.id, { disciplineDefinitionId: definitionId, label });
+      for (const selection of sessionDefinitions.filter((item) => !existing.data.some((session) => session.disciplineDefinitionId === item.definitionId))) {
+        const label = catalogue.data.find((definition) => definition.id === selection.definitionId)?.presentation.label ?? 'Catalogue session';
+        await createSession(updated.id, { disciplineDefinitionId: selection.definitionId, label, ...(selection.verticalConfig ? { verticalConfig: selection.verticalConfig } : {}) });
       }
     }
     setEvent(updated);
@@ -138,10 +129,8 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   if (loadError) return <section className={styles.loadError} role="alert"><h1>{loadError.startsWith('This event') ? 'Event not found' : 'Event unavailable'}</h1><p>{loadError}</p><Button onClick={() => setReloadKey((key) => key + 1)}>Try again</Button><Button variant="secondary" onClick={onBack}>Back to events</Button></section>;
   if (!event) return null;
 
-  const rosterFailed = rosterState === 'failed';
-  const isHostWorkspace = !rosterFailed && (fixtureTeams.length === 0 || fixtureTeams.some((t) => t.team.workspaceId === activeWorkspace.id && t.team.status === 'accepted'));
-  const hasGuestTeams = fixtureTeams.length > 1;
-  const canManageLifecycle = canOperate && (rosterFailed ? event.type !== 'competition' : (!hasGuestTeams || isHostWorkspace));
+  const isHost = event.workspaceId === activeWorkspace.id;
+  const canManageLifecycle = canOperate && isHost;
   const canEditRoster = event.status !== 'completed' && event.status !== 'cancelled';
   const canEditEvent = event.status === 'scheduled' || event.status === 'in_progress';
 
@@ -154,7 +143,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Format</dt><dd>{event.discipline === null ? 'Catalogue sessions' : '100m'}</dd></div></dl>
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
-        {event.discipline === null ? <><>{!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} usesSessionRosters />}</><MeetRosterPanel event={event} canOperate={canOperate} isCoach={isCoach} activeWorkspaceId={activeWorkspace.id} isGuest={isGuest} /></> : <><>{!isGuest && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}</><Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
+        {event.discipline === null ? <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} usesSessionRosters />}<MeetRosterPanel event={event} canOperate={canOperate} isCoach={isCoach} activeWorkspaceId={activeWorkspace.id} isGuest={isGuest} /><SessionLivePanel event={event} canOperate={canOperate} isCoach={isCoach} /></> : <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
        {canManageLifecycle && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>

@@ -90,7 +90,7 @@ describe('listClubCalendarEvents', () => {
   it('returns selected clubs upcoming events in the requested season and preserves club attribution', async () => {
     query.mockResolvedValue(poolRow([{
       ...{
-        id: EVENT_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Rival Relay',
+        id: EVENT_ID, workspace_id: USER_ID, created_by: USER_ID, type: 'competition', discipline: '100m', title: 'Rival Relay',
         date: '2026-08-22', time: null, location_name: null, latitude: null, longitude: null,
         status: 'scheduled', created_at: new Date('2026-08-14T10:00:00.000Z'), updated_at: new Date('2026-08-14T10:00:00.000Z'),
       },
