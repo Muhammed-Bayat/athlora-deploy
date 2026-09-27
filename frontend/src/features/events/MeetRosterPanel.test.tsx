@@ -34,10 +34,11 @@ describe('MeetRosterPanel', () => {
     ] });
     api.listEntrants.mockResolvedValue({ data: [
       { id: 'athlete-entrant', workspaceId: 'host-workspace', kind: 'athlete', athleteId: 'athlete', name: 'Ari Runner', clubName: null, details: null, memberIds: [] },
+      { id: 'guest-entrant', workspaceId: 'guest-workspace', kind: 'athlete', athleteId: 'guest-athlete', name: 'Gia Guest', clubName: null, details: null, memberIds: [] },
       { id: 'team', workspaceId: 'host-workspace', kind: 'relay', athleteId: null, name: 'Blue relay', clubName: null, details: null, memberIds: ['athlete-entrant'] },
     ] });
     api.listRegistrations.mockImplementation(async (_eventId: string, sessionId: string) => ({ data: sessionId === 'session-track'
-      ? [{ id: 'track-registration', disciplineSessionId: 'session-track', entrantId: 'athlete-entrant', withdrawnAt: null }]
+      ? [{ id: 'track-registration', disciplineSessionId: 'session-track', entrantId: 'athlete-entrant', withdrawnAt: null }, { id: 'guest-registration', disciplineSessionId: 'session-track', entrantId: 'guest-entrant', withdrawnAt: null }]
       : [{ id: 'relay-registration', disciplineSessionId: 'session-relay', entrantId: 'team', withdrawnAt: null }],
     }));
     athletes.listAthletes.mockResolvedValue({ data: [
@@ -57,6 +58,7 @@ describe('MeetRosterPanel', () => {
     expect(screen.queryByRole('button', { name: 'Register for session' })).not.toBeInTheDocument();
     expect(screen.queryByText('Guest entrant')).not.toBeInTheDocument();
     expect(await screen.findByRole('list', { name: 'Session roster' })).toHaveTextContent('Ari RunnerNo squad assignedActive');
+    expect(screen.queryByText('Gia Guest')).not.toBeInTheDocument();
     expect(screen.getByText('Pending 1 · Yes 0 · No 0 · Maybe 0')).toBeInTheDocument();
 
     await selectThemedOption(user, 'RSVP for Ari Runner', 'Attending');

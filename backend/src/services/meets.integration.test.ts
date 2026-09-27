@@ -307,6 +307,21 @@ describeDB('multi-discipline migration and domain integration', () => {
     await expect(createSessionEntry(host, eventId, target, { ...timed, unit: 'metres' }, transaction)).rejects.toMatchObject({ code: 'ENTRANT_WITHDRAWN' });
   });
 
+  it('restores a withdrawn registration while the session roster is open', async () => {
+    await migrate();
+    const s = await session('hammer_throw');
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const target = { disciplineSessionId: s.id, entrantId: athlete.id };
+    const registered = await registerEntrant(host, eventId, target, transaction);
+
+    await withdrawEntrant(host, eventId, target, transaction);
+    const restored = await registerEntrant(host, eventId, target, transaction);
+
+    expect(restored).toMatchObject({ id: registered.id, withdrawnAt: null, withdrawnBy: null });
+    expect((await pool.query('SELECT withdrawn_at, withdrawn_by FROM session_entrants WHERE id = $1', [registered.id])).rows[0]).toEqual({ withdrawn_at: null, withdrawn_by: null });
+    expect((await pool.query("SELECT action FROM meet_domain_audit WHERE entity_id = $1 ORDER BY created_at DESC LIMIT 1", [registered.id])).rows[0]).toEqual({ action: 'restored' });
+  });
+
   it('limits fixture guests to their own entrants and rejects stale fixture acceptance', async () => {
     await migrate();
     await pool.query("INSERT INTO event_fixture_workspaces (event_id,workspace_id,role,status,contact_email,joined_by) VALUES ($1,$2,'guest','accepted','guest@test.example',$3)", [eventId, other.workspaceId, other.userId]);
