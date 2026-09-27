@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { ApiError } from '../middleware/errors.js';
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../services/publicStatistics.js';
 import { parseSeasonYear } from '../services/seasons.js';
+import { getPublicClubStandings } from '../services/standings.js';
 
 function parameter(value: string | string[] | undefined): string {
   if (typeof value !== 'string') throw new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -38,5 +39,12 @@ export const athleteComparison: RequestHandler = async (req, res, next) => {
       ? await getPublicAthleteComparison(req.query.athleteId)
       : await getPublicAthleteComparison(req.query.athleteId, parseSeasonYear(req.query.year));
     res.json({ data: comparison });
+  } catch (error) { next(error); }
+};
+
+export const clubStandings: RequestHandler = async (req, res, next) => {
+  try {
+    const standings = await getPublicClubStandings(typeof req.query.season === 'string' ? req.query.season : undefined);
+    res.json({ data: standings, meta: { count: standings.length } });
   } catch (error) { next(error); }
 };

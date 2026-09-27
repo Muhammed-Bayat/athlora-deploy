@@ -1,10 +1,9 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getPublicLeaderboard, listPublicClubs, listPublicSeasons, type LeaderboardEntry } from '../../api/publicStatistics';
+import { getPublicLeaderboard, listPublicClubs, listPublicSeasons, listPublicStatisticsReportDisciplines, type LeaderboardEntry, type PublicStatisticsReportDiscipline } from '../../api/publicStatistics';
 import { PublicNavigation } from '../../components/PublicNavigation';
-import { listDisciplines } from '../../api/meets';
 import { Input, Select } from '../../components';
-import type { DisciplineDefinition, PublicClub } from '../../types';
+import type { PublicClub } from '../../types';
 import styles from './PublicStatsPage.module.css';
 
 export function PublicLeaderboardPage() {
@@ -13,7 +12,7 @@ export function PublicLeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [clubs, setClubs] = useState<PublicClub[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [disciplines, setDisciplines] = useState<DisciplineDefinition[]>([]);
+  const [disciplines, setDisciplines] = useState<PublicStatisticsReportDiscipline[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,11 +26,11 @@ export function PublicLeaderboardPage() {
     void Promise.all([
       listPublicClubs(),
       listPublicSeasons(),
-      listDisciplines(),
+      listPublicStatisticsReportDisciplines(),
     ]).then(([c, s, d]) => {
       setClubs(c.data);
       setSeasons(s);
-      setDisciplines(d.data);
+      setDisciplines(d);
     }).catch(() => {});
   }, []);
 
@@ -39,7 +38,7 @@ export function PublicLeaderboardPage() {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    void getPublicLeaderboard({ discipline, season, club, gender, age }, controller.signal)
+    void getPublicLeaderboard({ discipline, season: season || 'all', club, gender, age }, controller.signal)
       .then((data) => setEntries(data))
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Could not load leaderboard');
@@ -80,7 +79,7 @@ export function PublicLeaderboardPage() {
         <div className={styles.filtersBar} aria-label="Leaderboard filters">
           <label>
             Discipline
-            <Select aria-label="Discipline" value={discipline} onChange={(e) => updateFilter('discipline', e.target.value)} options={[{ value: '', label: 'All disciplines' }, ...disciplines.map((d) => ({ value: d.code, label: d.presentation.label }))]} />
+            <Select aria-label="Discipline" value={discipline} onChange={(e) => updateFilter('discipline', e.target.value)} options={[{ value: '', label: 'All disciplines' }, ...disciplines.map((d) => ({ value: d.code, label: d.label }))]} searchable searchPlaceholder="Search disciplines" emptyMessage="No configured disciplines match" />
           </label>
           <label>
             Season

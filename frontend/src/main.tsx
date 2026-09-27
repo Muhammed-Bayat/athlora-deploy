@@ -7,6 +7,7 @@ import { Auth0TokenBridge } from './features/auth/Auth0TokenBridge';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { PublicLoggerPage } from './features/publicLogger/PublicLoggerPage';
 import { PublicLeaderboardPage } from './features/publicStats/PublicLeaderboardPage';
+import { PublicStandingsPage } from './features/publicStats/PublicStandingsPage';
 import { PublicStatsPage } from './features/publicStats/PublicStatsPage';
 import { PublicStatisticsReportPage } from './features/publicStats/PublicStatisticsReportPage';
 import { PublicScheduleIndexPage } from './features/publicSchedule/PublicScheduleIndexPage';
@@ -24,7 +25,7 @@ const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
 const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
 const isPublicLoggerRoute = /^\/log\/[^/]+$/.test(window.location.pathname);
-const isPublicStatsRoute = /^\/stats(?:\/(?:leaderboard|report))?\/?$/.test(window.location.pathname);
+const isPublicStatsRoute = /^\/stats(?:\/(?:leaderboard|standings|report))?\/?$/.test(window.location.pathname);
 const isPublicScheduleRoute = /^\/schedule(?:\/[^/]+)?\/?$/.test(window.location.pathname);
 const isPublicRoute = isPublicLoggerRoute || isPublicStatsRoute || isPublicScheduleRoute;
 
@@ -40,6 +41,7 @@ createRoot(rootElement).render(
         <Routes>
           <Route path="/stats" element={<PublicStatsPage />} />
           <Route path="/stats/leaderboard" element={<PublicLeaderboardPage />} />
+          <Route path="/stats/standings" element={<PublicStandingsPage />} />
           <Route path="/stats/report" element={<PublicStatisticsReportPage />} />
         </Routes>
       </BrowserRouter>

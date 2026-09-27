@@ -34,10 +34,18 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
   const gender = query.gender?.trim() || null;
   const age = query.age?.trim() || null;
 
-  const conditions = [
+  const legacyConditions = [
+    "e.status = 'completed'",
+    "r.outcome = 'valid'",
+    "COALESCE(r.manual_override, r.final_result) > 0",
+    "a.lifecycle_status <> 'archived'",
+    "c.public_results_enabled = true",
+    "(e.workspace_id = a.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id WHERE fw.event_id = e.id AND fw.workspace_id = a.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
+  ];
+  const sessionConditions = [
     "s.result_state = 'final'",
     "s.status = 'completed'",
-    "e.status <> 'cancelled'",
+    "e.status = 'completed'",
     "en.kind = 'athlete'",
     "d.default_rules->>'entrantType' = 'individual'",
     "se.withdrawn_at IS NULL",
@@ -45,45 +53,63 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
     "r.final_result IS NOT NULL",
     "a.lifecycle_status <> 'archived'",
     "c.public_results_enabled = true",
-    "EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision)"
+    "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
   const params: unknown[] = [];
 
   if (season.selected !== 'all') {
     params.push(season.startDate, season.endDate);
-    conditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
+    legacyConditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
+    sessionConditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
   }
   if (discipline) {
     params.push(discipline);
-    conditions.push(`(d.code = $${params.length} OR d.id::text = $${params.length})`);
+      legacyConditions.push(`r.discipline = $${params.length}`);
+      sessionConditions.push(`(d.code = $${params.length} OR d.id::text = $${params.length})`);
   }
   if (clubId) {
     params.push(clubId);
-    conditions.push(`c.id = $${params.length}`);
+      legacyConditions.push(`c.id = $${params.length}`);
+      sessionConditions.push(`c.id = $${params.length}`);
   }
   if (gender) {
     params.push(gender);
-    conditions.push(`a.gender ILIKE $${params.length}`);
+      legacyConditions.push(`a.gender ILIKE $${params.length}`);
+      sessionConditions.push(`a.gender ILIKE $${params.length}`);
   }
   if (age) {
     const numericAge = Number(age);
     if (!Number.isNaN(numericAge)) {
       params.push(numericAge);
-      conditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
+        legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
+        sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
     } else if (age.startsWith('under-')) {
       const maxAge = Number(age.replace('under-', ''));
       if (!Number.isNaN(maxAge)) {
         params.push(maxAge);
-        conditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer <= $${params.length}::integer`);
+        legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer <= $${params.length}::integer`);
+        sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer <= $${params.length}::integer`);
       }
     }
   }
 
   const sql = `
     WITH performances AS (
-      SELECT r.final_result, r.id AS result_id, en.athlete_id, a.name AS athlete_name, a.dob, a.gender,
-             c.id AS club_id, c.name AS club_name, d.code, d.unit AS discipline_unit, d.precision, d.direction,
-             d.presentation->>'label' AS label, e.date AS event_date
+       SELECT COALESCE(r.manual_override, r.final_result) AS final_result,
+              concat(r.event_id::text, ':', r.athlete_id::text, ':', r.discipline) AS result_id,
+              r.athlete_id, a.name AS athlete_name, a.dob, a.gender,
+              c.id AS club_id, c.name AS club_name, r.discipline AS code,
+              CASE WHEN r.discipline = '100m' THEN '100 metres' ELSE r.discipline END AS label,
+              'seconds'::text AS discipline_unit, 2::integer AS precision, 'lower'::text AS direction, e.date AS event_date
+       FROM results r
+       JOIN athletes a ON a.id = r.athlete_id
+       JOIN clubs c ON c.workspace_id = a.workspace_id
+       JOIN events e ON e.id = r.event_id
+       WHERE ${legacyConditions.join(' AND ')}
+       UNION ALL
+       SELECT r.final_result, r.id::text AS result_id, en.athlete_id, a.name AS athlete_name, a.dob, a.gender,
+              c.id AS club_id, c.name AS club_name, d.code, d.presentation->>'label' AS label,
+              d.unit AS discipline_unit, d.precision, d.direction, e.date AS event_date
       FROM session_results r
       JOIN discipline_sessions s ON s.id = r.session_id
       JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -92,7 +118,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
       JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
       JOIN clubs c ON c.workspace_id = r.workspace_id
       JOIN events e ON e.id = r.event_id
-      WHERE ${conditions.join(' AND ')}
+       WHERE ${sessionConditions.join(' AND ')}
     ), best_per_athlete AS (
       SELECT athlete_id,
              (ARRAY_AGG(athlete_name ORDER BY CASE WHEN direction = 'lower' THEN final_result ELSE -final_result END ASC, event_date DESC, result_id DESC))[1] AS athlete_name,

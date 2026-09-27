@@ -82,4 +82,12 @@ describe('publicStatistics API', () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report?discipline=100m&gender=female');
   });
+
+  it('gets public fixture standings for the selected season', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(publicStatistics.getPublicClubStandings('2026')).resolves.toEqual([]);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/standings?season=2026');
+  });
 });
