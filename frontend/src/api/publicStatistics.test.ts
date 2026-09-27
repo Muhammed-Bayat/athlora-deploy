@@ -64,6 +64,16 @@ describe('publicStatistics API', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toContain('athleteId=a-1&athleteId=a-2&year=2024');
   });
 
+  it('gets reportable published disciplines', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      response({ data: [{ code: '100m', label: '100 metres' }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(publicStatistics.listPublicStatisticsReportDisciplines()).resolves.toEqual([{ code: '100m', label: '100 metres' }]);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report/disciplines');
+  });
+
   it('gets the public detailed report with only selected URL filters', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [], meta: { count: 0, generatedAt: '2026-09-25T00:00:00.000Z' } }));
     vi.stubGlobal('fetch', fetchMock);

@@ -1,6 +1,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getPublicLeaderboard, listPublicClubs, listPublicSeasons, type LeaderboardEntry } from '../../api/publicStatistics';
+import { PublicNavigation } from '../../components/PublicNavigation';
 import { listDisciplines } from '../../api/meets';
 import { Input, Select } from '../../components';
 import type { DisciplineDefinition, PublicClub } from '../../types';
@@ -65,13 +66,7 @@ export function PublicLeaderboardPage() {
           <img src="/logo-removebg.png" alt="" />
           <span>Athlora<small>Performance OS</small></span>
         </a>
-        <nav aria-label="Public navigation">
-          <a href="/">Home</a>
-          <a href="/stats">Stats</a>
-          <a href="/stats/leaderboard" className={styles.activeLink} aria-current="page">Leaderboard</a>
-          <a href="/schedule">Schedule</a>
-          <a className={styles.startLink} href="/">Get started</a>
-        </nav>
+        <PublicNavigation current="leaderboard" />
       </header>
       <main className={styles.main}>
         <div className={styles.explorerHeading}>

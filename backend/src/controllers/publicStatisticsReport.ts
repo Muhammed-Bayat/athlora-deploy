@@ -1,6 +1,18 @@
 import type { RequestHandler } from 'express';
 import { getPool } from '../db/client.js';
-import { getPublicStatisticsReport } from '../services/publicStatisticsReport.js';
+import {
+  getPublicStatisticsReport,
+} from '../services/publicStatisticsReport.js';
+import { listAvailableDisciplines } from '../services/disciplineCatalog.js';
+
+export const publicStatisticsReportDisciplines: RequestHandler = async (_req, res, next) => {
+  try {
+    const data = (await listAvailableDisciplines(getPool())).map(({ discipline, label }) => ({ code: discipline, label }));
+    res.json({ data, meta: { count: data.length } });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const publicStatisticsReport: RequestHandler = async (req, res, next) => {
   try {

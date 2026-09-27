@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../../api/publicStatistics';
 import { SeasonSelector, Select, ClubBadge } from '../../components';
+import { PublicNavigation } from '../../components/PublicNavigation';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import type { PublicAthleteComparison, PublicAthleteDisciplineStatistics, PublicAthleteStatistics, PublicClub, PublicClubStatistics, PublicDiscipline } from '../../types';
 import styles from './PublicStatsPage.module.css';
@@ -339,7 +340,7 @@ export function PublicStatsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.aurora} aria-hidden="true"><i /><i /><i /></div>
-      <header className={styles.header}><a className={styles.brand} href="/"><img src="/logo-removebg.png" alt="" /><span>Athlora<small>Performance OS</small></span></a><nav aria-label="Public navigation"><a href="/">Home</a><a className={styles.activeLink} href="/stats" aria-current="page">Stats</a><a href="/schedule">Schedule</a><a className={styles.startLink} href="/">Get started</a></nav></header>
+      <header className={styles.header}><a className={styles.brand} href="/"><img src="/logo-removebg.png" alt="" /><span>Athlora<small>Performance OS</small></span></a><PublicNavigation current="stats" /></header>
       <main className={styles.content}>
         <section className={styles.hero} aria-labelledby="public-stats-heading">
           <div className={styles.heroCopy}>
