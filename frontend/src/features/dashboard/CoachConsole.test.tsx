@@ -151,6 +151,20 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
   });
 
+  it('shows the active Club option when it is the only workspace', async () => {
+    const user = userEvent.setup();
+    const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
+    render(
+      <WorkspaceContext.Provider value={{ activeWorkspace: personalWorkspace, workspaces: [personalWorkspace], selectWorkspace: vi.fn(), refreshWorkspaces: async () => undefined }}>
+        <MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>
+      </WorkspaceContext.Provider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Active Club' }));
+
+    expect(within(screen.getByRole('listbox')).getByRole('option', { name: 'Personal workspace' })).toBeVisible();
+  });
+
   it('closes the weather preview when the page is clicked', async () => {
     const user = userEvent.setup();
     renderConsole();
