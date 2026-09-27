@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../../types';
@@ -57,6 +57,11 @@ const event: AthleticsEvent = {
 let sessionStatus = 'scheduled';
 let sessionVersion = 1;
 let resultState = 'provisional';
+
+async function chooseOption(user: ReturnType<typeof userEvent.setup>, control: string, option: string) {
+  await user.click(await screen.findByRole('button', { name: control }));
+  await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
+}
 
 describe('SessionLivePanel', () => {
   beforeEach(() => {
@@ -160,11 +165,11 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    await chooseOption(user, 'Session', '4x400m Heat 1 (scheduled)');
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     await waitFor(() => expect(api.changeSessionState).toHaveBeenCalledWith('event-1', 'session-1', 'in_progress', 1));
 
-    await user.selectOptions(await screen.findByLabelText('Team'), 'team-1');
+    await chooseOption(user, 'Team', 'Speed Demons');
     expect(await screen.findByLabelText('Team members')).toHaveTextContent('Legs: Ari Runner → Bea Dash');
 
     await user.type(screen.getByLabelText('Time (s)'), '60.5');
@@ -193,9 +198,9 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    await chooseOption(user, 'Session', '4x400m Heat 1 (scheduled)');
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
-    await user.selectOptions(await screen.findByLabelText('Team'), 'team-1');
+    await chooseOption(user, 'Team', 'Speed Demons');
     await user.type(await screen.findByLabelText('Time (s)'), '59.9');
     await user.click(screen.getByRole('button', { name: 'Log attempt' }));
 
@@ -218,7 +223,7 @@ describe('SessionLivePanel', () => {
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'relay-400', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
-    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    await chooseOption(user, 'Session', '4x400m Heat 1 (in_progress)');
     expect(await screen.findByText('Automatic best legal')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
   });
@@ -226,7 +231,7 @@ describe('SessionLivePanel', () => {
     sessionStatus = 'in_progress';
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach={false} />);
-    await user.selectOptions(await screen.findByLabelText('Session'), 'session-1');
+    await chooseOption(user, 'Session', '4x400m Heat 1 (in_progress)');
     expect(screen.queryByRole('button', { name: 'Finalize session' })).not.toBeInTheDocument();
   });
 });

@@ -262,7 +262,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       <label>
         Session
         <Select
-          variant="field"
+          aria-label="Session"
           value={sessionId}
           onChange={(input) => { setSessionId(input.target.value); setEntrantId(''); }}
           options={[{ value: '', label: 'Choose session' }, ...timedSessions.map((item) => ({ value: item.id, label: `${item.label} (${item.status})` }))]}
@@ -282,7 +282,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           <label>
             Team
             <Select
-              variant="field"
+              aria-label="Team"
               value={entrantId}
               onChange={(input) => setEntrantId(input.target.value)}
               options={[
@@ -314,7 +314,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
               <label>
                 Incident
                 <Select
-                  variant="field"
+                  aria-label="Incident"
                   value={incidentType}
                   onChange={(input) => { setIncidentType(input.target.value); if (input.target.value) setValue(''); }}
                   options={[

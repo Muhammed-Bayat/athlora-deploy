@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as api from '../../api/meets';
 import type { AthleticsEvent } from '../../types';
@@ -16,11 +17,14 @@ beforeEach(() => {
   vi.mocked(api.listSessionResults).mockResolvedValue({ data: [] } as never);
 });
 it('logs a height-specific clearance and displays the authoritative result without best selection', async () => {
+  const user = userEvent.setup();
   render(<VerticalEventsPanel event={{ id: 'event', status: 'in_progress' } as AthleticsEvent} canOperate isCoach />);
-  await screen.findByRole('option', { name: 'High Jump — in_progress' });
-  fireEvent.change(screen.getByLabelText('Vertical session'), { target: { value: 's' } });
-  await screen.findByRole('option', { name: 'Ari' });
-  fireEvent.change(screen.getByLabelText('Vertical entrant'), { target: { value: 'en' } });
+  await screen.findByRole('button', { name: 'Vertical session' });
+  await user.click(screen.getByRole('button', { name: 'Vertical session' }));
+  await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'High Jump — in_progress' }));
+  await screen.findByRole('button', { name: 'Vertical entrant' });
+  await user.click(screen.getByRole('button', { name: 'Vertical entrant' }));
+  await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari' }));
   vi.mocked(api.listSessionResults).mockResolvedValue({ data: [{ entrantId: 'en', effectiveResult: 1.5, effectiveOutcome: 'valid', placing: null, vertical: { failuresAtBest: 0, totalFailuresToBest: 0, eliminated: false } }] } as never);
   fireEvent.click(screen.getByRole('button', { name: 'clearance' }));
   await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event', { disciplineSessionId: 's', entrantId: 'en' }, expect.objectContaining({ verticalState: 'clearance', value: 1.5, unit: 'metres' })));

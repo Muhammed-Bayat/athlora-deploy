@@ -140,7 +140,7 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ### Themed event and public statistics controls — 2026-09-27
 
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **698 tests pass, 0 skip**. Coverage confirms existing session logging and vertical-event control flows, report URL filters, and the themed public-leaderboard discipline picker.
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **698 tests pass, 0 skip**. Coverage confirms session logging and vertical-event listbox selection, report URL filters, the public-leaderboard discipline picker, and the themed active-club switcher.
 - Backend: not run; this is a frontend presentation and shared-control change with no API, schema, or backend behavior change.
 - Documentation: Docusaurus production build passes after this verification-status update.
 - E2E: not run; the change has focused component coverage and the authenticated browser suite requires local PostgreSQL plus Auth0 configuration.
