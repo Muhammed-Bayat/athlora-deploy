@@ -9,11 +9,14 @@ import {
   type PublicAthleteComparisonAthlete,
   type PublicClub,
   type PublicClubStatistics,
+  type PublicAthleteDisciplineStatistics,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { getClubStatistics } from './clubs.js';
 import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
+import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
+import { listAvailableDisciplines } from './disciplineCatalog.js';
 
 interface PublicClubRow {
   id: string;
@@ -65,6 +68,10 @@ function rounded(value: number | string | null): number | null {
   return number === null ? null : Math.round(number * 100) / 100;
 }
 
+function dateText(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+}
+
 async function findPublicClub(clubId: unknown, executor: DbExecutor): Promise<PublicClubRow> {
   if (!isCanonicalUuid(clubId)) throw notFound();
   const result = await executor.query<PublicClubRow>(
@@ -88,7 +95,7 @@ function publicBrandSummary(row: PublicClubRow) {
   };
 }
 
-function mapPublicAthleteStatistics(row: PublicAthleteStatisticsRow): PublicAthleteStatistics {
+function mapPublicAthleteStatistics(row: PublicAthleteStatisticsRow, disciplines: PublicAthleteDisciplineStatistics[]): PublicAthleteStatistics {
   const pb = nullableNumber(row.pb);
   const earliest = nullableNumber(row.earliest_valid_result);
   return {
@@ -102,11 +109,58 @@ function mapPublicAthleteStatistics(row: PublicAthleteStatisticsRow): PublicAthl
     improvement: earliest === null || pb === null || Number(row.valid_result_count) < 2
       ? null
       : Math.round((earliest - pb) * 100) / 100,
+    disciplines,
   };
+}
+
+function disciplineStatistics(entries: PublicStatisticsReportEntry[]): Map<string, PublicAthleteDisciplineStatistics[]> {
+  const byAthlete = new Map<string, Map<string, PublicStatisticsReportEntry[]>>();
+  for (const entry of entries) {
+    const disciplines = byAthlete.get(entry.athleteId) ?? new Map<string, PublicStatisticsReportEntry[]>();
+    disciplines.set(entry.discipline, [...(disciplines.get(entry.discipline) ?? []), entry]);
+    byAthlete.set(entry.athleteId, disciplines);
+  }
+  return new Map([...byAthlete].map(([athleteId, disciplines]) => [athleteId, [...disciplines.values()].map((results) => {
+    const first = results[0]!;
+    const ordered = [...results].sort((left, right) => dateText(left.eventDate).localeCompare(dateText(right.eventDate)));
+    const values = results.map((result) => result.performance);
+    const pb = first.direction === 'lower' ? Math.min(...values) : Math.max(...values);
+    const average = values.reduce((total, value) => total + value, 0) / values.length;
+    const variance = values.reduce((total, value) => total + (value - average) ** 2, 0) / values.length;
+    const improvement = values.length < 2 ? null : first.direction === 'lower' ? ordered[0]!.performance - pb : pb - ordered[0]!.performance;
+    return {
+      discipline: first.discipline, label: first.label, unit: first.unit, precision: first.precision, direction: first.direction,
+      pb, latestEffectiveResult: ordered[ordered.length - 1]!.performance, validResultCount: values.length,
+      average: Math.round(average * 100) / 100, consistency: values.length < 2 ? null : Math.round(Math.sqrt(variance) * 100) / 100,
+      improvement: improvement === null ? null : Math.round(improvement * 100) / 100,
+      progression: ordered.map((result) => ({ date: dateText(result.eventDate), result: result.performance })),
+    };
+  })]));
+}
+
+async function preferredDisciplinesByAthlete(workspaceId: string, executor: DbExecutor): Promise<Map<string, PublicAthleteDisciplineStatistics[]>> {
+  const result = await executor.query<{
+    athlete_id: string; code: string; label: string; unit: PublicAthleteDisciplineStatistics['unit']; precision: number | string; direction: PublicAthleteDisciplineStatistics['direction'];
+  }>(`SELECT preferences.athlete_id, definitions.code, definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction
+      FROM athlete_preferred_disciplines preferences
+      JOIN athletes athletes ON athletes.id = preferences.athlete_id
+      JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
+      WHERE athletes.workspace_id = $1 AND athletes.lifecycle_status <> 'archived'`, [workspaceId]);
+  const byAthlete = new Map<string, PublicAthleteDisciplineStatistics[]>();
+  for (const row of result.rows) {
+    const disciplines = byAthlete.get(row.athlete_id) ?? [];
+    disciplines.push({
+      discipline: row.code, label: row.label, unit: row.unit, precision: Number(row.precision), direction: row.direction,
+      pb: null, latestEffectiveResult: null, validResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+    });
+    byAthlete.set(row.athlete_id, disciplines);
+  }
+  return byAthlete;
 }
 
 async function getPublicAthleteStatistics(
   workspaceId: string,
+  clubId: string,
   executor: DbExecutor,
   season: SeasonScope,
 ): Promise<PublicAthleteStatistics[]> {
@@ -181,7 +235,16 @@ async function getPublicAthleteStatistics(
      ORDER BY m.pb ASC NULLS LAST, lower(a.name), a.id`,
     [workspaceId, DISCIPLINE_100M, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
-  return result.rows.map(mapPublicAthleteStatistics);
+  const publishedResults = await getPublicStatisticsReport({ season: season.selected === 'all' ? undefined : String(season.selected), club: clubId }, executor);
+  const disciplines = disciplineStatistics(publishedResults);
+  const preferences = await preferredDisciplinesByAthlete(workspaceId, executor);
+  return result.rows.map((row) => {
+    const published = disciplines.get(row.id) ?? [];
+    const selected = preferences.get(row.id) ?? [];
+    const allDisciplines = [...published, ...selected.filter((discipline) => !published.some((entry) => entry.discipline === discipline.discipline))]
+      .sort((left, right) => left.label.localeCompare(right.label));
+    return mapPublicAthleteStatistics(row, allDisciplines);
+  });
 }
 
 export async function listPublicClubs(search: string | null): Promise<PublicClub[]> {
@@ -201,11 +264,13 @@ export async function getPublicClubStatistics(clubId: unknown, season: SeasonSco
   return withReadTransaction(async (client) => {
     const club = await findPublicClub(clubId, client);
     const statistics = await getClubStatistics(club.id, client, season);
-    const athletes = await getPublicAthleteStatistics(club.workspace_id, client, season);
+    const athletes = await getPublicAthleteStatistics(club.workspace_id, club.id, client, season);
+    const availableDisciplines = await listAvailableDisciplines(client);
     return {
       ...statistics,
       club: { id: club.id, name: club.name, branding: publicBrandSummary(club) },
       athletes,
+      availableDisciplines,
     };
   });
 }
@@ -282,7 +347,7 @@ export async function getPublicAthleteComparison(
     }
 
     const athletes = await Promise.all(selected.map(async (selectedAthlete): Promise<PublicAthleteComparisonAthlete> => {
-      const statistics = await getPublicAthleteStatistics(selectedAthlete.workspace_id, client, season);
+      const statistics = await getPublicAthleteStatistics(selectedAthlete.workspace_id, selectedAthlete.club_id, client, season);
       const athlete = statistics.find((entry) => entry.athlete.id === selectedAthlete.id);
       if (!athlete) throw notFound();
       return {

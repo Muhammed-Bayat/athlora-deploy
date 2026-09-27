@@ -8,7 +8,7 @@ function formatValue(value: number | null, precision: number, unit: string): str
   return `${value.toFixed(precision)} ${suffix}`;
 }
 
-export function PublicSessionResults({ clubId }: { clubId: string }) {
+export function PublicSessionResults({ clubId, disciplineCode }: { clubId: string; disciplineCode: string }) {
   const [meetings, setMeetings] = useState<PublicClubSessionResults[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,8 @@ export function PublicSessionResults({ clubId }: { clubId: string }) {
   if (!clubId) return null;
   if (loading) return <p className={styles.loading} role="status">Loading session results...</p>;
   if (error) return <p className={styles.error} role="alert">{error}</p>;
-  if (meetings.length === 0) return null;
+  const filteredMeetings = meetings.map((meeting) => ({ ...meeting, sessions: meeting.sessions.filter((session) => session.disciplineCode === disciplineCode) })).filter((meeting) => meeting.sessions.length > 0);
+  if (filteredMeetings.length === 0) return null;
 
   return (
     <section className={styles.explorer} aria-label="Published session results">
@@ -53,7 +54,7 @@ export function PublicSessionResults({ clubId }: { clubId: string }) {
         </div>
         <p>Public places for sessions the club has published. Team times never count as individual personal bests.</p>
       </div>
-      {meetings.map((meeting) => (
+      {filteredMeetings.map((meeting) => (
         <article key={meeting.eventId} aria-label={`${meeting.eventTitle} results`}>
           <h3>{meeting.eventTitle}</h3>
           <p>{meeting.eventDate}</p>

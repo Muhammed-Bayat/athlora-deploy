@@ -14,6 +14,8 @@ import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
+import { listAvailableDisciplines } from './disciplineCatalog.js';
+import type { PublicAthleteDisciplineStatistics } from '../types/domain.js';
 
 type ReadTransactionRunner = <T>(
   operation: (client: DbExecutor) => Promise<T>,
@@ -136,6 +138,84 @@ function computeImprovement(validResults: number[], pb: number | null): number |
   return Math.round((earliest - pb) * 100) / 100;
 }
 
+async function fetchAthleteDisciplineStatistics(
+  workspaceId: string,
+  athleteId: string,
+  client: DbExecutor,
+  season: SeasonScope,
+): Promise<PublicAthleteDisciplineStatistics[]> {
+  const [results, preferences] = await Promise.all([
+    client.query<{
+      discipline: string; label: string; unit: PublicAthleteDisciplineStatistics['unit']; precision: number | string; direction: PublicAthleteDisciplineStatistics['direction'];
+      event_date: string; event_time: string | null; event_created_at: string | Date; event_id: string; result: number | string;
+    }>(`SELECT r.discipline, definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction,
+               e.date::text AS event_date, e.time::text AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result
+        FROM results r
+        JOIN events e ON e.id = r.event_id
+        JOIN discipline_definitions definitions ON definitions.code = r.discipline
+        WHERE r.athlete_id = $1 AND e.status <> 'cancelled'
+          AND r.outcome NOT IN ('dq', 'dnf', 'dns')
+          AND (r.manual_override IS NOT NULL AND r.manual_override > 0 OR r.final_result IS NOT NULL)
+          AND e.date >= $2::date AND e.date < $3::date
+          AND (e.workspace_id = $4 OR EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id
+              AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+            WHERE fw.event_id = e.id AND fw.workspace_id = $4 AND fw.role = 'guest'
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))
+        ORDER BY r.discipline, e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC`, [
+      athleteId,
+      season.selected === 'all' ? '0001-01-01' : season.startDate!,
+      season.selected === 'all' ? '9999-12-31' : season.endDate!,
+      workspaceId,
+    ]),
+    client.query<{
+      code: string; label: string; unit: PublicAthleteDisciplineStatistics['unit']; precision: number | string; direction: PublicAthleteDisciplineStatistics['direction'];
+    }>(`SELECT definitions.code, definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction
+        FROM athlete_preferred_disciplines preferences
+        JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
+        WHERE preferences.athlete_id = $1`, [athleteId]),
+  ]);
+
+  const byDiscipline = new Map<string, PublicAthleteDisciplineStatistics>();
+  for (const row of results?.rows ?? []) {
+    const existing = byDiscipline.get(row.discipline);
+    const value = Number(row.result);
+    if (!existing) {
+      byDiscipline.set(row.discipline, {
+        discipline: row.discipline, label: row.label, unit: row.unit, precision: Number(row.precision), direction: row.direction,
+        pb: value, latestEffectiveResult: value, validResultCount: 1, average: value, consistency: null, improvement: null,
+        progression: [{ date: row.event_date, result: value }],
+      });
+      continue;
+    }
+    const values = [...existing.progression.map(({ result }) => result), value];
+    const pb = existing.direction === 'lower' ? Math.min(...values) : Math.max(...values);
+    const average = values.reduce((total, result) => total + result, 0) / values.length;
+    const variance = values.reduce((total, result) => total + (result - average) ** 2, 0) / values.length;
+    existing.pb = pb;
+    existing.latestEffectiveResult = value;
+    existing.validResultCount = values.length;
+    existing.average = Math.round(average * 100) / 100;
+    existing.consistency = Math.round(Math.sqrt(variance) * 100) / 100;
+    existing.improvement = existing.direction === 'lower'
+      ? Math.round((existing.progression[0]!.result - pb) * 100) / 100
+      : Math.round((pb - existing.progression[0]!.result) * 100) / 100;
+    existing.progression.push({ date: row.event_date, result: value });
+  }
+  for (const preference of preferences?.rows ?? []) {
+    if (!byDiscipline.has(preference.code)) {
+      byDiscipline.set(preference.code, {
+        discipline: preference.code, label: preference.label, unit: preference.unit, precision: Number(preference.precision), direction: preference.direction,
+        pb: null, latestEffectiveResult: null, validResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
+      });
+    }
+  }
+  return [...byDiscipline.values()].sort((left, right) => left.label.localeCompare(right.label));
+}
+
 async function fetchAthleteAggregate(
   workspaceId: string,
   athleteId: unknown,
@@ -195,7 +275,20 @@ async function fetchAthleteAggregate(
     consistency,
     improvement,
     progression: entries,
+    disciplines: [],
   };
+}
+
+async function hydrateDisciplineStatistics(
+  athletes: ComparisonAthleteAggregate[],
+  workspaceIds: string[],
+  client: DbExecutor,
+  season: SeasonScope,
+): Promise<ComparisonAthleteAggregate[]> {
+  return Promise.all(athletes.map(async (athlete, index) => ({
+    ...athlete,
+    disciplines: await fetchAthleteDisciplineStatistics(workspaceIds[index]!, athlete.athlete.id, client, season),
+  })));
 }
 
 export async function getTwoAthleteComparison(
@@ -215,7 +308,8 @@ export async function getTwoAthleteComparison(
     const athlete2 = await fetchAthleteAggregate(workspaceId, athlete2Id, client, season);
 
     return {
-      athletes: [athlete1, athlete2],
+      athletes: await hydrateDisciplineStatistics([athlete1, athlete2], [workspaceId, workspaceId], client, season) as ComparisonDetail['athletes'],
+      availableDisciplines: await listAvailableDisciplines(client),
     };
   });
 }
@@ -257,7 +351,10 @@ export async function getCrossClubAthleteComparison(
 
     const athlete1 = await fetchAthleteAggregate(athlete1WorkspaceId, athlete1Id, client, season);
     const athlete2 = await fetchAthleteAggregate(athlete2WorkspaceId, athlete2Id, client, season);
-    return { athletes: [athlete1, athlete2] };
+    return {
+      athletes: await hydrateDisciplineStatistics([athlete1, athlete2], [athlete1WorkspaceId, athlete2WorkspaceId], client, season) as ComparisonDetail['athletes'],
+      availableDisciplines: await listAvailableDisciplines(client),
+    };
   });
 }
 
@@ -268,9 +365,13 @@ export async function getMultiAthleteComparison(
   season: SeasonScope = parseSeasonYear(undefined),
 ): Promise<MultiComparisonDetail> {
   const ids = validateAthleteIds(athleteIds);
-  return runTransaction(async (client) => ({
-    athletes: await Promise.all(ids.map((athleteId) => fetchAthleteAggregate(workspaceId, athleteId, client, season))),
-  }));
+  return runTransaction(async (client) => {
+    const athletes = await Promise.all(ids.map((athleteId) => fetchAthleteAggregate(workspaceId, athleteId, client, season)));
+    return {
+      athletes: await hydrateDisciplineStatistics(athletes, ids.map(() => workspaceId), client, season),
+      availableDisciplines: await listAvailableDisciplines(client),
+    };
+  });
 }
 
 export async function getCrossClubMultiAthleteComparison(
@@ -302,9 +403,11 @@ export async function getCrossClubMultiAthleteComparison(
       );
     }
 
+    const aggregates = await Promise.all(ids.map((athleteId, index) =>
+      fetchAthleteAggregate(workspaceIds[index]!, athleteId, client, season)));
     return {
-      athletes: await Promise.all(ids.map((athleteId, index) =>
-        fetchAthleteAggregate(workspaceIds[index]!, athleteId, client, season))),
+      athletes: await hydrateDisciplineStatistics(aggregates, workspaceIds as string[], client, season),
+      availableDisciplines: await listAvailableDisciplines(client),
     };
   });
 }

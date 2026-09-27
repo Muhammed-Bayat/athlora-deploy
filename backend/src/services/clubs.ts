@@ -19,11 +19,13 @@ import {
   type ClubJoinRequest,
   type ClubPublication,
   type ClubStatistics,
+  type ClubDisciplineStatistics,
   type AthleticsEvent,
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { publicMediaPath } from './mediaStorage.js';
+import { listAvailableDisciplines } from './disciplineCatalog.js';
 
 interface ClubSummaryRow {
   id: string;
@@ -67,6 +69,24 @@ interface ClubStatisticsRow {
   population_standard_deviation: number | string | null;
 }
 
+interface ClubDisciplineResultRow {
+  discipline: string;
+  athlete_id: string;
+  lifecycle_status: AthleteLifecycleStatus;
+  event_date: string;
+  event_time: string | null;
+  event_created_at: string;
+  event_id: string;
+  effective_result: number | string | null;
+  effective_outcome: string;
+}
+
+interface ClubPreferredDisciplineRow {
+  athlete_id: string;
+  lifecycle_status: AthleteLifecycleStatus;
+  discipline: string;
+}
+
 function clubNotFound(): ApiError {
   return new ApiError(404, 'CLUB_NOT_FOUND', 'Club not found');
 }
@@ -77,6 +97,84 @@ function count(value: number | string): number {
 
 function nullableNumber(value: number | string | null): number | null {
   return value === null ? null : Number(value);
+}
+
+function average(values: number[]): number | null {
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
+}
+
+function standardDeviation(values: number[]): number | null {
+  const mean = average(values);
+  if (mean === null || values.length < 2) return null;
+  return Math.sqrt(values.reduce((total, value) => total + (value - mean) ** 2, 0) / values.length);
+}
+
+async function getClubDisciplineStatistics(workspaceId: string, executor: DbExecutor, season: SeasonScope) {
+  const rows = await executor.query<ClubDisciplineResultRow>(
+    `SELECT r.discipline, r.athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
+            e.created_at AS event_created_at, e.id AS event_id,
+            CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+                 ELSE r.final_result END AS effective_result,
+            CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                 ELSE r.outcome END AS effective_outcome
+     FROM results r
+     JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
+     JOIN events e ON e.id = r.event_id
+     WHERE e.status <> 'cancelled' AND e.date >= $2::date AND e.date < $3::date
+       AND (e.workspace_id = $1 OR EXISTS (
+         SELECT 1 FROM event_fixture_workspaces fw
+         JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+         WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+       ))`,
+    [workspaceId, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
+  );
+  const availableDisciplines = await listAvailableDisciplines(executor);
+  const preferred = await executor.query<ClubPreferredDisciplineRow>(
+    `SELECT preferences.athlete_id, athletes.lifecycle_status, definitions.code AS discipline
+     FROM athlete_preferred_disciplines preferences
+     JOIN athletes ON athletes.id = preferences.athlete_id
+     JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
+     WHERE athletes.workspace_id = $1`,
+    [workspaceId],
+  );
+  const byDiscipline = new Map<string, ClubDisciplineResultRow[]>();
+  rows.rows.forEach((row) => byDiscipline.set(row.discipline, [...(byDiscipline.get(row.discipline) ?? []), row]));
+  const preferredByDiscipline = new Map<string, ClubPreferredDisciplineRow[]>();
+  (preferred?.rows ?? []).forEach((row) => preferredByDiscipline.set(row.discipline, [...(preferredByDiscipline.get(row.discipline) ?? []), row]));
+  const disciplines: ClubDisciplineStatistics[] = availableDisciplines.map((discipline) => {
+    const results = byDiscipline.get(discipline.discipline) ?? [];
+    const assignedAthletes = new Map<string, AthleteLifecycleStatus>();
+    results.forEach((row) => assignedAthletes.set(row.athlete_id, row.lifecycle_status));
+    (preferredByDiscipline.get(discipline.discipline) ?? []).forEach((row) => assignedAthletes.set(row.athlete_id, row.lifecycle_status));
+    const valid = results.filter((row) => row.effective_outcome === 'valid' && row.effective_result !== null);
+    const values = valid.map((row) => Number(row.effective_result));
+    const ordered = [...valid].sort((left, right) => `${right.event_date}T${right.event_time ?? ''}${right.event_created_at}${right.event_id}`.localeCompare(`${left.event_date}T${left.event_time ?? ''}${left.event_created_at}${left.event_id}`));
+    return {
+      ...discipline,
+      rosterAthleteCount: assignedAthletes.size,
+      activeAthleteCount: [...assignedAthletes.values()].filter((status) => status === 'active').length,
+      inactiveAthleteCount: [...assignedAthletes.values()].filter((status) => status === 'inactive').length,
+      archivedAthleteCount: [...assignedAthletes.values()].filter((status) => status === 'archived').length,
+      distinctAthletesWithValidResults: new Set(valid.map((row) => row.athlete_id)).size,
+      totalResultCount: results.length,
+      validResultCount: valid.length,
+      fastestValidResult: values.length ? discipline.direction === 'lower' ? Math.min(...values) : Math.max(...values) : null,
+      latestValidResult: ordered.length ? Number(ordered[0]!.effective_result) : null,
+      averageValidResult: average(values),
+      medianValidResult: median(values),
+      populationStandardDeviation: standardDeviation(values),
+    };
+  });
+  return { availableDisciplines, disciplines };
 }
 
 async function findClub(
@@ -282,6 +380,7 @@ export async function getClubStatistics(
   );
   const statistics = result.rows[0];
   if (!statistics) throw new Error('Club statistics aggregate query returned no row');
+  const disciplineStatistics = await getClubDisciplineStatistics(club.workspaceId, executor, season);
 
   return {
     club: {
@@ -303,6 +402,7 @@ export async function getClubStatistics(
     averageValidTime: nullableNumber(statistics.average_valid_time),
     medianValidTime: nullableNumber(statistics.median_valid_time),
     populationStandardDeviation: nullableNumber(statistics.population_standard_deviation),
+    ...disciplineStatistics,
   };
 }
 

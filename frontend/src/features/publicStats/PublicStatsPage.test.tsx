@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicStatsPage } from './PublicStatsPage';
@@ -31,7 +31,8 @@ const clubDetail = {
   averageValidTime: 11.1,
   medianValidTime: 11.1,
   populationStandardDeviation: 0.13,
-  athletes: [{ athlete: { id: '44444444-4444-4444-8444-444444444444', name: 'Ari Runner' }, pb: 10.91, latestEffectiveResult: 11.02, validResultCount: 3, totalResultCount: 3, average: 11.1, consistency: 0.13, improvement: 0.24 }],
+  availableDisciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, direction: 'higher' }],
+  athletes: [{ athlete: { id: '44444444-4444-4444-8444-444444444444', name: 'Ari Runner' }, pb: 10.91, latestEffectiveResult: 11.02, validResultCount: 3, totalResultCount: 3, average: 11.1, consistency: 0.13, improvement: 0.24, disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower', pb: 10.91, latestEffectiveResult: 11.02, validResultCount: 3, average: 11.1, consistency: 0.13, improvement: 0.24, progression: [{ date: '2026-01-10', result: 11.2 }, { date: '2026-02-10', result: 10.91 }] }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, direction: 'higher', pb: 6.4, latestEffectiveResult: 6.4, validResultCount: 2, average: 6.2, consistency: 0.2, improvement: 0.3, progression: [{ date: '2026-01-10', result: 6.1 }, { date: '2026-02-10', result: 6.4 }] }] }],
 };
 
 beforeEach(() => {
@@ -52,11 +53,16 @@ describe('PublicStatsPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Open Track Club' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
-    expect(screen.getByLabelText(`Ari Runner ${new Date().getUTCFullYear()} 100m metrics`)).toHaveTextContent('Improvement');
+    expect(screen.getByLabelText(`Ari Runner ${new Date().getUTCFullYear()} discipline metrics`)).toHaveTextContent('100m');
+    const longJump = screen.getByRole('tab', { name: 'Long jump' });
+    await userEvent.click(longJump);
+    expect(longJump).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText(`Ari Runner ${new Date().getUTCFullYear()} discipline metrics`)).toHaveTextContent('6.40 m');
+    expect(screen.queryByText('View public schedule →')).not.toBeInTheDocument();
     expect(mockGetPublicClubStatistics).toHaveBeenCalledWith(CLUB_ID, expect.any(AbortSignal));
   });
 
-  it('compares selected athletes from different published clubs with a progression chart and table', async () => {
+  it('compares selected athletes from different published clubs by discipline', async () => {
     const otherClubDetail = {
       ...clubDetail,
       club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' },
@@ -83,14 +89,27 @@ describe('PublicStatsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
     await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Bea Dash' }));
 
-    expect(await screen.findByRole('img', { name: '100m progression chart comparing Ari Runner, Bea Dash' })).toBeInTheDocument();
-    expect(new Set(Array.from(document.querySelectorAll('[data-series-color]'), (line) => line.getAttribute('data-series-color'))).size).toBe(2);
-    expect(screen.getByRole('list', { name: 'Chart legend' })).toHaveTextContent('Ari Runner Series 1 · Open Track Club');
-    const point = screen.getByRole('img', { name: 'Series 1: Ari Runner, 11.20s on 2026-01-10' });
-    fireEvent.focus(point);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Series 1: Ari Runner');
-    await userEvent.click(screen.getByRole('button', { name: 'Table' }));
-    expect(await screen.findByRole('table', { name: 'Public athlete comparison metrics' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('table', { name: '100m public athlete comparison' })).toHaveTextContent('Ari Runner');
+    await userEvent.click(screen.getByRole('tab', { name: 'Long jump' }));
+    expect(screen.getByRole('table', { name: 'Long jump public athlete comparison' })).toHaveTextContent('6.40 m');
     expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith([clubDetail.athletes[0].athlete.id, OTHER_ATHLETE_ID], expect.any(AbortSignal), undefined);
+  });
+
+  it('compares selected clubs by discipline', async () => {
+    const otherClubDetail = { ...clubDetail, club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' } };
+    mockListPublicClubs.mockResolvedValue({ data: [clubDetail.club, otherClubDetail.club], meta: { count: 2 } });
+    mockGetPublicClubStatistics.mockImplementation((clubId: string) => Promise.resolve(clubId === CLUB_ID ? clubDetail : otherClubDetail));
+    render(<PublicStatsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Public statistics view' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Compare clubs' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add club to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Open Track Club' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add club to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Harbour Athletics' }));
+
+    expect(await screen.findByRole('tab', { name: 'Long jump' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: '100m public club comparison' })).toHaveTextContent('Open Track Club');
   });
 });

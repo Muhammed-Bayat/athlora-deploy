@@ -118,7 +118,7 @@
 .selectionEditor {
   display: grid;
   gap: var(--space-4);
-  max-width: 480px;
+  max-width: 620px;
 }
 
 .selectionChips {
@@ -140,7 +140,12 @@
   background: rgba(69, 190, 215, 0.1);
   color: var(--console-ink);
   font-size: var(--font-size-sm);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
 }
+
+.selectionName { display: grid; min-width: 0; gap: 2px; }
+.selectionName strong { overflow: hidden; color: var(--console-ink); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+.selectionName small { overflow: hidden; color: var(--console-muted); font: 600 0.61rem var(--font-family-mono); text-overflow: ellipsis; white-space: nowrap; }
 
 .selectionChips button {
   width: 18px;
@@ -208,13 +213,10 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  min-width: 620px;
 }
 
-.comparisonTable {
-  min-width: 620px;
-  display: block;
-  overflow-x: auto;
-}
+.tableScroll { overflow-x: auto; border: 1px solid var(--console-line); border-radius: var(--radius-sm); }
 
 .comparisonTable th,
 .comparisonTable td {
@@ -251,6 +253,15 @@
   gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
+
+.disciplinePicker { display: grid; gap: var(--space-3); }
+.disciplineActions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.disciplineLabel { color: var(--console-muted); font: 700 0.7rem var(--font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.disciplineLabel strong { margin-left: var(--space-2); color: var(--cyan-200); font: inherit; letter-spacing: normal; text-transform: none; }
+.disciplineTabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 8px; scrollbar-color: var(--cyan-200) transparent; }
+.disciplineTabs button { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--console-line); border-radius: var(--radius-pill); background: var(--console-surface); color: var(--console-muted); font: 700 0.7rem var(--font-family-mono); cursor: pointer; }
+.disciplineTabs button[aria-selected="true"] { border-color: var(--cyan-200); background: rgba(69, 190, 215, 0.16); color: var(--console-ink); box-shadow: 0 0 0 1px rgba(138, 233, 242, 0.12); }
+.disciplineTabs button:hover, .disciplineTabs button:focus-visible { border-color: var(--cyan-200); color: var(--console-ink); outline: none; }
 
 .chartWrap {
   overflow-x: auto;
@@ -323,6 +334,8 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+.legendItem i { width: 10px; height: 10px; border-radius: 50%; }
 
 .seriesLine {
   fill: none;

@@ -69,10 +69,26 @@
 .selectors + .selectors { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
 .selector { min-width: 0; }
 .selector label { display: block; margin: 0 0 8px 2px; color: #a5c4cd; font: 700 0.65rem var(--font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.comparisonClubPicker { grid-column: span 2; padding: 15px; border: 1px solid rgba(138, 233, 242, 0.13); border-radius: 17px; background: linear-gradient(120deg, rgba(10, 48, 64, 0.44), rgba(3, 21, 32, 0.36)); }
+.comparisonClubPicker label { display: flex; justify-content: space-between; }
+.comparisonClubPicker label span { color: var(--cyan-200); }
+.comparisonClubPicker p { margin: 9px 2px 0; color: #87a9b4; font-size: 0.74rem; line-height: 1.4; }
+.disciplinePicker { grid-column: 1 / -1; }
+.selectedDiscipline { display: inline-flex; align-items: center; margin-left: 9px; padding: 3px 7px; border: 1px solid rgba(138, 233, 242, 0.35); border-radius: var(--radius-pill); background: rgba(69, 190, 215, 0.15); color: #c5fbff; letter-spacing: 0.03em; }
+.disciplinePicker .disciplineTabs { margin: 0; padding: 8px; border: 1px solid rgba(138, 233, 242, 0.13); border-radius: 15px; background: rgba(1, 20, 31, 0.42); }
 
-.comparisonSelection { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; margin: var(--space-3) 0 0; list-style: none; }
-.comparisonSelection li { display: inline-flex; align-items: center; gap: var(--space-2); padding: 6px 9px; border: 1px solid rgba(138, 233, 242, 0.28); border-radius: var(--radius-pill); background: rgba(69, 190, 215, 0.1); color: var(--ui-white); font-size: 0.78rem; }
-.comparisonSelection button { border: 0; background: transparent; color: var(--cyan-200); cursor: pointer; font-size: 1rem; }
+.comparisonSelectionSection { display: grid; grid-template-columns: minmax(170px, 0.75fr) minmax(0, 2fr); gap: 18px; align-items: center; margin-top: 16px; padding: 16px; border: 1px solid rgba(138, 233, 242, 0.13); border-radius: 18px; background: rgba(1, 20, 31, 0.5); }
+.comparisonSelectionSection .kicker { margin: 0 0 5px; }
+.comparisonSelectionSection strong { color: #d9f5f7; font: 700 0.82rem var(--font-family-base); }
+.athleteComparisonSelectionSection { margin-top: 24px; border-color: rgba(138, 233, 242, 0.2); background: linear-gradient(120deg, rgba(10, 48, 64, 0.42), rgba(1, 20, 31, 0.56)); }
+.comparisonSelection { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.comparisonSelection li { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 7px 6px 8px; border: 1px solid rgba(138, 233, 242, 0.24); border-radius: var(--radius-pill); background: rgba(69, 190, 215, 0.1); color: var(--ui-white); font-size: 0.78rem; }
+.comparisonSelection li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparisonSelection .selectedAthlete { display: grid; gap: 2px; min-width: 0; }
+.comparisonSelection .selectedAthlete strong { overflow: hidden; color: #efffff; font: 700 0.78rem var(--font-family-base); text-overflow: ellipsis; white-space: nowrap; }
+.comparisonSelection .selectedAthlete small { overflow: hidden; color: #8eb5c0; font: 600 0.6rem var(--font-family-mono); text-overflow: ellipsis; white-space: nowrap; }
+.comparisonSelection button { padding: 3px 6px; border: 1px solid rgba(138, 233, 242, 0.17); border-radius: var(--radius-pill); background: transparent; color: var(--cyan-200); font: 700 0.61rem var(--font-family-mono); cursor: pointer; }
+.comparisonSelection button:hover, .comparisonSelection button:focus-visible { border-color: var(--cyan-200); background: rgba(138, 233, 242, 0.1); outline: none; }
 .selector > div { width: 100%; }
 .error { margin: 18px 0 0; color: #ff9c8a; font-size: 0.86rem; }
 .loading, .emptyState { position: relative; margin: 32px auto 0; padding: 18px 22px; border: 1px solid rgba(138, 233, 242, 0.13); border-radius: 16px; background: rgba(3, 23, 35, 0.72); color: #aac6ce; font-size: 0.9rem; line-height: 1.5; text-align: center; box-shadow: inset 0 1px rgba(255, 255, 255, 0.03); }
@@ -83,6 +99,7 @@
 .comparisonPanel { position: relative; margin-top: 38px; padding: 26px; border: 1px solid var(--chart-tooltip-border); border-radius: 24px; background: var(--chart-tooltip-surface); box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 22px 64px rgba(0, 0, 0, 0.3); }
 .comparisonToolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
 .comparisonToolbar h2 { margin: 0; color: var(--chart-tooltip-text); font: 700 clamp(1.3rem, 3vw, 1.9rem) / 1 var(--font-display); letter-spacing: -0.05em; }
+.comparisonToolbar h2 span { display: inline-block; margin-left: 8px; color: var(--chart-series-1); font: 700 0.62em var(--font-family-mono); letter-spacing: 0; }
 .comparisonToolbar div { display: flex; gap: 6px; }
 .comparisonToolbar button { padding: 8px 12px; border: 1px solid var(--chart-tooltip-border); border-radius: 999px; background: transparent; color: var(--chart-tooltip-muted); font: 700 0.65rem var(--font-family-mono); cursor: pointer; }
 .comparisonToolbar button[aria-pressed="true"] { border-color: var(--chart-series-1); background: color-mix(in srgb, var(--chart-series-1) 18%, transparent); color: var(--chart-tooltip-text); }
@@ -93,6 +110,7 @@
 .comparisonChart circle:focus-visible { stroke: var(--chart-focus); stroke-width: 3; outline: none; }
 .chartLegend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 4px; }
 .chartLegend span { display: inline-flex; align-items: center; gap: 7px; color: var(--chart-tooltip-text); font-size: 0.78rem; }
+.chartLegend i { width: 18px; height: 3px; border-radius: var(--radius-pill); box-shadow: 0 0 8px currentColor; }
 .legendMarker { width: 24px; height: 6px; flex: none; }
 .legendMarker line { stroke-width: 3; stroke-linecap: round; }
 .chartLegend small { color: var(--chart-tooltip-muted); font: 600 0.62rem var(--font-family-mono); }
@@ -167,6 +185,9 @@
   .explorerHeading, .sectionHeading { display: block; }
   .explorerHeading > p, .sectionHeading > p { margin-top: 14px; text-align: left; }
   .selectors, .selectors + .selectors, .comparisonCards { grid-template-columns: 1fr; }
+  .comparisonClubPicker { grid-column: auto; }
+  .disciplinePicker { grid-column: auto; }
+  .comparisonSelectionSection { grid-template-columns: 1fr; gap: 12px; }
   .comparisonPanel { padding: 20px; }
   .comparisonToolbar { align-items: flex-start; flex-direction: column; }
   .galleryViewport { height: 490px; }
@@ -182,3 +203,7 @@
   .aurora i { animation: none; }
   .clubCard, .athleteCard, .gallerySlot, .galleryControls button, .startLink { transition: none; }
 }
+.disciplineTabs { display: flex; gap: var(--space-2); margin: var(--space-4) 0; overflow-x: auto; padding-bottom: var(--space-1); }
+.disciplineTabs button { flex: none; min-height: 38px; padding: 0 var(--space-3); border: 1px solid var(--console-line); border-radius: var(--radius-sm); background: transparent; color: var(--console-muted); font: var(--font-weight-bold) 0.75rem var(--font-family-base); cursor: pointer; }
+.disciplineTabs button[aria-selected='true'] { border-color: var(--console-teal); background: color-mix(in srgb, var(--console-teal) 28%, transparent); color: #e4feff; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--console-teal) 40%, transparent), 0 0 14px color-mix(in srgb, var(--console-teal) 25%, transparent); }
+.disciplineTabs button:focus-visible { outline: 3px solid var(--console-focus); outline-offset: 2px; }
