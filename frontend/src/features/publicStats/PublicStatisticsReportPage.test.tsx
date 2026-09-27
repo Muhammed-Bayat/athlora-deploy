@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +25,8 @@ describe('PublicStatisticsReportPage', () => {
     expect(screen.getByLabelText('Discipline')).toHaveValue('100m');
     expect(screen.getByRole('button', { name: 'Download CSV' })).toBeDisabled();
 
-    await user.selectOptions(screen.getByLabelText('Gender'), 'female');
+    await user.click(screen.getByRole('button', { name: 'Gender' }));
+    await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Female' }));
     await waitFor(() => expect(getReport).toHaveBeenLastCalledWith(expect.objectContaining({ gender: 'female' }), expect.anything()));
   });
 });
