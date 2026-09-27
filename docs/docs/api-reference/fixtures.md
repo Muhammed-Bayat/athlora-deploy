@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Cross-Club Fixtures
 
-Fixtures connect a hosted, scheduled 100m competition to one or more guest clubs (workspaces) without granting those clubs membership in the host workspace. The system supports invitation management, roster isolation, revision-based reacceptance, timeline logging by guest teams, and result correction.
+Fixtures connect a hosted, scheduled competition to one or more guest clubs (workspaces) without granting those clubs membership in the host workspace. The system supports invitation management, roster isolation, revision-based reacceptance, timeline logging by guest teams, and result correction. Legacy 100m fixtures retain their participant roster endpoints; multi-discipline fixtures use protected meet entrants and session registrations.
 
 All paths are relative to `/api/v1`. Authentication is required for all routes.
 
@@ -116,6 +116,10 @@ Accepting creates the guest workspace relationship and sets the accepted revisio
 
 Guest roster routes enforce that the fixture is `scheduled`, the guest team is `accepted`, and the accepted revision matches the current fixture revision. Roster changes are locked after the fixture starts or after a material revision change.
 
+### Multi-discipline fixture rosters
+
+After accepting an invitation to a multi-discipline meet, a guest coach opens the shared event detail and uses its existing discipline tabs. The coach can create only active athletes from their own workspace and register each entrant only in the sessions required by that club. An athlete registration requires the session's catalogue definition to be in the athlete's preferred disciplines; a mismatched request returns `409 ATHLETE_DISCIPLINE_MISMATCH`. A club with no 200m athletes, for example, simply creates no 200m registration. Hosts can see every accepted club's session entries, while guests see and change only their own.
+
 ### Guest timeline logging
 
 Guest teams can create, edit, and undo timeline entries for their own athletes only. The same version-conflict, lifecycle, and result-recomputation rules apply as the standard timeline API.
@@ -189,4 +193,4 @@ Notifications are deduplicated via `dedupe_key` and support unread counts and ma
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The multi-discipline fixture roster flow was documented with the assistance of OpenCode[openai/gpt-5.6-terra].

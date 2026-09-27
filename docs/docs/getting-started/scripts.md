@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### Discipline-filtered fixture rosters — 2026-09-27
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **697 tests pass, 0 skip**. Coverage includes session-specific preferred-discipline filtering, guest registration through meet APIs rather than legacy participant APIs, generic meet fixture controls, and themed multi-discipline fixture roster guidance.
+- Backend: lint, strict typecheck, and production build pass; **708 tests pass, 70 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. Participant-list isolation is unit-covered; the disposable-database integration suite covers the strict preferred-discipline registration rule when configured.
+- Documentation: Docusaurus production build passes after product-status, frontend behavior, fixture API, and meet-contract updates.
+- E2E: not run; the authenticated suite requires local PostgreSQL plus Auth0 configuration. The changed guest workflow has frontend and backend unit coverage, while its database integration coverage remains gated on `TEST_DATABASE_URL`.
+
 ### Event discipline selection and roster tabs — 2026-09-26
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **688 tests pass, 0 skip**. Coverage includes grouped multi-discipline selection cards, disabled vertical choices pending height configuration, keyboard session-tab navigation, session-specific roster display, and existing 100m regression behavior.

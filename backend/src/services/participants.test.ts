@@ -54,14 +54,15 @@ beforeEach(() => {
 });
 
 describe('event participant service', () => {
-  it('lists owned participants with athlete summaries in stable name order', async () => {
+  it('lists host participants or only the accepted guest workspace participant rows in stable name order', async () => {
     query.mockResolvedValueOnce({ rows: [participantRow] });
 
     await expect(listEventParticipants(USER_ID, EVENT_ID)).resolves.toEqual([participant]);
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('JOIN events e');
     expect(sql).toContain('JOIN athletes a');
-    expect(sql).not.toContain('ep.participant_workspace_id = $2');
+    expect(sql).toContain('ep.participant_workspace_id = $2');
+    expect(sql).toContain("fw.status = 'accepted'");
     expect(sql).toContain('ORDER BY lower(a.name) ASC, a.id ASC');
     expect(parameters).toEqual([EVENT_ID, USER_ID]);
   });
