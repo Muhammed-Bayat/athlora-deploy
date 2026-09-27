@@ -1,17 +1,19 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AthleticsEvent } from '../../types';
+import type { AthleticsEvent, RsvpStatus } from '../../types';
 import { MeetRosterPanel } from './MeetRosterPanel';
 
 const api = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), createEntrant: vi.fn(), updateEntrant: vi.fn(), registerEntrant: vi.fn(), withdrawEntrant: vi.fn(), changeSessionState: vi.fn() }));
 const athletes = vi.hoisted(() => ({ listAthletes: vi.fn() }));
 const participants = vi.hoisted(() => ({ listEventParticipants: vi.fn(), addEventParticipant: vi.fn(), updateEventParticipant: vi.fn() }));
+const fixturesApi = vi.hoisted(() => ({ listGuestFixtureParticipants: vi.fn(), addGuestFixtureParticipant: vi.fn(), updateGuestFixtureParticipant: vi.fn() }));
 vi.mock('../../api/meets', () => api);
 vi.mock('../../api/athletes', () => athletes);
 vi.mock('../../api/participants', () => participants);
+vi.mock('../../api/fixtures', () => fixturesApi);
 
-const event: AthleticsEvent = { id: 'event-1', createdBy: 'coach-1', type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
+const event: AthleticsEvent = { id: 'event-1', workspaceId: 'workspace-1', createdBy: 'coach-1', type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
 
 async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, label: string, option: string | RegExp) {
   const trigger = screen.getByRole('button', { name: label });
@@ -46,6 +48,9 @@ describe('MeetRosterPanel', () => {
       { id: 'athlete-2', name: 'Bea Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'], squads: [] },
     ] });
     participants.listEventParticipants.mockResolvedValue({ data: [{ athleteId: 'athlete', rsvpStatus: 'pending' }] });
+    fixturesApi.listGuestFixtureParticipants.mockResolvedValue({ data: [], meta: { count: 0 } });
+    fixturesApi.addGuestFixtureParticipant.mockResolvedValue({} as never);
+    fixturesApi.updateGuestFixtureParticipant.mockResolvedValue({} as never);
   });
 
   it('uses session tabs with the familiar roster rows and RSVP controls', async () => {
@@ -107,13 +112,30 @@ describe('MeetRosterPanel', () => {
     expect(screen.queryByText('Sami Sprinter')).not.toBeInTheDocument();
   });
 
-  it('lets an accepted guest use meet registration without calling legacy participant APIs', async () => {
+  it('lets an accepted guest register athletes and track their RSVP with the fixture guest API', async () => {
     const user = userEvent.setup();
+    let guestRsvp: RsvpStatus = 'pending';
+    let guestEntrants: Array<Record<string, unknown>> = [];
+    let guestRegistrations: Array<Record<string, unknown>> = [];
     api.listSessions.mockResolvedValue({ data: [{ id: 'session-track', disciplineDefinitionId: 'track', label: '200m', status: 'scheduled', version: 1 }] });
-    api.listEntrants.mockResolvedValue({ data: [] });
-    api.listRegistrations.mockResolvedValue({ data: [] });
+    api.listEntrants.mockImplementation(async () => ({ data: guestEntrants, meta: { count: guestEntrants.length } }));
+    api.listRegistrations.mockImplementation(async () => ({ data: guestRegistrations, meta: { count: guestRegistrations.length } }));
     athletes.listAthletes.mockResolvedValue({ data: [{ id: 'guest-athlete', name: 'Gia Guest', status: 'active', preferredDisciplineIds: ['track'], squads: [] }] });
-    api.createEntrant.mockResolvedValue({ id: 'guest-entrant', workspaceId: 'guest-workspace', kind: 'athlete', athleteId: 'guest-athlete', name: 'Gia Guest', clubName: null, details: null, memberIds: [] });
+    api.createEntrant.mockImplementation(async () => {
+      guestEntrants = [{ id: 'guest-entrant', workspaceId: 'guest-workspace', kind: 'athlete', athleteId: 'guest-athlete', name: 'Gia Guest', clubName: null, details: null, memberIds: [] }];
+      return guestEntrants[0];
+    });
+    api.registerEntrant.mockImplementation(async () => {
+      guestRegistrations = [{ id: 'guest-registration', disciplineSessionId: 'session-track', entrantId: 'guest-entrant', withdrawnAt: null }];
+      return guestRegistrations[0];
+    });
+    let guestAdded = false;
+    fixturesApi.listGuestFixtureParticipants.mockImplementation(async () => ({ data: guestAdded ? [{ athleteId: 'guest-athlete', rsvpStatus: guestRsvp }] : [], meta: { count: guestAdded ? 1 : 0 } }));
+    fixturesApi.addGuestFixtureParticipant.mockImplementation(async () => { guestAdded = true; return {} as never; });
+    fixturesApi.updateGuestFixtureParticipant.mockImplementation(async (_eventId: string, _athleteId: string, rsvp: RsvpStatus) => {
+      guestRsvp = rsvp;
+      return {} as never;
+    });
 
     render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="guest-workspace" isGuest />);
 
@@ -121,8 +143,15 @@ describe('MeetRosterPanel', () => {
     await user.click(screen.getByRole('checkbox', { name: /Gia Guest/i }));
     await user.click(screen.getByRole('button', { name: 'Add 1 athlete' }));
     await waitFor(() => expect(api.registerEntrant).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-track', entrantId: 'guest-entrant' }));
+    expect(fixturesApi.addGuestFixtureParticipant).toHaveBeenCalledWith('event-1', 'guest-athlete');
     expect(participants.listEventParticipants).not.toHaveBeenCalled();
     expect(participants.addEventParticipant).not.toHaveBeenCalled();
-    expect(screen.queryByText('Roster filter')).not.toBeInTheDocument();
+    expect(screen.getByText('Roster filter')).toBeInTheDocument();
+    expect(screen.getByText('Pending 1 · Yes 0 · No 0 · Maybe 0')).toBeInTheDocument();
+
+    await selectThemedOption(user, 'RSVP for Gia Guest', 'Not attending');
+    await waitFor(() => expect(fixturesApi.updateGuestFixtureParticipant).toHaveBeenCalledWith('event-1', 'guest-athlete', 'no'));
+    expect(participants.updateEventParticipant).not.toHaveBeenCalled();
+    expect(await screen.findByText('Pending 0 · Yes 0 · No 1 · Maybe 0')).toBeInTheDocument();
   });
 });

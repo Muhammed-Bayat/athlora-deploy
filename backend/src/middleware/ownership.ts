@@ -4,6 +4,7 @@ import { assertEventLoggingOpen } from '../services/events.js';
 import {
   assertAthleteOwnership,
   assertEventAthleteOwnership,
+  assertEventHostOwnership,
   assertEventOwnership,
   assertParticipantOwnership,
   assertResultOwnership,
@@ -30,6 +31,10 @@ export const requireAthleteOwnership = ownershipGuard((req, workspaceId) =>
 
 export function requireEventOwnership(parameter = 'id'): RequestHandler {
   return ownershipGuard((req, workspaceId) => assertEventOwnership(workspaceId, req.params[parameter]));
+}
+
+export function requireEventHostOwnership(parameter = 'id'): RequestHandler {
+  return ownershipGuard((req, workspaceId) => assertEventHostOwnership(workspaceId, req.params[parameter]));
 }
 
 export const requireBodyEventOwnership = ownershipGuard((req, workspaceId) =>

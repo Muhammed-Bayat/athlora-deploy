@@ -257,6 +257,7 @@ export type EventStatus = (typeof EVENT_STATUSES)[number];
 
 export interface AthleticsEvent {
   id: string;
+  workspaceId: string;
   createdBy: string;
   type: EventType;
   discipline: Discipline | null;

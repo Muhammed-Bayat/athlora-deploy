@@ -346,6 +346,7 @@ export type EventStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled
 
 export interface AthleticsEvent {
   id: string;
+  workspaceId: string;
   createdBy: string;
   type: EventType;
   discipline: Discipline | null;

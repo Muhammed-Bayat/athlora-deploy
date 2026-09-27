@@ -57,6 +57,7 @@ beforeEach(() => {
 function eventRow(overrides: Partial<EventRow> = {}): EventRow {
   return {
     id: EVENT_ID,
+    workspace_id: USER_ID,
     created_by: USER_ID,
     type: 'competition',
     discipline: '100m',
@@ -76,6 +77,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
 function eventBody(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
   return {
     id: EVENT_ID,
+    workspaceId: USER_ID,
     createdBy: USER_ID,
     type: 'competition',
     discipline: '100m',

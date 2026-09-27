@@ -4,6 +4,7 @@ import { cancelEvent, createEvent, getEventWeather, listEvents, updateEvent } fr
 
 const event: AthleticsEvent = {
   id: '11111111-1111-4111-8111-111111111111',
+  workspaceId: 'workspace-1',
   createdBy: '22222222-2222-4222-8222-222222222222',
   type: 'competition',
   discipline: '100m',

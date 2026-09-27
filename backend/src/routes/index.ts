@@ -32,7 +32,7 @@ import publicMeetsRouter from './publicMeets.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, resolveLocalApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
-import { requireAthleteOwnership, requireEventOwnership } from '../middleware/ownership.js';
+import { requireAthleteOwnership, requireEventHostOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
 import { requireOperationalAccess } from '../middleware/capabilities.js';
 import {
@@ -74,10 +74,10 @@ eventsRouter.get('/:id', requireEventOwnership(), events.getEvent);
 eventsRouter.put(
   '/:id',
   requireOperationalAccess(), validateBody(parseEventReplacementPayload),
-  requireEventOwnership(),
+  requireEventHostOwnership(),
   events.updateEvent,
 );
-eventsRouter.delete('/:id', requireOperationalAccess(), requireEventOwnership(), events.deleteEvent);
+eventsRouter.delete('/:id', requireOperationalAccess(), requireEventHostOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 const squadsRouter = Router();

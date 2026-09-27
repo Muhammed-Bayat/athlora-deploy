@@ -32,6 +32,10 @@ export async function assertEventOwnership(workspaceId: string, eventId: unknown
   ) LIMIT 1`, [eventId as string, workspaceId], executor);
 }
 
+export async function assertEventHostOwnership(workspaceId: string, eventId: unknown, executor: DbExecutor = getPool()): Promise<void> {
+  await assertScoped(workspaceId, [eventId], 'SELECT 1 FROM events e WHERE e.id = $1 AND e.workspace_id = $2 LIMIT 1', [eventId as string, workspaceId], executor);
+}
+
 async function assertEventAthleteScoped(workspaceId: string, eventId: unknown, athleteId: unknown, table: string, executor: DbExecutor): Promise<void> {
   const relationship = table === 'events' ? '' : `JOIN ${table} x ON x.event_id = e.id AND x.athlete_id = a.id`;
   const fixtureAccess = table === 'events'

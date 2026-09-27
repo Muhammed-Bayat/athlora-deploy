@@ -69,6 +69,7 @@ const BEA_ID = '77777777-7777-4777-8777-777777777777';
 function event(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
   return {
     id: CITY_ID,
+    workspaceId: '00000000-0000-4000-8000-000000000000',
     createdBy: '55555555-5555-4555-8555-555555555555',
     type: 'competition',
     discipline: '100m',
@@ -212,7 +213,7 @@ beforeEach(() => {
     { id: 'track-200', kind: 'track', unit: 'seconds', presentation: { label: '200m' } },
     { id: 'field-shot', kind: 'field', unit: 'metres', presentation: { label: 'Shot put' } },
     { id: 'relay-4x100', kind: 'relay', unit: 'seconds', presentation: { label: '4 x 100m relay' } },
-    { id: 'vertical-high-jump', kind: 'vertical', unit: 'cm', presentation: { label: 'High jump' } },
+    { id: 'vertical-high-jump', kind: 'vertical', unit: 'cm', presentation: { label: 'High jump' }, defaultRules: { aggregation: 'vertical', entrantType: 'individual', failureLimit: 3, heightIncrement: 0.02, round: 'final' } },
   ] });
   meetsApi.listSessions.mockResolvedValue({ data: [] });
   meetsApi.createSession.mockResolvedValue({});
@@ -503,6 +504,34 @@ describe('EventsPage', () => {
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
+  it('requires heights for a vertical session and sends the vertical config on creation', async () => {
+    const created = event({ id: '66666666-6666-4666-8666-666666666666', title: 'County Jumps Meet', discipline: null });
+    eventApi.createEvent.mockResolvedValue(created);
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('button', { name: /City Sprint Meet/ });
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add event' });
+
+    await user.type(within(dialog).getByLabelText('Event title'), 'County Jumps Meet');
+    await user.click(await within(dialog).findByRole('checkbox', { name: /High jump/ }));
+    expect(within(dialog).getByRole('group', { name: 'High jump heights' })).toBeInTheDocument();
+    await selectDate(user, dialog, '2026-09-05');
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('enter a starting height and increment in metres');
+    expect(eventApi.createEvent).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText('Starting height (m)'), '1.5');
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    await waitFor(() => expect(meetsApi.createSession).toHaveBeenCalledWith(created.id, {
+      disciplineDefinitionId: 'vertical-high-jump',
+      label: 'High jump',
+      verticalConfig: { startingHeight: 1.5, heightIncrement: 0.02, failureLimit: 3, round: 'final' },
+    }));
+    expect(await screen.findByRole('button', { name: /County Jumps Meet/ })).toBeInTheDocument();
+  });
+
   it('uses grouped Athlora discipline cards when creating a multi-discipline meet', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -515,7 +544,9 @@ describe('EventsPage', () => {
     expect(within(dialog).getByRole('heading', { name: 'Track' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Field' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Relays' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('checkbox', { name: /High jump/ })).toBeDisabled();
+    const highJumpChoice = within(dialog).getByRole('checkbox', { name: /High jump/ });
+    expect(highJumpChoice).toBeEnabled();
+    expect(within(dialog).getByText('Heights set after selection')).toBeInTheDocument();
 
     await user.click(trackChoice);
     await user.click(within(dialog).getByRole('checkbox', { name: /4 x 100m relay/ }));

@@ -6,7 +6,11 @@ import { listClubCalendarEvents, listClubs } from '../../api/clubs';
 import { searchVenues } from '../../api/venues';
 import { listAthletes } from '../../api/athletes';
 import { createSession, listDisciplines, listSessions } from '../../api/meets';
-import type { DisciplineDefinition } from '../../types/meets';
+import type { DisciplineDefinition, VerticalConfig } from '../../types/meets';
+
+export interface SessionDefinitionSelection { definitionId: string; verticalConfig?: VerticalConfig }
+
+interface VerticalConfigDraft { startingHeight: string; heightIncrement: string; failureLimit: string; round: 'qualification' | 'final' }
 import {
   addEventParticipant,
   acknowledgeParticipantStatusReview,
@@ -252,7 +256,7 @@ function sortedParticipants(participants: EventParticipantSummary[]): EventParti
 
 interface EventFormProps {
   event?: AthleticsEvent;
-  onSave: (payload: EventMutationPayload, sessionDefinitionIds: string[]) => Promise<void>;
+  onSave: (payload: EventMutationPayload, sessionDefinitions: SessionDefinitionSelection[]) => Promise<void>;
   onCancel: () => void;
   onSubmittingChange: (submitting: boolean) => void;
 }
@@ -271,6 +275,8 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   const [disciplinesLoading, setDisciplinesLoading] = useState(true);
   const [disciplinesError, setDisciplinesError] = useState(false);
   const [sessionDefinitionIds, setSessionDefinitionIds] = useState<string[]>([]);
+  const [verticalConfigDrafts, setVerticalConfigDrafts] = useState<Record<string, VerticalConfigDraft>>({});
+  const [verticalConfigError, setVerticalConfigError] = useState('');
   const venueRequestRef = useRef(0);
   const titleRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLButtonElement>(null);
@@ -284,6 +290,37 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     formEvent.preventDefault();
     const parsed = toPayload(draft, event?.status ?? 'scheduled');
     if (draft.genericMeet && sessionDefinitionIds.length === 0) parsed.errors.genericMeet = 'Choose at least one initial discipline session.';
+    setVerticalConfigError('');
+    let sessionDefinitions: SessionDefinitionSelection[] = [];
+    if (draft.genericMeet) {
+      sessionDefinitions = sessionDefinitionIds.map((definitionId) => {
+        const discipline = disciplines.find((item) => item.id === definitionId);
+        if (discipline?.kind !== 'vertical') return { definitionId };
+        const config = verticalConfigDrafts[definitionId];
+        return {
+          definitionId,
+          verticalConfig: {
+            startingHeight: Number(config?.startingHeight),
+            heightIncrement: Number(config?.heightIncrement),
+            failureLimit: Number(config?.failureLimit),
+            round: config?.round ?? 'final',
+          },
+        };
+      });
+      const invalidVertical = sessionDefinitions.find((selection) => {
+        if (!selection.verticalConfig) return false;
+        const config = selection.verticalConfig;
+        const heightPattern = /^\d+(\.\d{1,2})?$/;
+        return !heightPattern.test(String(config.startingHeight)) || config.startingHeight <= 0
+          || !heightPattern.test(String(config.heightIncrement)) || config.heightIncrement <= 0
+          || !Number.isInteger(config.failureLimit) || config.failureLimit < 1 || config.failureLimit > 10;
+      });
+      if (invalidVertical) {
+        const label = disciplines.find((item) => item.id === invalidVertical.definitionId)?.presentation.label ?? 'Vertical discipline';
+        setVerticalConfigError(`${label}: enter a starting height and increment in metres (up to two decimals), and a failure limit from 1 to 10.`);
+        return;
+      }
+    }
     if (Object.keys(parsed.errors).length > 0) {
       setErrors(parsed.errors);
       if (parsed.errors.title) titleRef.current?.focus();
@@ -295,7 +332,7 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     onSubmittingChange(true);
     setSubmitError(null);
     try {
-      await onSave(parsed.payload, sessionDefinitionIds);
+      await onSave(parsed.payload, sessionDefinitions);
     } catch (error) {
       const fields = validationErrors(error);
       setErrors(fields);
@@ -372,6 +409,27 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
     { key: 'relay', label: 'Relays', items: disciplines.filter((discipline) => discipline.kind === 'relay') },
   ].filter((group) => group.items.length > 0);
 
+  const toggleSessionDefinition = (discipline: DisciplineDefinition, checked: boolean) => {
+    setSessionDefinitionIds((current) => (checked ? [...current, discipline.id] : current.filter((id) => id !== discipline.id)));
+    if (discipline.kind === 'vertical') {
+      setVerticalConfigDrafts((current) => (checked
+        ? {
+          ...current,
+          [discipline.id]: current[discipline.id] ?? {
+            startingHeight: '',
+            heightIncrement: String(discipline.defaultRules?.heightIncrement ?? 0.02),
+            failureLimit: String(discipline.defaultRules?.failureLimit ?? 3),
+            round: discipline.defaultRules?.round ?? 'final',
+          },
+        }
+        : current));
+    }
+  };
+
+  const updateVerticalConfig = (definitionId: string, patch: Partial<VerticalConfigDraft>) => {
+    setVerticalConfigDrafts((current) => ({ ...current, [definitionId]: { ...current[definitionId], ...patch } }));
+  };
+
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       {submitError && <p className={styles.formError} role="alert">{submitError}</p>}
@@ -390,16 +448,29 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
               {group.items.map((discipline) => {
                 const vertical = discipline.kind === 'vertical';
                 const checked = sessionDefinitionIds.includes(discipline.id);
-                return <label className={`${styles.disciplineChoice} ${checked ? styles.disciplineChoiceSelected : ''} ${vertical ? styles.disciplineChoiceDisabled : ''}`} key={discipline.id}>
-                  <input type="checkbox" disabled={vertical} checked={checked} onChange={(input) => setSessionDefinitionIds((current) => input.target.checked ? [...current, discipline.id] : current.filter((id) => id !== discipline.id))} />
-                  <span><strong>{discipline.presentation.label}</strong><small>{vertical ? 'Requires height configuration' : discipline.kind === 'relay' ? 'Team relay' : discipline.unit === 'seconds' ? 'Timed event' : 'Measured event'}</small></span>
+                return <label className={`${styles.disciplineChoice} ${checked ? styles.disciplineChoiceSelected : ''}`} key={discipline.id}>
+                  <input type="checkbox" checked={checked} onChange={(input) => toggleSessionDefinition(discipline, input.target.checked)} />
+                  <span><strong>{discipline.presentation.label}</strong><small>{vertical ? 'Heights set after selection' : discipline.kind === 'relay' ? 'Team relay' : discipline.unit === 'seconds' ? 'Timed event' : 'Measured event'}</small></span>
                 </label>;
               })}
             </div>
           </section>
         ))}
+        {sessionDefinitionIds.map((definitionId) => {
+          const discipline = disciplines.find((item) => item.id === definitionId);
+          if (!discipline || discipline.kind !== 'vertical') return null;
+          const config = verticalConfigDrafts[definitionId] ?? { startingHeight: '', heightIncrement: String(discipline.defaultRules?.heightIncrement ?? 0.02), failureLimit: String(discipline.defaultRules?.failureLimit ?? 3), round: 'final' as const };
+          return <fieldset className={styles.verticalConfig} key={definitionId}>
+            <legend>{discipline.presentation.label} heights</legend>
+            <label>Starting height (m)<input type="number" min="0.01" step="0.01" value={config.startingHeight} onChange={(input) => updateVerticalConfig(definitionId, { startingHeight: input.target.value })} /></label>
+            <label>Height increment (m)<input type="number" min="0.01" step="0.01" value={config.heightIncrement} onChange={(input) => updateVerticalConfig(definitionId, { heightIncrement: input.target.value })} /></label>
+            <label>Consecutive failure limit<input type="number" min="1" max="10" value={config.failureLimit} onChange={(input) => updateVerticalConfig(definitionId, { failureLimit: input.target.value })} /></label>
+            <label>Round<Select aria-label={`${discipline.presentation.label} round`} value={config.round} onChange={(input) => updateVerticalConfig(definitionId, { round: input.target.value as VerticalConfigDraft['round'] })} options={[{ value: 'final', label: 'Final' }, { value: 'qualification', label: 'Qualification' }]} /></label>
+          </fieldset>;
+        })}
         {!disciplinesLoading && !disciplinesError && initialSessionGroups.length === 0 ? <p className={styles.catalogueStatus}>No eligible disciplines are available.</p> : null}
         {errors.genericMeet && <span className={styles.fieldError}>{errors.genericMeet}</span>}
+        {verticalConfigError && <span className={styles.fieldError} role="alert">{verticalConfigError}</span>}
       </fieldset>}
 
       <label htmlFor="event-title">Event title</label>
@@ -842,14 +913,14 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const hasFilters = dateTab !== 'upcoming' || Boolean(typeFilter) || Boolean(statusFilter);
   const pending = editorBusy;
 
-  const saveEditor = async (payload: EventMutationPayload, sessionDefinitionIds: string[]) => {
+  const saveEditor = async (payload: EventMutationPayload, sessionDefinitions: SessionDefinitionSelection[] = []) => {
     const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
     if (payload.discipline === null) {
       const existing = editor === 'new' ? [] : (await listSessions(event.id)).data.map((session) => session.disciplineDefinitionId);
       const definitions = (await listDisciplines()).data;
-      for (const definitionId of sessionDefinitionIds.filter((id) => !existing.includes(id))) {
-        const label = definitions.find((definition) => definition.id === definitionId)?.presentation.label ?? 'Catalogue session';
-        await createSession(event.id, { disciplineDefinitionId: definitionId, label });
+      for (const selection of sessionDefinitions.filter((item) => !existing.includes(item.definitionId))) {
+        const label = definitions.find((definition) => definition.id === selection.definitionId)?.presentation.label ?? 'Catalogue session';
+        await createSession(event.id, { disciplineDefinitionId: selection.definitionId, label, ...(selection.verticalConfig ? { verticalConfig: selection.verticalConfig } : {}) });
       }
     }
     storeEvent(event);

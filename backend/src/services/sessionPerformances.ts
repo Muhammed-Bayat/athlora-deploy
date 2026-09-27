@@ -151,21 +151,26 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   const session = await getSession(db, eventId, sessionId);
   const definition = await getDefinition(db, session.disciplineDefinitionId);
   const entries = (await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 ORDER BY created_at, id', [sessionId])).rows.map(row => mapMeetRow<SessionEntry>(row));
-  const result = await db.query(
-    `SELECT r.*, se.withdrawn_at, en.kind AS entrant_kind FROM session_results r JOIN session_entrants se
+  const result = await db.query<{ withdrawn_at: Date | null; entrant_kind: string; athlete_rsvp: string | null }>(
+    `SELECT r.*, se.withdrawn_at, en.kind AS entrant_kind, en.athlete_id,
+            ep.rsvp_status AS athlete_rsvp
+     FROM session_results r JOIN session_entrants se
        ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
-     JOIN meet_entrants en ON en.id = r.entrant_id WHERE r.session_id = $1 ORDER BY r.entrant_id`, [sessionId],
+     JOIN meet_entrants en ON en.id = r.entrant_id
+     LEFT JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = en.athlete_id
+     WHERE r.session_id = $1 ORDER BY r.entrant_id`, [sessionId],
   );
   // Rank the whole session, then filter visibility; guest ranks must not change with the viewer.
   const rows = result.rows.map((row) => {
     const mapped = mapMeetRow<SessionResult>(row);
     const effective = authoritativeResult(definition, entries.filter(entry => entry.entrantId === mapped.entrantId), mapped.selectedEntryId, session.verticalConfig);
     const vertical = 'failuresAtBest' in effective ? effective : undefined;
-    const eligible = access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.withdrawn_at === null;
+    const attending = row.entrant_kind !== 'athlete' || row.athlete_rsvp !== 'no';
+    const eligible = attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.withdrawn_at === null;
     return { ...mapped, ...(vertical ? { vertical } : {}), effectiveResult: effective.value, effectiveOutcome: effective.outcome,
-      countsTowardsStatistics: eligible && effective.outcome === 'valid' && session.resultState === 'final' && row.entrant_kind === 'athlete' && definition.defaultRules.entrantType === 'individual', placing: null as number | null };
+      countsTowardsStatistics: eligible && effective.outcome === 'valid' && session.resultState === 'final' && row.entrant_kind === 'athlete' && definition.defaultRules.entrantType === 'individual', placing: null as number | null, attending };
   });
-  const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entries.filter(e => e.entrantId === row.entrantId), eligible: access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
+  const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entries.filter(e => e.entrantId === row.entrantId), eligible: row.attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
   rows.forEach(row => { row.placing = access.event.status === 'cancelled' || session.status === 'cancelled' ? null : session.resultState === 'final' ? row.finalPlace ?? null : places.get(row.entrantId) ?? null; });
   {
     for (const row of rows) {
@@ -179,10 +184,12 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
       Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter(h => h.event_date.slice(0, 4) === date.rows[0]?.date.slice(0, 4)).every(better) });
     }
   }
-  return rows.filter((row) => canReadEntrant(actor, access, row.workspaceId)).map(({ ...row }) => {
+  return rows.filter((row) => row.attending && canReadEntrant(actor, access, row.workspaceId)).map(({ attending: _attending, ...row }) => {
     // Do not expose joined registration internals as accidental DTO fields.
     delete (row as unknown as Record<string, unknown>).withdrawnAt;
     delete (row as unknown as Record<string, unknown>).entrantKind;
+    delete (row as unknown as Record<string, unknown>).athleteRsvp;
+    delete (row as unknown as Record<string, unknown>).athleteId;
     return row;
   });
 }

@@ -15,7 +15,7 @@ import type {
 } from '../validation/payloads.js';
 
 const EVENT_COLUMNS =
-  'id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status, created_at, updated_at';
+  'id, workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status, created_at, updated_at';
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');

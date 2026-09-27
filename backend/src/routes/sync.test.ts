@@ -50,6 +50,7 @@ function openEvent(): { rows: Array<Record<string, unknown>> } {
   return {
     rows: [{
       id: EVENT_ID,
+      workspace_id: USER_ID,
       created_by: USER_ID,
       type: 'competition',
       discipline: '100m',

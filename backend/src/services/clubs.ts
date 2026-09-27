@@ -238,7 +238,7 @@ export async function listClubCalendarEvents(
   }
 
   const result = await executor.query<ClubCalendarEventRow>(
-    `SELECT e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at,
+    `SELECT e.id, e.workspace_id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at,
             c.id AS club_id, c.name AS club_name
      FROM events e
      JOIN clubs c ON c.workspace_id = e.workspace_id

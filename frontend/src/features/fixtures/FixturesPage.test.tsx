@@ -32,6 +32,7 @@ const BEA_ID = 'athlete-2';
 function event(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
   return {
     id: EVENT_ID,
+    workspaceId: 'host-workspace',
     createdBy: 'host-user',
     type: 'competition',
     discipline: '100m',

@@ -10,7 +10,7 @@ import { notifyFixtureInvitation, notifyFixtureReacceptanceRequired, notifyFixtu
 import { recomputeEventResults } from './timeline.js';
 import { publicMediaPath } from './mediaStorage.js';
 
-const EVENT_COLUMNS = 'e.id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at';
+const EVENT_COLUMNS = 'e.id, e.workspace_id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at';
 
 type FixtureInvitationStatus = 'pending' | 'accepted' | 'declined' | 'change_requested' | 'revoked';
 type FixtureWorkspaceStatus = 'accepted' | 'reacceptance_required' | 'withdrawn';

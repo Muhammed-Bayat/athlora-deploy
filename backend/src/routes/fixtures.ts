@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as fixtures from '../controllers/fixtures.js';
 import { requireCoach, requireOperationalAccess } from '../middleware/capabilities.js';
-import { requireEventOwnership } from '../middleware/ownership.js';
+import { requireEventHostOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
 import {
   parseEventParticipantCreatePayload,
@@ -15,15 +15,15 @@ import {
 } from '../validation/payloads.js';
 
 export const fixtureHostRouter = Router();
-fixtureHostRouter.get('/:eventId/fixture-invitations', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.listInvitations);
-fixtureHostRouter.post('/:eventId/fixture-invitations', requireOperationalAccess(), requireEventOwnership('eventId'), validateBody(parseFixtureInvitationCreatePayload), fixtures.createInvitation);
-fixtureHostRouter.post('/:eventId/fixture-invitations/:invitationId/resend', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.resendInvitation);
-fixtureHostRouter.delete('/:eventId/fixture-invitations/:invitationId', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.revokeInvitation);
-fixtureHostRouter.get('/:eventId/fixture-rosters', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.hostedRosters);
-fixtureHostRouter.post('/:eventId/fixture-workspaces/:workspaceId/withdrawal', requireCoach(), requireEventOwnership('eventId'), fixtures.hostWithdrawal);
-fixtureHostRouter.get('/:eventId/fixture-entries', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.hostedEntries);
-fixtureHostRouter.get('/:eventId/fixture-results', requireOperationalAccess(), requireEventOwnership('eventId'), fixtures.hostedResults);
-fixtureHostRouter.put('/:eventId/fixture-results/:athleteId', requireOperationalAccess(), requireEventOwnership('eventId'), validateBody(parseResultOverridePayload), fixtures.overrideHostResult);
+fixtureHostRouter.get('/:eventId/fixture-invitations', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.listInvitations);
+fixtureHostRouter.post('/:eventId/fixture-invitations', requireOperationalAccess(), requireEventHostOwnership('eventId'), validateBody(parseFixtureInvitationCreatePayload), fixtures.createInvitation);
+fixtureHostRouter.post('/:eventId/fixture-invitations/:invitationId/resend', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.resendInvitation);
+fixtureHostRouter.delete('/:eventId/fixture-invitations/:invitationId', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.revokeInvitation);
+fixtureHostRouter.get('/:eventId/fixture-rosters', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.hostedRosters);
+fixtureHostRouter.post('/:eventId/fixture-workspaces/:workspaceId/withdrawal', requireCoach(), requireEventHostOwnership('eventId'), fixtures.hostWithdrawal);
+fixtureHostRouter.get('/:eventId/fixture-entries', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.hostedEntries);
+fixtureHostRouter.get('/:eventId/fixture-results', requireOperationalAccess(), requireEventHostOwnership('eventId'), fixtures.hostedResults);
+fixtureHostRouter.put('/:eventId/fixture-results/:athleteId', requireOperationalAccess(), requireEventHostOwnership('eventId'), validateBody(parseResultOverridePayload), fixtures.overrideHostResult);
 
 const fixtureGuestRouter = Router();
 fixtureGuestRouter.get('/incoming', fixtures.listIncoming);

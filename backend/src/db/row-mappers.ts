@@ -120,6 +120,7 @@ export interface SquadRow {
 
 export interface EventRow {
   id: string;
+  workspace_id: string;
   created_by: string;
   type: string;
   discipline: string | null;
@@ -663,6 +664,7 @@ function squadNames(value: unknown, field: string): string[] {
 export function mapEventRow(row: EventRow): AthleticsEvent {
   return {
     id: uuid(row.id, 'events.id'),
+    workspaceId: uuid(row.workspace_id, 'events.workspace_id'),
     createdBy: uuid(row.created_by, 'events.created_by'),
     type: enumValue(row.type, EVENT_TYPES, 'events.type'),
     discipline: nullableDiscipline(row.discipline, 'events.discipline'),

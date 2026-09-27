@@ -3,6 +3,7 @@ import { getPool } from '../db/client.js';
 import {
   assertAthleteOwnership,
   assertEventAthleteOwnership,
+  assertEventHostOwnership,
   assertEventOwnership,
   assertParticipantOwnership,
   assertResultOwnership,
@@ -52,6 +53,17 @@ describe('ownership checks', () => {
       expect.stringMatching(/FROM events[\s\S]*workspace_id = \$2/),
       [EVENT_ID, USER_ID],
     );
+  });
+
+  it('checks event host ownership without granting fixture guests access', async () => {
+    query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+
+    await expect(assertEventHostOwnership(USER_ID, EVENT_ID)).resolves.toBeUndefined();
+
+    const sql = query.mock.calls[0]?.[0] as string;
+    expect(sql).toMatch(/e\.workspace_id = \$2/);
+    expect(sql).not.toContain('event_fixture_workspaces');
+    expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, USER_ID]);
   });
 
   it('can run an ownership check through a transaction client', async () => {
@@ -131,6 +143,7 @@ describe('ownership non-disclosure', () => {
   const checks = [
     ['athlete', () => assertAthleteOwnership(USER_ID, ATHLETE_ID)],
     ['event', () => assertEventOwnership(USER_ID, EVENT_ID)],
+    ['event host', () => assertEventHostOwnership(USER_ID, EVENT_ID)],
     ['event-athlete', () => assertEventAthleteOwnership(USER_ID, EVENT_ID, ATHLETE_ID)],
     ['timeline entry', () => assertTimelineEntryOwnership(USER_ID, EVENT_ID, ENTRY_ID)],
     ['participant', () => assertParticipantOwnership(USER_ID, EVENT_ID, ATHLETE_ID)],
