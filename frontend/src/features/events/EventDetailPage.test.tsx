@@ -123,6 +123,23 @@ describe('EventDetailPage', () => {
     await waitFor(() => expect(screen.queryAllByRole('region', { name: 'Host fixture controls' })).toHaveLength(1));
   });
 
+  it('does not expose session or public logging controls in either team event view', async () => {
+    const multiDisciplineEvent = { ...event, discipline: null };
+    render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
+
+    await screen.findByRole('region', { name: 'Multi-discipline roster' });
+    expect(screen.queryByRole('region', { name: 'Session live logger' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
+
+    workspace.id = 'guest-workspace';
+    fixtureApi.getGuestFixture.mockResolvedValue({});
+    render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByRole('region', { name: 'Multi-discipline roster' })).toHaveLength(2));
+    expect(screen.queryByRole('region', { name: 'Session live logger' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
+  });
+
   it('hides lifecycle controls when shared-fixture roster lookup fails for a competition', async () => {
     fixtureApi.listFixtureRosters.mockRejectedValue(new Error('offline'));
     render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} />);

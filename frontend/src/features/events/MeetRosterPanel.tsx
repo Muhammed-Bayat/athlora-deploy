@@ -104,7 +104,11 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
 
   const participantFor = (entrant: MeetEntrant) => entrant.athleteId ? participants.find((participant) => participant.athleteId === entrant.athleteId) : undefined;
   const rsvpFor = (entrant: MeetEntrant | undefined): RsvpStatus | null => entrant?.athleteId ? participantFor(entrant)?.rsvpStatus ?? 'pending' : null;
-  const activeRegistrations = registrations.filter((registration) => !registration.withdrawnAt);
+  const ownsEntrant = (entrant: MeetEntrant) => entrant.workspaceId === activeWorkspaceId;
+  const activeRegistrations = registrations.filter((registration) => {
+    const entrant = entrants.find((item) => item.id === registration.entrantId);
+    return !registration.withdrawnAt && Boolean(entrant && ownsEntrant(entrant));
+  });
   const visibleRegistrations = activeRegistrations.filter((registration) => {
     if (relaySession || rsvpFilter === 'all') return true;
     const entrant = entrants.find((item) => item.id === registration.entrantId);
@@ -115,8 +119,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
     const rsvpStatus = rsvpFor(entrant);
     return rsvpStatus ? { ...counts, [rsvpStatus]: counts[rsvpStatus] + 1 } : counts;
   }, { pending: 0, yes: 0, no: 0, maybe: 0 });
-  const registeredEntrantIds = new Set(registrations.map((registration) => registration.entrantId));
-  const ownsEntrant = (entrant: MeetEntrant) => entrant.workspaceId === activeWorkspaceId;
+  const registeredEntrantIds = new Set(activeRegistrations.map((registration) => registration.entrantId));
   const athleteMatchesSession = (athlete: Athlete | undefined) => Boolean(athlete && selected?.disciplineDefinitionId && athlete.preferredDisciplineIds.includes(selected.disciplineDefinitionId));
   const availableAthletes = athletes.filter((athlete) => {
     const entrant = entrants.find((item) => item.athleteId === athlete.id);

@@ -263,7 +263,15 @@ export async function registerEntrant(actor: MeetActor, eventId: string, target:
     }
     const existing = await db.query('SELECT * FROM session_entrants WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
     if (existing.rows[0]) {
-      if (existing.rows[0].withdrawn_at) meetConflict('ENTRANT_WITHDRAWN', 'Registration has been withdrawn');
+      if (existing.rows[0].withdrawn_at) {
+        const restored = await db.query(
+          'UPDATE session_entrants SET withdrawn_at = NULL, withdrawn_by = NULL WHERE id = $1 RETURNING *',
+          [existing.rows[0].id],
+        );
+        const registration = mapMeetRow<SessionRegistration>(restored.rows[0]);
+        await meetAudit(db, actor, eventId, actor.workspaceId, 'registration', registration.id, 'restored', existing.rows[0], registration);
+        return registration;
+      }
       return mapMeetRow<SessionRegistration>(existing.rows[0]);
     }
     const result = await db.query(
