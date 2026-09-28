@@ -1,4 +1,4 @@
-import type { EntryType, EventStatus, IncidentType, ResultOutcome } from './index';
+import type { EntryType, EventStatus, IncidentType, ResultOutcome, RsvpStatus } from './index';
 
 export interface SessionTarget { disciplineSessionId: string; entrantId: string }
 export interface DisciplineDefinition {
@@ -29,6 +29,7 @@ export interface DisciplineSession {
 export interface MeetEntrant {
   id: string; eventId: string; workspaceId: string; kind: 'athlete' | 'guest' | 'relay';
   athleteId: string | null; name: string; clubName: string | null; details: string | null; memberIds: string[]; createdBy: string; createdAt: string;
+  workspaceName: string; rsvpStatus: RsvpStatus | null;
 }
 export interface SessionRegistration extends SessionTarget {
   id: string; eventId: string; workspaceId: string; withdrawnAt: string | null;
@@ -43,6 +44,7 @@ export interface SessionEntryReplacement extends SessionEntryInput { expectedVer
 export interface SessionEntry extends SessionEntryInput, SessionTarget {
   attemptOrder?: number | null;
   id: string; eventId: string; workspaceId: string; recordedBy: string | null; publicLoggerSessionId: string | null;
+  recorderName?: string | null;
   version: number; createdAt: string; updatedAt: string; deletedAt: string | null;
 }
 export interface SessionResult extends SessionTarget {
@@ -93,12 +95,15 @@ export interface PublicMeetEntrant {
   id: string;
   name: string;
   kind: MeetEntrant['kind'];
+  workspaceName: string | null;
+  clubName: string | null;
+  attending: boolean;
   members: SafeRelayMember[];
 }
 
 export type PublicSessionEntry = Pick<SessionEntry,
   'id' | 'eventId' | 'disciplineSessionId' | 'entrantId' | 'verticalState' | 'attemptOrder'
-  | 'entryType' | 'value' | 'unit' | 'isFoul' | 'incidentType' | 'version' | 'createdAt'
+  | 'entryType' | 'value' | 'unit' | 'isFoul' | 'incidentType' | 'version' | 'createdAt' | 'recorderName'
 > & { canEdit: boolean; canUndo: boolean };
 
 export interface PublicMeetSession {
@@ -111,7 +116,7 @@ export interface PublicMeetSession {
   verticalConfig?: VerticalConfig | null;
   entrantIds: string[];
   entries: PublicSessionEntry[];
-  results: Array<Pick<SessionResult, 'entrantId' | 'outcome' | 'placing' | 'vertical'> & { value: number | null }>;
+  results: Array<Pick<SessionResult, 'entrantId' | 'outcome' | 'placing' | 'vertical' | 'selectedEntryId'> & { value: number | null }>;
 }
 
 export interface PublicMeetLoggerSnapshot {

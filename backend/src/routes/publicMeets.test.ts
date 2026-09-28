@@ -59,7 +59,7 @@ describe('public meet routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({
       disciplines: [],
-      entrants: [{ id: ENTRANT_ID, name: 'North Stars', kind: 'relay', members: [{ leg: 1, name: 'Ari Runner', isGuest: false }] }],
+      entrants: [{ id: ENTRANT_ID, name: 'North Stars', kind: 'relay', workspaceName: null, clubName: null, attending: true, members: [{ leg: 1, name: 'Ari Runner', isGuest: false }] }],
       sessions: [{ id: SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '44444444-4444-4444-8444-444444444444', status: 'in_progress', resultState: 'provisional', version: 1, verticalConfig: null, results: [], entrantIds: [ENTRANT_ID], entries: [] }],
     });
     expect(services.resolvePublicMeetActor).toHaveBeenCalledWith('public-session', EVENT_ID);

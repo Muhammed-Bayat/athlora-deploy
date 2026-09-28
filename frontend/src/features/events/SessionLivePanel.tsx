@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as meets from '../../api/meets';
-import { listEventParticipants } from '../../api/participants';
-import { Button, OfflineRecoverySurface, Select } from '../../components';
+import { Button, Input, OfflineRecoverySurface } from '../../components';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { useRealtimeRoom } from '../realtime/useRealtimeRoom';
 import { useSessionOffline } from '../../hooks/useSessionOffline';
 import { useCurrentUser } from '../auth/CurrentUserContext';
 import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
 import { cacheSession, getCachedSession } from '../../offline/sessionCache';
-import type { AthleticsEvent } from '../../types';
+import type { AthleticsEvent, IncidentType } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
 import styles from './SessionLivePanel.module.css';
+
+const INCIDENT_BUTTONS: { value: IncidentType; label: string; title: string }[] = [
+  { value: 'false_start', label: 'False Start', title: 'False Start' },
+  { value: 'lane_infringement', label: 'Lane Inf.', title: 'Lane Infringement' },
+  { value: 'dq', label: 'DQ', title: 'Disqualified' },
+  { value: 'dnf', label: 'DNF', title: 'Did Not Finish' },
+  { value: 'dns', label: 'DNS', title: 'Did Not Start' },
+];
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
@@ -33,11 +40,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [sessionId, setSessionId] = useState('');
   const [entries, setEntries] = useState<SessionEntry[]>([]);
   const [results, setResults] = useState<SessionResult[]>([]);
-  const [entrantId, setEntrantId] = useState('');
-  const [value, setValue] = useState('');
-  const [incidentType, setIncidentType] = useState('');
-  const [isFoul, setIsFoul] = useState(false);
-  const [noteText, setNoteText] = useState('');
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [fouls, setFouls] = useState<Record<string, boolean>>({});
+  const [heights, setHeights] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -45,35 +50,35 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
   const [resolution, setResolution] = useState<SessionResolution | null>(null);
   const [resolutionReason, setResolutionReason] = useState('');
-  const [declinedAthleteIds, setDeclinedAthleteIds] = useState<Set<string>>(new Set());
   const [registrations, setRegistrations] = useState<{ sessionId: string; rows: SessionRegistration[] }>({ sessionId: '', rows: [] });
-  const [height, setHeight] = useState('');
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const timedSessions = sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId));
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
-  const selectedEntrant = entrants.find((item) => item.id === entrantId);
   const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
   const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
   const registeredEntrantIds = new Set(sessionRegistrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId));
-  const selectedRegistered = registeredEntrantIds.has(entrantId);
-  const selectedEliminated = Boolean(results.find((row) => row.entrantId === entrantId)?.vertical?.eliminated);
+  const loggableEntrants = definition
+    ? entrants
+      .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
+      .filter((item) => item.kind === 'relay' || !item.athleteId || item.rsvpStatus === 'yes')
+      .filter((item) => registeredEntrantIds.has(item.id))
+    : [];
 
   const reload = useCallback(async () => {
     try {
-      const [catalogue, nextSessions, nextEntrants, participantResponse] = await Promise.all([
-        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id), listEventParticipants(event.id),
+      const [catalogue, nextSessions, nextEntrants] = await Promise.all([
+        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
       ]);
       setDefinitions(catalogue.data);
       setSessions(nextSessions.data);
       const normalizedEntrants = nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] }));
       setEntrants(normalizedEntrants);
-      setDeclinedAthleteIds(new Set(participantResponse.data.filter((participant) => participant.rsvpStatus === 'no').map((participant) => participant.athleteId)));
       if (sessionId) {
         const [history, board, registrationList] = await Promise.all([
           meets.listSessionEntries(event.id, sessionId),
@@ -81,14 +86,13 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           meets.listRegistrations(event.id, sessionId),
         ]);
         setRegistrations({ sessionId, rows: registrationList.data });
-        const nextEntries = history.data.filter((entry) => !entrantId || entry.entrantId === entrantId);
-        setEntries(nextEntries);
+        setEntries(history.data);
         setResults(board.data);
         void cacheSession(currentUser?.id ?? 'anonymous', activeWorkspace.id, event.id, sessionId, {
           definitions: catalogue.data,
           sessions: nextSessions.data,
           entrants: normalizedEntrants,
-          entries: nextEntries,
+          entries: history.data,
           results: board.data,
         }).then(() => {
           setCacheFreshness(Date.now());
@@ -114,7 +118,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       setResults(data.results);
       setCacheFreshness(cached.cachedAt);
     }
-  }, [activeWorkspace.id, currentUser?.id, entrantId, event.id, sessionId]);
+  }, [activeWorkspace.id, currentUser?.id, event.id, sessionId]);
 
   useEffect(() => {
     void reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load session logging'));
@@ -147,9 +151,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
 
   const selectSession = (nextSessionId: string, focus = false) => {
     setSessionId(nextSessionId);
-    setEntrantId('');
-    const nextSession = sessions.find((item) => item.id === nextSessionId);
-    setHeight(nextSession?.verticalConfig ? String(nextSession.verticalConfig.startingHeight) : '');
+    setValues({});
+    setFouls({});
+    setHeights({});
     if (focus) window.requestAnimationFrame(() => sessionTabRefs.current.get(nextSessionId)?.focus());
   };
 
@@ -173,40 +177,59 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     }
   };
 
-  const target = { disciplineSessionId: sessionId, entrantId };
-  const selectedResult = results.find((row) => row.entrantId === entrantId);
-  const teamEntries = entries.filter((entry) => entry.entrantId === entrantId && entry.entryType === 'attempt' && !entry.deletedAt);
-
-  const logAttempt = () => run(async () => {
-    if (!sessionId || !entrantId) return;
+  const logAttempt = (entrantId: string) => run(async () => {
+    if (!sessionId || !entrantId || !definition) return;
+    const raw = values[entrantId] ?? '';
     const payload = {
       entryType: 'attempt' as const,
-      value: value === '' ? null : Number(value),
-      unit: value === '' ? null : definition?.unit ?? 'seconds',
-      isFoul,
-      incidentType: (incidentType || null) as SessionEntry['incidentType'],
-      noteText: noteText.trim() || null,
+      value: raw === '' ? null : Number(raw),
+      unit: raw === '' ? null : definition.unit,
+      isFoul: fouls[entrantId] ?? false,
+      incidentType: null,
+      noteText: null,
       deviceId: null,
     };
+    const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueCreateEntry(event.id, activeWorkspace.id, target, payload);
     if (!queued) await meets.createSessionEntry(event.id, target, payload);
-    setValue('');
-    setIncidentType('');
-    setNoteText('');
+    setValues((prev) => ({ ...prev, [entrantId]: '' }));
+    setFouls((prev) => ({ ...prev, [entrantId]: false }));
   });
 
-  const selectOfficial = (entryId: string | null) => run(async () => {
-    if (!selectedResult) return;
-    await meets.selectSessionResultEntry(event.id, target, { entryId, expectedVersion: selectedResult.version });
+  const logIncident = (entrantId: string, incidentType: IncidentType) => run(async () => {
+    if (!sessionId || !entrantId) return;
+    const payload = {
+      entryType: 'penalty' as const,
+      value: null,
+      unit: null,
+      isFoul: false,
+      incidentType,
+      noteText: null,
+      deviceId: null,
+    };
+    const target = { disciplineSessionId: sessionId, entrantId };
+    const queued = await offline.enqueueCreateEntry(event.id, activeWorkspace.id, target, payload);
+    if (!queued) await meets.createSessionEntry(event.id, target, payload);
   });
 
-  const undoEntry = (entry: SessionEntry) => run(async () => {
+  const selectOfficial = (entrantId: string, entryId: string | null) => run(async () => {
+    const result = results.find((row) => row.entrantId === entrantId);
+    if (!sessionId || !result) return;
+    await meets.selectSessionResultEntry(event.id, { disciplineSessionId: sessionId, entrantId }, { entryId, expectedVersion: result.version });
+  });
+
+  const undoEntry = (entrantId: string, entry: SessionEntry) => run(async () => {
+    if (!sessionId) return;
+    const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueUndoEntry(event.id, activeWorkspace.id, target, entry.id, entry.version);
     if (!queued) await meets.undoSessionEntry(event.id, target, entry.id, entry.version);
   });
 
-  const logVerticalAttempt = (verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
-    if (!sessionId || !entrantId || !definition || height === '') return;
+  const logVerticalAttempt = (entrantId: string, verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
+    if (!sessionId || !entrantId || !definition) return;
+    const height = heights[entrantId] ?? String(session?.verticalConfig?.startingHeight ?? '');
+    if (height === '') return;
+    const target = { disciplineSessionId: sessionId, entrantId };
     await meets.createSessionEntry(event.id, target, {
       entryType: 'attempt',
       value: Number(height),
@@ -219,8 +242,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     });
   });
 
-  const voidEntry = (entry: SessionEntry) => run(async () => {
-    await meets.replaceSessionEntry(event.id, target, entry.id, {
+  const voidEntry = (entrantId: string, entry: SessionEntry) => run(async () => {
+    if (!sessionId) return;
+    await meets.replaceSessionEntry(event.id, { disciplineSessionId: sessionId, entrantId }, entry.id, {
       entryType: entry.entryType,
       value: entry.value,
       unit: entry.unit,
@@ -231,11 +255,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       verticalState: 'void',
       expectedVersion: entry.version,
     });
-  });
-
-  const registerSelected = () => run(async () => {
-    if (!sessionId || !entrantId) return;
-    await meets.registerEntrant(event.id, target);
   });
 
   const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
@@ -318,12 +337,18 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     URL.revokeObjectURL(url);
   }
 
+  function teamLine(entrant: MeetEntrant): string {
+    if (entrant.kind === 'relay') return `Legs: ${memberSummary(entrant, entrants) || 'Members not listed'}`;
+    if (entrant.kind === 'guest') return entrant.clubName ?? 'Guest';
+    return entrant.workspaceName || 'Athlete';
+  }
+
   if (event.discipline !== null) return null;
 
   return (
     <section aria-label="Session live logging" aria-busy={busy}>
       <h2>Session live logger</h2>
-      <p>Timed results require coach selection. Jumps and throws use the automatic best legal attempt. High jump and pole vault progress by height with countback rankings. Entrants must be registered to a session before logging. Offline attempts queue and sync when reconnecting.</p>
+      <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results use the recorded value with an official selection. Jumps and throws use the automatic best legal attempt. High jump and pole vault progress by height with countback rankings. Offline attempts queue and sync when reconnecting.</p>
       <OfflineRecoverySurface
         isOnline={offline.isOnline}
         actions={recoveryActions}
@@ -376,123 +401,158 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           {canFinalize && session.status === 'in_progress' && (
             <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>Finalize session</Button>
           )}
-           {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
-           {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
-          <label>
-            Team
-            <Select
-              aria-label="Team"
-              value={entrantId}
-              onChange={(input) => setEntrantId(input.target.value)}
-              options={[
-                { value: '', label: 'Choose team' },
-                ...entrants
-                  .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
-                  .filter((item) => item.kind === 'relay' || !item.athleteId || !declinedAthleteIds.has(item.athleteId))
-                  .map((item) => ({ value: item.id, label: registeredEntrantIds.has(item.id) ? item.name : `${item.name} (not registered)` })),
-              ]}
-            />
-          </label>
-          {selectedEntrant?.kind === 'relay' && (
-            <p aria-label="Team members">Legs: {memberSummary(selectedEntrant, entrants) || 'Members not listed'}</p>
-          )}
-          {selectedEntrant && !selectedRegistered && (
-            <p role="status">{selectedEntrant.name} is not registered for this session.</p>
-          )}
-          {isCoach && selectedEntrant && !selectedRegistered && selectedEntrant.workspaceId === activeWorkspace.id && session.status === 'scheduled' && ['scheduled', 'in_progress'].includes(event.status) && (
-            <Button onClick={() => void registerSelected()} disabled={busy}>Register entrant</Button>
-          )}
+          {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
+          {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
           {vertical && session.verticalConfig && (
             <p>{session.verticalConfig.round}: starts at {session.verticalConfig.startingHeight.toFixed(2)} m, then +{session.verticalConfig.heightIncrement.toFixed(2)} m per height. {session.verticalConfig.failureLimit} consecutive failures eliminate an entrant.</p>
           )}
-          {live && entrantId && vertical && (
-            <fieldset disabled={busy || !selectedRegistered || selectedEliminated}>
-              <legend>Log vertical attempt</legend>
-              <label>
-                Target height (m)
-                <input
-                  type="number"
-                  min={session.verticalConfig?.startingHeight ?? 0.01}
-                  step={session.verticalConfig?.heightIncrement ?? 0.01}
-                  value={height}
-                  onChange={(input) => setHeight(input.target.value)}
-                />
-              </label>
-              <Button variant="secondary" onClick={() => setHeight(((height === '' ? (session.verticalConfig?.startingHeight ?? 0) : Number(height)) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2))}>Next height</Button>
-              {(['clearance', 'failure', 'pass'] as const).map((state) => (
-                <Button key={state} disabled={busy || height === ''} onClick={() => void logVerticalAttempt(state)}>{state}</Button>
-              ))}
-              {selectedEliminated && <p>{selectedEntrant?.name} is eliminated.</p>}
-            </fieldset>
-          )}
-          {live && entrantId && !vertical && (
-            <fieldset disabled={busy || !selectedRegistered}>
-              <legend>Log attempt</legend>
-              <label>
-                {timed ? 'Time (s)' : `Mark (${definition.unit})`}
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={value}
-                  onChange={(input) => setValue(input.target.value)}
-                  disabled={Boolean(incidentType)}
-                />
-              </label>
-              {!timed && <label><input type="checkbox" checked={isFoul} onChange={e => setIsFoul(e.target.checked)} />Foul</label>}
-              <label>
-                Incident
-                <Select
-                  aria-label="Incident"
-                  value={incidentType}
-                  onChange={(input) => { setIncidentType(input.target.value); if (input.target.value) setValue(''); }}
-                  options={[
-                    { value: '', label: 'None' },
-                    { value: 'false_start', label: 'False start' },
-                    { value: 'dq', label: 'DQ' },
-                    { value: 'dnf', label: 'DNF' },
-                    { value: 'dns', label: 'DNS' },
-                    { value: 'lane_infringement', label: 'Lane infringement' },
-                  ]}
-                />
-              </label>
-              <label>
-                Note
-                <input value={noteText} onChange={(input) => setNoteText(input.target.value)} maxLength={2000} />
-              </label>
-              <Button onClick={() => void logAttempt()} disabled={busy || (!value && !incidentType && !isFoul)}>Log attempt</Button>
-            </fieldset>
-          )}
-          <h3>Attempts</h3>
-          <ol>
-            {teamEntries.map((entry, index) => (
-              <li key={entry.id}>
-                #{entry.attemptOrder ?? index + 1} {vertical
-                  ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
-                  : `${formatResult(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}
-                {!vertical && selectedResult?.selectedEntryId === entry.id && ' · official'}
-                {isCoach && live && (
-                  <>
-                    {' '}
-                    {timed && <Button
-                      variant="secondary"
-                      disabled={busy || !offline.isOnline || selectedResult?.selectedEntryId === entry.id || entry.value === null || !!entry.incidentType || entry.isFoul}
-                      onClick={() => void selectOfficial(entry.id)}
-                    >
-                      Make official
-                    </Button>}
-                    {vertical && entry.verticalState && entry.verticalState !== 'void' && (
-                      <Button variant="secondary" disabled={busy} onClick={() => void voidEntry(entry)}>Void attempt {entry.attemptOrder}</Button>
+          <h3>{definition.defaultRules.entrantType === 'relay' ? 'Relay teams' : 'Athletes'} ({loggableEntrants.length})</h3>
+          {loggableEntrants.length === 0 && <p>{entrants.length === 0 ? 'No entrants have been added to this event yet.' : registeredEntrantIds.size === 0 ? 'No one is registered for this session yet. Add entrants from the meet roster.' : 'No registered athletes are marked as attending. Update RSVPs on the event roster.'}</p>}
+          {loggableEntrants.length > 0 && (
+            <div className={styles.athleteList} tabIndex={0} aria-label={definition.defaultRules.entrantType === 'relay' ? 'Scrollable relay teams' : 'Scrollable athletes'}>
+              {loggableEntrants.map((entrant) => {
+                const result = results.find((row) => row.entrantId === entrant.id);
+                const eliminated = Boolean(result?.vertical?.eliminated);
+                const controlsDisabled = busy || !live || (vertical && eliminated);
+                const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && entry.entryType === 'attempt' && !entry.deletedAt);
+                const currentRecord = !result
+                  ? '—'
+                  : vertical
+                    ? result.vertical?.eliminated ? 'Eliminated' : result.effectiveResult === null ? 'NH' : formatResult(result.effectiveResult, definition)
+                    : `${formatResult(result.effectiveResult, definition)}${result.isPb ? ' PB' : ''}${result.isSb ? ' SB' : ''}${result.effectiveOutcome !== 'valid' ? ` ${result.effectiveOutcome.toUpperCase()}` : ''}`;
+                const height = heights[entrant.id] ?? String(session.verticalConfig?.startingHeight ?? '');
+                return (
+                  <div key={entrant.id} className={styles.athleteRow} role="group" aria-label={entrant.name}>
+                    <div className={styles.athleteInfo}>
+                      <b>{entrant.name}</b>
+                      <small aria-label={entrant.kind === 'relay' ? 'Team members' : undefined}>{teamLine(entrant)}</small>
+                    </div>
+                    <div className={styles.controlsGroup}>
+                      {vertical ? (
+                        <div className={styles.finishInputGroup}>
+                          <Input
+                            aria-label={`Target height (m) for ${entrant.name}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={session.verticalConfig?.startingHeight ?? 0.01}
+                            step={session.verticalConfig?.heightIncrement ?? 0.01}
+                            value={height}
+                            onChange={(input) => setHeights((prev) => ({ ...prev, [entrant.id]: input.target.value }))}
+                            disabled={controlsDisabled}
+                          />
+                          <Button
+                            variant="secondary"
+                            disabled={controlsDisabled}
+                            onClick={() => setHeights((prev) => ({ ...prev, [entrant.id]: (Number(height || session.verticalConfig?.startingHeight || 0) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2) }))}
+                          >
+                            Next height
+                          </Button>
+                          <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
+                        </div>
+                      ) : (
+                        <div className={styles.finishInputGroup}>
+                          <Input
+                            aria-label={`${timed ? 'Time (s)' : `Mark (${definition.unit})`} for ${entrant.name}`}
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            placeholder={timed ? '10.25' : '0.00'}
+                            value={values[entrant.id] ?? ''}
+                            onChange={(input) => setValues((prev) => ({ ...prev, [entrant.id]: input.target.value }))}
+                            disabled={controlsDisabled}
+                          />
+                          {!timed && (
+                            <label className={styles.foulToggle}>
+                              <input
+                                type="checkbox"
+                                aria-label={`Foul for ${entrant.name}`}
+                                checked={fouls[entrant.id] ?? false}
+                                onChange={(input) => setFouls((prev) => ({ ...prev, [entrant.id]: input.target.checked }))}
+                                disabled={controlsDisabled}
+                              />
+                              Foul
+                            </label>
+                          )}
+                          <Button
+                            disabled={controlsDisabled || !(values[entrant.id] ?? '').trim()}
+                            onClick={() => void logAttempt(entrant.id)}
+                            style={{ minHeight: '44px', minWidth: '44px' }}
+                          >
+                            Record
+                          </Button>
+                          <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
+                        </div>
+                      )}
+                      {vertical ? (
+                        <div className={styles.incidentButtonGroup}>
+                          {(['clearance', 'failure', 'pass'] as const).map((state) => (
+                            <Button
+                              key={state}
+                              disabled={controlsDisabled}
+                              onClick={() => void logVerticalAttempt(entrant.id, state)}
+                              style={{ minHeight: '44px', minWidth: '44px' }}
+                            >
+                              {state === 'clearance' ? 'Clearance' : state === 'failure' ? 'Failure' : 'Pass'}
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.incidentButtonGroup}>
+                          {INCIDENT_BUTTONS.map((incident) => (
+                            <Button
+                              key={incident.value}
+                              variant="secondary"
+                              disabled={controlsDisabled}
+                              onClick={() => void logIncident(entrant.id, incident.value)}
+                              style={{ minHeight: '44px', minWidth: '44px' }}
+                              title={incident.title}
+                            >
+                              {incident.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      {vertical && eliminated && <p>{entrant.name} is eliminated.</p>}
+                    </div>
+                    {entrantEntries.length > 0 && (
+                      <ol className={styles.attemptsList} aria-label={`Attempts for ${entrant.name}`}>
+                        {entrantEntries.map((entry, index) => (
+                          <li key={entry.id}>
+                            #{entry.attemptOrder ?? index + 1} {vertical
+                              ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
+                              : `${formatResult(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}
+                            {entry.recorderName && ` · by ${entry.recorderName}`}
+                            {!vertical && result?.selectedEntryId === entry.id && ' · official'}
+                            {isCoach && live && (
+                              <>
+                                {' '}
+                                {timed && (
+                                  <Button
+                                    variant="secondary"
+                                    disabled={busy || !offline.isOnline || result?.selectedEntryId === entry.id || entry.value === null || !!entry.incidentType || entry.isFoul}
+                                    onClick={() => void selectOfficial(entrant.id, entry.id)}
+                                  >
+                                    Make official
+                                  </Button>
+                                )}
+                                {vertical && entry.verticalState && entry.verticalState !== 'void' && (
+                                  <Button variant="secondary" disabled={busy} onClick={() => void voidEntry(entrant.id, entry)}>Void attempt {entry.attemptOrder}</Button>
+                                )}
+                                <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
                     )}
-                    <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entry)}>Undo</Button>
-                  </>
-                )}
-              </li>
-            ))}
-            {teamEntries.length === 0 && <li>No attempts logged yet.</li>}
-          </ol>
-          {isCoach && live && timed && selectedResult && teamEntries.length > 0 && selectedResult.selectedEntryId && (
-            <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(null)}>Clear official selection</Button>
+                    {isCoach && live && timed && result?.selectedEntryId && entrantEntries.length > 0 && (
+                      <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(entrant.id, null)}>Clear official selection</Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
           <h3>Standings ({session.resultState === 'final' ? 'final' : session.resultState === 'reopened' ? 'reopened — provisional' : 'provisional'})</h3>
           <table>
@@ -526,27 +586,27 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 })}
             </tbody>
           </table>
-           <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
-           {resolution && (
-             <section aria-label="Offline reconciliation">
-               <h3>Offline reconciliation</h3>
-               <p>{resolution.conflicts.filter((conflict) => !conflict.resolvedAt).length} unresolved conflict(s). Select the official attempt above, then record the resolution below.</p>
-               <label>
-                 Resolution reason
-                 <input value={resolutionReason} onChange={(input) => setResolutionReason(input.target.value)} maxLength={500} />
-               </label>
-               <ol>
-                 {resolution.conflicts.map((conflict) => (
-                   <li key={conflict.id}>
-                     {conflict.actionType} from device {conflict.deviceId} at {new Date(conflict.createdAt).toLocaleString()}; expected v{conflict.expectedVersion ?? '—'}, canonical v{conflict.actualVersion ?? '—'}.
-                     {conflict.resolvedAt ? ` Resolved: ${conflict.resolutionReason ?? 'Acknowledged'}.` : <Button variant="secondary" disabled={busy || !resolutionReason.trim()} onClick={() => void resolveConflict(conflict.id)}>Acknowledge resolution</Button>}
-                   </li>
-                 ))}
-                 {resolution.conflicts.length === 0 && <li>No cross-device conflicts recorded.</li>}
-               </ol>
-             </section>
-           )}
-         </div>
+          <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
+          {resolution && (
+            <section aria-label="Offline reconciliation">
+              <h3>Offline reconciliation</h3>
+              <p>{resolution.conflicts.filter((conflict) => !conflict.resolvedAt).length} unresolved conflict(s). Select the official attempt above, then record the resolution below.</p>
+              <label>
+                Resolution reason
+                <input value={resolutionReason} onChange={(input) => setResolutionReason(input.target.value)} maxLength={500} />
+              </label>
+              <ol>
+                {resolution.conflicts.map((conflict) => (
+                  <li key={conflict.id}>
+                    {conflict.actionType} from device {conflict.deviceId} at {new Date(conflict.createdAt).toLocaleString()}; expected v{conflict.expectedVersion ?? '—'}, canonical v{conflict.actualVersion ?? '—'}.
+                    {conflict.resolvedAt ? ` Resolved: ${conflict.resolutionReason ?? 'Acknowledged'}.` : <Button variant="secondary" disabled={busy || !resolutionReason.trim()} onClick={() => void resolveConflict(conflict.id)}>Acknowledge resolution</Button>}
+                  </li>
+                ))}
+                {resolution.conflicts.length === 0 && <li>No cross-device conflicts recorded.</li>}
+              </ol>
+            </section>
+          )}
+        </div>
       )}
     </section>
   );

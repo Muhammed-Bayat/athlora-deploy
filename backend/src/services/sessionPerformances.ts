@@ -4,7 +4,7 @@ import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withReadTransaction, withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets.js';
-import { canReadEntrant, canWriteEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
+import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
 import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
 import { FINAL_INDIVIDUAL_PERFORMANCES } from './disciplineStatistics.js';
@@ -16,7 +16,7 @@ async function registration(db: DbExecutor, actor: MeetActor, access: MeetAccess
     [eventId, target.disciplineSessionId, target.entrantId],
   );
   const row = result.rows[0];
-  if (!row || !(write ? canWriteEntrant : canReadEntrant)(actor, access, row.workspace_id)) meetNotFound();
+  if (!row || (!write && !canReadEntrant(actor, access, row.workspace_id))) meetNotFound();
   if (write && row.withdrawn_at) meetConflict('ENTRANT_WITHDRAWN', 'Registration has been withdrawn');
   return row;
 }
@@ -70,9 +70,18 @@ export async function listSessionEntries(actor: MeetActor, eventId: string, sess
   await getSession(db, eventId, sessionId);
   if (entrantId !== undefined) await registration(db, actor, access, eventId, { disciplineSessionId: sessionId, entrantId }, false);
   const result = await db.query(
-    `SELECT * FROM session_timeline_entries WHERE session_id = $1 AND deleted_at IS NULL
-       AND ($2::uuid IS NULL OR entrant_id = $2) AND ($3::boolean OR workspace_id = $4)
-     ORDER BY created_at, id`, [sessionId, entrantId ?? null, access.host || access.helper, 'workspaceId' in actor ? actor.workspaceId : null],
+    `SELECT ste.*,
+            COALESCE(pls.logger_name,
+              (SELECT w.name FROM workspace_members wm
+               JOIN workspaces w ON w.id = wm.workspace_id
+               WHERE wm.user_id = ste.recorded_by
+               ORDER BY wm.created_at, wm.workspace_id
+               LIMIT 1)) AS recorder_name
+     FROM session_timeline_entries ste
+     LEFT JOIN public_logger_sessions pls ON pls.id = ste.public_logger_session_id
+     WHERE ste.session_id = $1 AND ste.deleted_at IS NULL
+       AND ($2::uuid IS NULL OR ste.entrant_id = $2)
+     ORDER BY ste.created_at, ste.id`, [sessionId, entrantId ?? null],
   );
   return result.rows.map((row) => mapMeetRow<SessionEntry>(row));
 }
@@ -157,7 +166,7 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
      FROM session_results r JOIN session_entrants se
        ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
      JOIN meet_entrants en ON en.id = r.entrant_id
-     LEFT JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = en.athlete_id
+     LEFT JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = en.athlete_id AND ep.participant_workspace_id = en.workspace_id
      WHERE r.session_id = $1 ORDER BY r.entrant_id`, [sessionId],
   );
   // Rank the whole session, then filter visibility; guest ranks must not change with the viewer.
@@ -184,7 +193,7 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
       Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter(h => h.event_date.slice(0, 4) === date.rows[0]?.date.slice(0, 4)).every(better) });
     }
   }
-  return rows.filter((row) => row.attending && canReadEntrant(actor, access, row.workspaceId)).map(({ attending: _attending, ...row }) => {
+  return rows.filter((row) => row.attending).map(({ attending: _attending, ...row }) => {
     // Do not expose joined registration internals as accidental DTO fields.
     delete (row as unknown as Record<string, unknown>).withdrawnAt;
     delete (row as unknown as Record<string, unknown>).entrantKind;

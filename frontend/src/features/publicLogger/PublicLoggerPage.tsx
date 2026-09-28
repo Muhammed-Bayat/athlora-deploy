@@ -329,6 +329,7 @@ export function PublicLoggerPage() {
                     )}
                   </span>
                 </div>
+                <small>Recorded by {entry.recorderName ?? 'Independent logger'}{entry.recorderClub ? ` · ${entry.recorderClub}` : ''}</small>
               </div>
             ))}
           </div>

@@ -13,6 +13,7 @@ function publicEntry(entry: SessionEntry, publicLoggerSessionId: string) {
     verticalState: entry.verticalState, attemptOrder: entry.attemptOrder,
     entrantId: entry.entrantId, entryType: entry.entryType, value: entry.value, unit: entry.unit,
     isFoul: entry.isFoul, incidentType: entry.incidentType, version: entry.version, createdAt: entry.createdAt,
+    recorderName: entry.recorderName ?? null,
     canEdit: entry.publicLoggerSessionId === publicLoggerSessionId, canUndo: entry.publicLoggerSessionId === publicLoggerSessionId };
 }
 
@@ -24,15 +25,18 @@ const snapshot: RequestHandler = async (req, res, next) => {
     const actor = await resolvePublicMeetActor(token, eventId);
     const sessions = await listSessions(actor, eventId);
     const entrants = await listEntrants(actor, eventId);
-    const safeEntrants = await Promise.all(entrants.map(async ({ id, name, kind }) => ({
-      id, name, kind,
-      members: kind === 'relay' ? await listSafeRelayMembers(eventId, id) : [],
+    const safeEntrants = await Promise.all(entrants.map(async (entrant) => ({
+      id: entrant.id, name: entrant.name, kind: entrant.kind,
+      workspaceName: entrant.workspaceName ?? null,
+      clubName: entrant.clubName ?? null,
+      attending: entrant.kind === 'relay' || !entrant.athleteId || entrant.rsvpStatus === 'yes',
+      members: entrant.kind === 'relay' ? await listSafeRelayMembers(eventId, entrant.id) : [],
     })));
     res.json({ data: { disciplines: await listDisciplines(),
       entrants: safeEntrants,
       sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, resultState, version, verticalConfig }) => ({
         id, label, disciplineDefinitionId, status, resultState, version, verticalConfig,
-        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical })),
+        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical, selectedEntryId: r.selectedEntryId })),
         entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
         entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '')),
       }))),

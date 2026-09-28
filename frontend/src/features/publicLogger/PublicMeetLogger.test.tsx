@@ -30,8 +30,8 @@ const snapshot: PublicMeetLoggerSnapshot = {
     },
   ],
   entrants: [
-    { id: RELAY_ID, name: 'North Stars', kind: 'relay', members: [{ leg: 1, name: 'Ari Runner', isGuest: false }, { leg: 2, name: 'Bea Guest', isGuest: true }] },
-    { id: GUEST_ID, name: 'Casey Guest', kind: 'guest', members: [] },
+    { id: RELAY_ID, name: 'North Stars', kind: 'relay', workspaceName: null, clubName: null, attending: true, members: [{ leg: 1, name: 'Ari Runner', isGuest: false }, { leg: 2, name: 'Bea Guest', isGuest: true }] },
+    { id: GUEST_ID, name: 'Casey Guest', kind: 'guest', workspaceName: null, clubName: 'Independent Athletics', attending: true, members: [] },
   ],
   sessions: [
     { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [] },
@@ -58,28 +58,56 @@ describe('PublicMeetLogger', () => {
     });
   });
 
-  it('shows only active meet sessions, keeps relay legs safe, and targets field attempts to the selected session entrant', async () => {
+  it('mirrors the coach live logger: discipline tabs, safe relay legs, team lines, and targeted recording', async () => {
     const user = userEvent.setup();
     render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={offlineSync()} />);
 
     expect(await screen.findByRole('heading', { name: 'City Combined Meet' })).toBeInTheDocument();
-    expect(screen.getByText('Relay: L1 Ari Runner, L2 Bea Guest')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Closed Session/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /4x100m Final/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Long Jump Final/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Closed Session/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Long Jump Final/ }));
-    await user.type(screen.getByLabelText('Measurement (metres)'), '6.45');
-    await user.click(screen.getByRole('button', { name: 'Record observation' }));
+    // Default tab is the first in-progress session; relay legs stay name-only and safe.
+    expect(screen.getByText('Legs: Ari Runner → Bea Guest')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /Long Jump Final/ }));
+    expect(screen.getByText('Independent Athletics')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
 
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
       'public-session', EVENT_ID, { disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID },
       expect.objectContaining({ entryType: 'attempt', value: 6.45, unit: 'metres', isFoul: false, noteText: null }),
     ));
 
-    await user.click(screen.getByRole('checkbox', { name: 'Foul' }));
-    await user.click(screen.getByRole('button', { name: 'Record observation' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Foul for Casey Guest' }));
+    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenLastCalledWith(
       'public-session', EVENT_ID, { disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID },
-      expect.objectContaining({ entryType: 'attempt', value: null, unit: null, isFoul: true }),
+      expect.objectContaining({ entryType: 'attempt', value: 6.45, unit: 'metres', isFoul: true }),
     ));
+  });
+
+  it('hides registered entrants who are not marked as attending', async () => {
+    const absentSnapshot: PublicMeetLoggerSnapshot = {
+      ...snapshot,
+      entrants: [
+        ...snapshot.entrants,
+        { id: 'aaaaaaa1-1111-4111-8111-111111111111', name: 'Absent Athlete', kind: 'athlete', workspaceName: 'North Club', clubName: null, attending: false, members: [] },
+      ],
+      sessions: snapshot.sessions.map((item) => item.id === FIELD_SESSION_ID
+        ? { ...item, entrantIds: [...item.entrantIds, 'aaaaaaa1-1111-4111-8111-111111111111'] }
+        : item),
+    };
+    vi.mocked(publicLoggerApi.getPublicMeetLoggerSnapshot).mockResolvedValue(absentSnapshot);
+
+    const user = userEvent.setup();
+    render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={offlineSync()} />);
+
+    await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
+    expect(screen.queryByText('Absent Athlete')).not.toBeInTheDocument();
+    expect(screen.getByText('Casey Guest')).toBeInTheDocument();
   });
 });
