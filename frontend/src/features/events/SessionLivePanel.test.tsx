@@ -15,7 +15,6 @@ const api = vi.hoisted(() => ({
   createSessionEntry: vi.fn(),
   undoSessionEntry: vi.fn(),
   replaceSessionEntry: vi.fn(),
-  registerEntrant: vi.fn(),
   selectSessionResultEntry: vi.fn(),
   changeSessionState: vi.fn(),
 }));
@@ -33,10 +32,8 @@ const offline = vi.hoisted(() => ({
 const workspace = vi.hoisted(() => ({ useWorkspace: () => ({ activeWorkspace: { id: 'ws-1' } }) }));
 const currentUser = vi.hoisted(() => ({ useCurrentUser: () => ({ id: 'coach-1' }) }));
 const realtime = vi.hoisted(() => ({ useRealtimeRoom: () => undefined }));
-const participantsApi = vi.hoisted(() => ({ listEventParticipants: vi.fn() }));
 
 vi.mock('../../api/meets', () => api);
-vi.mock('../../api/participants', () => participantsApi);
 vi.mock('../../hooks/useSessionOffline', () => ({ useSessionOffline: () => offline }));
 vi.mock('../auth/WorkspaceContext', () => workspace);
 vi.mock('../auth/CurrentUserContext', () => currentUser);
@@ -64,11 +61,6 @@ let sessionStatus = 'scheduled';
 let sessionVersion = 1;
 let resultState = 'provisional';
 
-async function chooseOption(user: ReturnType<typeof userEvent.setup>, control: string, option: string) {
-  await user.click(await screen.findByRole('button', { name: control }));
-  await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
-}
-
 describe('SessionLivePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,7 +73,6 @@ describe('SessionLivePanel', () => {
     offline.enqueueCreateEntry.mockResolvedValue(false);
     offline.enqueueUndoEntry.mockResolvedValue(false);
     vi.mocked(eventHelpersApi.getOfflineLoggerDesignation).mockResolvedValue(null);
-    participantsApi.listEventParticipants.mockResolvedValue({ data: [], meta: { count: 0 } });
     api.listRegistrations.mockResolvedValue({ data: [{
       id: 'reg-1',
       eventId: 'event-1',
@@ -93,7 +84,6 @@ describe('SessionLivePanel', () => {
       createdBy: 'coach-1',
       createdAt: '2026-09-20T09:00:00.000Z',
     }], meta: { count: 1 } });
-    api.registerEntrant.mockResolvedValue({});
     api.replaceSessionEntry.mockResolvedValue({});
     api.changeSessionState.mockImplementation(async (_event, _session, status) => {
       resultState = status === 'completed' ? 'final' : sessionStatus === 'completed' ? 'reopened' : resultState;
@@ -120,9 +110,9 @@ describe('SessionLivePanel', () => {
       version: sessionVersion,
     }] }));
     api.listEntrants.mockResolvedValue({ data: [
-      { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
-      { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
-      { id: 'team-1', eventId: 'event-1', workspaceId: 'ws-1', kind: 'relay', athleteId: null, name: 'Speed Demons', clubName: null, details: null, memberIds: ['athlete-a', 'athlete-b'], createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'team-1', eventId: 'event-1', workspaceId: 'ws-1', kind: 'relay', athleteId: null, name: 'Speed Demons', clubName: null, details: null, memberIds: ['athlete-a', 'athlete-b'], workspaceName: 'Team A', rsvpStatus: null, createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
     ] });
     api.listSessionEntries.mockResolvedValue({ data: [{
       id: 'entry-1',
@@ -189,14 +179,14 @@ describe('SessionLivePanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     await waitFor(() => expect(api.changeSessionState).toHaveBeenCalledWith('event-1', 'session-1', 'in_progress', 1));
 
-    await chooseOption(user, 'Team', 'Speed Demons');
-    expect(await screen.findByLabelText('Team members')).toHaveTextContent('Legs: Ari Runner → Bea Dash');
+    const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
+    expect(within(teamRow).getByLabelText('Team members')).toHaveTextContent('Legs: Ari Runner → Bea Dash');
 
-    await user.type(screen.getByLabelText('Time (s)'), '60.5');
-    await user.click(screen.getByRole('button', { name: 'Log attempt' }));
+    await user.type(within(teamRow).getByLabelText('Time (s) for Speed Demons'), '60.5');
+    await user.click(within(teamRow).getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-1', entrantId: 'team-1' }, expect.objectContaining({ entryType: 'attempt', value: 60.5 })));
 
-    const officialButtons = await screen.findAllByRole('button', { name: 'Make official' });
+    const officialButtons = await within(teamRow).findAllByRole('button', { name: 'Make official' });
     await user.click(officialButtons[0]);
     await waitFor(() => expect(api.selectSessionResultEntry).toHaveBeenCalledWith(
       'event-1',
@@ -220,9 +210,9 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
-    await chooseOption(user, 'Team', 'Speed Demons');
-    await user.type(await screen.findByLabelText('Time (s)'), '59.9');
-    await user.click(screen.getByRole('button', { name: 'Log attempt' }));
+    const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
+    await user.type(within(teamRow).getByLabelText('Time (s) for Speed Demons'), '59.9');
+    await user.click(within(teamRow).getByRole('button', { name: 'Record' }));
 
     await waitFor(() => expect(offline.enqueueCreateEntry).toHaveBeenCalledWith(
       'event-1',
@@ -233,7 +223,7 @@ describe('SessionLivePanel', () => {
     expect(api.createSessionEntry).not.toHaveBeenCalled();
   });
 
-  it('hides athletes who are not attending from the team picker', async () => {
+  it('hides athletes who are not attending from the logging list', async () => {
     const user = userEvent.setup();
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'track-200', code: '200m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '200m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } }] });
     api.listSessions.mockImplementation(async () => ({ data: [{
@@ -245,7 +235,10 @@ describe('SessionLivePanel', () => {
       status: sessionStatus,
       version: sessionVersion,
     }] }));
-    participantsApi.listEventParticipants.mockResolvedValue({ data: [{ athleteId: 'a', rsvpStatus: 'no' }, { athleteId: 'b', rsvpStatus: 'yes' }], meta: { count: 2 } });
+    api.listEntrants.mockResolvedValue({ data: [
+      { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'no', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], workspaceName: 'Team B', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+    ] });
     api.listRegistrations.mockResolvedValue({ data: [
       { id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' },
       { id: 'reg-b', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-b', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' },
@@ -253,10 +246,36 @@ describe('SessionLivePanel', () => {
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
     await user.click(await screen.findByRole('tab', { name: /200m Heat 1/ }));
-    await user.click(screen.getByRole('button', { name: 'Team' }));
-    const menu = screen.getByRole('listbox');
-    expect(within(menu).queryByRole('option', { name: 'Ari Runner' })).not.toBeInTheDocument();
-    expect(within(menu).getByRole('option', { name: 'Bea Dash' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Ari Runner' })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Bea Dash' })).toBeInTheDocument();
+  });
+
+  it('shows the full session roster across teams to any logger', async () => {
+    const user = userEvent.setup();
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'track-200', code: '200m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '200m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } }] });
+    api.listSessions.mockImplementation(async () => ({ data: [{
+      id: 'session-1',
+      workspaceId: 'ws-1',
+      resultState,
+      disciplineDefinitionId: 'track-200',
+      label: '200m Heat 1',
+      status: sessionStatus,
+      version: sessionVersion,
+    }] }));
+    api.listEntrants.mockResolvedValue({ data: [
+      { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-2', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], workspaceName: 'Team B', rsvpStatus: 'yes', createdBy: 'coach-2', createdAt: '2026-09-01T00:00:00.000Z' },
+    ] });
+    api.listRegistrations.mockResolvedValue({ data: [
+      { id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' },
+      { id: 'reg-b', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-b', workspaceId: 'ws-2', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-2', createdAt: '2026-09-20T09:00:00.000Z' },
+    ], meta: { count: 2 } });
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    await user.click(await screen.findByRole('tab', { name: /200m Heat 1/ }));
+    const teamARow = await screen.findByRole('group', { name: 'Ari Runner' });
+    expect(within(teamARow).getByText('Team A')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Bea Dash' })).getByText('Team B')).toBeInTheDocument();
   });
 
   it('renders nothing for a legacy 100m event', () => {
@@ -318,11 +337,11 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /High jump Final/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
-    await chooseOption(user, 'Team', 'Ari Runner');
+    const row = await screen.findByRole('group', { name: 'Ari Runner' });
 
-    expect(await screen.findByLabelText('Target height (m)')).toHaveValue(1.5);
+    expect(await within(row).findByLabelText('Target height (m) for Ari Runner')).toHaveValue(1.5);
     expect(screen.getByText(/starts at 1\.50 m, then \+0\.02 m per height\. 3 consecutive failures/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'clearance' }));
+    await user.click(within(row).getByRole('button', { name: 'Clearance' }));
     await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith(
       'event-1',
       { disciplineSessionId: 'session-1', entrantId: 'athlete-a' },
@@ -331,7 +350,7 @@ describe('SessionLivePanel', () => {
 
     expect(await screen.findByRole('columnheader', { name: 'Countback' })).toBeInTheDocument();
     expect(screen.getByRole('table')).toHaveTextContent('0 / 0');
-    await user.click(await screen.findByRole('button', { name: 'Void attempt 1' }));
+    await user.click(await within(row).findByRole('button', { name: 'Void attempt 1' }));
     await waitFor(() => expect(api.replaceSessionEntry).toHaveBeenCalledWith(
       'event-1',
       { disciplineSessionId: 'session-1', entrantId: 'athlete-a' },
@@ -340,7 +359,7 @@ describe('SessionLivePanel', () => {
     ));
   });
 
-  it('lets a coach register an unregistered entrant from the logger', async () => {
+  it('hides entrants who are not registered for this session', async () => {
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'track-200', code: '200m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '200m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } }] });
     api.listSessions.mockImplementation(async () => ({ data: [{
       id: 'session-1',
@@ -351,36 +370,12 @@ describe('SessionLivePanel', () => {
       status: sessionStatus,
       version: sessionVersion,
     }] }));
-    let registered = false;
-    api.listRegistrations.mockImplementation(async () => ({
-      data: registered ? [{
-        id: 'reg-a',
-        eventId: 'event-1',
-        disciplineSessionId: 'session-1',
-        entrantId: 'athlete-a',
-        workspaceId: 'ws-1',
-        withdrawnAt: null,
-        withdrawnBy: null,
-        createdBy: 'coach-1',
-        createdAt: '2026-09-20T09:00:00.000Z',
-      }] : [],
-      meta: { count: registered ? 1 : 0 },
-    }));
-    api.registerEntrant.mockImplementation(async () => { registered = true; return {}; });
+    api.listRegistrations.mockResolvedValue({ data: [], meta: { count: 0 } });
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
     await user.click(await screen.findByRole('tab', { name: /200m Heat 1/ }));
-    await chooseOption(user, 'Team', 'Ari Runner (not registered)');
-    expect(await screen.findByText('Ari Runner is not registered for this session.')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Time (s)')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Register entrant' }));
-    await waitFor(() => expect(api.registerEntrant).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-1', entrantId: 'athlete-a' }));
-    expect(screen.queryByText(/is not registered for this session/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Start session' }));
-    await waitFor(() => expect(api.changeSessionState).toHaveBeenCalledWith('event-1', 'session-1', 'in_progress', 1));
-    expect(await screen.findByLabelText('Time (s)')).toBeEnabled();
+    expect(screen.queryByRole('group', { name: 'Ari Runner' })).not.toBeInTheDocument();
+    expect(screen.getByText('No one is registered for this session yet. Add entrants from the meet roster.')).toBeInTheDocument();
   });
 });

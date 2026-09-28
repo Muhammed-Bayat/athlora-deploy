@@ -1,4 +1,4 @@
-import type { EntryType, EventStatus, IncidentType, ResultOutcome, UserRole } from './domain.js';
+import type { EntryType, EventStatus, IncidentType, ResultOutcome, RsvpStatus, UserRole } from './domain.js';
 
 export interface SessionTarget {
   disciplineSessionId: string;
@@ -62,6 +62,8 @@ export interface MeetEntrant {
   clubName: string | null;
   details: string | null;
   memberIds: string[];
+  workspaceName: string;
+  rsvpStatus: RsvpStatus | null;
   createdBy: string;
   createdAt: string;
 }
@@ -90,6 +92,7 @@ export interface SessionEntry extends SessionTarget {
   noteText: string | null;
   recordedBy: string | null;
   publicLoggerSessionId: string | null;
+  recorderName?: string | null;
   version: number;
   deviceId: string | null;
   createdAt: string;

@@ -322,7 +322,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect((await pool.query("SELECT action FROM meet_domain_audit WHERE entity_id = $1 ORDER BY created_at DESC LIMIT 1", [registered.id])).rows[0]).toEqual({ action: 'restored' });
   });
 
-  it('limits fixture guests to their own entrants and rejects stale fixture acceptance', async () => {
+  it('gives fixture guests the full start list and rejects stale fixture acceptance', async () => {
     await migrate();
     await pool.query("INSERT INTO event_fixture_workspaces (event_id,workspace_id,role,status,contact_email,joined_by) VALUES ($1,$2,'guest','accepted','guest@test.example',$3)", [eventId, other.workspaceId, other.userId]);
     const s = await session();
@@ -332,7 +332,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await expect(registerEntrant(other, eventId, { disciplineSessionId: s.id, entrantId: own.id }, transaction)).rejects.toMatchObject({ status: 404 });
     const target = { disciplineSessionId: s.id, entrantId: visiting.id };
     await registerEntrant(other, eventId, target, transaction);
-    expect((await listEntrants(other, eventId, pool)).map((row) => row.id)).toEqual([visiting.id]);
+    expect((await listEntrants(other, eventId, pool)).map((row) => row.id)).toEqual([own.id, visiting.id]);
     await open(s.id);
     await createSessionEntry(other, eventId, target, timed, transaction);
     expect(await listSessionResults(other, eventId, s.id, pool)).toHaveLength(1);

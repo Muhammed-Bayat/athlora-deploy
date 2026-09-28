@@ -4,7 +4,7 @@ import { withTransaction } from '../db/transaction.js';
 import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
-import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
+import { meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
 import { listSessionResults, recomputeSessionResult } from './sessionPerformances.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
@@ -100,12 +100,15 @@ export async function changeSessionState(actor: MeetActor, eventId: string, sess
 }
 
 export async function listEntrants(actor: MeetActor, eventId: string, db: DbExecutor = getPool()): Promise<MeetEntrant[]> {
-  const access = await meetAccess(db, actor, eventId);
+  await meetAccess(db, actor, eventId);
   const result = await db.query(
-    `SELECT en.*, COALESCE((SELECT json_agg(rm.member_id ORDER BY rm.leg) FROM relay_members rm WHERE rm.relay_id = en.id), '[]') AS member_ids
+    `SELECT en.*, COALESCE((SELECT json_agg(rm.member_id ORDER BY rm.leg) FROM relay_members rm WHERE rm.relay_id = en.id), '[]') AS member_ids,
+       (SELECT w.name FROM workspaces w WHERE w.id = en.workspace_id) AS workspace_name,
+       (SELECT ep.rsvp_status FROM event_participants ep
+         WHERE ep.event_id = en.event_id AND ep.athlete_id = en.athlete_id AND ep.participant_workspace_id = en.workspace_id) AS rsvp_status
      FROM meet_entrants en WHERE en.event_id = $1
-       AND ($2::boolean OR en.workspace_id = $3) ORDER BY en.created_at, en.id`,
-    [eventId, access.host || access.helper, 'workspaceId' in actor ? actor.workspaceId : null],
+     ORDER BY en.created_at, en.id`,
+    [eventId],
   );
   return result.rows.map((row) => mapMeetRow<MeetEntrant>(row));
 }
@@ -221,10 +224,10 @@ export async function listSafeRelayMembers(eventId: string, relayId: string, db:
 }
 
 export async function listRegistrations(actor: MeetActor, eventId: string, sessionId: string, db: DbExecutor = getPool()): Promise<SessionRegistration[]> {
-  const access = await meetAccess(db, actor, eventId);
+  await meetAccess(db, actor, eventId);
   await getSession(db, eventId, sessionId);
   const result = await db.query('SELECT * FROM session_entrants WHERE session_id = $1 ORDER BY created_at, id', [sessionId]);
-  return result.rows.filter((row) => canReadEntrant(actor, access, row.workspace_id)).map((row) => mapMeetRow<SessionRegistration>(row));
+  return result.rows.map((row) => mapMeetRow<SessionRegistration>(row));
 }
 
 export async function registerEntrant(actor: MeetActor, eventId: string, target: SessionTarget, transaction: MeetTransaction = withTransaction): Promise<SessionRegistration> {

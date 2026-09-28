@@ -49,6 +49,107 @@
   outline-offset: 2px;
 }
 
+.athleteList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: min(120vh, 110rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-2);
+}
+
+.athleteList:focus-visible {
+  outline: 2px solid var(--console-cyan);
+  outline-offset: 2px;
+}
+
+.athleteRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--console-row-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--console-line);
+}
+
+.athleteInfo,
+.athleteInfo > * {
+  min-width: 0;
+}
+
+.athleteInfo b {
+  display: block;
+  font-size: 1rem;
+  color: var(--console-ink);
+  overflow-wrap: anywhere;
+}
+
+.athleteInfo small {
+  color: var(--console-muted);
+}
+
+.controlsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.finishInputGroup {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.finishInputGroup input {
+  min-width: 0;
+}
+
+.currentRecord {
+  color: var(--console-teal);
+  font: var(--font-weight-bold) var(--font-size-sm)/1.2 var(--font-family-mono);
+  white-space: nowrap;
+}
+
+.foulToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.incidentButtonGroup {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.incidentButtonGroup button {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.attemptsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--console-muted);
+  font-size: var(--font-size-sm);
+}
+
+.attemptsList button {
+  min-height: 32px;
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
 @media (max-width: 700px) {
   .sessionPanel { padding: var(--space-3); }
 }
