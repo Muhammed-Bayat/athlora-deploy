@@ -51,6 +51,11 @@ This document records Sprint 2 discussions with Harshil, including feedback and 
 - Use stakeholder and user feedback alongside the bug tracker to prioritise remaining Sprint work.
 - Review larger workflow changes, including invitations and public access, with the client before removing or materially changing them.
 
+## 14 September 2026: Stakeholder Feedback
+
+- Harshil completed the Sprint 2 stakeholder-feedback form after reviewing the deployed application.
+- The submitted response evidence is retained in [Stakeholder Feedback](../../testing/stakeholder-feedback).
+
 ## AI Declaration
 
-This document was created from supplied client-meeting notes with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created from supplied client-meeting notes with the assistance of OpenCode[openai/gpt-5.6-terra] and updated with the assistance of OpenCode[openai/gpt-5.6-terra].
