@@ -318,9 +318,38 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
-    const attempts = await within(teamRow).findByRole('list', { name: 'Attempts for Speed Demons' });
+    const attempts = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
     expect(within(attempts).getAllByRole('button', { name: 'Make official' })).toHaveLength(2);
     expect(within(attempts).getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+  });
+  it('lists incident entries with Undo so a DQ can be reversed', async () => {
+    sessionStatus = 'in_progress';
+    api.listSessionEntries.mockResolvedValue({ data: [{
+      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      entryType: 'attempt', value: 61.1, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
+      recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null,
+    }, {
+      id: 'entry-dq', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      entryType: 'penalty', value: null, unit: null, isFoul: false, incidentType: 'dq', noteText: null,
+      recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:01:00.000Z', updatedAt: '2026-09-20T10:01:00.000Z', deletedAt: null,
+    }] });
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
+    const entriesList = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
+    const items = within(entriesList).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[1]).toHaveTextContent('Disqualified');
+    expect(within(items[1]).getByRole('button', { name: 'Make official' })).toBeDisabled();
+    await user.click(within(items[1]).getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(api.undoSessionEntry).toHaveBeenCalledWith(
+      'event-1',
+      { disciplineSessionId: 'session-1', entrantId: 'team-1' },
+      'entry-dq',
+      1,
+    ));
   });
   it('shows discipline-relevant options for throws and distance races', async () => {
     api.listDisciplines.mockResolvedValue({ data: [
