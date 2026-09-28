@@ -75,7 +75,6 @@ export interface ClubPublication {
 
 export const DASHBOARD_CARD_IDS = [
   'season-selector',
-  'hero',
   'status-attention',
   'stats',
   'roster-snapshot',
@@ -88,7 +87,6 @@ export type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
 
 export const REQUIRED_DASHBOARD_CARD_IDS = [
   'season-selector',
-  'hero',
   'status-attention',
 ] as const satisfies readonly DashboardCardId[];
 
