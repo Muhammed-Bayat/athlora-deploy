@@ -829,6 +829,72 @@
   margin: 0;
 }
 
+.rosterTableWrap {
+  overflow-x: auto;
+}
+
+.rosterTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rosterTable th,
+.rosterTable td {
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--ui-line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.rosterTable thead th {
+  padding-top: 0;
+  color: var(--ui-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rosterTable tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.rosterGroupStart:not(:first-child) > * {
+  border-top: 8px solid var(--ui-panel);
+}
+
+.rosterAthlete {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  color: var(--ui-text);
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rosterAthlete:hover {
+  color: var(--cyan-300);
+}
+
+.rosterAthlete:focus-visible {
+  outline: 2px solid var(--cyan-300);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.rosterPb {
+  color: var(--cyan-300);
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right !important;
+}
+
 /* Roster + event rows */
 
 .apiRosterRow,
@@ -1654,6 +1720,53 @@ button.resultRow:hover {
   }
   .resultRow {
     align-items: flex-start;
+  }
+
+  .rosterTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .rosterTable,
+  .rosterTable tbody,
+  .rosterTable tr,
+  .rosterTable th,
+  .rosterTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .rosterTable tr {
+    padding: 10px 0;
+  }
+
+  .rosterTable th,
+  .rosterTable td {
+    padding: 5px 0;
+    border: 0;
+  }
+
+  .rosterGroupStart:not(:first-child) > * {
+    border-top: 1px solid var(--ui-line);
+  }
+
+  .rosterTable td::before {
+    display: inline-block;
+    width: 86px;
+    color: var(--ui-muted);
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .rosterPb {
+    text-align: left !important;
   }
 }
 

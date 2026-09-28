@@ -461,9 +461,14 @@ export interface AthleteStatisticsDetail extends AthleteStatistics {
 export interface RosterSnapshotEntry {
   athleteId: string;
   name: string;
-  squadNames?: string[];
-  squad?: string | null;
-  discipline: Discipline;
+  disciplines: DashboardRosterDiscipline[];
+}
+
+export interface DashboardRosterDiscipline {
+  discipline: string;
+  label: string;
+  unit: 'seconds' | 'metres' | 'cm';
+  precision: number;
   pb: number | null;
 }
 
@@ -471,7 +476,7 @@ export interface DashboardUpcomingEvent {
   eventId: string;
   title: string;
   type: EventType;
-  discipline: Discipline;
+  discipline: string | null;
   date: string;
   time: string | null;
   locationName: string | null;

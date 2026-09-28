@@ -157,9 +157,7 @@ const statisticsRow: AthleteStatisticsRow = {
 const rosterRow: RosterSnapshotRow = {
   athlete_id: ATHLETE_ID,
   name: 'Ari Runner',
-  squad_names: [],
-  discipline: '100m',
-  pb: '11.120',
+  disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: '11.120' }],
 };
 
 const upcomingEventRow: DashboardUpcomingEventRow = {
@@ -487,13 +485,11 @@ describe('PostgreSQL row mapping', () => {
     });
   });
 
-  it('maps a roster snapshot row with a nullable PB', () => {
-    expect(mapRosterSnapshotRow(changed(rosterRow, { pb: null }))).toEqual({
+  it('maps roster discipline PBs', () => {
+    expect(mapRosterSnapshotRow(changed(rosterRow, { disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: null }] }))).toEqual({
       athleteId: ATHLETE_ID,
       name: 'Ari Runner',
-      squadNames: [],
-      discipline: '100m',
-      pb: null,
+      disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: null }],
     });
   });
 

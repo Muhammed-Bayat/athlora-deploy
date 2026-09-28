@@ -143,9 +143,7 @@ describe('getDashboardSummary', () => {
     const roster: RosterSnapshotRow = {
       athlete_id: ATHLETE_ID,
       name: 'Ari Runner',
-      squad_names: [],
-      discipline: '100m',
-      pb: '11.20',
+      disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: '11.20' }],
     };
     const upcoming: DashboardUpcomingEventRow = {
       event_id: '55555555-5555-4555-8555-555555555555',
@@ -230,7 +228,7 @@ describe('getDashboardSummary', () => {
     const upcomingCall = query.mock.calls.find(([sql]) =>
       (sql as string).includes("e.status = 'scheduled'"));
     expect(upcomingCall?.[0]).not.toContain("status = 'cancelled'");
-    expect(upcomingCall?.[0]).toContain('AND e.discipline = $3');
+    expect(upcomingCall?.[0]).toContain("AND e.date <= ($2::date + INTERVAL '7 days')");
   });
 
   it('rejects a malformed owner id before querying', async () => {
