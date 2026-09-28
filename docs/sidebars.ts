@@ -70,6 +70,15 @@ const sidebars: SidebarsConfig = {
             'sprints/sprint-2/raw-meeting-transcript',
           ],
         },
+        {
+          type: 'category',
+          label: 'Sprint 3',
+          items: [
+            'sprints/sprint-3/meeting-records',
+            'sprints/sprint-3/client-meetings',
+            'sprints/sprint-3/raw-meeting-transcript',
+          ],
+        },
       ],
     },
     {
