@@ -37,6 +37,7 @@ export async function athleteRelayHistory(
      JOIN discipline_definitions d ON d.id = s.discipline_definition_id
      LEFT JOIN session_results r ON r.session_id = s.id AND r.entrant_id = team.id
      WHERE member.athlete_id = $1 AND member.workspace_id = $2 AND d.kind = 'relay'
+       AND s.status = 'completed' AND s.result_state = 'final' AND e.status <> 'cancelled'
      ORDER BY e.date DESC, s.created_at, rm.leg`,
     [athleteId as string, workspaceId],
   );

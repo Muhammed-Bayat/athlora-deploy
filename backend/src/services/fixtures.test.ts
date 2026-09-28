@@ -6,7 +6,7 @@ const mockOverrideResultRecord = vi.fn();
 vi.mock('../controllers/results.js', () => ({ overrideResultRecord: mockOverrideResultRecord }));
 
 import { getPool } from '../db/client.js';
-import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertFixtureReadyToStart, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant } from './fixtures.js';
+import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertFixtureReadyToStart, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant, markFixtureReacceptanceRequired } from './fixtures.js';
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const HOST_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -118,6 +118,36 @@ describe('assertFixtureReadyToStart', () => {
       expect.stringContaining("ep.rsvp_status IN ('pending', 'maybe')"),
       [EVENT_ID],
     );
+  });
+});
+
+describe('markFixtureReacceptanceRequired', () => {
+  it('syncs the host row to the new revision whenever the revision advances', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ workspace_id: WORKSPACE_ID }] })
+      .mockResolvedValueOnce({ rows: [{ fixture_revision: 2 }] })
+      .mockResolvedValue({ rows: [] });
+
+    await expect(markFixtureReacceptanceRequired({ query } as never, EVENT_ID, ACTOR_ID))
+      .resolves.toBeUndefined();
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE events SET fixture_revision = fixture_revision + 1'),
+      [EVENT_ID],
+    );
+    const hostSync = query.mock.calls.find(([sql]) => String(sql).includes('SET accepted_revision = $2'));
+    expect(hostSync).toBeTruthy();
+    expect(hostSync?.[1]).toEqual([EVENT_ID, 2]);
+    expect(String(hostSync?.[0])).toContain("role = 'host'");
+  });
+
+  it('leaves the revision alone when no guest teams remain', async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(markFixtureReacceptanceRequired({ query } as never, EVENT_ID, ACTOR_ID))
+      .resolves.toBeUndefined();
+
+    expect(query).toHaveBeenCalledTimes(1);
   });
 });
 

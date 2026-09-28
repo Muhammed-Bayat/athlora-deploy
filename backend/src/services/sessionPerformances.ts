@@ -6,6 +6,7 @@ import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets.js';
 import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
+import { sameLoggerIdentity } from './loggerIdentity.js';
 import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
 import { FINAL_INDIVIDUAL_PERFORMANCES } from './disciplineStatistics.js';
 
@@ -65,25 +66,56 @@ export async function recomputeSessionResult(db: DbExecutor, actor: MeetActor, e
   await meetAudit(db, actor, eventId, workspaceId, 'result', after.rows[0].id, before.rows[0] ? 'recomputed' : 'created', before.rows[0], after.rows[0]);
 }
 
+export interface SessionEntryAttribution {
+  recordedBy: string | null;
+  publicLoggerSessionId: string | null;
+  recordedWorkspaceId?: string | null;
+  recorderLinkId?: string | null;
+  recorderLoggerName?: string | null;
+  recorderLoggerClub?: string | null;
+}
+
+/** Only the club or person that made a record may correct it; the host retains an override. */
+export function canMutateSessionEntry(actor: MeetActor, access: MeetAccess, entry: SessionEntryAttribution): boolean {
+  if ('publicLoggerSessionId' in actor) {
+    return entry.publicLoggerSessionId !== null
+      && entry.recorderLinkId === actor.publicLoggerLinkId
+      && sameLoggerIdentity(entry.recorderLoggerName, actor.publicLoggerName)
+      && sameLoggerIdentity(entry.recorderLoggerClub, actor.publicLoggerClub);
+  }
+  if (actor.role !== 'coach') return false;
+  if (access.host) return true;
+  if (access.helper) return entry.recordedBy === actor.userId;
+  return entry.recordedWorkspaceId === actor.workspaceId;
+}
+
 export async function listSessionEntries(actor: MeetActor, eventId: string, sessionId: string, entrantId?: string, db: DbExecutor = getPool()): Promise<SessionEntry[]> {
   const access = await meetAccess(db, actor, eventId);
   await getSession(db, eventId, sessionId);
   if (entrantId !== undefined) await registration(db, actor, access, eventId, { disciplineSessionId: sessionId, entrantId }, false);
   const result = await db.query(
     `SELECT ste.*,
-            COALESCE(pls.logger_name,
-              (SELECT w.name FROM workspace_members wm
-               JOIN workspaces w ON w.id = wm.workspace_id
+            COALESCE(pls.logger_name, rw.name,
+              (SELECT w.name FROM workspaces w
+               JOIN workspace_members wm ON wm.workspace_id = w.id
                WHERE wm.user_id = ste.recorded_by
                ORDER BY wm.created_at, wm.workspace_id
-               LIMIT 1)) AS recorder_name
+               LIMIT 1)) AS recorder_name,
+            pls.link_id AS recorder_link_id, pls.logger_name AS recorder_logger_name, pls.logger_club AS recorder_logger_club
      FROM session_timeline_entries ste
      LEFT JOIN public_logger_sessions pls ON pls.id = ste.public_logger_session_id
+     LEFT JOIN workspaces rw ON rw.id = ste.recorded_workspace_id
      WHERE ste.session_id = $1 AND ste.deleted_at IS NULL
        AND ($2::uuid IS NULL OR ste.entrant_id = $2)
      ORDER BY ste.created_at, ste.id`, [sessionId, entrantId ?? null],
   );
-  return result.rows.map((row) => mapMeetRow<SessionEntry>(row));
+  return result.rows.map((row) => {
+    const { recorder_link_id: recorderLinkId, recorder_logger_name: recorderLoggerName, recorder_logger_club: recorderLoggerClub, ...rest } = row;
+    const entry = mapMeetRow<SessionEntry>(rest);
+    const attribution: SessionEntryAttribution = { ...entry, recorderLinkId, recorderLoggerName, recorderLoggerClub };
+    const canMutate = canMutateSessionEntry(actor, access, attribution);
+    return { ...entry, canEdit: canMutate, canUndo: canMutate };
+  });
 }
 
 export async function createSessionEntry(actor: MeetActor, eventId: string, target: SessionTarget, input: SessionEntryInput, transaction: MeetTransaction = withTransaction, entryId: string = randomUUID()): Promise<SessionEntry> {
@@ -94,11 +126,12 @@ export async function createSessionEntry(actor: MeetActor, eventId: string, targ
     const order = definition.kind === 'vertical' ? await db.query<{ next: number }>('SELECT COALESCE(MAX(attempt_order), 0) + 1 AS next FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]) : null;
     const result = await db.query(
       `INSERT INTO session_timeline_entries
-         (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id, vertical_state, attempt_order)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+         (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id, recorded_workspace_id, vertical_state, attempt_order)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [entryId, eventId, target.disciplineSessionId, target.entrantId, entrant.workspace_id, input.entryType, input.value,
         input.unit, input.isFoul, input.incidentType, input.noteText, input.deviceId,
-         'userId' in actor ? actor.userId : null, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : null, input.verticalState ?? null, order?.rows[0].next ?? null],
+         'userId' in actor ? actor.userId : null, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : null,
+         'userId' in actor ? actor.workspaceId : null, input.verticalState ?? null, order?.rows[0].next ?? null],
     );
     const entry = mapMeetRow<SessionEntry>(result.rows[0]);
     await meetAudit(db, actor, eventId, entrant.workspace_id, 'entry', entry.id, 'created', null, entry);
@@ -107,12 +140,17 @@ export async function createSessionEntry(actor: MeetActor, eventId: string, targ
   });
 }
 
-function assertEntryCorrection(actor: MeetActor, access: MeetAccess, entry: SessionEntry): void {
+async function assertEntryCorrection(db: DbExecutor, actor: MeetActor, access: MeetAccess, entry: SessionEntry): Promise<void> {
   if ('publicLoggerSessionId' in actor) {
-    if (actor.publicLoggerSessionId !== entry.publicLoggerSessionId) meetNotFound();
+    if (!entry.publicLoggerSessionId) meetNotFound();
+    const recorder = await db.query<{ link_id: string; logger_name: string; logger_club: string }>(
+      'SELECT link_id, logger_name, logger_club FROM public_logger_sessions WHERE id = $1', [entry.publicLoggerSessionId]);
+    const identity = recorder.rows[0];
+    if (!identity || !canMutateSessionEntry(actor, access,
+      { ...entry, recorderLinkId: identity.link_id, recorderLoggerName: identity.logger_name, recorderLoggerClub: identity.logger_club })) meetNotFound();
   } else {
     meetCoach(actor);
-    if (access.helper && entry.recordedBy !== actor.userId) meetNotFound();
+    if (!canMutateSessionEntry(actor, access, entry)) meetNotFound();
   }
 }
 
@@ -127,7 +165,7 @@ export async function mutateSessionEntry(
     const found = await db.query('SELECT * FROM session_timeline_entries WHERE id = $1 AND event_id = $2 AND session_id = $3 AND entrant_id = $4 FOR UPDATE', [entryId, eventId, target.disciplineSessionId, target.entrantId]);
     if (!found.rows[0]) meetNotFound();
     const before = mapMeetRow<SessionEntry>(found.rows[0]);
-    assertEntryCorrection(actor, access, before);
+    await assertEntryCorrection(db, actor, access, before);
     if (undo && before.deletedAt && before.version === input.expectedVersion + 1) return before;
     if (before.deletedAt) meetNotFound();
     if (before.version !== input.expectedVersion) meetConflict('TIMELINE_ENTRY_VERSION_CONFLICT', 'Timeline entry has been modified');

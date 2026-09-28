@@ -80,11 +80,15 @@ export async function processSessionSyncBatch(actor: MeetActor, eventId: string,
           const { entryId, ...payload } = action.payload;
           meetIds(entryId);
           let expectedVersion = parseVersion(action.expectedVersion ?? payload.expectedVersion);
-          if (isPublic) {
-            // Public officials retain audited last-write-wins, but only for their own exact target.
+          if ('publicLoggerSessionId' in actor) {
+            // Public officials retain audited last-write-wins, but only over records they made themselves.
             const current = await db.query(
-              `SELECT * FROM session_timeline_entries WHERE id = $1 AND event_id = $2 AND session_id = $3 AND entrant_id = $4 AND public_logger_session_id = $5 AND deleted_at IS NULL`,
-              [entryId, eventId, action.target.disciplineSessionId, action.target.entrantId, actorId],
+              `SELECT ste.* FROM session_timeline_entries ste
+               JOIN public_logger_sessions pls ON pls.id = ste.public_logger_session_id
+               WHERE ste.id = $1 AND ste.event_id = $2 AND ste.session_id = $3 AND ste.entrant_id = $4 AND ste.deleted_at IS NULL
+                 AND pls.link_id = $5 AND lower(trim(pls.logger_name)) = lower(trim($6)) AND lower(trim(pls.logger_club)) = lower(trim($7))`,
+              [entryId, eventId, action.target.disciplineSessionId, action.target.entrantId,
+               actor.publicLoggerLinkId, actor.publicLoggerName, actor.publicLoggerClub],
             );
             const row = current.rows[0];
             if (!row) meetNotFound();

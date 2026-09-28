@@ -302,6 +302,7 @@ async function lockOwnedEntry(
      JOIN athletes a ON a.id = te.athlete_id
       WHERE te.id = $1
         AND te.event_id = $2
+        AND (e.workspace_id = $3 OR te.recorded_workspace_id = $3)
         AND (
           (e.workspace_id = $3 AND a.workspace_id = $3)
            OR ($4::boolean AND EXISTS (
@@ -342,10 +343,11 @@ export async function listTimelineEntries(
               ))
           ))`
     : '';
-  const result = await executor.query<TimelineEntryRow>(
+  const result = await executor.query<TimelineEntryRow & { can_mutate: boolean }>(
     `SELECT ${TIMELINE_SELECT_COLUMNS},
               COALESCE(public_logger.logger_name, recorder.name) AS recorder_name,
-              CASE WHEN public_logger.id IS NOT NULL THEN NULLIF(public_logger.logger_club, '') ELSE recorder_workspace.name END AS recorder_club
+              CASE WHEN public_logger.id IS NOT NULL THEN NULLIF(public_logger.logger_club, '') ELSE recorder_workspace.name END AS recorder_club,
+              (e.workspace_id = $2 OR te.recorded_workspace_id = $2) AS can_mutate
      FROM timeline_entries te
       JOIN events e ON e.id = te.event_id
       JOIN athletes a ON a.id = te.athlete_id
@@ -360,7 +362,7 @@ export async function listTimelineEntries(
             SELECT 1 FROM event_fixture_workspaces fixture_workspace
             WHERE fixture_workspace.event_id = e.id AND fixture_workspace.workspace_id = membership.workspace_id
           )
-        ORDER BY membership.workspace_id
+        ORDER BY (te.recorded_workspace_id = membership.workspace_id) DESC, membership.workspace_id
         LIMIT 1
       ) recorder_workspace ON true
        WHERE te.event_id = $1
@@ -372,7 +374,10 @@ export async function listTimelineEntries(
        ORDER BY te.created_at ASC, te.id ASC`,
     allowFixtureAccess ? [ownedEventId, workspaceId, true] : [ownedEventId, workspaceId],
   );
-  return result.rows.map(mapTimelineEntryRow);
+  return result.rows.map((row) => {
+    const entry = mapTimelineEntryRow(row);
+    return { ...entry, canEdit: row.can_mutate, canUndo: row.can_mutate };
+  });
 }
 
 export async function createTimelineEntry(
@@ -413,8 +418,8 @@ export async function createTimelineEntry(
 
     const inserted = await client.query<TimelineEntryRow>(
       `INSERT INTO timeline_entries
-         (event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, device_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, recorded_workspace_id, device_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${TIMELINE_COLUMNS}`,
       [
         ownedEventId,
@@ -427,6 +432,7 @@ export async function createTimelineEntry(
         payload.incidentType,
         payload.noteText,
         userId,
+        workspaceId,
         payload.deviceId,
       ],
     );

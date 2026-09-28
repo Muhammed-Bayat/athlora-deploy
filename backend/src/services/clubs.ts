@@ -118,23 +118,53 @@ function standardDeviation(values: number[]): number | null {
 
 async function getClubDisciplineStatistics(workspaceId: string, executor: DbExecutor, season: SeasonScope) {
   const rows = await executor.query<ClubDisciplineResultRow>(
-    `SELECT r.discipline, r.athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
-            e.created_at AS event_created_at, e.id AS event_id,
-            CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
-                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
-                 ELSE r.final_result END AS effective_result,
-            CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
-                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
-                 ELSE r.outcome END AS effective_outcome
-     FROM results r
-     JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
-     JOIN events e ON e.id = r.event_id
-     WHERE e.status <> 'cancelled' AND e.date >= $2::date AND e.date < $3::date
-       AND (e.workspace_id = $1 OR EXISTS (
-         SELECT 1 FROM event_fixture_workspaces fw
-         JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
-         WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-       ))`,
+    `SELECT discipline, athlete_id, lifecycle_status, event_date, event_time, event_created_at, event_id,
+            effective_result, effective_outcome
+     FROM (
+       SELECT r.discipline, r.athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
+              e.created_at AS event_created_at, e.id AS event_id,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+                   ELSE r.final_result END AS effective_result,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                   ELSE r.outcome END AS effective_outcome
+       FROM results r
+       JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
+       JOIN events e ON e.id = r.event_id
+       WHERE e.status <> 'cancelled' AND e.date >= $2::date AND e.date < $3::date
+         AND (e.workspace_id = $1 OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+           WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
+       UNION ALL
+       SELECT d.code AS discipline, en.athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
+              e.created_at AS event_created_at, e.id AS event_id,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+                   ELSE r.final_result END AS effective_result,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                   ELSE r.outcome END AS effective_outcome
+       FROM session_results r
+       JOIN discipline_sessions s ON s.id = r.session_id
+       JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+       JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+       JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+       JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
+       JOIN events e ON e.id = r.event_id
+       WHERE r.workspace_id = $1
+         AND s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+         AND e.date >= $2::date AND e.date < $3::date
+         AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+         AND se.withdrawn_at IS NULL
+         AND (e.workspace_id = r.workspace_id OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
+     ) merged`,
     [workspaceId, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   const availableDisciplines = await listAvailableDisciplines(executor);
@@ -323,6 +353,42 @@ export async function getClubStatistics(
        FROM athletes a
        WHERE a.workspace_id = $1
      ), effective AS (
+       SELECT athlete_id,
+              e.date AS event_date,
+              e.time AS event_time,
+              e.created_at AS event_created_at,
+              e.id AS event_id,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+                  THEN r.manual_override
+                ELSE r.final_result
+              END AS effective_result,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                ELSE r.outcome
+              END AS effective_outcome
+       FROM session_results r
+       JOIN discipline_sessions s ON s.id = r.session_id
+       JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+       JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+       JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+       JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
+       JOIN events e ON e.id = r.event_id
+       WHERE d.code = $2
+          AND r.workspace_id = $1
+          AND s.result_state = 'final' AND s.status = 'completed'
+          AND e.status <> 'cancelled'
+          AND e.date >= $3::date AND e.date < $4::date
+          AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+          AND se.withdrawn_at IS NULL
+          AND (e.workspace_id = r.workspace_id OR EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))
+       UNION ALL
        SELECT r.athlete_id,
               e.date AS event_date,
               e.time AS event_time,

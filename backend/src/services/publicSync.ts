@@ -40,8 +40,8 @@ export async function processPublicSyncBatch(
   try {
     await client.query('BEGIN');
 
-    const sessionRes = await client.query<{ id: string; type: EventType; status: string }>(
-      `SELECT ps.id, e.type, e.status
+    const sessionRes = await client.query<{ id: string; link_id: string; logger_name: string; logger_club: string; type: EventType; status: string }>(
+      `SELECT ps.id, pl.id AS link_id, ps.logger_name, ps.logger_club, e.type, e.status
        FROM public_logger_sessions ps
        JOIN public_logger_links pl ON pl.id = ps.link_id
        JOIN events e ON e.id = ps.event_id
@@ -145,10 +145,12 @@ export async function processPublicSyncBatch(
             const currentVersion = expectedVersion ?? action.expectedVersion;
 
             const existingEntry = await client.query<{ id: string; version: number; value: number | null; incident_type: string | null; note_text: string | null }>(
-              `SELECT id, version, value, incident_type, note_text
-               FROM timeline_entries
-               WHERE id = $1 AND event_id = $2 AND public_logger_session_id = $3 AND deleted_at IS NULL`,
-              [entryId, eventId, session.id],
+              `SELECT te.id, te.version, te.value, te.incident_type, te.note_text
+               FROM timeline_entries te
+               JOIN public_logger_sessions es ON es.id = te.public_logger_session_id
+               WHERE te.id = $1 AND te.event_id = $2 AND te.deleted_at IS NULL
+                 AND es.link_id = $3 AND lower(trim(es.logger_name)) = lower(trim($4)) AND lower(trim(es.logger_club)) = lower(trim($5))`,
+              [entryId, eventId, session.link_id, session.logger_name, session.logger_club],
             );
 
             if (existingEntry.rows.length === 0) {
@@ -241,9 +243,12 @@ export async function processPublicSyncBatch(
             const currentVersion = expectedVersion ?? action.expectedVersion;
 
             const existingEntry = await client.query<{ id: string; version: number }>(
-              `SELECT id, version FROM timeline_entries
-               WHERE id = $1 AND event_id = $2 AND public_logger_session_id = $3 AND deleted_at IS NULL`,
-              [entryId, eventId, session.id],
+              `SELECT te.id, te.version
+               FROM timeline_entries te
+               JOIN public_logger_sessions es ON es.id = te.public_logger_session_id
+               WHERE te.id = $1 AND te.event_id = $2 AND te.deleted_at IS NULL
+                 AND es.link_id = $3 AND lower(trim(es.logger_name)) = lower(trim($4)) AND lower(trim(es.logger_club)) = lower(trim($5))`,
+              [entryId, eventId, session.link_id, session.logger_name, session.logger_club],
             );
 
             if (existingEntry.rows.length === 0) {

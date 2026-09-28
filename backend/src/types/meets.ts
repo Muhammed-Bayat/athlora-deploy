@@ -7,7 +7,7 @@ export interface SessionTarget {
 
 export type MeetActor =
   | { userId: string; workspaceId: string; role: UserRole }
-  | { publicLoggerSessionId: string };
+  | { publicLoggerSessionId: string; publicLoggerLinkId: string; publicLoggerName: string; publicLoggerClub: string };
 
 export interface DisciplineDefinition {
   id: string;
@@ -92,7 +92,10 @@ export interface SessionEntry extends SessionTarget {
   noteText: string | null;
   recordedBy: string | null;
   publicLoggerSessionId: string | null;
+  recordedWorkspaceId?: string | null;
   recorderName?: string | null;
+  canEdit?: boolean;
+  canUndo?: boolean;
   version: number;
   deviceId: string | null;
   createdAt: string;

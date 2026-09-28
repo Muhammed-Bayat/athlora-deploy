@@ -8,13 +8,13 @@ import type { SessionEntry, SessionEntryInput } from '../types/meets.js';
 import { object, parseSessionEntry, parseSessionEntryReplacement, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
 
-function publicEntry(entry: SessionEntry, publicLoggerSessionId: string) {
+function publicEntry(entry: SessionEntry, canEdit: boolean, canUndo: boolean) {
   return { id: entry.id, eventId: entry.eventId, disciplineSessionId: entry.disciplineSessionId,
     verticalState: entry.verticalState, attemptOrder: entry.attemptOrder,
     entrantId: entry.entrantId, entryType: entry.entryType, value: entry.value, unit: entry.unit,
     isFoul: entry.isFoul, incidentType: entry.incidentType, version: entry.version, createdAt: entry.createdAt,
     recorderName: entry.recorderName ?? null,
-    canEdit: entry.publicLoggerSessionId === publicLoggerSessionId, canUndo: entry.publicLoggerSessionId === publicLoggerSessionId };
+    canEdit, canUndo };
 }
 
 const snapshot: RequestHandler = async (req, res, next) => {
@@ -38,7 +38,7 @@ const snapshot: RequestHandler = async (req, res, next) => {
         id, label, disciplineDefinitionId, status, resultState, version, verticalConfig,
         results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical, selectedEntryId: r.selectedEntryId })),
         entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
-        entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '')),
+        entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, entry.canEdit === true, entry.canUndo === true)),
       }))),
     } });
   } catch (error) { next(error); }
@@ -62,7 +62,7 @@ function mutation(mode: 'create' | 'replace' | 'undo'): RequestHandler {
           : publicEntryInput(parseSessionEntryReplacement(req.body)), mode === 'undo');
       notifySessionInvalidated(eventId, disciplineSessionId, entrantId);
       if (mode === 'undo') res.status(204).end();
-      else res.status(mode === 'create' ? 201 : 200).json({ data: publicEntry(entry, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : '') });
+      else res.status(mode === 'create' ? 201 : 200).json({ data: publicEntry(entry, true, true) });
     } catch (error) { next(error); }
   };
 }

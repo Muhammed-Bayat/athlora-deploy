@@ -5,7 +5,8 @@ import { applyMigrations, loadMigrations } from '../db/migrate.js';
 import type { MeetActor, SessionEntryInput, SessionTarget } from '../types/meets.js';
 import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listSessions, registerEntrant, updateEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
 import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry, overrideSessionResult, selectSessionResultEntry, sessionStatistics } from './sessionPerformances.js';
-import { createTimelineEntry, listTimelineEntries, removeTimelineEntry } from './timeline.js';
+import { recomputeEventResults, listTimelineEntries, removeTimelineEntry } from './timeline.js';
+import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { getAthleteStatisticsDetail } from './statistics.js';
 import { processSessionSyncBatch, type SessionSyncAction } from './sessionSync.js';
 import { disciplineAthleteStatistics } from './disciplineStatistics.js';
@@ -69,6 +70,7 @@ describeDB('multi-discipline migration and domain integration', () => {
        SELECT seeded.athlete_id, definition.id
        FROM unnest($1::uuid[]) AS seeded(athlete_id)
        CROSS JOIN discipline_definitions definition
+       WHERE EXISTS (SELECT 1 FROM athletes a WHERE a.id = seeded.athlete_id)
        ON CONFLICT DO NOTHING`,
       [[athleteId, otherAthleteId]],
     );
@@ -118,15 +120,24 @@ describeDB('multi-discipline migration and domain integration', () => {
   it('upgrades populated 0027 without rewriting history, is repeatable, and retains the 100m service contract', async () => {
     await pool.query("UPDATE events SET status = 'in_progress' WHERE id = $1", [eventId]);
     await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'yes')", [eventId, athleteId, host.workspaceId]);
-    const legacy = await createTimelineEntry(host.userId, eventId, { ...timed, athleteId, discipline: '100m', unit: 'seconds', isFoul: false }, transaction, host.workspaceId);
+    // The pre-upgrade app wrote entries without recorded_workspace_id; the service
+    // INSERT now requires it, so simulate the legacy writer directly.
+    const legacyRow = await pool.query(
+      `INSERT INTO timeline_entries (event_id, athlete_id, discipline, entry_type, value, unit, is_foul, recorded_by, device_id)
+       VALUES ($1,$2,'100m',$3,$4,'seconds',false,$5,$6) RETURNING *`,
+      [eventId, athleteId, timed.entryType, timed.value, host.userId, timed.deviceId],
+    );
+    await recomputeEventResults(pool, eventId, 'competition');
+    const legacy = mapTimelineEntryRow(legacyRow.rows[0] as TimelineEntryRow);
     await pool.query("UPDATE results SET manual_override = 11.1, override_reason = 'Photo finish', overridden_by = $1, override_at = now() WHERE event_id = $2", [host.userId, eventId]);
-    const before = await pool.query('SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(t) FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1', [eventId]);
+    const before = await pool.query(`SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
     await migrate();
     await migrate();
-    const after = await pool.query('SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(t) FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1', [eventId]);
+    const after = await pool.query(`SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
     expect(after.rows).toEqual(before.rows);
+    expect((await pool.query('SELECT recorded_workspace_id FROM timeline_entries')).rows).toEqual([{ recorded_workspace_id: host.workspaceId }]);
     expect(Number((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count)).toBe(migrations.length);
-    expect(await listTimelineEntries(host.workspaceId, eventId, pool)).toEqual([{ ...legacy, recorderName: 'Host', recorderClub: 'Host' }]);
+    expect(await listTimelineEntries(host.workspaceId, eventId, pool)).toEqual([{ ...legacy, recorderName: 'Host', recorderClub: 'Host', canEdit: true, canUndo: true }]);
     const stats = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(stats.pb).toBe(11.1);
     expect((await pool.query('SELECT * FROM discipline_sessions')).rows).toEqual([]);
@@ -277,6 +288,8 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
     const history = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(history.pb).toBeNull();
+    const { athleteRelayHistory } = await import('./relayHistory.js');
+    expect(await athleteRelayHistory(host.workspaceId, athleteId, pool)).toEqual([]);
     await changeSessionState(host, eventId, session400.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
@@ -285,7 +298,6 @@ describeDB('multi-discipline migration and domain integration', () => {
     await pool.query('DELETE FROM session_timeline_entries');
     const updated = await updateEntrant(host, eventId, relay.id, { name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction);
     expect(updated).toMatchObject({ name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] });
-    const { athleteRelayHistory } = await import('./relayHistory.js');
     const relayHistory = await athleteRelayHistory(host.workspaceId, athleteId, pool);
     expect(relayHistory.some((row) => row.teamName === 'Renamed' && row.countsAsIndividualResult === false)).toBe(true);
   });
@@ -309,7 +321,7 @@ describeDB('multi-discipline migration and domain integration', () => {
 
   it('restores a withdrawn registration while the session roster is open', async () => {
     await migrate();
-    const s = await session('hammer_throw');
+    const s = await session('hammer');
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const target = { disciplineSessionId: s.id, entrantId: athlete.id };
     const registered = await registerEntrant(host, eventId, target, transaction);
@@ -371,17 +383,98 @@ describeDB('multi-discipline migration and domain integration', () => {
     const target = await ready();
     const link = await pool.query("INSERT INTO public_logger_links (event_id,token_hash,created_by) VALUES ($1,'link',$2) RETURNING id", [eventId, host.userId]);
     const publicSessions = await pool.query("INSERT INTO public_logger_sessions(link_id,event_id,token_hash,logger_name,logger_club,expires_at) VALUES ($1,$2,'token-a','Official','Club',now()+interval '1 hour'),($1,$2,'token-b','Other official','Club',now()+interval '1 hour') RETURNING id", [link.rows[0].id, eventId]);
-    const official = { publicLoggerSessionId: publicSessions.rows[0].id };
+    const official = { publicLoggerSessionId: publicSessions.rows[0].id as string, publicLoggerLinkId: link.rows[0].id as string, publicLoggerName: 'Official', publicLoggerClub: 'Club' };
     const first = action(target);
     await processSessionSyncBatch(official, eventId, 'device', [first], transaction);
     const edit = action(target, { actionType: 'edit_entry', payload: { ...timed, value: 10.8, entryId: first.actionId }, expectedVersion: 99 });
     expect((await processSessionSyncBatch(official, eventId, 'device', [edit], transaction)).receipts[0].status).toBe('accepted');
     const conflicts = await pool.query('SELECT * FROM public_sync_conflict_log');
     expect(conflicts.rows[0]).toMatchObject({ discipline_session_id: target.disciplineSessionId, entrant_id: target.entrantId, overwritten_version: 1 });
-    const denied = await processSessionSyncBatch({ publicLoggerSessionId: publicSessions.rows[1].id }, eventId, 'device', [{ ...edit, actionId: randomUUID() }], transaction);
+    const denied = await processSessionSyncBatch({ publicLoggerSessionId: publicSessions.rows[1].id as string, publicLoggerLinkId: link.rows[0].id as string, publicLoggerName: 'Other official', publicLoggerClub: 'Club' }, eventId, 'device', [{ ...edit, actionId: randomUUID() }], transaction);
     expect(denied.receipts[0]).toMatchObject({ status: 'rejected', code: 'NOT_FOUND' });
     await pool.query("UPDATE public_logger_links SET status = 'revoked' WHERE id = $1", [link.rows[0].id]);
     await expect(processSessionSyncBatch(official, eventId, 'device', [action(target)], transaction)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('restricts session entry corrections to the recording club with a host override', async () => {
+    const target = await ready();
+    const joinFixture = async (actor: Extract<MeetActor, { userId: string }>, email: string) => {
+      await pool.query("INSERT INTO event_fixture_workspaces (event_id,workspace_id,role,status,contact_email,joined_by) VALUES ($1,$2,'guest','accepted',$3,$4)", [eventId, actor.workspaceId, email, actor.userId]);
+    };
+    await joinFixture(other, 'other@test.example');
+    const thirdUser = await pool.query<{ id: string }>("INSERT INTO users (auth0_id, name, email) VALUES ('auth|Third','Third','third@test.example') RETURNING id");
+    const thirdWorkspace = await pool.query<{ id: string }>("INSERT INTO workspaces (name) VALUES ('Third') RETURNING id");
+    await pool.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1,$2,'coach')", [thirdWorkspace.rows[0].id, thirdUser.rows[0].id]);
+    const third: Extract<MeetActor, { userId: string }> = { userId: thirdUser.rows[0].id, workspaceId: thirdWorkspace.rows[0].id, role: 'coach' };
+    await joinFixture(third, 'third@test.example');
+    const sameClubUser = await pool.query<{ id: string }>("INSERT INTO users (auth0_id, name, email) VALUES ('auth|GuestTwo','Guest Two','guesttwo@test.example') RETURNING id");
+    await pool.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1,$2,'coach')", [other.workspaceId, sameClubUser.rows[0].id]);
+    const sameClub: Extract<MeetActor, { userId: string }> = { userId: sameClubUser.rows[0].id, workspaceId: other.workspaceId, role: 'coach' };
+
+    const hostEntry = await createSessionEntry(host, eventId, target, timed, transaction);
+    const guestEntry = await createSessionEntry(other, eventId, target, { ...timed, value: 10.9 }, transaction);
+
+    await expect(mutateSessionEntry(other, eventId, target, hostEntry.id, { ...timed, value: 10, expectedVersion: 1 }, false, transaction)).rejects.toMatchObject({ status: 404 });
+    await expect(mutateSessionEntry(third, eventId, target, guestEntry.id, { ...timed, value: 10, expectedVersion: 1 }, false, transaction)).rejects.toMatchObject({ status: 404 });
+    await mutateSessionEntry(sameClub, eventId, target, guestEntry.id, { ...timed, value: 10.9, expectedVersion: 1 }, false, transaction);
+    await mutateSessionEntry(host, eventId, target, guestEntry.id, { ...timed, value: 10.8, expectedVersion: 2 }, false, transaction);
+    await mutateSessionEntry(host, eventId, target, hostEntry.id, { ...timed, value: 11.2, expectedVersion: 1 }, false, transaction);
+
+    expect(Object.fromEntries((await listSessionEntries(host, eventId, target.disciplineSessionId, undefined, pool)).map((entry) => [entry.id, [entry.canEdit, entry.canUndo]])))
+      .toEqual({ [hostEntry.id]: [true, true], [guestEntry.id]: [true, true] });
+    expect(Object.fromEntries((await listSessionEntries(other, eventId, target.disciplineSessionId, undefined, pool)).map((entry) => [entry.id, [entry.canEdit, entry.canUndo]])))
+      .toEqual({ [hostEntry.id]: [false, false], [guestEntry.id]: [true, true] });
+    expect(Object.fromEntries((await listSessionEntries(third, eventId, target.disciplineSessionId, undefined, pool)).map((entry) => [entry.id, [entry.canEdit, entry.canUndo]])))
+      .toEqual({ [hostEntry.id]: [false, false], [guestEntry.id]: [false, false] });
+    expect((await pool.query('SELECT recorded_workspace_id FROM session_timeline_entries WHERE id = $1', [hostEntry.id])).rows)
+      .toEqual([{ recorded_workspace_id: host.workspaceId }]);
+    expect((await pool.query('SELECT recorded_workspace_id FROM session_timeline_entries WHERE id = $1', [guestEntry.id])).rows)
+      .toEqual([{ recorded_workspace_id: other.workspaceId }]);
+  });
+
+  it('keeps public logger corrections bound to the person across sessions', async () => {
+    const target = await ready();
+    const link = await pool.query<{ id: string }>("INSERT INTO public_logger_links (event_id,token_hash,created_by) VALUES ($1,'identity-link',$2) RETURNING id", [eventId, host.userId]);
+    const openSession = async (token: string, loggerName: string, loggerClub: string) => {
+      const session = await pool.query<{ id: string }>(
+        "INSERT INTO public_logger_sessions(link_id,event_id,token_hash,logger_name,logger_club,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '1 hour') RETURNING id",
+        [link.rows[0].id, eventId, token, loggerName, loggerClub],
+      );
+      return { publicLoggerSessionId: session.rows[0].id, publicLoggerLinkId: link.rows[0].id, publicLoggerName: loggerName, publicLoggerClub: loggerClub };
+    };
+    const official = await openSession('official-token', ' Official ', 'Club');
+    const entry = await createSessionEntry(official, eventId, target, timed, transaction);
+
+    const samePersonNewSession = await openSession('official-return-token', 'official', 'CLUB');
+    const corrected = await mutateSessionEntry(samePersonNewSession, eventId, target, entry.id, { ...timed, value: 10.9, expectedVersion: 1 }, false, transaction);
+    expect(corrected.value).toBe(10.9);
+    expect((await listSessionEntries(samePersonNewSession, eventId, target.disciplineSessionId, undefined, pool)).map((listEntry) => listEntry.canEdit)).toEqual([true]);
+
+    const someoneElse = await openSession('stranger-token', 'Someone else', 'Club');
+    await expect(mutateSessionEntry(someoneElse, eventId, target, entry.id, { ...timed, value: 10, expectedVersion: 2 }, false, transaction)).rejects.toMatchObject({ status: 404 });
+    expect((await listSessionEntries(someoneElse, eventId, target.disciplineSessionId, undefined, pool)).map((listEntry) => [listEntry.canEdit, listEntry.canUndo])).toEqual([[false, false]]);
+
+    const syncEdit = action(target, { actionType: 'edit_entry', payload: { ...timed, value: 10.7, entryId: entry.id }, expectedVersion: 99 });
+    expect((await processSessionSyncBatch(someoneElse, eventId, 'device', [syncEdit], transaction)).receipts[0]).toMatchObject({ status: 'rejected', code: 'NOT_FOUND' });
+    const ownSyncEdit = action(target, { actionType: 'edit_entry', payload: { ...timed, value: 10.6, entryId: entry.id }, expectedVersion: 99 });
+    expect((await processSessionSyncBatch(samePersonNewSession, eventId, 'device', [ownSyncEdit], transaction)).receipts[0].status).toBe('accepted');
+  });
+
+  it('keeps helper corrections person-level while the host retains the override', async () => {
+    const target = await ready();
+    const helperUser = await pool.query<{ id: string }>("INSERT INTO users (auth0_id, name, email) VALUES ('auth|Helper','Helper','helper@test.example') RETURNING id");
+    const helperWorkspace = await pool.query<{ id: string }>("INSERT INTO workspaces (name) VALUES ('Helper club') RETURNING id");
+    await pool.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1,$2,'coach')", [helperWorkspace.rows[0].id, helperUser.rows[0].id]);
+    const helperInvitation = await pool.query<{ id: string }>("INSERT INTO event_helper_invitations (event_id, secret_hash, human_code, created_by) VALUES ($1,'helper-secret','HELPC0DE',$2) RETURNING id", [eventId, host.userId]);
+    await pool.query("INSERT INTO event_helper_grants (event_id, auth0_sub, invitation_id) VALUES ($1,'auth|Helper',$2)", [eventId, helperInvitation.rows[0].id]);
+    const helper: Extract<MeetActor, { userId: string }> = { userId: helperUser.rows[0].id, workspaceId: helperWorkspace.rows[0].id, role: 'coach' };
+
+    const own = await createSessionEntry(helper, eventId, target, timed, transaction);
+    const hostEntry = await createSessionEntry(host, eventId, target, { ...timed, value: 10.9 }, transaction);
+
+    await mutateSessionEntry(helper, eventId, target, own.id, { ...timed, value: 11, expectedVersion: 1 }, false, transaction);
+    await expect(mutateSessionEntry(helper, eventId, target, hostEntry.id, { ...timed, value: 10, expectedVersion: 1 }, false, transaction)).rejects.toMatchObject({ status: 404 });
+    await mutateSessionEntry(host, eventId, target, own.id, { ...timed, value: 11.1, expectedVersion: 2 }, false, transaction);
   });
 
   it('atomically finalizes official results, places and individual statistics; rolls back and reopens/refinalizes', async () => {
@@ -462,5 +555,103 @@ describeDB('multi-discipline migration and domain integration', () => {
     else await expect(selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ code: 'DERIVED_RESULT_ONLY' });
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ discipline: code, direction: d.direction, pb: value, sb: value });
+  });
+
+  it('keeps host statistics visible when the host fixture row is stale and gates progression on finalization', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    const d = await definition('100m');
+    const s = await createSession(host, eventId, { disciplineDefinitionId: d.id, label: 'Final' }, transaction);
+    const en = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const target = { disciplineSessionId: s.id, entrantId: en.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    const entry = await createSessionEntry(host, eventId, target, timed, transaction);
+    await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    const { getDisciplineProgression } = await import('./disciplineProgression.js');
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+
+    // A revision advance used to leave the host row's accepted_revision behind,
+    // silently hiding host-club results from statistics.
+    await pool.query("UPDATE event_fixture_workspaces SET accepted_revision = 99 WHERE event_id = $1 AND role = 'host'", [eventId]);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ pb: 11.25, sb: 11.25 });
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+
+    const unfinished = await createSession(host, eventId, { disciplineDefinitionId: d.id, label: 'Still running' }, transaction);
+    await registerEntrant(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, transaction);
+    await open(unfinished.id);
+    const pending = await createSessionEntry(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, timed, transaction);
+    await selectSessionResultEntry(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, { entryId: pending.id, expectedVersion: 1 }, transaction);
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+  });
+
+  it('propagates finalized 100m session results into every comparison and statistics surface', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    const secondAthleteId = (await pool.query<{ id: string }>(
+      'INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1,$2,$3) RETURNING id',
+      [host.workspaceId, host.userId, 'Second athlete'],
+    )).rows[0].id;
+    await pool.query(
+      `INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id)
+       SELECT $1, definition.id FROM discipline_definitions definition WHERE definition.code = '100m'`,
+      [secondAthleteId],
+    );
+    const s = await session('100m', 'Final');
+    const first = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const second = await createEntrant(host, eventId, { kind: 'athlete', athleteId: secondAthleteId }, transaction);
+    const firstTarget = { disciplineSessionId: s.id, entrantId: first.id };
+    const secondTarget = { disciplineSessionId: s.id, entrantId: second.id };
+    for (const target of [firstTarget, secondTarget]) await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    const firstEntry = await createSessionEntry(host, eventId, firstTarget, timed, transaction);
+    const secondEntry = await createSessionEntry(host, eventId, secondTarget, { ...timed, value: 10.9 }, transaction);
+    await selectSessionResultEntry(host, eventId, firstTarget, { entryId: firstEntry.id, expectedVersion: 1 }, transaction);
+    await selectSessionResultEntry(host, eventId, secondTarget, { entryId: secondEntry.id, expectedVersion: 1 }, transaction);
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+
+    const { getMultiAthleteComparison, getCrossClubMultiAthleteComparison } = await import('./comparison.js');
+    const comparison = await getMultiAthleteComparison(host.workspaceId, [athleteId, secondAthleteId], transaction, allSeasons);
+    expect(comparison.athletes.map((athlete) => athlete.pb)).toEqual([11.25, 10.9]);
+    expect(comparison.athletes[0]).toMatchObject({ validResultCount: 1, totalResultCount: 1, latestEffectiveResult: 11.25 });
+    expect(comparison.athletes[0].disciplines.find((discipline) => discipline.discipline === '100m')).toMatchObject({
+      pb: 11.25, validResultCount: 1, progression: [{ date: '2026-09-01', result: 11.25 }],
+    });
+
+    await pool.query(
+      'INSERT INTO clubs (workspace_id, name, public_results_enabled) VALUES ($1,$2,true),($3,$2,true)',
+      [host.workspaceId, 'Published', other.workspaceId],
+    );
+    const crossClub = await getCrossClubMultiAthleteComparison([athleteId, otherAthleteId], transaction, allSeasons);
+    expect(crossClub.athletes.map((athlete) => athlete.pb)).toEqual([11.25, null]);
+    expect(crossClub.athletes[1].disciplines.find((discipline) => discipline.discipline === '100m')).toMatchObject({
+      pb: null, validResultCount: 0, progression: [],
+    });
+
+    const { getClubStatistics } = await import('./clubs.js');
+    const hostClubId = (await pool.query<{ id: string }>('SELECT id FROM clubs WHERE workspace_id = $1', [host.workspaceId])).rows[0].id;
+    expect(await getClubStatistics(hostClubId, pool, allSeasons)).toMatchObject({
+      distinctAthletesWithValidResults: 2, valid100mResultCount: 2, fastestValidTime: 10.9,
+    });
+
+    const stats = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction, allSeasons);
+    expect(stats).toMatchObject({ pb: 11.25, latestResult: 11.25, latestOutcome: 'valid' });
+    expect(stats.resultCounts.allTime).toBe(1);
+    expect(stats.latest).toMatchObject({ effectiveResult: 11.25, effectiveOutcome: 'valid' });
+
+    const { getAthleteProgressionDetail } = await import('./progression.js');
+    const progression = await getAthleteProgressionDetail(host.workspaceId, athleteId, {}, transaction, allSeasons);
+    expect(progression.summary).toEqual({ allTimePb: 11.25, totalResults: 1, totalValid: 1 });
+    expect(progression.entries[0]).toMatchObject({
+      effectiveResult: 11.25, effectiveOutcome: 'valid', countsTowardsStatistics: true, isNewPb: true,
+    });
+
+    const { getDashboardSummary } = await import('./dashboard.js');
+    const dashboard = await getDashboardSummary(host.workspaceId, '2026-09-01', transaction, allSeasons);
+    expect(dashboard.seasonPbs).toBe(2);
+    expect(dashboard.rosterSnapshot.find((athlete) => athlete.athleteId === athleteId)).toMatchObject({ discipline: '100m', pb: 11.25 });
+    expect(dashboard.recentResults.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
+    expect(dashboard.recentPbs.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
   });
 });

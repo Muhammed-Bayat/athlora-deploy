@@ -38,7 +38,9 @@ function validateAthleteIds(athleteIds: unknown): string[] {
 
 const PROGRESSION_SELECT = `
   WITH effective AS (
-    SELECT r.*,
+    SELECT r.event_id, r.athlete_id, r.discipline, r.final_result, r.unit, r.placing,
+           r.is_pb, r.is_sb, r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
+           r.outcome, r.override_at,
            a.name AS athlete_name,
            COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
            a.archived_at AS athlete_archived_at,
@@ -72,6 +74,53 @@ const PROGRESSION_SELECT = `
          JOIN event_participants ep ON ep.event_id = fw.event_id
            AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
          WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+           AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+       ))
+        AND e.status <> 'cancelled'
+        AND e.date >= $4::date AND e.date < $5::date
+    UNION ALL
+    SELECT r.event_id, en.athlete_id, d.code, r.final_result, r.unit,
+           NULL::int AS placing, false AS is_pb, false AS is_sb,
+           r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
+           r.outcome, r.override_at,
+           a.name AS athlete_name,
+           COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
+           a.archived_at AS athlete_archived_at,
+           e.title AS event_title,
+           e.type AS event_type,
+           d.code AS event_discipline,
+           e.date AS event_date,
+           e.time AS event_time,
+           e.location_name AS event_location_name,
+           e.status AS event_status,
+           e.created_at AS event_created_at,
+           CASE
+             WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+             WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+               THEN r.manual_override
+             ELSE r.final_result
+           END AS effective_result,
+           CASE
+             WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+             WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+             ELSE r.outcome
+           END AS effective_outcome
+    FROM session_results r
+    JOIN discipline_sessions s ON s.id = r.session_id
+    JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+    JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+    JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+    JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
+    JOIN events e ON e.id = r.event_id
+     WHERE en.athlete_id = $1
+       AND d.code = $3
+       AND r.workspace_id = $2
+       AND s.result_state = 'final' AND s.status = 'completed'
+       AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+       AND se.withdrawn_at IS NULL
+       AND (e.workspace_id = r.workspace_id OR EXISTS (
+         SELECT 1 FROM event_fixture_workspaces fw
+         WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
         AND e.status <> 'cancelled'
@@ -165,7 +214,31 @@ async function fetchAthleteDisciplineStatistics(
             WHERE fw.event_id = e.id AND fw.workspace_id = $4 AND fw.role = 'guest'
               AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
           ))
-        ORDER BY r.discipline, e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC`, [
+        UNION ALL
+        SELECT d.code AS discipline, d.presentation->>'label' AS label, d.unit, d.precision, d.direction,
+               e.date::text AS event_date, e.time::text AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result
+        FROM session_results r
+        JOIN discipline_sessions s ON s.id = r.session_id
+        JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+        JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+        JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+        JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
+        JOIN events e ON e.id = r.event_id
+        WHERE en.athlete_id = $1
+          AND r.workspace_id = $4
+          AND s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+          AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+          AND se.withdrawn_at IS NULL
+          AND r.outcome NOT IN ('dq', 'dnf', 'dns')
+          AND (r.manual_override IS NOT NULL AND r.manual_override > 0 OR r.final_result IS NOT NULL)
+          AND e.date >= $2::date AND e.date < $3::date
+          AND (e.workspace_id = r.workspace_id OR EXISTS (
+            SELECT 1 FROM event_fixture_workspaces fw
+            WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+          ))
+        ORDER BY discipline, event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC`, [
       athleteId,
       season.selected === 'all' ? '0001-01-01' : season.startDate!,
       season.selected === 'all' ? '9999-12-31' : season.endDate!,

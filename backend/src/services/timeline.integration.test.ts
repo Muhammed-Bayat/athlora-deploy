@@ -7,6 +7,13 @@ import type { EventType } from '../types/domain.js';
 import type { TimelineEntryCreatePayload } from '../validation/payloads.js';
 import { cancelEvent, replaceEvent } from './events.js';
 import {
+  createPublicLoggerEntry,
+  hashPublicLoggerToken,
+  publicLoggerSnapshot,
+  removePublicLoggerEntry,
+  updatePublicLoggerEntry,
+} from './publicLoggers.js';
+import {
   createTimelineEntry,
   listTimelineEntries,
   removeTimelineEntry,
@@ -15,18 +22,6 @@ import {
 
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
-const TABLES = [
-  ...MEET_TEST_TABLES,
-  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
-  'account_deletions',
-  'results',
-  'timeline_entries',
-  'event_participants',
-  'events',
-  'athletes',
-  'users',
-  'schema_migrations',
-];
 
 describeDB('timeline entries against a real database', () => {
   let pool: pg.Pool;
@@ -61,7 +56,7 @@ describeDB('timeline entries against a real database', () => {
   afterEach(async () => {
     const client = await pool.connect();
     try {
-      await client.query(`DROP TABLE IF EXISTS ${TABLES.join(', ')} CASCADE`);
+      await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     } finally {
       client.release();
     }
@@ -75,7 +70,10 @@ describeDB('timeline entries against a real database', () => {
        RETURNING id`,
       [`auth0|timeline-${suffix}`, `Coach ${suffix}`, `timeline-${suffix}@example.com`],
     );
-    return rows[0].id;
+    const coachId = rows[0].id;
+    await pool.query('INSERT INTO workspaces (id, name) VALUES ($1, $2)', [coachId, `Coach ${suffix}`]);
+    await pool.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'coach')", [coachId, coachId]);
+    return coachId;
   }
 
   async function seedEvent(
@@ -86,8 +84,8 @@ describeDB('timeline entries against a real database', () => {
     date = '2026-09-01',
   ): Promise<string> {
     const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO events (created_by, type, discipline, title, date, status)
-       VALUES ($1, $2, '100m', $3, $4, $5)
+      `INSERT INTO events (workspace_id, created_by, type, discipline, title, date, status)
+       VALUES ($1, $1, $2, '100m', $3, $4, $5)
        RETURNING id`,
       [coachId, type, `Sprint ${suffix}`, date, status],
     );
@@ -439,5 +437,81 @@ describeDB('timeline entries against a real database', () => {
     const entries = await pool.query(`SELECT 1 FROM timeline_entries`);
     expect(entries.rowCount).toBe(0);
   });
+
+  it('limits legacy corrections to the recording club while the host keeps an override', async () => {
+    const hostCoachId = await seedCoach('recorder-host');
+    const guestCoachId = await seedCoach('recorder-guest');
+    const eventId = await seedEvent(hostCoachId, 'Recorder meet');
+    const athleteId = await seedAthlete(hostCoachId, 'Recorder Runner');
+    await pool.query(
+      'INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,\'yes\')',
+      [eventId, athleteId, hostCoachId],
+    );
+    await pool.query(
+      "INSERT INTO event_fixture_workspaces (event_id, workspace_id, role, status, contact_email, joined_by) VALUES ($1,$2,'guest','accepted','guest@example.com',$3)",
+      [eventId, guestCoachId, guestCoachId],
+    );
+
+    const hostEntry = await createTimelineEntry(hostCoachId, eventId, attempt(athleteId, 11.2), runTransaction);
+    const guestEntry = await createTimelineEntry(guestCoachId, eventId, attempt(athleteId, 11.4), runTransaction, guestCoachId);
+
+    await expect(updateTimelineEntry(
+      guestCoachId, eventId, hostEntry.id, { expectedVersion: 1, value: 11 }, runTransaction,
+    )).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    await expect(removeTimelineEntry(
+      guestCoachId, eventId, hostEntry.id, { expectedVersion: 1 }, runTransaction,
+    )).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+
+    await updateTimelineEntry(hostCoachId, eventId, guestEntry.id, { expectedVersion: 1, value: 11.3 }, runTransaction);
+    await updateTimelineEntry(guestCoachId, eventId, guestEntry.id, { expectedVersion: 2, value: 11.35 }, runTransaction);
+
+    expect(Object.fromEntries((await listTimelineEntries(hostCoachId, eventId, pool)).map((entry) => [entry.id, [entry.canEdit, entry.canUndo]])))
+      .toEqual({ [hostEntry.id]: [true, true], [guestEntry.id]: [true, true] });
+    expect(Object.fromEntries((await listTimelineEntries(guestCoachId, eventId, pool)).map((entry) => [entry.id, [entry.canEdit, entry.canUndo]])))
+      .toEqual({ [hostEntry.id]: [false, false], [guestEntry.id]: [true, true] });
+    expect((await pool.query('SELECT recorded_workspace_id FROM timeline_entries WHERE id = $1', [hostEntry.id])).rows)
+      .toEqual([{ recorded_workspace_id: hostCoachId }]);
+    expect((await pool.query('SELECT recorded_workspace_id FROM timeline_entries WHERE id = $1', [guestEntry.id])).rows)
+      .toEqual([{ recorded_workspace_id: guestCoachId }]);
+  });
+
+  it('keeps legacy public logger corrections with the person across sessions', async () => {
+    const coachId = await seedCoach('public-recorder');
+    const eventId = await seedEvent(coachId, 'Public link meet');
+    const athleteId = await seedAthlete(coachId, 'Public Runner');
+    await pool.query(
+      'INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id) VALUES ($1,$2,$3)',
+      [eventId, athleteId, coachId],
+    );
+    const link = await pool.query<{ id: string }>(
+      "INSERT INTO public_logger_links (event_id, token_hash, created_by) VALUES ($1,'legacy-link-hash',$2) RETURNING id",
+      [eventId, coachId],
+    );
+
+    const openSession = async (token: string, loggerName: string, loggerClub: string) => {
+      await pool.query(
+        `INSERT INTO public_logger_sessions (link_id, event_id, token_hash, logger_name, logger_club, expires_at)
+         VALUES ($1,$2,$3,$4,$5,now()+interval '1 hour')`,
+        [link.rows[0].id, eventId, hashPublicLoggerToken(token), loggerName, loggerClub],
+      );
+    };
+    await openSession('official-first', ' Official ', 'Club');
+    const created = await createPublicLoggerEntry('official-first', eventId, attempt(athleteId, 11.2), runTransaction);
+
+    await openSession('official-second', 'official', 'CLUB');
+    const returning = await publicLoggerSnapshot('official-second', eventId, pool);
+    expect(returning.timeline.map((entry) => [entry.canEdit, entry.canUndo])).toEqual([[true, true]]);
+    expect((await updatePublicLoggerEntry('official-second', eventId, created.id, { expectedVersion: 1, value: 11.1 }, runTransaction)).value).toBe(11.1);
+
+    await openSession('someone-else', 'Someone else', 'Club');
+    const stranger = await publicLoggerSnapshot('someone-else', eventId, pool);
+    expect(stranger.timeline.every((entry) => !entry.canEdit && !entry.canUndo)).toBe(true);
+    await expect(updatePublicLoggerEntry('someone-else', eventId, created.id, { expectedVersion: 2, value: 11 }, runTransaction))
+      .rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    await expect(removePublicLoggerEntry('someone-else', eventId, created.id, { expectedVersion: 2 }, runTransaction))
+      .rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+
+    await removePublicLoggerEntry('official-second', eventId, created.id, { expectedVersion: 2 }, runTransaction);
+    expect((await publicLoggerSnapshot('official-first', eventId, pool)).timeline).toEqual([]);
+  });
 });
-import { MEET_TEST_TABLES } from '../db/meet-test-tables.js';

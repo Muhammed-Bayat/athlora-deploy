@@ -119,7 +119,7 @@ describe('timeline service', () => {
     expect(created).toMatchObject({ id: ENTRY_ID, athleteId: ATHLETE_ID, value: 11.2, version: 1 });
     const insert = query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO timeline_entries'));
     expect(insert?.[1]).toEqual([
-      EVENT_ID, ATHLETE_ID, '100m', 'attempt', 11.2, 'seconds', false, null, null, USER_ID, null,
+      EVENT_ID, ATHLETE_ID, '100m', 'attempt', 11.2, 'seconds', false, null, null, USER_ID, USER_ID, null,
     ]);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('ON CONFLICT'))).toBe(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('SET "placing"'))).toBe(true);
