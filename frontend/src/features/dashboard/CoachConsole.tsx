@@ -21,6 +21,7 @@ import { OfflineIndicator } from '../../components/OfflineIndicator';
 import { ClubBadge } from '../../components/ClubBadge';
 import { Select } from '../../components';
 import type { ClubBrandSummary } from '../../types';
+import { AthloraAssistantProvider } from '../assistant/AthloraAssistantProvider';
 import type { ConsoleView, WeatherPreset } from './consoleData';
 import styles from './CoachConsole.module.css';
 
@@ -510,6 +511,7 @@ export function CoachConsole() {
   if (weather === 'snow') sceneLayers.push('snow');
 
   return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-night={weatherEnabled && isNight ? true : undefined} data-weather-enabled={weatherEnabled}>
+    <AthloraAssistantProvider>
     <div className={styles.weatherScene} aria-hidden="true">
       <WeatherCanvas layers={sceneLayers} precipitation={weatherPrecipitation} reducedMotion={reducedMotion} />
       {weather === 'storm' && <i className={styles.lightning} />}
@@ -560,5 +562,6 @@ export function CoachConsole() {
       </main>
     </div>
     <nav className={styles.mobileNav} aria-label="Mobile coach console">{NAV.map((item) => <button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)} key={item.id}><i><ConsoleIcon name={item.icon} /></i>{item.shortLabel}</button>)}</nav>
+    </AthloraAssistantProvider>
   </div>;
 }

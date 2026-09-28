@@ -29,6 +29,7 @@ import publicStatisticsRouter from './publicStatistics.js';
 import publicScheduleRouter from './publicSchedule.js';
 import meetsRouter, { disciplinesRouter } from './meets.js';
 import publicMeetsRouter from './publicMeets.js';
+import analyticsRouter from './analytics.js';
 import { acceptWorkspaceInvitation } from '../controllers/workspaces.js';
 import { resolveApplicationUser, resolveLocalApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
@@ -118,6 +119,7 @@ router.use(
   athletesRouter,
 );
 router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
+router.use('/analytics', verifyAuth0Token, resolveApplicationUser, analyticsRouter);
 router.use('/preferences', verifyAuth0Token, resolveApplicationUser, preferencesRouter);
 router.use('/squads', verifyAuth0Token, resolveApplicationUser, squadsRouter);
 router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
