@@ -20,12 +20,6 @@ export const DASHBOARD_CARDS: readonly DashboardCardMeta[] = [
     required: true,
   },
   {
-    id: 'hero',
-    label: 'Summary hero',
-    description: 'Greeting and headline roster numbers.',
-    required: true,
-  },
-  {
     id: 'status-attention',
     label: 'Status attention',
     description: 'Inactive athletes and pending status reviews.',

@@ -35,7 +35,7 @@ describe('user preferences service', () => {
     );
   });
 
-  it('strips unknown card ids and reinserts missing known cards on read', async () => {
+  it('strips retired hero and unknown card ids and reinserts missing known cards on read', async () => {
     query.mockResolvedValueOnce({
       rows: [{
         dashboard_card_order: ['hero', 'retired-card', 'season-selector'],
@@ -47,8 +47,8 @@ describe('user preferences service', () => {
     const preferences = await getDashboardPreferences(USER_ID, WORKSPACE_ID);
     const order = preferences.dashboardCardOrder;
     expect(order).not.toContain('retired-card');
-    expect(order[0]).toBe('hero');
-    expect(order[1]).toBe('season-selector');
+    expect(order[0]).toBe('season-selector');
+    expect(order).not.toContain('hero');
     for (const card of DEFAULT_DASHBOARD_CARD_ORDER) {
       expect(order).toContain(card);
     }

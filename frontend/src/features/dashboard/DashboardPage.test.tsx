@@ -17,7 +17,6 @@ vi.mock('../../api/preferences', () => preferencesApi);
 const DEFAULT_PREFERENCES: UserPreferences = {
   dashboardCardOrder: [
     'season-selector',
-    'hero',
     'status-attention',
     'stats',
     'roster-snapshot',
@@ -150,17 +149,16 @@ describe('DashboardPage', () => {
     expect(props.onSummaryLoaded).toHaveBeenCalledWith(EMPTY_SUMMARY);
   });
 
-  it('renders onboarding actions for an empty summary', async () => {
+  it('renders roster onboarding without an upcoming-events CTA', async () => {
     const user = userEvent.setup();
     const props = callbacks();
     render(<DashboardPage {...props} />);
 
     expect(await screen.findByRole('heading', { name: 'No athletes yet' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'No upcoming events' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No upcoming events' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open roster' }));
-    await user.click(screen.getByRole('button', { name: 'Open events' }));
     expect(props.onOpenRoster).toHaveBeenCalledOnce();
-    expect(props.onOpenEvents).toHaveBeenCalledOnce();
+    expect(props.onOpenEvents).not.toHaveBeenCalled();
   });
 
   it('preserves populated summary ordering and opens exact athletes and events', async () => {
@@ -195,6 +193,17 @@ describe('DashboardPage', () => {
     expect(within(hero).getByText('Local time')).toBeInTheDocument();
     expect(within(hero).getByText('Active roster')).toBeInTheDocument();
     expect(hero).toHaveTextContent('2 athletes active in your roster');
+  });
+
+  it('places the summary hero before season controls and dashboard cards', async () => {
+    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
+    render(<DashboardPage {...callbacks()} />);
+
+    const hero = await screen.findByRole('region', { name: 'Performance. In motion.' });
+    const seasonSelector = screen.getByRole('button', { name: /Season:/ });
+    const roster = screen.getByRole('region', { name: 'Roster snapshot' });
+    expect(hero.compareDocumentPosition(seasonSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hero.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('cleans up the summary hero clock when it unmounts', async () => {
@@ -324,7 +333,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Customize dashboard' })).toBeInTheDocument();
   });
 
-  it('saves and applies named dashboard views', async () => {
+  it('does not render saved dashboard views while preserving them during customization', async () => {
     preferencesApi.getDashboardPreferences.mockResolvedValue({
       ...DEFAULT_PREFERENCES,
       dashboardSavedFilters: [
@@ -335,20 +344,15 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
     render(<DashboardPage {...callbacks()} />);
 
-    await screen.findByRole('region', { name: 'Saved dashboard views' });
-    const nameInput = screen.getByPlaceholderText('Name this view');
-    await user.type(nameInput, 'Sprint block');
-    await user.click(screen.getByRole('button', { name: 'Save view' }));
+    await screen.findByRole('region', { name: 'Performance. In motion.' });
+    expect(screen.queryByRole('region', { name: 'Saved dashboard views' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Name this view')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Customize dashboard' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalled());
     const saved = preferencesApi.putDashboardPreferences.mock.calls[0][0] as UserPreferences;
-    expect(saved.dashboardSavedFilters).toHaveLength(2);
-    expect(saved.dashboardSavedFilters[1]).toMatchObject({ name: 'Sprint block', surface: 'dashboard' });
-
-    await user.click(screen.getByRole('button', { name: 'All-time' }));
-    expect(screen.getByPlaceholderText('Name this view')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Delete saved view All-time' }));
-    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalledTimes(2));
-    const afterDelete = preferencesApi.putDashboardPreferences.mock.calls[1][0] as UserPreferences;
-    expect(afterDelete.dashboardSavedFilters.map((preset) => preset.id)).not.toContain('view-1');
+    expect(saved.dashboardSavedFilters).toEqual([
+      { id: 'view-1', surface: 'dashboard', name: 'All-time', filters: { season: 'all' } },
+    ]);
   });
 });

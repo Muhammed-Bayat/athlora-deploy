@@ -7,7 +7,6 @@ import type {
   DashboardActiveEvent,
   DashboardSummary,
   DashboardTimelineEntry,
-  SavedFilterPreset,
   UserPreferences,
 } from '../../types';
 import { format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
@@ -16,7 +15,6 @@ import { SeasonSelector } from '../../components';
 import { seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import styles from './DashboardPage.module.css';
 import { CustomizeDashboardDialog } from './CustomizeDashboardDialog';
-import { SavedDashboardFilters } from './SavedDashboardFilters';
 import { useDashboardPreferences, visibleCards } from './useDashboardPreferences';
 
 export interface DashboardPageProps {
@@ -383,9 +381,6 @@ function SummaryDashboard({
   preferences,
   onCustomizeOpen,
   onApplySeason,
-  onSaveView,
-  onDeleteView,
-  saving,
 }: {
   summary: DashboardSummary;
   season: SeasonValue;
@@ -396,9 +391,6 @@ function SummaryDashboard({
   preferences: UserPreferences;
   onCustomizeOpen: () => void;
   onApplySeason: (value: SeasonValue) => void;
-  onSaveView: (name: string) => Promise<boolean>;
-  onDeleteView: (presetId: string) => Promise<boolean>;
-  saving: boolean;
 }) {
   const visible = visibleCards(preferences.dashboardCardOrder, preferences.dashboardHiddenCards);
   const cards = new Set(visible);
@@ -413,23 +405,6 @@ function SummaryDashboard({
               Customize dashboard
             </button>
           </div>
-        );
-      case 'hero':
-        return (
-          <section key={id} className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
-            <SummaryHeroCopy summary={summary} />
-            <div className={styles.summaryOrbit} aria-hidden="true">
-              <div className={styles.orbitTrack}>
-                <svg viewBox="0 0 290 180" fill="none">
-                  <ellipse cx="145" cy="90" rx="118" ry="55" />
-                  <ellipse cx="145" cy="90" rx="90" ry="40" />
-                  <ellipse cx="145" cy="90" rx="60" ry="26" />
-                </svg>
-                <i /><i /><i />
-              </div>
-              <p><strong>{summary.activeAthletesCount}</strong> athlete{summary.activeAthletesCount === 1 ? '' : 's'} active in your roster</p>
-            </div>
-          </section>
         );
       case 'status-attention':
         return (
@@ -486,20 +461,25 @@ function SummaryDashboard({
 
   return (
     <>
-      {(summary.athletesCount === 0 || summary.upcomingEventCount === 0) && (
+      <section className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
+        <SummaryHeroCopy summary={summary} />
+        <div className={styles.summaryOrbit} aria-hidden="true">
+          <div className={styles.orbitTrack}>
+            <svg viewBox="0 0 290 180" fill="none">
+              <ellipse cx="145" cy="90" rx="118" ry="55" />
+              <ellipse cx="145" cy="90" rx="90" ry="40" />
+              <ellipse cx="145" cy="90" rx="60" ry="26" />
+            </svg>
+            <i /><i /><i />
+          </div>
+          <p><strong>{summary.activeAthletesCount}</strong> athlete{summary.activeAthletesCount === 1 ? '' : 's'} active in your roster</p>
+        </div>
+      </section>
+      {summary.athletesCount === 0 && (
         <section className={styles.onboarding} aria-label="Dashboard setup">
           {summary.athletesCount === 0 && <div><h2>No athletes yet</h2><p>Add athletes to build your roster and track their performances.</p><button type="button" onClick={onOpenRoster}>Open roster</button></div>}
-          {summary.upcomingEventCount === 0 && <div><h2>No upcoming events</h2><p>Plan a competition or training session for your squad.</p><button type="button" onClick={onOpenEvents}>Open events</button></div>}
         </section>
       )}
-      <SavedDashboardFilters
-        preferences={preferences}
-        season={season}
-        saving={saving}
-        onApply={onApplySeason}
-        onSaveCurrent={onSaveView}
-        onDelete={onDeleteView}
-      />
       {visible.map((id) => renderCard(id))}
       {!cards.has('season-selector') && (
         <div className={styles.dashboardToolbar}>
@@ -544,26 +524,6 @@ export function DashboardPage(props: DashboardPageProps) {
     return () => { current = false; };
   }, [reloadKey, season]);
 
-  const saveCurrentView = async (name: string): Promise<boolean> => {
-    const preset: SavedFilterPreset = {
-      id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-        ? crypto.randomUUID()
-        : `view-${Date.now()}`,
-      surface: 'dashboard',
-      name,
-      filters: { season },
-    };
-    return preferencesState.save({
-      ...preferencesState.preferences,
-      dashboardSavedFilters: [...preferencesState.preferences.dashboardSavedFilters, preset],
-    });
-  };
-
-  const deleteView = async (presetId: string): Promise<boolean> => preferencesState.save({
-    ...preferencesState.preferences,
-    dashboardSavedFilters: preferencesState.preferences.dashboardSavedFilters.filter((preset) => preset.id !== presetId),
-  });
-
   if (!summary && !loadError) {
     return <section className={styles.dashboard} aria-busy="true"><div className={styles.loading} role="status" aria-live="polite"><span /><span /><span /><p>Loading dashboard...</p></div></section>;
   }
@@ -596,9 +556,6 @@ export function DashboardPage(props: DashboardPageProps) {
           preferences={preferencesState.preferences}
           onCustomizeOpen={() => setCustomizeOpen(true)}
           onApplySeason={setSeason}
-          onSaveView={saveCurrentView}
-          onDeleteView={deleteView}
-          saving={preferencesState.saving}
         />
       )}
       {customizeOpen && (

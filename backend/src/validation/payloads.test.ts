@@ -822,7 +822,6 @@ describe('club branding payload', () => {
 describe('user preferences payload', () => {
   const defaultOrder = [
     'season-selector',
-    'hero',
     'status-attention',
     'stats',
     'roster-snapshot',
@@ -846,9 +845,9 @@ describe('user preferences payload', () => {
 
   it('parses reordered cards, hidden cards, and named presets', () => {
     const order = [...defaultOrder];
-    const [stats, hero] = [order[3], order[1]];
-    order[1] = stats;
-    order[3] = hero;
+    const [stats, seasonSelector] = [order[3], order[0]];
+    order[0] = stats;
+    order[3] = seasonSelector;
 
     expect(parseUserPreferencesPayload({
       dashboardCardOrder: order,
@@ -883,7 +882,7 @@ describe('user preferences payload', () => {
 
   it('rejects incomplete or unknown card ids and required cards in the hidden list', () => {
     expectValidationError(() => parseUserPreferencesPayload({
-      dashboardCardOrder: defaultOrder.slice(0, 8),
+      dashboardCardOrder: defaultOrder.slice(0, 7),
       dashboardHiddenCards: [],
       dashboardSavedFilters: [],
     }), [
@@ -897,7 +896,7 @@ describe('user preferences payload', () => {
     }), [
       { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Card order must list every known card exactly once' },
       { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Missing required card id recent-pbs' },
-      { path: 'dashboardCardOrder.8', code: 'invalid_value', message: 'Unknown dashboard card id' },
+      { path: 'dashboardCardOrder.7', code: 'invalid_value', message: 'Unknown dashboard card id' },
       { path: 'dashboardHiddenCards.0', code: 'invalid_value', message: 'Unknown dashboard card id' },
     ]);
     expectValidationError(() => parseUserPreferencesPayload({
@@ -907,7 +906,7 @@ describe('user preferences payload', () => {
     }), [
       { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Card order must list every known card exactly once' },
       { path: 'dashboardCardOrder', code: 'invalid_value', message: 'Missing required card id recent-pbs' },
-      { path: 'dashboardCardOrder.8', code: 'invalid_value', message: 'Duplicate dashboard card id' },
+      { path: 'dashboardCardOrder.7', code: 'invalid_value', message: 'Duplicate dashboard card id' },
     ]);
   });
 
