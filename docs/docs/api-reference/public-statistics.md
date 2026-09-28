@@ -127,25 +127,25 @@ Relay `members` expose only ordered leg number, display name, and guest flag. Ra
 ## Detailed Statistics Reports
 
 ```
-GET /api/v1/public/statistics/report?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={age|under-age}
+GET /api/v1/public/statistics/report?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={5..100}
 GET /api/v1/public/statistics/report/disciplines
 ```
 
-The unauthenticated `/stats/report` page keeps these filters in its shareable URL and reads the endpoint live, so it never serves a stored private snapshot. Its searchable discipline selector reads `/report/disciplines`, which returns canonical `{ code, label }` values for every configured discipline. Selecting a discipline without eligible results shows the normal empty state. The report response includes completed legacy 100m results and completed/final individual session performances. Each row contains safe athlete and club names, discipline presentation, performance, public standing, event title and date. Cancelled events, archived athletes, provisional sessions, invalid outcomes, withdrawn registrations, guests, relays and unpublished clubs are excluded.
+The unauthenticated `/stats/report` page keeps these filters in its shareable URL and reads the endpoint live, so it never serves a stored private snapshot. `age` is an exact whole-number age from 5 to 100, calculated against each performance's event date; athletes without a recorded date of birth do not match an age-filtered report. Its searchable discipline selector reads `/report/disciplines`, which returns canonical `{ code, label }` values for every configured discipline. Selecting a discipline without eligible results shows the normal empty state. The report response includes completed legacy 100m results and completed/final individual session performances. Each row contains safe athlete and club names, discipline presentation, performance, public standing, event title and date. Cancelled events, archived athletes, provisional sessions, invalid outcomes, withdrawn registrations, guests, relays and unpublished clubs are excluded.
 
 The report page generates matching CSV and branded PDF downloads in the browser. CSV cells are quoted and values beginning with spreadsheet formulas are escaped. PDF and CSV exports contain the same filtered data displayed in the report.
 
 ## Athlete Leaderboard And Club Standings
 
 ```
-GET /api/v1/public/statistics/leaderboard?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={age|under-age}
+GET /api/v1/public/statistics/leaderboard?discipline={code}&season={year|all}&club={uuid}&gender={male|female}&age={5..100}
 GET /api/v1/public/statistics/standings?season={year|all}
 ```
 
-`/stats/leaderboard` ranks one eligible best performance per athlete and discipline. Timed disciplines rank lower values first; measured disciplines rank higher values first. Equal performances share standard competition places (`1, 1, 3`). The all-time scope uses each athlete's personal best; a selected season uses their season best. Legacy 100m and finalized individual session performances are included only when their club has published results.
+`/stats/leaderboard` ranks one eligible best performance per athlete and discipline. `age` uses the same exact, birthday-aware event-date calculation as reports. Timed disciplines rank lower values first; measured disciplines rank higher values first. Equal performances share standard competition places (`1, 1, 3`). The all-time scope uses each athlete's personal best; a selected season uses their season best. Legacy 100m and finalized individual session performances are included only when their club has published results.
 
 `/stats/standings` ranks public clubs across completed shared fixtures. A fixture must have an accepted guest at its current revision. Valid final individual and relay places earn 5 points for first, 3 for second, and 1 for third; relay points are awarded once to the relay's club. Clubs tie only when points, wins, second places, and third places all match. Private clubs, withdrawn teams, guests, and invalid or provisional results never appear.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report was documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report and exact public age filtering were documented with the assistance of OpenCode[gpt-5.6-terra].

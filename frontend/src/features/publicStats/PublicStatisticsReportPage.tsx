@@ -9,6 +9,7 @@ import styles from './PublicStatsPage.module.css';
 
 const filterKeys = ['discipline', 'season', 'club', 'gender', 'age'] as const;
 type FilterKey = typeof filterKeys[number];
+const exactAge = /^(?:[5-9]|[1-9]\d|100)$/;
 const genderOptions = [
   { value: '', label: 'All genders' },
   { value: 'male', label: 'Male' },
@@ -29,6 +30,12 @@ export function PublicStatisticsReportPage() {
   const [filterError, setFilterError] = useState('');
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const filters = Object.fromEntries(filterKeys.map((key) => [key, searchParams.get(key) || ''])) as Record<FilterKey, string>;
+  const [ageDraft, setAgeDraft] = useState(filters.age);
+  const ageError = ageDraft !== '' && !exactAge.test(ageDraft);
+
+  useEffect(() => {
+    setAgeDraft(filters.age);
+  }, [filters.age]);
 
   useEffect(() => {
     const request = ++clubSearchRequest.current;
@@ -57,6 +64,10 @@ export function PublicStatisticsReportPage() {
     if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
   });
+  const updateAge = (value: string) => {
+    setAgeDraft(value);
+    if (value === '' || exactAge.test(value)) updateFilter('age', value);
+  };
   const exportCsv = () => { setExporting('csv'); downloadFile(reportCsv(report.data), 'athlora-public-statistics-report.csv', 'text/csv;charset=utf-8'); setExporting(null); };
   const exportPdf = async () => { setExporting('pdf'); try { downloadFile(await reportPdf(report.data, filters), 'athlora-public-statistics-report.pdf', 'application/pdf'); } finally { setExporting(null); } };
   const athleteMetrics = Array.from(report.data.reduce((metrics, entry) => {
@@ -76,8 +87,9 @@ export function PublicStatisticsReportPage() {
         <label>Season<Select aria-label="Season" value={filters.season} onChange={(event) => updateFilter('season', event.target.value)} options={[{ value: '', label: 'All seasons' }, ...seasons.map((year) => ({ value: String(year), label: String(year) }))]} /></label>
         <label>Club<Select aria-label="Club" value={filters.club} onChange={(event) => updateFilter('club', event.target.value)} options={[{ value: '', label: 'All published clubs' }, ...clubs.map((club) => ({ value: club.id, label: club.name }))]} searchable searchPlaceholder="Search published clubs" emptyMessage="No published clubs match" onSearchChange={setClubSearch} /></label>
         <label>Gender<Select aria-label="Gender" value={filters.gender} onChange={(event) => updateFilter('gender', event.target.value)} options={genderOptions} /></label>
-        <label>Age category<Input type="number" min="5" max="100" value={filters.age} onChange={(event) => updateFilter('age', event.target.value)} /></label>
+        <label>Age<Input aria-invalid={ageError} type="number" min="5" max="100" step="1" inputMode="numeric" placeholder="Exact age" value={ageDraft} onChange={(event) => updateAge(event.target.value)} /></label>
       </div>
+      {ageError && <p className={styles.error} role="alert">Age must be a whole number from 5 to 100.</p>}
       {filterError && <p className={styles.error} role="alert">{filterError}</p>}
       <div className={styles.reportToolbar}><p aria-live="polite">{loading ? 'Loading report...' : `${report.meta.count} published performance${report.meta.count === 1 ? '' : 's'}`}</p><div className={styles.exportActions}><Button variant="secondary" onClick={exportCsv} disabled={loading || !report.data.length || exporting !== null}>Download CSV</Button><Button onClick={() => void exportPdf()} disabled={loading || !report.data.length || exporting !== null}>Download PDF</Button></div></div>
       {exporting && <p className={styles.loading} role="status">Preparing {exporting.toUpperCase()} download...</p>}

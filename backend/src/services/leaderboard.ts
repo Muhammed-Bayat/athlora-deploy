@@ -1,4 +1,5 @@
 import { getPool, type DbExecutor } from '../db/client.js';
+import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { parseSeasonYear } from './seasons.js';
 
@@ -27,12 +28,21 @@ export interface LeaderboardEntry {
   age: number | null;
 }
 
+function parseExactAge(value: string | undefined): number | null {
+  const age = value?.trim() ?? '';
+  if (!age) return null;
+  if (!/^(?:[5-9]|[1-9]\d|100)$/.test(age)) {
+    throw new ApiError(422, 'LEADERBOARD_FILTER_INVALID', 'Age filter is invalid');
+  }
+  return Number(age);
+}
+
 export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecutor = getPool()): Promise<LeaderboardEntry[]> {
   const season = parseSeasonYear(query.season);
   const discipline = query.discipline?.trim() || null;
   const clubId = query.club?.trim() || null;
   const gender = query.gender?.trim() || null;
-  const age = query.age?.trim() || null;
+  const age = parseExactAge(query.age);
 
   const legacyConditions = [
     "e.status = 'completed'",
@@ -78,19 +88,9 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
       sessionConditions.push(`a.gender ILIKE $${params.length}`);
   }
   if (age) {
-    const numericAge = Number(age);
-    if (!Number.isNaN(numericAge)) {
-      params.push(numericAge);
-        legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
-        sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
-    } else if (age.startsWith('under-')) {
-      const maxAge = Number(age.replace('under-', ''));
-      if (!Number.isNaN(maxAge)) {
-        params.push(maxAge);
-        legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer <= $${params.length}::integer`);
-        sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer <= $${params.length}::integer`);
-      }
-    }
+    params.push(age);
+    legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
+    sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
   }
 
   const sql = `

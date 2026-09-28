@@ -18,11 +18,19 @@ describe('public statistics report service', () => {
     expect(sql).toContain("r.outcome = 'valid'");
     expect(sql).toContain('FROM results r');
     expect(sql).toContain('UNION ALL');
+    expect(sql).toContain('EXTRACT(YEAR FROM age(e.date, a.dob))::integer =');
+    expect(query.mock.calls[0]?.[1]).toContain(20);
   });
 
   it('rejects invalid public filters before querying', async () => {
     const query = vi.fn();
     await expect(getPublicStatisticsReport({ gender: 'unknown' }, { query } as never)).rejects.toMatchObject({ code: 'REPORT_FILTER_INVALID' });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each(['under-20', '20.5', '4', '101', 'not-an-age'])('rejects invalid exact age %s before querying', async (age) => {
+    const query = vi.fn();
+    await expect(getPublicStatisticsReport({ age }, { query } as never)).rejects.toMatchObject({ code: 'REPORT_FILTER_INVALID' });
     expect(query).not.toHaveBeenCalled();
   });
 });

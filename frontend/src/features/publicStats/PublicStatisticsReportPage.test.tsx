@@ -73,6 +73,19 @@ describe('PublicStatisticsReportPage', () => {
     await waitFor(() => expect(getReport).toHaveBeenLastCalledWith(expect.objectContaining({ season: '2025' }), expect.anything()));
   });
 
+  it('applies an exact age after a valid whole number is entered', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/stats/report']}><PublicStatisticsReportPage /></MemoryRouter>);
+
+    const age = await screen.findByRole('spinbutton', { name: 'Age' });
+    await user.type(age, '2');
+    expect(screen.getByRole('alert')).toHaveTextContent('Age must be a whole number from 5 to 100');
+    expect(getReport).toHaveBeenLastCalledWith(expect.objectContaining({ age: '' }), expect.anything());
+
+    await user.type(age, '0');
+    await waitFor(() => expect(getReport).toHaveBeenLastCalledWith(expect.objectContaining({ age: '20' }), expect.anything()));
+  });
+
   it('keeps available filters when another filter source fails', async () => {
     const user = userEvent.setup();
     listDisciplines.mockRejectedValue(new Error('Unavailable'));

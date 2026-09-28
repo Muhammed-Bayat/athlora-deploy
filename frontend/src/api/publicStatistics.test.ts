@@ -78,9 +78,9 @@ describe('publicStatistics API', () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [], meta: { count: 0, generatedAt: '2026-09-25T00:00:00.000Z' } }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await publicStatistics.getPublicStatisticsReport({ discipline: '100m', season: '', gender: 'female' });
+    await publicStatistics.getPublicStatisticsReport({ discipline: '100m', season: '', gender: 'female', age: '20' });
 
-    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report?discipline=100m&gender=female');
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report?discipline=100m&gender=female&age=20');
   });
 
   it('gets public fixture standings for the selected season', async () => {
