@@ -532,12 +532,12 @@ When adding a new feature, tests should be written in the same session as the im
 
 ## 13. Stakeholder feedback
 
-Automated tests are complemented by manual stakeholder and user feedback. During Sprint 2, the client/stakeholder and users tested the deployed application and completed separate structured forms covering the product experience and improvement opportunities. The response evidence is retained with the Sprint records; feedback-to-issue/PR linkage is recorded only where that link is available.
+Automated tests are complemented by manual stakeholder and user feedback. During Sprints 2 and 3, the client/stakeholder and users tested the deployed application and completed separate structured forms covering the product experience and improvement opportunities. The response evidence is retained with the Sprint records; feedback-to-issue/PR linkage is recorded only where that link is available.
 
-The submitted response evidence and form links are retained in [Sprint 2 Stakeholder Feedback](./stakeholder-feedback) and [Sprint 2 User Feedback](./user-feedback). Manual feedback is not a substitute for unit, integration, end-to-end, or accessibility testing; it provides independent product perspectives alongside those automated quality gates.
+The submitted response evidence and form links are retained in [Stakeholder Feedback](./stakeholder-feedback) and [User Feedback](./user-feedback). Manual feedback is not a substitute for unit, integration, end-to-end, or accessibility testing; it provides independent product perspectives alongside those automated quality gates.
 
 ---
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence was documented with the assistance of OpenCode[openai/gpt-5.6-terra].
