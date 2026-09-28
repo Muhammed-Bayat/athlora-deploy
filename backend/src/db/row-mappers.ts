@@ -24,6 +24,7 @@ import {
   type AthleteStatistics,
   type AthleticsEvent,
   type DashboardActiveEvent,
+  type DashboardRosterDiscipline,
   type DashboardTimelineEntry,
   type DashboardUpcomingEvent,
   type EventParticipant,
@@ -248,17 +249,14 @@ export interface ProgressionEntryRow extends ResultRow {
 export interface RosterSnapshotRow {
   athlete_id: string;
   name: string;
-  squad_names?: unknown;
-  squad?: string | null;
-  discipline: string;
-  pb: NumericValue | null;
+  disciplines?: unknown;
 }
 
 export interface DashboardUpcomingEventRow {
   event_id: string;
   title: string;
   type: string;
-  discipline: string;
+  discipline: string | null;
   date: DateValue;
   time: string | null;
   location_name: string | null;
@@ -989,12 +987,29 @@ export function mapProgressionEntryRow(row: ProgressionEntryRow): ProgressionEnt
 }
 
 export function mapRosterSnapshotRow(row: RosterSnapshotRow): RosterSnapshotEntry {
+  if (row.disciplines !== undefined && !Array.isArray(row.disciplines)) {
+    return invalid('roster snapshot.disciplines', 'expected an array');
+  }
   return {
     athleteId: uuid(row.athlete_id, 'roster snapshot.athlete_id'),
     name: nonemptyString(row.name, 'roster snapshot.name'),
-    squadNames: row.squad_names === undefined ? [] : squadNames(row.squad_names, 'roster snapshot.squad_names'),
-    discipline: discipline(row.discipline, 'roster snapshot.discipline'),
-    pb: nullablePositiveNumeric(row.pb, 'roster snapshot.pb'),
+    disciplines: (row.disciplines ?? []).map((value, index): DashboardRosterDiscipline => {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return invalid(`roster snapshot.disciplines.${index}`, 'expected an object');
+      }
+      const item = value as Record<string, unknown>;
+      const precision = numeric(item.precision, `roster snapshot.disciplines.${index}.precision`);
+      if (!Number.isSafeInteger(precision) || precision < 0) {
+        return invalid(`roster snapshot.disciplines.${index}.precision`, 'expected a nonnegative integer');
+      }
+      return {
+        discipline: nonemptyString(item.discipline, `roster snapshot.disciplines.${index}.discipline`),
+        label: nonemptyString(item.label, `roster snapshot.disciplines.${index}.label`),
+        unit: enumValue(item.unit, ['seconds', 'metres', 'cm'] as const, `roster snapshot.disciplines.${index}.unit`),
+        precision,
+        pb: nullablePositiveNumeric(item.pb, `roster snapshot.disciplines.${index}.pb`),
+      };
+    }),
   };
 }
 
@@ -1005,7 +1020,7 @@ export function mapDashboardUpcomingEventRow(
     eventId: uuid(row.event_id, 'dashboard upcoming event.event_id'),
     title: nonemptyString(row.title, 'dashboard upcoming event.title'),
     type: enumValue(row.type, EVENT_TYPES, 'dashboard upcoming event.type'),
-    discipline: discipline(row.discipline, 'dashboard upcoming event.discipline'),
+    discipline: nullableString(row.discipline, 'dashboard upcoming event.discipline'),
     date: databaseDate(row.date, 'dashboard upcoming event.date'),
     time: nullableDatabaseTime(row.time, 'dashboard upcoming event.time'),
     locationName: nullableString(

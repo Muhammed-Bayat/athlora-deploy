@@ -2,32 +2,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import type { AthleteResultHistoryEntry, DashboardSummary, UserPreferences } from '../../types';
+import type { AthleteResultHistoryEntry, DashboardSummary } from '../../types';
 import { DashboardPage, type DashboardPageProps } from './DashboardPage';
 
 const dashboardApi = vi.hoisted(() => ({ getDashboardSummary: vi.fn() }));
 vi.mock('../../api/dashboard', () => dashboardApi);
-
-const preferencesApi = vi.hoisted(() => ({
-  getDashboardPreferences: vi.fn(),
-  putDashboardPreferences: vi.fn(),
-}));
-vi.mock('../../api/preferences', () => preferencesApi);
-
-const DEFAULT_PREFERENCES: UserPreferences = {
-  dashboardCardOrder: [
-    'season-selector',
-    'status-attention',
-    'stats',
-    'roster-snapshot',
-    'upcoming-events',
-    'pb-trend',
-    'recent-results',
-    'recent-pbs',
-  ],
-  dashboardHiddenCards: [],
-  dashboardSavedFilters: [],
-};
 
 const EMPTY_SUMMARY: DashboardSummary = {
   state: 'summary',
@@ -84,8 +63,8 @@ function populatedSummary(): DashboardSummary {
     upcomingEventCount: 2,
     seasonPbs: 4,
     rosterSnapshot: [
-      { athleteId: 'athlete-2', name: 'Zola Fast', squadNames: [], discipline: '100m', pb: null },
-      { athleteId: 'athlete-1', name: 'Ari Runner', squadNames: ['Sprint'], discipline: '100m', pb: 11.21 },
+      { athleteId: 'athlete-2', name: 'Zola Fast', disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: null }] },
+      { athleteId: 'athlete-1', name: 'Ari Runner', disciplines: [{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, pb: 11.21 }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, pb: 6.45 }] },
     ],
     upcomingEvents: [
       { eventId: 'event-2', title: 'Training Two', type: 'training', discipline: '100m', date: '2026-08-20', time: null, locationName: null, status: 'scheduled', athleteCount: 0 },
@@ -132,8 +111,6 @@ function callbacks(): DashboardPageProps {
 beforeEach(() => {
   vi.clearAllMocks();
   dashboardApi.getDashboardSummary.mockResolvedValue(EMPTY_SUMMARY);
-  preferencesApi.getDashboardPreferences.mockResolvedValue(DEFAULT_PREFERENCES);
-  preferencesApi.putDashboardPreferences.mockImplementation(async (payload: UserPreferences) => payload);
 });
 
 describe('DashboardPage', () => {
@@ -161,19 +138,23 @@ describe('DashboardPage', () => {
     expect(props.onOpenEvents).not.toHaveBeenCalled();
   });
 
-  it('preserves populated summary ordering and opens exact athletes and events', async () => {
+  it('shows a grouped athlete PB table without squad metadata and opens exact athletes and events', async () => {
     dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
     const user = userEvent.setup();
     const props = callbacks();
     render(<DashboardPage {...props} />);
 
-    const roster = await screen.findByRole('region', { name: 'Roster snapshot' });
-    const rosterButtons = within(roster).getAllByRole('button').filter((button) => button.textContent?.includes('Personal best'));
+    const roster = await screen.findByRole('region', { name: 'Athlete roster' });
+    expect(within(roster).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Athlete', 'Discipline', 'PB']);
+    const rosterButtons = within(roster).getAllByRole('button').filter((button) => button.textContent?.includes('Zola Fast') || button.textContent?.includes('Ari Runner'));
     expect(rosterButtons.map((button) => button.textContent)).toEqual([
       expect.stringContaining('Zola Fast'),
       expect.stringContaining('Ari Runner'),
     ]);
     expect(roster).toHaveTextContent('No PB');
+    expect(roster).toHaveTextContent('Long jump');
+    expect(roster).toHaveTextContent('6.45 m');
+    expect(roster).not.toHaveTextContent('No squad assigned');
     await user.click(rosterButtons[0]);
 
     const events = screen.getByRole('region', { name: 'Upcoming events' });
@@ -195,15 +176,16 @@ describe('DashboardPage', () => {
     expect(hero).toHaveTextContent('2 athletes active in your roster');
   });
 
-  it('places the summary hero before season controls and dashboard cards', async () => {
+  it('places upcoming events before the athlete roster', async () => {
     dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
     render(<DashboardPage {...callbacks()} />);
 
-    const hero = await screen.findByRole('region', { name: 'Performance. In motion.' });
+    await screen.findByRole('region', { name: 'Performance. In motion.' });
     const seasonSelector = screen.getByRole('button', { name: /Season:/ });
-    const roster = screen.getByRole('region', { name: 'Roster snapshot' });
-    expect(hero.compareDocumentPosition(seasonSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(hero.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const events = screen.getByRole('region', { name: 'Upcoming events' });
+    const roster = screen.getByRole('region', { name: 'Athlete roster' });
+    expect(seasonSelector.compareDocumentPosition(events) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(events.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('cleans up the summary hero clock when it unmounts', async () => {
@@ -229,20 +211,6 @@ describe('DashboardPage', () => {
     expect(hero).toHaveTextContent(/1 of 1 athlete is active/);
   });
 
-  it('shows effective outcomes, PBs, and archived historical athletes', async () => {
-    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
-    const user = userEvent.setup();
-    const props = callbacks();
-    render(<DashboardPage {...props} />);
-
-    const results = await screen.findByRole('region', { name: 'Recent results' });
-    const archivedResult = within(results).getByRole('button', { name: /Bea Sprinter/ });
-    expect(archivedResult).toHaveTextContent('Archived');
-    expect(archivedResult).toHaveTextContent('Disqualified');
-    expect(within(screen.getByRole('region', { name: 'Recent PBs' })).getByText('PB')).toBeInTheDocument();
-    await user.click(archivedResult);
-    expect(props.onOpenAthlete).toHaveBeenCalledWith('athlete-archived');
-  });
 
   it('renders live progress and supplied entries and resumes the exact event', async () => {
     dashboardApi.getDashboardSummary.mockResolvedValue(liveSummary());
@@ -290,69 +258,14 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(props.onSummaryLoaded).not.toHaveBeenCalled());
   });
 
-  it('opens the customize dialog, reorders cards, and saves preferences', async () => {
-    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
-    const user = userEvent.setup();
-    render(<DashboardPage {...callbacks()} />);
-
-    await screen.findByRole('region', { name: 'Roster snapshot' });
-    await user.click(screen.getByRole('button', { name: 'Customize dashboard' }));
-
-    const dialog = screen.getByRole('dialog', { name: 'Customize dashboard' });
-    expect(dialog).toBeInTheDocument();
-
-    const rows = within(dialog).getAllByRole('listitem');
-    const recentPbsRow = rows.find((row) => row.textContent?.includes('Recent PBs'));
-    expect(recentPbsRow).toBeDefined();
-    const hideToggle = within(recentPbsRow!).getByRole('checkbox');
-    expect(hideToggle).toBeChecked();
-    await user.click(hideToggle);
-    expect(hideToggle).not.toBeChecked();
-
-    await user.click(within(dialog).getByRole('button', { name: 'Move Recent PBs up' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalled());
-    const payload = preferencesApi.putDashboardPreferences.mock.calls[0][0] as UserPreferences;
-    expect(payload.dashboardHiddenCards).toContain('recent-pbs');
-    expect(payload.dashboardCardOrder.indexOf('recent-pbs')).toBeLessThan(
-      payload.dashboardCardOrder.indexOf('recent-results'),
-    );
-  });
-
-  it('hides optional cards that are marked hidden', async () => {
-    preferencesApi.getDashboardPreferences.mockResolvedValue({
-      ...DEFAULT_PREFERENCES,
-      dashboardHiddenCards: ['recent-pbs'],
-    });
+  it('does not render removed dashboard panels or customization controls', async () => {
     dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
     render(<DashboardPage {...callbacks()} />);
 
-    expect(await screen.findByRole('region', { name: 'Recent results' })).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Athlete roster' });
+    expect(screen.queryByRole('button', { name: 'Customize dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Squad PB Trend' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recent results' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Recent PBs' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Customize dashboard' })).toBeInTheDocument();
-  });
-
-  it('does not render saved dashboard views while preserving them during customization', async () => {
-    preferencesApi.getDashboardPreferences.mockResolvedValue({
-      ...DEFAULT_PREFERENCES,
-      dashboardSavedFilters: [
-        { id: 'view-1', surface: 'dashboard', name: 'All-time', filters: { season: 'all' } },
-      ],
-    });
-    dashboardApi.getDashboardSummary.mockResolvedValue(populatedSummary());
-    const user = userEvent.setup();
-    render(<DashboardPage {...callbacks()} />);
-
-    await screen.findByRole('region', { name: 'Performance. In motion.' });
-    expect(screen.queryByRole('region', { name: 'Saved dashboard views' })).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Name this view')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Customize dashboard' }));
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(preferencesApi.putDashboardPreferences).toHaveBeenCalled());
-    const saved = preferencesApi.putDashboardPreferences.mock.calls[0][0] as UserPreferences;
-    expect(saved.dashboardSavedFilters).toEqual([
-      { id: 'view-1', surface: 'dashboard', name: 'All-time', filters: { season: 'all' } },
-    ]);
   });
 });

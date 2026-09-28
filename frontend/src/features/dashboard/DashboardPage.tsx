@@ -1,21 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../api/client';
 import { getDashboardSummary } from '../../api/dashboard';
-import type {
-  AthleteResultHistoryEntry,
-  DashboardCardId,
-  DashboardActiveEvent,
-  DashboardSummary,
-  DashboardTimelineEntry,
-  UserPreferences,
-} from '../../types';
-import { format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
+import type { DashboardActiveEvent, DashboardSummary, DashboardTimelineEntry } from '../../types';
+import { format100mSeconds, formatDateOnly } from '../../utils/formatting';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
 import { SeasonSelector } from '../../components';
 import { seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import styles from './DashboardPage.module.css';
-import { CustomizeDashboardDialog } from './CustomizeDashboardDialog';
-import { useDashboardPreferences, visibleCards } from './useDashboardPreferences';
 
 export interface DashboardPageProps {
   onOpenRoster: () => void;
@@ -43,6 +34,12 @@ function eventTime(time: string | null): string {
   return time ? time.slice(0, 5) : 'Time not set';
 }
 
+function formatPb(discipline: DashboardSummary['rosterSnapshot'][number]['disciplines'][number]): string {
+  if (discipline.pb === null) return 'No PB';
+  const unit = discipline.unit === 'seconds' ? 's' : discipline.unit === 'metres' ? 'm' : 'cm';
+  return `${discipline.pb.toFixed(discipline.precision)} ${unit}`;
+}
+
 function initials(name: string): string {
   return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -53,35 +50,6 @@ function greetingForHour(hour: number): string {
   return 'Good evening, Coach';
 }
 
-function weekStartOf(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  return d.toISOString().slice(0, 10);
-}
-
-function isWithinDays(date: string, reference: string, maxDays: number): boolean {
-  const diff = (new Date(`${date}T00:00:00`).getTime() - new Date(`${reference}T00:00:00`).getTime()) / 86400000;
-  return diff >= 0 && diff <= maxDays;
-}
-
-function trendBuckets(summary: DashboardSummary): { labels: string[]; values: number[] } {
-  const labels = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'Now'];
-  const target = weekStartOf(summary.asOfDate);
-  const start = new Date(`${target}T00:00:00`);
-  start.setDate(start.getDate() - 42);
-  const weekStarts = Array.from({ length: 7 }, (_, index) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + index * 7);
-    return d.toISOString().slice(0, 10);
-  });
-  const values = weekStarts.map(() => 0);
-  summary.recentPbs.forEach((item) => {
-    const index = weekStarts.indexOf(weekStartOf(item.event.date));
-    if (index !== -1) values[index] += 1;
-  });
-  return { labels, values };
-}
 
 function CountUp({ value }: { value: number }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -166,36 +134,7 @@ function TimelineEntryRow({ item }: { item: DashboardTimelineEntry }) {
   );
 }
 
-function ResultRow({ item, onOpenAthlete }: {
-  item: AthleteResultHistoryEntry;
-  onOpenAthlete: (athleteId: string) => void;
-}) {
-  const resultLabel = item.effectiveResult !== null
-    ? format100mSeconds(item.effectiveResult)
-    : formatOutcome(item.effectiveOutcome);
-
-  return (
-    <li>
-      <button type="button" className={styles.resultRow} onClick={() => onOpenAthlete(item.athlete.id)}>
-        <span className={styles.apiAvatar} aria-hidden="true">{initials(item.athlete.name)}</span>
-        <span className={styles.rowBody}>
-          <span className={styles.rowHeading}>
-            <strong>{item.athlete.name}</strong>
-            {item.athlete.archivedAt && <span className={styles.archivedBadge}>Archived</span>}
-          </span>
-          <small>{item.event.title} · {formatDateOnly(item.event.date)}</small>
-        </span>
-        <span className={styles.resultValue}>
-          <strong>{resultLabel}</strong>
-          {item.result.isPb && <span className={styles.pbBadge}>PB</span>}
-        </span>
-      </button>
-    </li>
-  );
-}
-
 function StatRow({ summary, season }: { summary: DashboardSummary; season: string }) {
-  const next14 = summary.upcomingEvents.filter((event) => isWithinDays(event.date, summary.asOfDate, 14)).length;
   const stats = [
     {
       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19.5c0-3.2 2.4-5.5 5.5-5.5s5.5 2.3 5.5 5.5" /><circle cx="17.5" cy="9" r="2.4" /><path d="M15.4 14.2c2.2.3 4 2.3 4.1 5.1" /></svg>,
@@ -208,18 +147,18 @@ function StatRow({ summary, season }: { summary: DashboardSummary; season: strin
     },
     {
       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /></svg>,
-      label: 'Next 14 days',
-      value: next14,
-      delta: `${summary.upcomingEventCount} total`,
+       label: 'Next 7 days',
+       value: summary.upcomingEventCount,
+       delta: 'on calendar',
       context: summary.upcomingEvents[0] ? `Next: ${summary.upcomingEvents[0].title}` : 'Calendar clear',
-      progress: Math.min(100, next14 * 18),
+       progress: Math.min(100, summary.upcomingEventCount * 18),
       featured: false,
     },
     {
       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>,
        label: season === 'all' ? 'All-time PBs' : `${season} PBs`,
       value: summary.seasonPbs,
-      delta: `${summary.recentPbs.length} recent`,
+       delta: 'season total',
       context: 'Performance momentum',
       progress: Math.min(100, summary.seasonPbs * 25),
       featured: false,
@@ -261,45 +200,6 @@ function StatusAttention({ inactiveAthletesCount, statusReviewCount }: Pick<Dash
     <section className={styles.statusAttention} aria-label="Roster status attention">
       {inactiveAthletesCount > 0 && <p><strong>{inactiveAthletesCount}</strong> inactive athlete{inactiveAthletesCount === 1 ? '' : 's'}</p>}
       {statusReviewCount > 0 && <p><strong>{statusReviewCount}</strong> participant status review{statusReviewCount === 1 ? '' : 's'} pending</p>}
-    </section>
-  );
-}
-
-function TrendPanel({ summary }: { summary: DashboardSummary }) {
-  const { labels, values } = trendBuckets(summary);
-  const max = Math.max(...values, 1);
-  const total = values.reduce((sum, value) => sum + value, 0);
-  const momentum = values[6] - values[5];
-  const momentumLabel = total === 0 ? '—' : `${momentum >= 0 ? '+' : ''}${momentum}`;
-  const momentumCopy = total === 0
-    ? 'PB movement versus last week. No personal bests were recorded in the last 7 weeks — the next competition block will reset the trend.'
-    : momentum > 0
-      ? 'PB movement versus last week. The squad is carrying positive performance momentum into the next competition block.'
-      : momentum < 0
-        ? 'PB movement versus last week. A softer week — useful context for managing load and recovery.'
-        : 'PB movement versus last week. Steady output keeps the squad on plan.';
-
-  return (
-    <section className={`${styles.panel} ${styles.trendPanel}`} aria-labelledby="pb-trend-title">
-      <header className={styles.panelHead}>
-        <div><p className={styles.panelEyebrow}>Performance signal</p><h3 id="pb-trend-title">Squad PB Trend</h3></div>
-        <span className={styles.trendRange}>Last 7 weeks</span>
-      </header>
-      <div className={styles.trendLayout}>
-        <div className={styles.bars}>
-          {labels.map((label, index) => (
-            <div className={styles.barCol} key={label}>
-              <div className={styles.bar} style={{ height: `${(values[index] / max) * 100}%` }} />
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
-        <aside className={styles.trendInsight}>
-          <small>Current momentum</small>
-          <strong>{momentumLabel}</strong>
-          <p>{momentumCopy}</p>
-        </aside>
-      </div>
     </section>
   );
 }
@@ -378,8 +278,6 @@ function SummaryDashboard({
   onOpenAthlete,
   onOpenEvents,
   onOpenEvent,
-  preferences,
-  onCustomizeOpen,
   onApplySeason,
 }: {
   summary: DashboardSummary;
@@ -388,77 +286,8 @@ function SummaryDashboard({
   onOpenAthlete: (athleteId: string) => void;
   onOpenEvents: () => void;
   onOpenEvent: (eventId: string) => void;
-  preferences: UserPreferences;
-  onCustomizeOpen: () => void;
   onApplySeason: (value: SeasonValue) => void;
 }) {
-  const visible = visibleCards(preferences.dashboardCardOrder, preferences.dashboardHiddenCards);
-  const cards = new Set(visible);
-
-  const renderCard = (id: DashboardCardId) => {
-    switch (id) {
-      case 'season-selector':
-        return (
-          <div key={id} className={styles.dashboardToolbar}>
-            <SeasonSelector value={season} onChange={onApplySeason} />
-            <button type="button" className={styles.customizeButton} onClick={onCustomizeOpen}>
-              Customize dashboard
-            </button>
-          </div>
-        );
-      case 'status-attention':
-        return (
-          <StatusAttention
-            key={id}
-            inactiveAthletesCount={summary.inactiveAthletesCount}
-            statusReviewCount={summary.statusReviewCount}
-          />
-        );
-      case 'stats':
-        return <StatRow key={id} summary={summary} season={season} />;
-      case 'roster-snapshot':
-        return (
-          <section key={id} className={styles.panel} aria-labelledby="roster-snapshot-title">
-            <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster intelligence</p><h3 id="roster-snapshot-title">Roster snapshot</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
-            {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
-              <ul className={styles.rowList}>{summary.rosterSnapshot.map((athlete) => (
-                <li key={athlete.athleteId}><button type="button" className={styles.apiRosterRow} onClick={() => onOpenAthlete(athlete.athleteId)}><span className={styles.apiAvatar} aria-hidden="true">{initials(athlete.name)}</span><span className={styles.rowBody}><strong>{athlete.name}</strong><small>{athlete.discipline} · {athlete.squadNames?.join(', ') || 'No squad assigned'}</small></span><span className={styles.resultValue}><strong>{athlete.pb === null ? 'No PB' : format100mSeconds(athlete.pb)}</strong><small>Personal best</small></span></button></li>
-              ))}</ul>
-            )}
-          </section>
-        );
-      case 'upcoming-events':
-        return (
-          <section key={id} className={styles.panel} aria-labelledby="upcoming-events-title">
-            <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
-            {summary.upcomingEvents.length === 0 ? <p className={styles.emptyCopy}>No upcoming events to show.</p> : (
-              <ul className={styles.rowList}>{summary.upcomingEvents.map((event) => (
-                <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date} className={styles.eventDateBadge}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>
-              ))}</ul>
-            )}
-          </section>
-        );
-      case 'pb-trend':
-        return <TrendPanel key={id} summary={summary} />;
-      case 'recent-results':
-        return (
-          <section key={id} className={styles.apiPanel} aria-labelledby="recent-results-title">
-            <header className={styles.panelHeader}><div><p>Results</p><h2 id="recent-results-title">Recent results</h2></div></header>
-            {summary.recentResults.length === 0 ? <p className={styles.emptyCopy}>No results recorded yet.</p> : <ul className={styles.rowList}>{summary.recentResults.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
-          </section>
-        );
-      case 'recent-pbs':
-        return (
-          <section key={id} className={styles.apiPanel} aria-labelledby="recent-pbs-title">
-            <header className={styles.panelHeader}><div><p>Performance</p><h2 id="recent-pbs-title">Recent PBs</h2></div></header>
-            {summary.recentPbs.length === 0 ? <p className={styles.emptyCopy}>No personal bests recorded yet.</p> : <ul className={styles.rowList}>{summary.recentPbs.map((item, index) => <ResultRow item={item} onOpenAthlete={onOpenAthlete} key={`${item.event.id}-${item.athlete.id}-${index}`} />)}</ul>}
-          </section>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <>
       <section className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
@@ -480,15 +309,33 @@ function SummaryDashboard({
           {summary.athletesCount === 0 && <div><h2>No athletes yet</h2><p>Add athletes to build your roster and track their performances.</p><button type="button" onClick={onOpenRoster}>Open roster</button></div>}
         </section>
       )}
-      {visible.map((id) => renderCard(id))}
-      {!cards.has('season-selector') && (
-        <div className={styles.dashboardToolbar}>
-          <SeasonSelector value={season} onChange={onApplySeason} />
-          <button type="button" className={styles.customizeButton} onClick={onCustomizeOpen}>
-            Customize dashboard
-          </button>
-        </div>
-      )}
+      <div className={styles.dashboardToolbar}><SeasonSelector value={season} onChange={onApplySeason} /></div>
+      <StatusAttention inactiveAthletesCount={summary.inactiveAthletesCount} statusReviewCount={summary.statusReviewCount} />
+      <StatRow summary={summary} season={season} />
+      <section className={styles.panel} aria-labelledby="upcoming-events-title">
+        <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
+        {summary.upcomingEvents.length === 0 ? <p className={styles.emptyCopy}>No upcoming events in the next 7 days.</p> : <ul className={styles.rowList}>{summary.upcomingEvents.map((event) => <li key={event.eventId}><button type="button" className={styles.eventButton} onClick={() => onOpenEvent(event.eventId)}><time dateTime={event.date} className={styles.eventDateBadge}><strong>{formatDateOnly(event.date)}</strong><span>{eventTime(event.time)}</span></time><span className={styles.rowBody}><strong>{event.title}</strong><small>{eventTypeLabel(event.type)} · {event.locationName ?? 'Location not set'}</small></span><span className={styles.eventCount}>{event.athleteCount} athlete{event.athleteCount === 1 ? '' : 's'}</span></button></li>)}</ul>}
+      </section>
+      <section className={styles.panel} aria-labelledby="roster-snapshot-title">
+        <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster</p><h3 id="roster-snapshot-title">Athlete roster</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
+        {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
+          <div className={styles.rosterTableWrap}>
+            <table className={styles.rosterTable}>
+              <thead><tr><th scope="col">Athlete</th><th scope="col">Discipline</th><th scope="col">PB</th></tr></thead>
+              <tbody>{summary.rosterSnapshot.flatMap((athlete) => {
+                const disciplines = athlete.disciplines.length === 0 ? [null] : athlete.disciplines;
+                return disciplines.map((discipline, index) => (
+                  <tr className={index === 0 ? styles.rosterGroupStart : undefined} key={`${athlete.athleteId}:${discipline?.discipline ?? 'none'}`}>
+                    {index === 0 && <th scope="rowgroup" rowSpan={disciplines.length}><button type="button" className={styles.rosterAthlete} onClick={() => onOpenAthlete(athlete.athleteId)}><span className={styles.apiAvatar} aria-hidden="true">{initials(athlete.name)}</span><span>{athlete.name}</span></button></th>}
+                    <td data-label="Discipline">{discipline?.label ?? 'No disciplines selected'}</td>
+                    <td className={styles.rosterPb} data-label="PB">{discipline ? formatPb(discipline) : '—'}</td>
+                  </tr>
+                ));
+              })}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }
@@ -499,8 +346,6 @@ export function DashboardPage(props: DashboardPageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
-  const preferencesState = useDashboardPreferences();
   const onSummaryLoadedRef = useRef(props.onSummaryLoaded);
   onSummaryLoadedRef.current = props.onSummaryLoaded;
 
@@ -537,12 +382,7 @@ export function DashboardPage(props: DashboardPageProps) {
     <section className={`${styles.dashboard} ${revealed ? styles.revealed : ''}`} aria-label="Dashboard overview">
       {isLive ? (
         <>
-          <div className={styles.dashboardToolbar}>
-            <SeasonSelector value={season} onChange={setSeason} />
-            <button type="button" className={styles.customizeButton} onClick={() => setCustomizeOpen(true)}>
-              Customize dashboard
-            </button>
-          </div>
+          <div className={styles.dashboardToolbar}><SeasonSelector value={season} onChange={setSeason} /></div>
           <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
         </>
       ) : (
@@ -553,19 +393,7 @@ export function DashboardPage(props: DashboardPageProps) {
           onOpenAthlete={props.onOpenAthlete}
           onOpenEvents={props.onOpenEvents}
           onOpenEvent={props.onOpenEvent}
-          preferences={preferencesState.preferences}
-          onCustomizeOpen={() => setCustomizeOpen(true)}
           onApplySeason={setSeason}
-        />
-      )}
-      {customizeOpen && (
-        <CustomizeDashboardDialog
-          preferences={preferencesState.preferences}
-          saving={preferencesState.saving}
-          error={preferencesState.error}
-          onSave={preferencesState.save}
-          onReset={preferencesState.reset}
-          onClose={() => setCustomizeOpen(false)}
         />
       )}
     </section>

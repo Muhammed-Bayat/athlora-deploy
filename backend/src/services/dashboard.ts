@@ -189,8 +189,8 @@ export async function getDashboardSummary(
          (SELECT COUNT(*) FROM events
            WHERE workspace_id = $1
             AND status = 'scheduled'
-            AND discipline = $5
-            AND date >= $2::date)
+             AND date >= $2::date
+             AND date <= ($2::date + INTERVAL '7 days'))
            AS upcoming_event_count,
          (SELECT COUNT(*) FROM (
            WITH history AS (
@@ -346,11 +346,11 @@ export async function getDashboardSummary(
 
     const rosterResult = await client.query<RosterSnapshotRow>(
       `SELECT a.id AS athlete_id,
-              a.name,
-               COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS squad_names,
-              $2::text AS discipline,
-              best.pb
-       FROM athletes a
+               a.name,
+               COALESCE(jsonb_agg(jsonb_build_object('discipline', d.code, 'label', d.presentation->>'label', 'unit', d.unit, 'precision', d.precision, 'pb', best.pb) ORDER BY d.presentation->>'label') FILTER (WHERE d.id IS NOT NULL), '[]'::jsonb) AS disciplines
+        FROM athletes a
+        LEFT JOIN athlete_preferred_disciplines preferences ON preferences.athlete_id = a.id
+        LEFT JOIN discipline_definitions d ON d.id = preferences.discipline_definition_id
        LEFT JOIN LATERAL (
          SELECT MIN(result_value) FILTER (WHERE outcome_value = 'valid') AS pb FROM (
            SELECT CASE
@@ -367,7 +367,7 @@ export async function getDashboardSummary(
            FROM results r
            JOIN events e ON e.id = r.event_id
            WHERE r.athlete_id = a.id
-             AND r.discipline = $2
+              AND r.discipline = d.code
                AND (e.workspace_id = $1 OR EXISTS (
                  SELECT 1 FROM event_fixture_workspaces fw
                  JOIN event_participants ep ON ep.event_id = fw.event_id
@@ -390,12 +390,12 @@ export async function getDashboardSummary(
                   END AS outcome_value
            FROM session_results r
            JOIN discipline_sessions s ON s.id = r.session_id
-           JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+            JOIN discipline_definitions session_definition ON session_definition.id = s.discipline_definition_id
            JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
            JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
            JOIN events e ON e.id = r.event_id
            WHERE en.athlete_id = a.id
-             AND d.code = $2
+              AND session_definition.code = d.code
                AND r.workspace_id = $1
                AND s.result_state = 'final' AND s.status = 'completed'
                AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
@@ -407,10 +407,11 @@ export async function getDashboardSummary(
                ))
              AND e.status <> 'cancelled'
          ) merged
-       ) best ON true
-         WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'
-       ORDER BY LOWER(a.name) ASC, a.created_at ASC, a.id ASC`,
-       [workspaceId, DISCIPLINE_100M],
+        ) best ON d.id IS NOT NULL
+          WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'
+        GROUP BY a.id
+        ORDER BY LOWER(a.name) ASC, a.created_at ASC, a.id ASC`,
+        [workspaceId],
     );
 
     const upcomingResult = await client.query<DashboardUpcomingEventRow>(
@@ -428,23 +429,17 @@ export async function getDashboardSummary(
         LEFT JOIN athletes a ON a.id = ep.athlete_id AND a.workspace_id = $1
         WHERE e.workspace_id = $1
          AND e.status = 'scheduled'
-         AND e.discipline = $3
-         AND e.date >= $2::date
+          AND e.date >= $2::date
+          AND e.date <= ($2::date + INTERVAL '7 days')
        GROUP BY e.id
        ORDER BY e.date ASC,
                 e.time ASC NULLS LAST,
                 e.created_at ASC,
                 e.id ASC`,
-       [workspaceId, asOfDate, DISCIPLINE_100M],
+        [workspaceId, asOfDate],
     );
 
-    const recentResults = await listRecentResults(
-      client,
-       workspaceId,
-      false,
-      RECENT_RESULTS_LIMIT,
-      season,
-    );
+    const recentResults = await listRecentResults(client, workspaceId, false, RECENT_RESULTS_LIMIT, season);
     const recentPbs = await listRecentResults(client, workspaceId, true, RECENT_PBS_LIMIT, season);
 
     return {
