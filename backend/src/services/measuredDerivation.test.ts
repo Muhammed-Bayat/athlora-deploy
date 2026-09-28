@@ -8,19 +8,21 @@ const def: DisciplineDefinition = {
   presentation: { label: 'Long Jump' }, createdAt: '', source: 'test',
 };
 
-describe('measured field derivation and automatic best-mark selection', () => {
-  it('automatically selects best legal mark and ignores fouls and passes', () => {
+describe('measured field derivation and official-mark selection', () => {
+  it('uses the selected legal mark and ignores fouls and passes', () => {
     const res = deriveMeasuredResult([
-      { entryType: 'attempt', value: 5.90, isFoul: false, incidentType: null },
-      { entryType: 'attempt', value: null, isFoul: true, incidentType: null },
-      { entryType: 'attempt', value: 6.12, isFoul: false, incidentType: null },
-      { entryType: 'attempt', value: null, isFoul: false, incidentType: null }, // pass
-      { entryType: 'attempt', value: 6.05, isFoul: false, incidentType: null },
-    ], def);
+      { id: 'first', entryType: 'attempt', value: 5.90, isFoul: false, incidentType: null },
+      { id: 'foul', entryType: 'attempt', value: null, isFoul: true, incidentType: null },
+      { id: 'official', entryType: 'attempt', value: 6.12, isFoul: false, incidentType: null },
+      { id: 'pass', entryType: 'attempt', value: null, isFoul: false, incidentType: null }, // pass
+      { id: 'later', entryType: 'attempt', value: 6.05, isFoul: false, incidentType: null },
+    ], def, 'official');
     expect(res).toMatchObject({ value: 6.12, outcome: 'valid' });
     expect(res.series).toHaveLength(5);
   });
-  it('handles all fouls or no attempts as no_result', () => {
+  it('requires an active legal selected mark', () => {
+    expect(deriveMeasuredResult([{ id: 'mark', entryType: 'attempt', value: 6.12, isFoul: false, incidentType: null }], def)).toMatchObject({ value: null, outcome: 'no_result' });
+    expect(deriveMeasuredResult([{ id: 'foul', entryType: 'attempt', value: null, isFoul: true, incidentType: null }], def, 'foul')).toMatchObject({ value: null, outcome: 'no_result' });
     expect(deriveMeasuredResult([{ entryType: 'attempt', value: null, isFoul: true, incidentType: null }], def)).toMatchObject({ value: null, outcome: 'no_result' });
     expect(deriveMeasuredResult([], def)).toMatchObject({ value: null, outcome: 'no_result' });
   });

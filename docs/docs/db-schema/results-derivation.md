@@ -26,17 +26,18 @@ deriveTrackTime(entries, eventType = 'competition', selectedEntryId = null)  // 
 - No valid attempt (or no attempts) → `{ value: null, incident: null, outcome: 'no_result' }`.
 - `false_start` and `lane_infringement` are penalty incidents and do not void the result — a `dq` entry must be recorded to void it. Fouls do not apply to track.
 
-## Measured disciplines (field, planned)
+## Measured disciplines (field)
 
-The target field-event model records distance (metres) or height (metres/cm) attempts, where the **result is the best valid attempt**. `deriveFieldBest` is already implemented and unit-tested as a pure helper, but no field discipline is currently accepted by the API or connected to the live logger, result recomputation, statistics, or placings. A field-event contract must wire those pieces together before this becomes a shipped feature.
+Measured field sessions record distance or height attempts in metres. A coach selects one active legal attempt as the official result through `session_results.selected_entry_id`; no selection is a `no_result`, and editing, undoing, fouling, or otherwise invalidating the selected attempt clears it for coach review. The selected mark, not the automatic best, is the authoritative result and is required before the session can be finalized.
 
-```ts
-deriveFieldBest(entries)  // → { value, incident, outcome }
-```
+- A legal selected attempt is a non-deleted, positive `attempt` with no foul or incident.
+- Foul attempts, soft-deleted entries, non-positive values, and incidents cannot be selected.
+- `dq` / `dnf` / `dns` void the result even when an official mark is selected. If more than one voiding incident is active, precedence is DQ, then DNF, then DNS.
+- Equal selected marks use the remaining legal-attempt series as a field-event countback.
 
-- Foul attempts are skipped (`is_foul`), as are soft-deleted entries and non-positive values.
-- All-foul attempts → `{ value: null, incident: null, outcome: 'no_result' }`.
-- `dq` / `dnf` / `dns` void the result. If more than one voiding incident is active, the current shared precedence is DQ, then DNF, then DNS.
+## Vertical disciplines
+
+High jump and pole vault derive a result from the complete ordered sequence of clearance, failure, pass, and void attempts, including countback. A coach makes that complete derived result set official by finalizing the session; no individual attempt can be selected. Reopening the session clears final places and permits corrections before it is made official again.
 
 ## Overrides
 
@@ -44,7 +45,7 @@ Coaches can correct a derived result with `manual_override`, `override_reason`, 
 
 ## Placings
 
-The current 100m implementation ranks effective valid results in ascending time (fastest first) within an event. Equal times share a place and the next place follows standard competition ranking (for example, 1, 1, 3). Voided outcomes (`dq`/`dnf`/`dns`), uncorrected `no_result` entries, and every result in a cancelled event receive `null`; a `no_result` promoted by an override can rank. Field-event contracts will rank valid measured results in the opposite direction, while vertical-event and multi-event rules will be documented with their own implementations.
+Timed sessions rank valid official results in ascending time; measured sessions rank valid official results in descending mark order, with their legal series as the tie-break. Equal results share a place and the next place follows standard competition ranking (for example, 1, 1, 3). Voided outcomes (`dq`/`dnf`/`dns`), uncorrected `no_result` entries, and every result in a cancelled event receive `null`. Vertical sessions apply their documented clearance and countback rules.
 
 ## PB/SB rules
 
@@ -54,7 +55,7 @@ The statistics and dashboard services repeat the same effective-result precedenc
 
 ## Implementation status
 
-`backend/src/services/resultDerivation.ts` implements the current 100m derivation/effective-result/placing/PB-SB rules. Timeline and override mutations share canonical whole-event recomputation so raw result fields remain auditable while downstream effective metadata converges. Future disciplines will use the same recomputation boundary with discipline-specific pure functions and tests.
+`backend/src/services/resultDerivation.ts`, `measuredDerivation.ts`, and `verticalScoring.ts` implement timed, measured, and vertical session rules. Timeline mutations share canonical per-result recomputation so source history remains auditable while downstream effective metadata converges.
 
 ## Design note
 
@@ -62,4 +63,4 @@ These rules are deliberately small and pure so they can be unit-tested exhaustiv
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The selected official-entry derivation rule for multi-discipline session results was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The selected official-entry derivation rule for multi-discipline session results was documented with the assistance of opencode[mimo-v2.6-flash-free]. Measured-field official selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra].

@@ -77,11 +77,11 @@ export async function changeSessionState(actor: MeetActor, eventId: string, sess
         await recomputeSessionResult(db, actor, eventId, { disciplineSessionId: sessionId, entrantId: entrant.entrant_id }, entrant.workspace_id, definition);
       }
       const board = await listSessionResults(actor, eventId, sessionId, db);
-      if (definition.defaultRules.aggregation === 'timed') {
+      if (definition.defaultRules.aggregation === 'timed' || definition.defaultRules.aggregation === 'best') {
         const pending = await db.query(`SELECT 1 FROM session_results r JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
           WHERE r.session_id = $1 AND se.withdrawn_at IS NULL AND r.selected_entry_id IS NULL AND r.outcome = 'no_result'
           AND EXISTS (SELECT 1 FROM session_timeline_entries t WHERE t.session_id = r.session_id AND t.entrant_id = r.entrant_id AND t.deleted_at IS NULL AND t.entry_type = 'attempt' AND t.value > 0 AND NOT t.is_foul) LIMIT 1`, [sessionId]);
-        if (pending.rows.length) meetConflict('OFFICIAL_SELECTION_REQUIRED', 'Select an official time for every entrant with recorded times');
+        if (pending.rows.length) meetConflict('OFFICIAL_SELECTION_REQUIRED', 'Select an official result for every entrant with recorded attempts');
       }
       for (const row of board) {
         await db.query('UPDATE session_results SET final_place = $1 WHERE id = $2', [row.placing, row.id]);

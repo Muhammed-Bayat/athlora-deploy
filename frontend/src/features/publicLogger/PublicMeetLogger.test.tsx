@@ -118,4 +118,30 @@ describe('PublicMeetLogger', () => {
     expect(screen.queryByText('Absent Athlete')).not.toBeInTheDocument();
     expect(screen.getAllByText('Casey Guest')).toHaveLength(2);
   });
+
+  it('shows an own incident entry and lets the official undo it', async () => {
+    const incidentSnapshot: PublicMeetLoggerSnapshot = {
+      ...snapshot,
+      sessions: snapshot.sessions.map((item) => item.id === FIELD_SESSION_ID ? {
+        ...item,
+        entries: [{
+          id: '99999999-9999-4999-8999-999999999998', eventId: EVENT_ID, disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID,
+          entryType: 'penalty', value: null, unit: null, isFoul: false, incidentType: 'dq', version: 1,
+          createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', canEdit: true, canUndo: true,
+        }],
+      } : item),
+    };
+    vi.mocked(publicLoggerApi.getPublicMeetLoggerSnapshot).mockResolvedValue(incidentSnapshot);
+    const user = userEvent.setup();
+    render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={offlineSync()} />);
+
+    await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
+    expect(await screen.findByRole('list', { name: 'Attempts for Casey Guest' })).toHaveTextContent('DQ');
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => expect(publicLoggerApi.removePublicMeetLoggerEntry).toHaveBeenCalledWith(
+      'public-session', EVENT_ID, { disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID },
+      '99999999-9999-4999-8999-999999999998', { expectedVersion: 1 },
+    ));
+  });
 });

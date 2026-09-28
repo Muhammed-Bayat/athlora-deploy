@@ -143,7 +143,7 @@ GET /public/logger/events/:eventId/discipline-sessions
 Header: X-Public-Logger-Session: <session-token>
 ```
 
-Returns the public-safe discipline catalogue, entrants, relay leg names, session status, result state, session entries, and computed results for the linked meet. The UI presents only `in_progress` sessions for writing. It can record timed observations, field attempts including fouls, vertical-event state, and approved incident codes against the selected `(disciplineSessionId, entrantId)` target.
+Returns the public-safe discipline catalogue, entrants, relay leg names, session status, result state, session entries, and computed results for the linked meet. The UI presents only `in_progress` sessions for writing. It can record timed observations, field attempts including fouls, vertical-event state, and approved incident codes against the selected `(disciplineSessionId, entrantId)` target. The recorder's own attempts and DQ/DNF/DNS incident entries expose the same versioned correction/undo capability; undoing an incident recomputes the affected result.
 
 The three nested entry routes use the same header. Create accepts a session-entry payload; replacement includes `expectedVersion`; undo requires `expectedVersion`. Public responses omit workspace attribution, logger identity, device identifiers, and note text. Public session entries cannot be `note` entries and cannot contain `noteText`; coach-only notes and roster/lifecycle controls remain authenticated-only.
 
@@ -229,4 +229,4 @@ For a multi-discipline meet, every action carries a `target` with `disciplineSes
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. Public incident undo was documented with the assistance of OpenCode[gpt-5.6-terra].

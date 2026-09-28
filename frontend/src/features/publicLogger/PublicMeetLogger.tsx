@@ -177,7 +177,7 @@ export function PublicMeetLogger({
   const targetFor = (entrantId: string): SessionTarget => ({ disciplineSessionId: sessionId, entrantId });
 
   const submitEntry = async (target: SessionTarget, payload: SessionEntryInput) => {
-    if (!offlineSync.isOnline) await offlineSync.enqueue({ target, actionType: 'create_entry', payload });
+    if (!offlineSync.isOnline) await offlineSync.enqueue({ target, actionType: 'create_entry', payload: { ...payload } });
     else await createPublicMeetLoggerEntry(sessionToken, event.id, target, payload);
   };
 
@@ -310,7 +310,7 @@ export function PublicMeetLogger({
 
       <section aria-label="Session live logging" aria-busy={busy}>
         <h2>Session live logger</h2>
-        <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results use the recorded value with an official selection. Jumps and throws use the automatic best legal attempt. High jump and pole vault progress by height with countback rankings. Offline attempts queue and sync when reconnecting.</p>
+        <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results, jumps, and throws use a coach-selected official attempt. High jump and pole vault progress by height with countback rankings and are made official as a complete result set. Offline attempts queue and sync when reconnecting.</p>
         {timedSessions.length === 0 && <p>No timed discipline sessions have been added to this event yet.</p>}
         {timedSessions.length > 0 && (
           <div className={styles.sessionTabs} role="tablist" aria-label="Discipline sessions">
@@ -355,7 +355,7 @@ export function PublicMeetLogger({
                   const result = results.find((row) => row.entrantId === entrant.id);
                   const eliminated = Boolean(result?.vertical?.eliminated);
                   const controlsDisabled = busy || !live || (vertical && eliminated);
-                  const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && entry.entryType === 'attempt');
+                  const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty'));
                   const currentRecord = !result
                     ? '—'
                     : vertical
@@ -461,9 +461,11 @@ export function PublicMeetLogger({
                         <ol className={styles.attemptsList} aria-label={`Attempts for ${entrant.name}`}>
                           {entrantEntries.map((entry, index) => (
                             <li key={entry.id}>
-                              #{entry.attemptOrder ?? index + 1} {vertical
+                              {entry.entryType === 'penalty'
+                                ? `${entry.incidentType?.toUpperCase() ?? 'Penalty'}`
+                                : `#${entry.attemptOrder ?? index + 1} ${vertical
                                 ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
-                                : `${formatValue(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}
+                                : `${formatValue(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}`}
                               {entry.recorderName && ` · by ${entry.recorderName}`}
                               {!vertical && result?.selectedEntryId === entry.id && ' · official'}
                               {live && entry.canUndo && (
@@ -508,7 +510,7 @@ export function PublicMeetLogger({
                           <td className={styles.numeric}>{vertical && row.value === null ? 'NH' : formatValue(row.value, definition)}</td>
                           {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
                           <td>{row.vertical?.eliminated ? 'Eliminated' : row.outcome}</td>
-                          {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
+                          {!vertical && <td>{row.selectedEntryId ? 'Selected' : 'Awaiting selection'}</td>}
                         </tr>
                       );
                     })}

@@ -551,7 +551,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(s.id);
     const value = d.kind === 'vertical' ? 1.5 : 12;
     const entry = await createSessionEntry(host, eventId, target, { ...timed, value, unit: d.unit, ...(d.kind === 'vertical' ? { verticalState: 'clearance' as const } : {}) }, transaction);
-    if (d.defaultRules.aggregation === 'timed') await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
+    if (d.defaultRules.aggregation !== 'vertical') await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
     else await expect(selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ code: 'DERIVED_RESULT_ONLY' });
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ discipline: code, direction: d.direction, pb: value, sb: value });

@@ -17,10 +17,11 @@ describe('authoritative session result policy', () => {
     expect(entries.map(e => e.value)).toEqual([12.5, 11]);
     expect([...sessionPlaces(timed, [candidate('first', timed, [entry('1', 10.901)]), candidate('tied', timed, [entry('2', 10.9)]), candidate('third', timed, entries, 'a')]).values()]).toEqual([1, 1, 3]);
   });
-  it('derives measured best legal automatically and breaks equal marks by subsequent legal attempts', () => {
+  it('requires an explicit measured source and breaks equal official marks by subsequent legal attempts', () => {
     const a = [entry('a', 6), entry('b', 5.5), entry('foul', 9, { isFoul: true })];
     const b = [entry('c', 6), entry('d', 5.4)];
-    expect(authoritativeResult(measured, a, 'b').value).toBe(6);
+    expect(authoritativeResult(measured, a, null).value).toBeNull();
+    expect(authoritativeResult(measured, a, 'b').value).toBe(5.5);
     expect([...sessionPlaces(measured, [candidate('second', measured, b), candidate('first', measured, a), candidate('tied', measured, a)]).values()]).toEqual([3, 1, 1]);
   });
   it('uses existing vertical countback and retains unresolved ties', () => {

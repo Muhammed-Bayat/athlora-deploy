@@ -47,6 +47,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
+  const selectable = definition?.defaultRules.aggregation === 'timed' || definition?.defaultRules.aggregation === 'best';
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
   const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
   const registeredEntrantIds = new Set(sessionRegistrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId));
@@ -336,7 +337,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   return (
     <section aria-label="Session live logging" aria-busy={busy}>
       <h2>Session live logger</h2>
-      <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results use the recorded value with an official selection. Jumps and throws use the automatic best legal attempt. High jump and pole vault progress by height with countback rankings. Offline attempts queue and sync when reconnecting.</p>
+      <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results, jumps, and throws use a coach-selected official attempt. High jump and pole vault progress by height with countback rankings and are made official as a complete result set. Offline attempts queue and sync when reconnecting.</p>
       <OfflineRecoverySurface
         isOnline={offline.isOnline}
         actions={recoveryActions}
@@ -387,7 +388,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             <Button onClick={() => void startSession()} disabled={busy}>Start session</Button>
           )}
           {canFinalize && session.status === 'in_progress' && (
-            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>Finalize session</Button>
+            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>{vertical ? 'Make results official' : 'Finalize session'}</Button>
           )}
           {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
           {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
@@ -516,7 +517,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                             {isCoach && live && (
                               <>
                                 {' '}
-                                {timed && (
+                                {selectable && (
                                   <Button
                                     variant="secondary"
                                     disabled={busy || !offline.isOnline || result?.selectedEntryId === entry.id || entry.value === null || !!entry.incidentType || entry.isFoul}
@@ -537,7 +538,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         ))}
                       </ol>
                     )}
-                    {isCoach && live && timed && result?.selectedEntryId && entrantEntries.length > 0 && (
+                    {isCoach && live && selectable && result?.selectedEntryId && entrantEntries.length > 0 && (
                       <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(entrant.id, null)}>Clear official selection</Button>
                     )}
                   </div>
@@ -572,7 +573,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         <td className={styles.numeric}>{vertical && row.effectiveResult === null ? 'NH' : formatResult(row.effectiveResult, definition)} {row.isPb && 'PB'} {row.isSb && 'SB'}</td>
                         {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
                         <td>{row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome}</td>
-                        {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
+                        {!vertical && <td>{row.selectedEntryId ? 'Selected' : 'Awaiting selection'}</td>}
                       </tr>
                     );
                   })}
