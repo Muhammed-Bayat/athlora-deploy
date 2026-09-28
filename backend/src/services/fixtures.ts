@@ -232,6 +232,11 @@ async function advanceFixtureRevision(
   );
   const revision = updated.rows[0]?.fixture_revision;
   if (!revision) throw notFound();
+  await client.query(
+    `UPDATE event_fixture_workspaces SET accepted_revision = $2
+     WHERE event_id = $1 AND role = 'host'`,
+    [eventId, revision],
+  );
   await createReacceptanceInvitations(client, eventId, revision, actorId, excludedWorkspaceId);
   return revision;
 }

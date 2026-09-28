@@ -509,6 +509,25 @@ describe('LiveLoggingPage', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Chronological Timeline' })).toHaveFocus());
   });
 
+  it('disables Edit and hides Undo for entries recorded by another club', async () => {
+    const foreignEntry = { ...mockTimelineEntry, id: 'entry-foreign', canEdit: false, canUndo: false };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockActiveEvent], meta: { count: 1 } });
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [mockTimelineEntry, foreignEntry], meta: { count: 2 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [mockResult], meta: { count: 1 } });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /Open Live Logger/ }));
+
+    const editButtons = await screen.findAllByRole('button', { name: 'Edit' });
+    expect(editButtons).toHaveLength(2);
+    expect(editButtons.filter((button) => button.hasAttribute('disabled'))).toHaveLength(1);
+    const undoButtons = screen.getAllByRole('button', { name: 'Undo' });
+    expect(undoButtons).toHaveLength(1);
+    expect(undoButtons[0]).toBeEnabled();
+  });
+
   it('exits the logger when the backend reports that the event closed', async () => {
     const completed = { ...mockActiveEvent, status: 'completed' as const };
     vi.mocked(eventsApi.listEvents)

@@ -34,8 +34,10 @@ export async function getDisciplineProgression(
     JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
     JOIN events e ON e.id = r.event_id AND e.status <> 'cancelled'
     WHERE r.workspace_id = $1 AND en.athlete_id = $2 AND s.discipline_definition_id = $3
-      AND s.status = 'completed' AND en.kind = 'athlete'
+      AND s.status = 'completed' AND s.result_state = 'final' AND en.kind = 'athlete'
       AND r.outcome = 'valid' AND r.final_result IS NOT NULL
+      AND (e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
+        AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))
       ${seasonCondition}
   ), ranked AS (
     SELECT *, CASE WHEN direction = 'lower' THEN MIN(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)

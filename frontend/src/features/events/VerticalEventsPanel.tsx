@@ -4,6 +4,8 @@ import { listAthletes } from '../../api/athletes';
 import { Button, Select } from '../../components';
 import type { AthleticsEvent, Athlete } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResult } from '../../types/meets';
+import { standingsMembers, standingsTeam } from './standingsDisplay';
+import styles from './SessionLivePanel.module.css';
 
 export function VerticalEventsPanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {
   const [definitions, setDefinitions] = useState<DisciplineDefinition[]>([]);
@@ -50,7 +52,10 @@ export function VerticalEventsPanel({ event, canOperate, isCoach }: { event: Ath
   const format = (value: number | null) => value === null ? 'NH' : `${value.toFixed(definition?.precision ?? 2)} m`;
   function exportResults() {
     const quote = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-    const lines = [['Entrant', 'Highest clearance (m)', 'Place', 'Failures at best', 'Failures through best', 'History'], ...results.map(r => [entrants.find(e => e.id === r.entrantId)?.name, r.effectiveResult?.toFixed(definition?.precision ?? 2) ?? 'NH', r.placing, r.vertical?.failuresAtBest, r.vertical?.totalFailuresToBest, entries.filter(e => e.entrantId === r.entrantId).map(e => `${e.attemptOrder}: ${e.value} ${e.verticalState ?? e.incidentType} (by ${e.recorderName ?? 'unknown'})`).join('; ')])];
+    const lines = [['Team / club', 'Members', 'Highest clearance (m)', 'Place', 'Failures at best', 'Failures through best', 'History'], ...results.map(r => {
+      const entrant = entrants.find(e => e.id === r.entrantId);
+      return [standingsTeam(entrant), standingsMembers(entrant, entrants), r.effectiveResult?.toFixed(definition?.precision ?? 2) ?? 'NH', r.placing, r.vertical?.failuresAtBest, r.vertical?.totalFailuresToBest, entries.filter(e => e.entrantId === r.entrantId).map(e => `${e.attemptOrder}: ${e.value} ${e.verticalState ?? e.incidentType} (by ${e.recorderName ?? 'unknown'})`).join('; ')];
+    })];
     const url = URL.createObjectURL(new Blob([lines.map(line => line.map(quote).join(',')).join('\n')], { type: 'text/csv' }));
     const link = document.createElement('a'); link.href = url; link.download = 'vertical-results.csv'; link.click(); URL.revokeObjectURL(url);
   }
@@ -72,11 +77,42 @@ export function VerticalEventsPanel({ event, canOperate, isCoach }: { event: Ath
       {isCoach && session.status === 'scheduled' && entrantId && !registered.includes(entrantId) && <Button disabled={busy} onClick={() => void run(() => api.registerEntrant(event.id, target))}>Register entrant</Button>}
       {canOperate && session.status === 'scheduled' && event.status === 'in_progress' && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'in_progress', session.version))}>Start vertical session</Button>}
       {live && <fieldset disabled={busy || !registered.includes(entrantId)}><legend>Log vertical attempt</legend><label>Target height (m)<input type="number" min={session.verticalConfig?.startingHeight} step={session.verticalConfig?.heightIncrement} value={height} onChange={e => setHeight(e.target.value)} /></label><Button onClick={() => setHeight((Number(height) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2))}>Next height</Button>{(['clearance', 'failure', 'pass'] as const).map(state => <Button key={state} disabled={results.find(r => r.entrantId === entrantId)?.vertical?.eliminated} onClick={() => void run(() => api.createSessionEntry(event.id, target, { entryType: 'attempt', value: Number(height), unit: 'metres', verticalState: state, isFoul: false, incidentType: null, noteText: null, deviceId: null }))}>{state}</Button>)}</fieldset>}
-      <h3>Attempt history</h3><ol>{entries.filter(e => !entrantId || e.entrantId === entrantId).map(e => <li key={e.id}>#{e.attemptOrder} {format(e.value)} — {e.verticalState ?? e.incidentType}{e.recorderName && ` · by ${e.recorderName}`} {live && isCoach && e.verticalState && e.verticalState !== 'void' && <Button disabled={busy} onClick={() => void run(() => api.replaceSessionEntry(event.id, { disciplineSessionId: selected, entrantId: e.entrantId }, e.id, { entryType: e.entryType, value: e.value, unit: e.unit, isFoul: false, incidentType: null, noteText: e.noteText, deviceId: null, verticalState: 'void', expectedVersion: e.version }))}>Void attempt {e.attemptOrder}</Button>}</li>)}</ol>
+      <h3>Attempt history</h3><ol>{entries.filter(e => !entrantId || e.entrantId === entrantId).map(e => <li key={e.id}>#{e.attemptOrder} {format(e.value)} — {e.verticalState ?? e.incidentType}{e.recorderName && ` · by ${e.recorderName}`} {live && isCoach && e.verticalState && e.verticalState !== 'void' && e.canEdit !== false && <Button disabled={busy} onClick={() => void run(() => api.replaceSessionEntry(event.id, { disciplineSessionId: selected, entrantId: e.entrantId }, e.id, { entryType: e.entryType, value: e.value, unit: e.unit, isFoul: false, incidentType: null, noteText: e.noteText, deviceId: null, verticalState: 'void', expectedVersion: e.version }))}>Void attempt {e.attemptOrder}</Button>}</li>)}</ol>
       {live && isCoach && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'completed', session.version))}>Finalize vertical session</Button>}
       {isCoach && canOperate && session.status === 'completed' && event.status !== 'cancelled' && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'in_progress', session.version))}>Reopen vertical session</Button>}
       <h3>Highest clearances {session.status !== 'completed' && '(provisional)'}</h3><p>Countback: failures at best height, then total failures through best. Equal keys share places; no jump-off.</p>
-      <table><thead><tr><th>Entrant</th><th>Highest clearance</th><th>Place</th><th>Countback</th><th>Status</th></tr></thead><tbody>{results.map(r => <tr key={r.entrantId}><td>{entrants.find(e => e.id === r.entrantId)?.name}</td><td>{format(r.effectiveResult)} {r.isPb && 'PB'} {r.isSb && 'SB'}</td><td>{r.placing ?? '—'}</td><td>{r.vertical?.failuresAtBest} / {r.vertical?.totalFailuresToBest}</td><td>{r.vertical?.eliminated ? 'Eliminated' : r.effectiveOutcome}</td></tr>)}</tbody></table><Button onClick={exportResults}>Export vertical results</Button>
+      <div className={styles.standingsScroll}>
+        <table className={styles.standingsTable}>
+          <thead>
+            <tr>
+              <th scope="col" className={styles.numeric}>Place</th>
+              <th scope="col">Team / club</th>
+              <th scope="col">Members</th>
+              <th scope="col" className={styles.numeric}>Highest clearance</th>
+              <th scope="col" className={styles.numeric}>Countback</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...results]
+              .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
+              .map(r => {
+                const entrant = entrants.find(e => e.id === r.entrantId);
+                return (
+                  <tr key={r.entrantId}>
+                    <td className={styles.numeric}>{r.placing ?? '—'}</td>
+                    <td>{standingsTeam(entrant)}</td>
+                    <td>{standingsMembers(entrant, entrants)}</td>
+                    <td className={styles.numeric}>{format(r.effectiveResult)} {r.isPb && 'PB'} {r.isSb && 'SB'}</td>
+                    <td className={styles.numeric}>{r.vertical?.failuresAtBest} / {r.vertical?.totalFailuresToBest}</td>
+                    <td>{r.vertical?.eliminated ? 'Eliminated' : r.effectiveOutcome}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+      <Button onClick={exportResults}>Export vertical results</Button>
     </>}
   </section>;
 }

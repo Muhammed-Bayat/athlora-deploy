@@ -520,6 +520,8 @@ export interface TimelineEntry {
   recorderName?: string | null;
   recorderClub?: string | null;
   publicLoggerSessionId?: string | null;
+  canEdit?: boolean;
+  canUndo?: boolean;
   version: number;
   deviceId: string | null;
   createdAt: string;
@@ -551,7 +553,7 @@ export interface TimelineEntryDeletePayload {
   expectedVersion: number;
 }
 
-export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit?: boolean; canUndo?: boolean };
+export type PublicTimelineEntry = Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'>;
 
 export interface PublicLoggerLink {
   id: string;

@@ -7,6 +7,7 @@ import type { TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEn
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { recomputeEventResults } from './timeline.js';
+import { sameLoggerIdentity } from './loggerIdentity.js';
 import type { MeetActor } from '../types/meets.js';
 
 const TIMELINE_COLUMNS = 'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id, created_at, updated_at, deleted_at';
@@ -42,6 +43,9 @@ interface SessionRow {
   status: EventStatus;
   discipline: string | null;
   expires_at: Date | string;
+  link_id?: string;
+  logger_name?: string;
+  logger_club?: string;
 }
 
 function timestamp(value: Date | string): string {
@@ -173,7 +177,8 @@ async function validSession(
 ): Promise<SessionRow> {
   assertUuid(eventId);
   const result = await executor.query<SessionRow>(
-    `SELECT ps.id, ps.event_id, e.title, e.status, e.discipline, ps.expires_at
+    `SELECT ps.id, ps.event_id, e.title, e.status, e.discipline, ps.expires_at,
+            pl.id AS link_id, ps.logger_name, ps.logger_club
      FROM public_logger_sessions ps
      JOIN public_logger_links pl ON pl.id = ps.link_id
      JOIN events e ON e.id = ps.event_id
@@ -190,7 +195,8 @@ async function validSession(
 
 export async function resolvePublicMeetActor(sessionToken: string, eventId: string, executor: DbExecutor = getPool()): Promise<MeetActor> {
   const session = await validSession(sessionToken, eventId, executor);
-  return { publicLoggerSessionId: session.id };
+  return { publicLoggerSessionId: session.id, publicLoggerLinkId: session.link_id ?? '',
+    publicLoggerName: session.logger_name ?? '', publicLoggerClub: session.logger_club ?? '' };
 }
 
 export async function publicLoggerSnapshot(
@@ -209,11 +215,12 @@ export async function publicLoggerSnapshot(
        ORDER BY a.name ASC, a.id ASC`,
       [session.event_id],
     ),
-    executor.query<TimelineEntryRow>(
-      `SELECT ${TIMELINE_COLUMNS}
-       FROM timeline_entries
-       WHERE event_id = $1 AND deleted_at IS NULL
-       ORDER BY created_at ASC, id ASC`,
+    executor.query<TimelineEntryRow & { entry_link_id: string | null; entry_logger_name: string | null; entry_logger_club: string | null }>(
+      `SELECT te.*, es.link_id AS entry_link_id, es.logger_name AS entry_logger_name, es.logger_club AS entry_logger_club
+       FROM timeline_entries te
+       LEFT JOIN public_logger_sessions es ON es.id = te.public_logger_session_id
+       WHERE te.event_id = $1 AND te.deleted_at IS NULL
+       ORDER BY te.created_at ASC, te.id ASC`,
       [session.event_id],
     ),
   ]);
@@ -235,7 +242,10 @@ export async function publicLoggerSnapshot(
         noteText: _noteText,
         ...publicEntry
       } = mapTimelineEntryRow(entry);
-      const editable = _publicLoggerSessionId === session.id;
+      // Identity is the person behind the link: any of their sessions can correct their own records.
+      const editable = entry.entry_link_id !== null && entry.entry_link_id === session.link_id
+        && sameLoggerIdentity(entry.entry_logger_name, session.logger_name)
+        && sameLoggerIdentity(entry.entry_logger_club, session.logger_club);
       return { ...publicEntry, canEdit: editable, canUndo: editable };
     }),
   };
@@ -248,8 +258,8 @@ function publicEntryResult(entry: TimelineEntry): Omit<TimelineEntry, 'recordedB
 
 async function lockOwnPublicEntry(client: DbExecutor, sessionToken: string, eventId: string, entryId: string): Promise<{ sessionId: string; eventType: EventType; entry: TimelineEntry }> {
   assertUuid(eventId); assertUuid(entryId);
-  const session = await client.query<{ id: string; type: EventType; status: EventStatus }>(
-    `SELECT ps.id, e.type, e.status
+  const session = await client.query<{ id: string; link_id: string; logger_name: string; logger_club: string; type: EventType; status: EventStatus }>(
+    `SELECT ps.id, pl.id AS link_id, ps.logger_name, ps.logger_club, e.type, e.status
      FROM public_logger_sessions ps
      JOIN public_logger_links pl ON pl.id = ps.link_id
      JOIN events e ON e.id = ps.event_id
@@ -260,10 +270,12 @@ async function lockOwnPublicEntry(client: DbExecutor, sessionToken: string, even
   const activeSession = session.rows[0];
   if (!activeSession || activeSession.status !== 'in_progress') throw unavailable();
   const entry = await client.query<TimelineEntryRow>(
-    `SELECT ${TIMELINE_COLUMNS} FROM timeline_entries
-     WHERE id = $1 AND event_id = $2 AND public_logger_session_id = $3
-     FOR UPDATE`,
-    [entryId, eventId, activeSession.id],
+    `SELECT te.* FROM timeline_entries te
+     JOIN public_logger_sessions es ON es.id = te.public_logger_session_id
+     WHERE te.id = $1 AND te.event_id = $2
+       AND es.link_id = $3 AND lower(trim(es.logger_name)) = lower(trim($4)) AND lower(trim(es.logger_club)) = lower(trim($5))
+     FOR UPDATE OF te`,
+    [entryId, eventId, activeSession.link_id, activeSession.logger_name, activeSession.logger_club],
   );
   if (!entry.rows[0]) throw notFound();
   return { sessionId: activeSession.id, eventType: activeSession.type, entry: mapTimelineEntryRow(entry.rows[0]) };

@@ -16,8 +16,8 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.*, en.athlete_id, a.name 
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
     AND se.withdrawn_at IS NULL AND r.outcome = 'valid' AND r.final_result IS NOT NULL
     AND a.lifecycle_status <> 'archived'
-    AND EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
-      AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision)`;
+    AND (e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
+      AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))`;
 
 export interface DisciplineAthleteStatistics {
   athleteId: string; athleteName: string; discipline: string; label: string;

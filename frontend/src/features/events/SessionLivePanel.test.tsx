@@ -292,6 +292,62 @@ describe('SessionLivePanel', () => {
     expect(await screen.findByText('Automatic best legal')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
   });
+  it('keeps official selection while hiding Undo for entries the club cannot correct', async () => {
+    sessionStatus = 'in_progress';
+    api.listSessionEntries.mockResolvedValue({ data: [{
+      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      entryType: 'attempt', value: 62.4, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
+      recordedBy: 'other-coach', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null,
+      canEdit: false, canUndo: false,
+    }, {
+      id: 'entry-2', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      entryType: 'attempt', value: 61.1, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
+      recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:01:00.000Z', updatedAt: '2026-09-20T10:01:00.000Z', deletedAt: null,
+    }] });
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
+    const attempts = await within(teamRow).findByRole('list', { name: 'Attempts for Speed Demons' });
+    expect(within(attempts).getAllByRole('button', { name: 'Make official' })).toHaveLength(2);
+    expect(within(attempts).getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+  });
+  it('shows discipline-relevant options for throws and distance races', async () => {
+    api.listDisciplines.mockResolvedValue({ data: [
+      { id: 'discus', code: 'discus', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Discus throw' }, defaultRules: { aggregation: 'best', entrantType: 'individual', attempts: 6 } },
+      { id: '1500m', code: '1500m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '1500m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual', distance: 1500 } },
+      { id: '100m', code: '100m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '100m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } },
+    ] });
+    api.listSessions.mockImplementation(async () => ({ data: [
+      { id: 'session-1', workspaceId: 'ws-1', resultState, disciplineDefinitionId: 'discus', label: 'Discus Final', status: sessionStatus, version: sessionVersion },
+      { id: 'session-2', workspaceId: 'ws-1', resultState, disciplineDefinitionId: '1500m', label: '1500m Final', status: sessionStatus, version: sessionVersion },
+      { id: 'session-3', workspaceId: 'ws-1', resultState, disciplineDefinitionId: '100m', label: '100m Final', status: sessionStatus, version: sessionVersion },
+    ] }));
+    api.listRegistrations.mockResolvedValue({ data: [
+      { id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' },
+    ], meta: { count: 1 } });
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    const discusRow = await screen.findByRole('group', { name: 'Ari Runner' });
+    expect(within(discusRow).getByLabelText('Mark (metres) for Ari Runner')).toBeInTheDocument();
+    expect(within(discusRow).getByRole('button', { name: 'Foul for Ari Runner' })).toBeInTheDocument();
+    expect(within(discusRow).getByRole('button', { name: 'DQ' })).toBeInTheDocument();
+    expect(within(discusRow).queryByRole('button', { name: 'False Start' })).not.toBeInTheDocument();
+    expect(within(discusRow).queryByRole('button', { name: 'Lane Inf.' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /1500m Final/ }));
+    const distanceRow = await screen.findByRole('group', { name: 'Ari Runner' });
+    expect(within(distanceRow).getByLabelText('Time (s) for Ari Runner')).toBeInTheDocument();
+    expect(within(distanceRow).getByRole('button', { name: 'False Start' })).toBeInTheDocument();
+    expect(within(distanceRow).queryByRole('button', { name: 'Lane Inf.' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /100m Final/ }));
+    const sprintRow = await screen.findByRole('group', { name: 'Ari Runner' });
+    expect(within(sprintRow).getByRole('button', { name: 'False Start' })).toBeInTheDocument();
+    expect(within(sprintRow).getByRole('button', { name: 'Lane Inf.' })).toBeInTheDocument();
+  });
   it('does not give a logger finalization authority', async () => {
     sessionStatus = 'in_progress';
     const user = userEvent.setup();
@@ -324,6 +380,11 @@ describe('SessionLivePanel', () => {
       entryType: 'attempt', value: 1.5, unit: 'metres', isFoul: false, incidentType: null, noteText: null,
       verticalState: 'clearance', attemptOrder: 1,
       recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null,
+    }, {
+      id: 'entry-v2', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a',
+      entryType: 'attempt', value: 1.5, unit: 'metres', isFoul: false, incidentType: null, noteText: null,
+      verticalState: 'failure', attemptOrder: 2, canEdit: false, canUndo: false,
+      recordedBy: 'other-coach', version: 1, createdAt: '2026-09-20T10:01:00.000Z', updatedAt: '2026-09-20T10:01:00.000Z', deletedAt: null,
     }] });
     api.listSessionResults.mockResolvedValue({ data: [{
       eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a',
@@ -339,6 +400,10 @@ describe('SessionLivePanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     const row = await screen.findByRole('group', { name: 'Ari Runner' });
 
+    expect(within(row).getByRole('button', { name: 'Void attempt 1' })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Void attempt 2' })).not.toBeInTheDocument();
+    expect(within(row).getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+
     expect(await within(row).findByLabelText('Target height (m) for Ari Runner')).toHaveValue(1.5);
     expect(screen.getByText(/starts at 1\.50 m, then \+0\.02 m per height\. 3 consecutive failures/)).toBeInTheDocument();
     await user.click(within(row).getByRole('button', { name: 'Clearance' }));
@@ -350,6 +415,8 @@ describe('SessionLivePanel', () => {
 
     expect(await screen.findByRole('columnheader', { name: 'Countback' })).toBeInTheDocument();
     expect(screen.getByRole('table')).toHaveTextContent('0 / 0');
+    expect(screen.getByRole('table')).toHaveTextContent('Team A');
+    expect(screen.getByRole('table')).toHaveTextContent('Ari Runner');
     await user.click(await within(row).findByRole('button', { name: 'Void attempt 1' }));
     await waitFor(() => expect(api.replaceSessionEntry).toHaveBeenCalledWith(
       'event-1',

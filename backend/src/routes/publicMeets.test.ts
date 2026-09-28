@@ -35,7 +35,7 @@ app.use('/api/v1/public/logger', publicMeetsRouter);
 describe('public meet routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    services.resolvePublicMeetActor.mockResolvedValue({ publicLoggerSessionId: 'public-session-id' });
+    services.resolvePublicMeetActor.mockResolvedValue({ publicLoggerSessionId: 'public-session-id', publicLoggerLinkId: 'public-link-id', publicLoggerName: 'Official', publicLoggerClub: 'Club' });
     services.listDisciplines.mockResolvedValue([]);
     services.listEntrants.mockResolvedValue([{ id: ENTRANT_ID, name: 'North Stars', kind: 'relay' }]);
     services.listSafeRelayMembers.mockResolvedValue([{ leg: 1, name: 'Ari Runner', isGuest: false }]);
@@ -73,7 +73,7 @@ describe('public meet routes', () => {
 
     expect(response.status).toBe(201);
     expect(services.createSessionEntry).toHaveBeenCalledWith(
-      { publicLoggerSessionId: 'public-session-id' }, EVENT_ID,
+      { publicLoggerSessionId: 'public-session-id', publicLoggerLinkId: 'public-link-id', publicLoggerName: 'Official', publicLoggerClub: 'Club' }, EVENT_ID,
       { disciplineSessionId: SESSION_ID, entrantId: ENTRANT_ID },
       expect.objectContaining({ value: 61.2, deviceId: null }),
     );

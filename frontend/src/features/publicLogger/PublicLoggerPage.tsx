@@ -321,10 +321,10 @@ export function PublicLoggerPage() {
                     {entry.entryType === 'attempt' && entry.value != null ? `${entry.value.toFixed(2)}s` : entry.incidentType}
                   </span>
                   <span className={styles.entryActions}>
-                    {entry.canEdit !== false && (
+                    {entry.canEdit === true && (
                       <Button variant="secondary" onClick={() => { setEditing(entry); setEditValue(entry.value?.toFixed(2) ?? ''); setEditIncident(entry.incidentType); }} disabled={Boolean(busy)}>Edit</Button>
                     )}
-                    {entry.canUndo !== false && (
+                    {entry.canUndo === true && (
                       <Button variant="danger" onClick={() => void undo(entry)} disabled={Boolean(busy)}>{busy === `undo-${entry.id}` ? 'Undoing...' : 'Undo'}</Button>
                     )}
                   </span>

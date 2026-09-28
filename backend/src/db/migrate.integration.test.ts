@@ -2,7 +2,6 @@ import { describe, expect, it, afterEach, beforeAll } from 'vitest';
 import pg from 'pg';
 import { applyMigrations, loadMigrations } from './migrate.js';
 import { listGuestFixtures } from '../services/fixtures.js';
-import { MEET_TEST_TABLES } from './meet-test-tables.js';
 
 /**
  * Migration integration tests against a real PostgreSQL database.
@@ -20,31 +19,6 @@ import { MEET_TEST_TABLES } from './meet-test-tables.js';
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 
-const TABLES = [
-  ...MEET_TEST_TABLES,
-  'fixture_notifications',
-  'club_join_requests',
-  'clubs',
-  'fixture_invitation_responses',
-  'fixture_invitations',
-  'event_fixture_workspaces',
-  'athlete_squads',
-  'squads',
-  'workspace_membership_audit',
-  'workspace_invitations',
-  'workspace_members',
-  'workspaces',
-  'account_deletions',
-  'results',
-  'timeline_entries',
-  'event_participants',
-  'events',
-  'athletes',
-  'users',
-  'user_preferences',
-  'schema_migrations',
-];
-
 describeDB('migrations against a real database', () => {
   let pool: pg.Pool;
   let migrations: Awaited<ReturnType<typeof loadMigrations>>;
@@ -57,8 +31,7 @@ describeDB('migrations against a real database', () => {
   afterEach(async () => {
     const client = await pool.connect();
     try {
-      await client.query(`DROP TABLE IF EXISTS ${TABLES.join(', ')} CASCADE`);
-      await client.query('DROP FUNCTION IF EXISTS create_event_fixture_host() CASCADE');
+      await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     } finally {
       client.release();
     }
@@ -91,47 +64,12 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(rows.map((row) => row.name)).toEqual([
-      '0001_init.sql',
-      '0002_contract_100m.sql',
-      '0003_aggregate_indexes.sql',
-      '0004_account_lifecycle.sql',
-      '0005_workspace_tenancy.sql',
-      '0006_workspace_roles_and_invitations.sql',
-      '0007_workspace_squads.sql',
-      '0008_athlete_lifecycle.sql',
-      '0009_intermediate_fixtures.sql',
-      '0010_fixture_workspace_status_index.sql',
-      '0011_athlete_injuries.sql',
-      '0012_audited_rsvps.sql',
-      '0013_in_app_event_reminders.sql',
-      '0014_event_helper_invitations.sql',
-      '0015_optional_injury_dates.sql',
-      '0016_public_logger_links.sql',
-      '0017_clubs.sql',
-      '0018_fixture_notifications.sql',
-      '0019_offline_logger_designation.sql',
-      '0019_targeted_fixture_invitations_and_single_membership.sql',
-       '0020_sync_idempotency.sql',
-      '0021_user_consent.sql',
-      '0022_notification_star_delete.sql',
-      '0022_public_logger_offline_sync.sql',
-      '0023_event_lifecycle_notifications.sql',
-      '0024_public_club_statistics.sql',
-      '0025_club_public_schedule_publication.sql',
-      '0026_user_preferences.sql',
-      '0027_club_branding.sql',
-      '0028_multi_discipline_meet_foundation.sql',
-      '0029_timed_discipline_catalogue.sql',
-      '0030_measured_field_catalogue.sql',
-      '0031_vertical_events_catalogue.sql',
-      '0032_athlete_disciplines_and_season_goals.sql',
-      '0033_guest_entrant_details.sql',
-      '0034_relay_catalogue_and_official_entry.sql',
-    ]);
+    expect(rows.map((row) => row.name)).toEqual(migrations.map((migration) => migration.name));
 
     expect(await hasColumn('athletes', 'archived_at')).toBe(true);
     expect(await hasColumn('timeline_entries', 'note_text')).toBe(true);
+    expect(await hasColumn('timeline_entries', 'recorded_workspace_id')).toBe(true);
+    expect(await hasColumn('session_timeline_entries', 'recorded_workspace_id')).toBe(true);
     expect(await hasColumn('results', 'outcome')).toBe(true);
     expect(await hasColumn('results', 'override_at')).toBe(true);
     expect(await hasColumn('account_deletions', 'completed_at')).toBe(true);
@@ -176,44 +114,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(rows.map((row) => row.name)).toEqual([
-      '0001_init.sql',
-      '0002_contract_100m.sql',
-      '0003_aggregate_indexes.sql',
-      '0004_account_lifecycle.sql',
-      '0005_workspace_tenancy.sql',
-      '0006_workspace_roles_and_invitations.sql',
-      '0007_workspace_squads.sql',
-      '0008_athlete_lifecycle.sql',
-      '0009_intermediate_fixtures.sql',
-      '0010_fixture_workspace_status_index.sql',
-      '0011_athlete_injuries.sql',
-      '0012_audited_rsvps.sql',
-      '0013_in_app_event_reminders.sql',
-      '0014_event_helper_invitations.sql',
-      '0015_optional_injury_dates.sql',
-      '0016_public_logger_links.sql',
-      '0017_clubs.sql',
-      '0018_fixture_notifications.sql',
-      '0019_offline_logger_designation.sql',
-      '0019_targeted_fixture_invitations_and_single_membership.sql',
-       '0020_sync_idempotency.sql',
-      '0021_user_consent.sql',
-      '0022_notification_star_delete.sql',
-      '0022_public_logger_offline_sync.sql',
-      '0023_event_lifecycle_notifications.sql',
-      '0024_public_club_statistics.sql',
-      '0025_club_public_schedule_publication.sql',
-      '0026_user_preferences.sql',
-      '0027_club_branding.sql',
-      '0028_multi_discipline_meet_foundation.sql',
-      '0029_timed_discipline_catalogue.sql',
-      '0030_measured_field_catalogue.sql',
-      '0031_vertical_events_catalogue.sql',
-      '0032_athlete_disciplines_and_season_goals.sql',
-      '0033_guest_entrant_details.sql',
-      '0034_relay_catalogue_and_official_entry.sql',
-    ]);
+    expect(rows.map((row) => row.name)).toEqual(migrations.map((migration) => migration.name));
     expect(await hasColumn('results', 'outcome')).toBe(true);
   });
 
@@ -222,7 +123,7 @@ describeDB('migrations against a real database', () => {
     await migrate();
 
     const { rows } = await pool.query('SELECT name, checksum FROM schema_migrations ORDER BY name');
-    expect(rows).toHaveLength(36);
+    expect(rows).toHaveLength(migrations.length);
     expect(await hasColumn('session_results', 'selected_entry_id')).toBe(true);
   });
 
@@ -253,26 +154,27 @@ describeDB('migrations against a real database', () => {
         `INSERT INTO users (auth0_id, name, email) VALUES ('auth|u1', 'Coach', 'c@example.com') RETURNING id`,
       );
       const coachId = rows[0].id;
+      await client.query('INSERT INTO workspaces (id, name) VALUES ($1, \'Coach club\')', [coachId]);
 
       await expect(
         client.query(
-          `INSERT INTO events (created_by, type, title, date, status)
-           VALUES ($1, 'competition', 'Invalid', '2026-08-01', 'in_limbo')`,
+          `INSERT INTO events (workspace_id, created_by, type, title, date, status)
+           VALUES ($1, $1, 'competition', 'Invalid', '2026-08-01', 'in_limbo')`,
           [coachId],
         ),
       ).rejects.toThrow('events_status_check');
 
       await expect(
         client.query(
-          `INSERT INTO events (created_by, type, title, date)
-           VALUES ($1, 'match', 'Invalid type', '2026-08-01')`,
+          `INSERT INTO events (workspace_id, created_by, type, title, date)
+           VALUES ($1, $1, 'match', 'Invalid type', '2026-08-01')`,
           [coachId],
         ),
       ).rejects.toThrow('events_type_check');
 
       await client.query(
-        `INSERT INTO events (created_by, type, title, date, status)
-         VALUES ($1, 'competition', 'Valid', '2026-08-01', 'scheduled')`,
+        `INSERT INTO events (workspace_id, created_by, type, title, date, status)
+         VALUES ($1, $1, 'competition', 'Valid', '2026-08-01', 'scheduled')`,
         [coachId],
       );
     } finally {
@@ -288,14 +190,15 @@ describeDB('migrations against a real database', () => {
         `INSERT INTO users (auth0_id, name, email) VALUES ('auth|u2', 'Coach', 'c2@example.com') RETURNING id`,
       );
       const coachId = userRows[0].id;
+      await client.query('INSERT INTO workspaces (id, name) VALUES ($1, \'Coach club\')', [coachId]);
       const { rows: athleteRows } = await client.query(
-        `INSERT INTO athletes (coach_id, name) VALUES ($1, 'Athlete'), ($1, 'Athlete Two') RETURNING id`,
+        `INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1, $1, 'Athlete'), ($1, $1, 'Athlete Two') RETURNING id`,
         [coachId],
       );
       const [athleteId, athleteTwoId] = athleteRows.map((row) => row.id);
       const { rows: eventRows } = await client.query(
-        `INSERT INTO events (created_by, type, title, date)
-         VALUES ($1, 'competition', '100m', '2026-08-01') RETURNING id`,
+        `INSERT INTO events (workspace_id, created_by, type, title, date)
+         VALUES ($1, $1, 'competition', '100m', '2026-08-01') RETURNING id`,
         [coachId],
       );
       const eventId = eventRows[0].id;

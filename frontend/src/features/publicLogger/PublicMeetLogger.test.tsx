@@ -34,8 +34,8 @@ const snapshot: PublicMeetLoggerSnapshot = {
     { id: GUEST_ID, name: 'Casey Guest', kind: 'guest', workspaceName: null, clubName: 'Independent Athletics', attending: true, members: [] },
   ],
   sessions: [
-    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [] },
-    { id: FIELD_SESSION_ID, label: 'Long Jump Final', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [] },
+    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [{ entrantId: RELAY_ID, outcome: 'valid', placing: 1, selectedEntryId: null, value: 48.21 }] },
+    { id: FIELD_SESSION_ID, label: 'Long Jump Final', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [{ entrantId: GUEST_ID, outcome: 'valid', placing: 1, selectedEntryId: null, value: 6.45 }] },
     { id: '88888888-8888-4888-8888-888888888888', label: 'Closed Session', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'scheduled', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [] },
   ],
 };
@@ -69,9 +69,17 @@ describe('PublicMeetLogger', () => {
 
     // Default tab is the first in-progress session; relay legs stay name-only and safe.
     expect(screen.getByText('Legs: Ari Runner → Bea Guest')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'False Start' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lane Inf.' })).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveTextContent('North Stars');
+    expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Guest');
 
     await user.click(screen.getByRole('tab', { name: /Long Jump Final/ }));
-    expect(screen.getByText('Independent Athletics')).toBeInTheDocument();
+    expect(screen.getAllByText('Independent Athletics')).toHaveLength(2);
+    expect(screen.getByRole('table')).toHaveTextContent('Casey Guest');
+    expect(screen.queryByRole('button', { name: 'False Start' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Lane Inf.' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'DQ' })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
     await user.click(screen.getByRole('button', { name: 'Record' }));
@@ -81,7 +89,7 @@ describe('PublicMeetLogger', () => {
       expect.objectContaining({ entryType: 'attempt', value: 6.45, unit: 'metres', isFoul: false, noteText: null }),
     ));
 
-    await user.click(screen.getByRole('checkbox', { name: 'Foul for Casey Guest' }));
+    await user.click(screen.getByRole('button', { name: 'Foul for Casey Guest' }));
     await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
     await user.click(screen.getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenLastCalledWith(
@@ -108,6 +116,6 @@ describe('PublicMeetLogger', () => {
 
     await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
     expect(screen.queryByText('Absent Athlete')).not.toBeInTheDocument();
-    expect(screen.getByText('Casey Guest')).toBeInTheDocument();
+    expect(screen.getAllByText('Casey Guest')).toHaveLength(2);
   });
 });

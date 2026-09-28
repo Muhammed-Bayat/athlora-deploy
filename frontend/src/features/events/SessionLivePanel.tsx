@@ -9,26 +9,13 @@ import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../.
 import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
+import { incidentButtons } from './disciplineIncidents';
+import { memberSummary, standingsMembers, standingsTeam } from './standingsDisplay';
 import styles from './SessionLivePanel.module.css';
-
-const INCIDENT_BUTTONS: { value: IncidentType; label: string; title: string }[] = [
-  { value: 'false_start', label: 'False Start', title: 'False Start' },
-  { value: 'lane_infringement', label: 'Lane Inf.', title: 'Lane Infringement' },
-  { value: 'dq', label: 'DQ', title: 'Disqualified' },
-  { value: 'dnf', label: 'DNF', title: 'Did Not Finish' },
-  { value: 'dns', label: 'DNS', title: 'Did Not Start' },
-];
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
   return `${value.toFixed(definition?.precision ?? 2)} ${definition?.unit === 'metres' || definition?.unit === 'cm' ? definition.unit : 's'}`;
-}
-
-function memberSummary(entrant: MeetEntrant | undefined, entrants: MeetEntrant[]): string {
-  if (!entrant || entrant.kind !== 'relay') return '';
-  return entrant.memberIds
-    .map((id) => entrants.find((item) => item.id === id)?.name ?? 'Member')
-    .join(' → ');
 }
 
 export function SessionLivePanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {
@@ -302,12 +289,13 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
     const rows = vertical
       ? [
-        ['Place', 'Entrant', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
+        ['Place', 'Team / club', 'Members', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
           return [
             row.placing ?? '',
-            entrant?.name ?? '',
+            standingsTeam(entrant),
+            standingsMembers(entrant, entrants),
             row.effectiveResult === null ? 'NH' : row.effectiveResult.toFixed(definition?.precision ?? 2),
             row.vertical?.failuresAtBest ?? '',
             row.vertical?.totalFailuresToBest ?? '',
@@ -316,13 +304,13 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
         }),
       ]
       : [
-        ['Place', 'Team', 'Members', 'Result', 'Outcome', 'Official entry'],
+        ['Place', 'Team / club', 'Members', 'Result', 'Outcome', 'Official entry'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
           return [
             row.placing ?? '',
-            entrant?.name ?? '',
-            memberSummary(entrant, entrants),
+            standingsTeam(entrant),
+            standingsMembers(entrant, entrants),
             row.effectiveResult === null ? '' : row.effectiveResult.toFixed(definition?.precision ?? 2),
             row.effectiveOutcome,
             row.selectedEntryId ? 'selected' : '',
@@ -463,16 +451,17 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                             disabled={controlsDisabled}
                           />
                           {!timed && (
-                            <label className={styles.foulToggle}>
-                              <input
-                                type="checkbox"
-                                aria-label={`Foul for ${entrant.name}`}
-                                checked={fouls[entrant.id] ?? false}
-                                onChange={(input) => setFouls((prev) => ({ ...prev, [entrant.id]: input.target.checked }))}
-                                disabled={controlsDisabled}
-                              />
+                            <Button
+                              variant={fouls[entrant.id] ? 'danger' : 'secondary'}
+                              aria-label={`Foul for ${entrant.name}`}
+                              aria-pressed={fouls[entrant.id] ?? false}
+                              onClick={() => setFouls((prev) => ({ ...prev, [entrant.id]: !(prev[entrant.id] ?? false) }))}
+                              disabled={controlsDisabled}
+                              style={{ minHeight: '44px', minWidth: '44px' }}
+                              title="Foul"
+                            >
                               Foul
-                            </label>
+                            </Button>
                           )}
                           <Button
                             disabled={controlsDisabled || !(values[entrant.id] ?? '').trim()}
@@ -499,7 +488,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         </div>
                       ) : (
                         <div className={styles.incidentButtonGroup}>
-                          {INCIDENT_BUTTONS.map((incident) => (
+                          {incidentButtons(definition).map((incident) => (
                             <Button
                               key={incident.value}
                               variant="secondary"
@@ -536,10 +525,12 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                                     Make official
                                   </Button>
                                 )}
-                                {vertical && entry.verticalState && entry.verticalState !== 'void' && (
+                                {vertical && entry.verticalState && entry.verticalState !== 'void' && entry.canEdit !== false && (
                                   <Button variant="secondary" disabled={busy} onClick={() => void voidEntry(entrant.id, entry)}>Void attempt {entry.attemptOrder}</Button>
                                 )}
-                                <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
+                                {entry.canUndo !== false && (
+                                  <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
+                                )}
                               </>
                             )}
                           </li>
@@ -555,37 +546,39 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             </div>
           )}
           <h3>Standings ({session.resultState === 'final' ? 'final' : session.resultState === 'reopened' ? 'reopened — provisional' : 'provisional'})</h3>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Place</th>
-                <th scope="col">Team</th>
-                <th scope="col">Members</th>
-                <th scope="col">Result</th>
-                {vertical && <th scope="col">Countback</th>}
-                <th scope="col">Status</th>
-                {!vertical && <th scope="col">Official entry</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {[...results]
-                .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
-                .map((row) => {
-                  const entrant = entrants.find((item) => item.id === row.entrantId);
-                  return (
-                    <tr key={row.entrantId}>
-                      <td>{row.placing ?? '—'}</td>
-                      <td>{entrant?.name ?? 'Team'}</td>
-                      <td>{memberSummary(entrant, entrants)}</td>
-                      <td>{vertical && row.effectiveResult === null ? 'NH' : formatResult(row.effectiveResult, definition)} {row.isPb && 'PB'} {row.isSb && 'SB'}</td>
-                      {vertical && <td>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
-                      <td>{row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome}</td>
-                      {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+          <div className={styles.standingsScroll}>
+            <table className={styles.standingsTable}>
+              <thead>
+                <tr>
+                  <th scope="col" className={styles.numeric}>Place</th>
+                  <th scope="col">Team / club</th>
+                  <th scope="col">Members</th>
+                  <th scope="col" className={styles.numeric}>Result</th>
+                  {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
+                  <th scope="col">Status</th>
+                  {!vertical && <th scope="col">Official entry</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {[...results]
+                  .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
+                  .map((row) => {
+                    const entrant = entrants.find((item) => item.id === row.entrantId);
+                    return (
+                      <tr key={row.entrantId}>
+                        <td className={styles.numeric}>{row.placing ?? '—'}</td>
+                        <td>{standingsTeam(entrant)}</td>
+                        <td>{standingsMembers(entrant, entrants)}</td>
+                        <td className={styles.numeric}>{vertical && row.effectiveResult === null ? 'NH' : formatResult(row.effectiveResult, definition)} {row.isPb && 'PB'} {row.isSb && 'SB'}</td>
+                        {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
+                        <td>{row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome}</td>
+                        {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
           <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
           {resolution && (
             <section aria-label="Offline reconciliation">

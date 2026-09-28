@@ -888,11 +888,12 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                           type="button"
                           className={styles.linkButton}
                           onClick={(event) => handleOpenEdit(entry, event.currentTarget)}
-                          disabled={mutationBusy}
+                          disabled={mutationBusy || entry.canEdit === false}
                           style={{ minHeight: '44px', minWidth: '44px' }}
                         >
                           Edit
                         </button>
+                        {entry.canUndo !== false && (
                         <button
                           type="button"
                           className={styles.dangerLinkButton}
@@ -902,6 +903,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
                         >
                           Undo
                         </button>
+                        )}
                         </div>}
                     </div>
                   );

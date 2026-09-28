@@ -37,8 +37,8 @@ fixtureGuestRouter.delete('/:eventId/participants/:athleteId', requireCoach(), f
 fixtureGuestRouter.post('/:eventId/withdrawal', requireCoach(), fixtures.guestWithdrawal);
 fixtureGuestRouter.get('/:eventId/entries', fixtures.listGuestEntries);
 fixtureGuestRouter.post('/:eventId/entries', requireOperationalAccess(), validateBody(parseTimelineEntryCreatePayload), fixtures.createGuestEntry);
-fixtureGuestRouter.patch('/:eventId/entries/:entryId', requireOperationalAccess(), validateBody(parseTimelineEntryPatchPayload), fixtures.updateGuestEntry);
-fixtureGuestRouter.delete('/:eventId/entries/:entryId', requireOperationalAccess(), validateBody(parseTimelineEntryDeletePayload), fixtures.removeGuestEntry);
+fixtureGuestRouter.patch('/:eventId/entries/:entryId', requireCoach(), validateBody(parseTimelineEntryPatchPayload), fixtures.updateGuestEntry);
+fixtureGuestRouter.delete('/:eventId/entries/:entryId', requireCoach(), validateBody(parseTimelineEntryDeletePayload), fixtures.removeGuestEntry);
 fixtureGuestRouter.get('/:eventId/results', fixtures.listGuestResults);
 fixtureGuestRouter.put('/:eventId/results/:athleteId', requireOperationalAccess(), validateBody(parseResultOverridePayload), fixtures.overrideGuestResult);
 

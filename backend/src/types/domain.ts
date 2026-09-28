@@ -339,6 +339,8 @@ export interface TimelineEntry {
   recorderName?: string | null;
   recorderClub?: string | null;
   publicLoggerSessionId?: string | null;
+  canEdit?: boolean;
+  canUndo?: boolean;
   version: number;
   deviceId: string | null;
   createdAt: string;

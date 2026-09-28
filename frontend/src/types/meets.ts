@@ -45,6 +45,9 @@ export interface SessionEntry extends SessionEntryInput, SessionTarget {
   attemptOrder?: number | null;
   id: string; eventId: string; workspaceId: string; recordedBy: string | null; publicLoggerSessionId: string | null;
   recorderName?: string | null;
+  recordedWorkspaceId?: string | null;
+  canEdit?: boolean;
+  canUndo?: boolean;
   version: number; createdAt: string; updatedAt: string; deletedAt: string | null;
 }
 export interface SessionResult extends SessionTarget {

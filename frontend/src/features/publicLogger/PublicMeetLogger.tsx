@@ -18,17 +18,11 @@ import type {
   SessionTarget,
 } from '../../types/meets';
 import styles from '../events/SessionLivePanel.module.css';
+import { incidentButtons } from '../events/disciplineIncidents';
+import { standingsTeam } from '../events/standingsDisplay';
 import pageStyles from './PublicLoggerPage.module.css';
 
 const DEFAULT_SESSION_CACHE_KEY = 'public-meet';
-
-const INCIDENT_BUTTONS: { value: IncidentType; label: string; title: string }[] = [
-  { value: 'false_start', label: 'False Start', title: 'False Start' },
-  { value: 'lane_infringement', label: 'Lane Inf.', title: 'Lane Infringement' },
-  { value: 'dq', label: 'DQ', title: 'Disqualified' },
-  { value: 'dnf', label: 'DNF', title: 'Did Not Finish' },
-  { value: 'dns', label: 'DNS', title: 'Did Not Start' },
-];
 
 function formatValue(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
@@ -47,6 +41,12 @@ function teamLine(entrant: PublicMeetEntrant): string {
   if (entrant.kind === 'relay') return `Legs: ${memberSummary(entrant) || 'Members not listed'}`;
   if (entrant.kind === 'guest') return entrant.clubName ?? 'Guest';
   return entrant.workspaceName ?? 'Athlete';
+}
+
+function standingsMembers(entrant: PublicMeetEntrant | undefined): string {
+  if (!entrant) return '';
+  if (entrant.kind === 'relay') return memberSummary(entrant);
+  return entrant.name;
 }
 
 export function PublicMeetLogger({
@@ -228,12 +228,13 @@ export function PublicMeetLogger({
     const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
     const rows = vertical
       ? [
-        ['Place', 'Entrant', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
+        ['Place', 'Team / club', 'Members', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
           return [
             row.placing ?? '',
-            entrant?.name ?? '',
+            standingsTeam(entrant),
+            standingsMembers(entrant),
             row.value === null ? 'NH' : row.value.toFixed(definition?.precision ?? 2),
             row.vertical?.failuresAtBest ?? '',
             row.vertical?.totalFailuresToBest ?? '',
@@ -242,13 +243,13 @@ export function PublicMeetLogger({
         }),
       ]
       : [
-        ['Place', 'Team', 'Members', 'Result', 'Outcome', 'Official entry'],
+        ['Place', 'Team / club', 'Members', 'Result', 'Outcome', 'Official entry'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
           return [
             row.placing ?? '',
-            entrant?.name ?? '',
-            memberSummary(entrant),
+            standingsTeam(entrant),
+            standingsMembers(entrant),
             row.value === null ? '' : row.value.toFixed(definition?.precision ?? 2),
             row.outcome,
             row.selectedEntryId ? 'selected' : '',
@@ -403,16 +404,17 @@ export function PublicMeetLogger({
                               disabled={controlsDisabled}
                             />
                             {!timed && (
-                              <label className={styles.foulToggle}>
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Foul for ${entrant.name}`}
-                                  checked={fouls[entrant.id] ?? false}
-                                  onChange={(input) => setFouls((prev) => ({ ...prev, [entrant.id]: input.target.checked }))}
-                                  disabled={controlsDisabled}
-                                />
+                              <Button
+                                variant={fouls[entrant.id] ? 'danger' : 'secondary'}
+                                aria-label={`Foul for ${entrant.name}`}
+                                aria-pressed={fouls[entrant.id] ?? false}
+                                onClick={() => setFouls((prev) => ({ ...prev, [entrant.id]: !(prev[entrant.id] ?? false) }))}
+                                disabled={controlsDisabled}
+                                style={{ minHeight: '44px', minWidth: '44px' }}
+                                title="Foul"
+                              >
                                 Foul
-                              </label>
+                              </Button>
                             )}
                             <Button
                               disabled={controlsDisabled || !(values[entrant.id] ?? '').trim()}
@@ -439,7 +441,7 @@ export function PublicMeetLogger({
                           </div>
                         ) : (
                           <div className={styles.incidentButtonGroup}>
-                            {INCIDENT_BUTTONS.map((incident) => (
+                            {incidentButtons(definition).map((incident) => (
                               <Button
                                 key={incident.value}
                                 variant="secondary"
@@ -480,37 +482,39 @@ export function PublicMeetLogger({
               </div>
             )}
             <h3>Standings ({session.resultState === 'final' ? 'final' : session.resultState === 'reopened' ? 'reopened — provisional' : 'provisional'})</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Place</th>
-                  <th scope="col">Team</th>
-                  <th scope="col">Members</th>
-                  <th scope="col">Result</th>
-                  {vertical && <th scope="col">Countback</th>}
-                  <th scope="col">Status</th>
-                  {!vertical && <th scope="col">Official entry</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {[...results]
-                  .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
-                  .map((row) => {
-                    const entrant = entrants.find((item) => item.id === row.entrantId);
-                    return (
-                      <tr key={row.entrantId}>
-                        <td>{row.placing ?? '—'}</td>
-                        <td>{entrant?.name ?? 'Team'}</td>
-                        <td>{memberSummary(entrant)}</td>
-                        <td>{vertical && row.value === null ? 'NH' : formatValue(row.value, definition)}</td>
-                        {vertical && <td>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
-                        <td>{row.vertical?.eliminated ? 'Eliminated' : row.outcome}</td>
-                        {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+            <div className={styles.standingsScroll}>
+              <table className={styles.standingsTable}>
+                <thead>
+                  <tr>
+                    <th scope="col" className={styles.numeric}>Place</th>
+                    <th scope="col">Team / club</th>
+                    <th scope="col">Members</th>
+                    <th scope="col" className={styles.numeric}>Result</th>
+                    {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
+                    <th scope="col">Status</th>
+                    {!vertical && <th scope="col">Official entry</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...results]
+                    .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
+                    .map((row) => {
+                      const entrant = entrants.find((item) => item.id === row.entrantId);
+                      return (
+                        <tr key={row.entrantId}>
+                          <td className={styles.numeric}>{row.placing ?? '—'}</td>
+                          <td>{standingsTeam(entrant)}</td>
+                          <td>{standingsMembers(entrant)}</td>
+                          <td className={styles.numeric}>{vertical && row.value === null ? 'NH' : formatValue(row.value, definition)}</td>
+                          {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
+                          <td>{row.vertical?.eliminated ? 'Eliminated' : row.outcome}</td>
+                          {!vertical && <td>{timed ? row.selectedEntryId ? 'Selected' : 'Awaiting selection' : 'Automatic best legal'}</td>}
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
             <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
           </div>
         )}
