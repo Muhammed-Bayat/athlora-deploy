@@ -654,4 +654,27 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(dashboard.recentResults.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
     expect(dashboard.recentPbs.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
   });
+
+  it('blocks starting an event while any host or guest athlete is pending or maybe', async () => {
+    await migrate();
+    const { replaceEvent } = await import('./events.js');
+    const start = { type: 'competition' as const, discipline: '100m' as const, title: 'Meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress' as const };
+    await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'pending')", [eventId, athleteId, host.workspaceId]);
+    await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });
+    await pool.query("UPDATE event_participants SET rsvp_status = 'maybe' WHERE event_id = $1", [eventId]);
+    await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });
+
+    await pool.query("UPDATE event_participants SET rsvp_status = 'yes' WHERE event_id = $1", [eventId]);
+    await pool.query(
+      `INSERT INTO event_fixture_workspaces (event_id, workspace_id, role, status, accepted_revision)
+       VALUES ($1,$2,'host','accepted',1),($1,$3,'guest','accepted',1)`,
+      [eventId, host.workspaceId, other.workspaceId],
+    );
+    await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'pending')", [eventId, otherAthleteId, other.workspaceId]);
+    await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });
+
+    await pool.query("UPDATE event_participants SET rsvp_status = 'yes' WHERE athlete_id = $1", [otherAthleteId]);
+    const started = await replaceEvent(host.workspaceId, eventId, start, transaction);
+    expect(started.status).toBe('in_progress');
+  });
 });
