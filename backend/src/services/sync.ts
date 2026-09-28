@@ -306,10 +306,10 @@ export async function getOfflineLoggerDesignation(eventId: string): Promise<Offl
     name: string | null;
     device_id: string | null;
   }>(
-    `SELECT grant.id AS grant_id, user_record.id AS user_id, user_record.name, grant.offline_queue_device_id AS device_id
-     FROM event_helper_grants grant
-     LEFT JOIN users user_record ON user_record.auth0_id = grant.auth0_sub
-     WHERE grant.event_id = $1 AND grant.status = 'active' AND grant.is_offline_logger = true
+    `SELECT ehg.id AS grant_id, user_record.id AS user_id, user_record.name, ehg.offline_queue_device_id AS device_id
+     FROM event_helper_grants ehg
+     LEFT JOIN users user_record ON user_record.auth0_id = ehg.auth0_sub
+     WHERE ehg.event_id = $1 AND ehg.status = 'active' AND ehg.is_offline_logger = true
      LIMIT 1`,
     [eventId],
   );
