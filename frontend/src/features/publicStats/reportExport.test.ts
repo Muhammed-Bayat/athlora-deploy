@@ -1,4 +1,6 @@
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
+import { formatReportDate, wrapReportText } from '../reports/pdfDocument';
 import { reportCsv, reportPdf } from './reportExport';
 
 const entry = {
@@ -18,5 +20,26 @@ describe('public report exports', () => {
     const bytes = await reportPdf([entry], { discipline: '100m', season: '2026' });
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.byteLength).toBeGreaterThan(500);
+  });
+
+  it('wraps long values and creates additional PDF pages for a large report', async () => {
+    const document = await PDFDocument.create();
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    expect(wrapReportText(font, 'Intercontinental Championship Final With A Long Event Name', 7.5, 55).length).toBeGreaterThan(1);
+
+    const entries = Array.from({ length: 70 }, (_, index) => ({
+      ...entry,
+      athleteId: `athlete-${index}`,
+      athleteName: `Athlete ${index + 1}`,
+      eventTitle: `Intercontinental Championship Final With A Long Event Name ${index + 1}`,
+    }));
+    const bytes = await reportPdf(entries, {});
+    const exported = await PDFDocument.load(bytes);
+
+    expect(exported.getPageCount()).toBeGreaterThan(1);
+  });
+
+  it('formats event dates for readable PDF table labels', () => {
+    expect(formatReportDate('2026-09-25')).toBe('25 Sept 2026');
   });
 });

@@ -2,15 +2,17 @@
 sidebar_position: 1
 ---
 
-# 100m data/API contract
+# Athletics data/API contract
 
-The authoritative contract for the currently implemented 100m vertical slice. It fixes the current discipline to **100m** (track, timed) and the result unit to **seconds** at the API/service boundary, and defines the request/response DTOs for athletes, events, participants, timeline entries, results, statistics, and dashboard data.
+The authoritative contract for the legacy 100m vertical slice and the catalogue-backed multi-discipline APIs. It defines the request/response DTOs for athletes, events, participants, timeline entries, results, statistics, dashboard data, and discipline analytics.
 
 All paths in this document are relative to `/api/v1`.
 
 Athlora's product scope is a full athletics meet, not only 100m. Additional track, relay, race-walk, jump, throw, and vertical-event contracts will extend this document with their own units, validation, entry shapes, derivation, placing, and PB/SB rules. Until those contracts are implemented, this page remains exact for the shipped 100m API.
 
 The database schema stays permissive (`discipline` is free-form `TEXT`; the `unit` column allows `seconds`/`metres`/`cm`) so later disciplines are added by new migrations without changing this contract. The discipline/unit fixation happens in the TypeScript domain types and the pure result-derivation service — never by a database CHECK on the discipline value.
+
+Legacy 100m endpoints retain their exact seconds-only behavior. Generic meet sessions and the discipline analytics endpoints resolve units, precision, direction, and labels through the immutable `discipline_definitions` catalogue.
 
 ## 1. Contract constants
 
@@ -192,6 +194,22 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 
 The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
+### 3.4a Discipline analytics
+
+All discipline analytics routes are authenticated and resolve their workspace from the caller. They accept `year=<four-digit year|all>`; omitted `year` selects the current UTC year. A selected year scopes `sb`; `pb`, chronological history, first/latest, average, median, improvement, and recent trend use the complete eligible history. With `year=all`, `sb` is the all-time best and therefore equals `pb` when results exist.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /analytics/athletes/:id/disciplines/:discipline` | Owner-scoped normalized discipline analysis for one athlete |
+| `GET /analytics/squads/:squadId/disciplines/:discipline` | Active squad members with descriptive factors and PB-only ranks |
+| `GET /analytics/disciplines/:discipline/athletes` | Active preferred-discipline athletes in the active workspace with descriptive factors and PB-only ranks |
+
+The athlete route uses the standard non-enumerating ownership check. Unknown/inaccessible athletes, squads, and discipline codes return the generic `404 NOT_FOUND`; no route accepts a workspace identifier. Workspace rankings include athletes whose preferred discipline has the requested code across retained catalogue versions, without duplicate rows.
+
+An athlete response contains `{ athleteId, discipline, season, pb, sb, latest, first, average, median, improvement, recentTrend, resultCount, recentResults, history }`. Every normalized history row carries a stable source-qualified `id`, `source` (`legacy_result` or `session_result`), original `sourceResultId`, athlete/discipline metadata, event metadata, raw `value`, and nullable `place`. The service reads legacy valid, non-cancelled 100m rows and finalized valid individual generic-session results in place; it does not create a migration or copy historical data.
+
+Squad/workspace responses contain `{ discipline, season, ranking, athletes }`. `ranking` explicitly records its `pb` basis, catalogue direction, ordering, tie behavior, unranked behavior, and available descriptive factors. Equal PBs share a rank; name/ID only order tied rows for display. There is no composite promising-athlete score or weighting.
+
 ### 3.5 Public logger links
 
 Coaches create shareable, token-authenticated links that let external guests log results for an event without an Auth0 account. Tokens are verified server-side; the public guest never authenticates through Auth0.
@@ -274,13 +292,13 @@ Reminders are in-app records generated for upcoming events. They are not push, e
 
 ### 3.9 AI integration
 
-The Gemini voice assistant provides real-time, voice-driven athlete management. The frontend captures microphone audio, streams it to Google Gemini through a WebSocket, and receives audio responses and tool-call results (e.g. creating an athlete).
+The global Gemini assistant is mounted once in the authenticated coach console. It can use catalogue, athlete-search, page-context, weather, and discipline-analytics tools, while retaining no raw browser coordinates in tool responses. The frontend captures microphone audio, streams it to Google Gemini through a WebSocket, and receives audio responses and tool-call results.
 
 | Method & path | Purpose |
 |---|---|
 | `POST /ai/gemini-token` | Create a short-lived Gemini API access token |
 
-The token is exchanged by the frontend SDK (`@google/genai`) to establish a `BidiGenerateContentConstrained` WebSocket session. The backend does not relay audio; the browser streams directly to Gemini's endpoint. Tool calls are intercepted by the frontend and sent to the existing Athlora API.
+The token is exchanged by the frontend SDK (`@google/genai`) to establish a `BidiGenerateContentConstrained` WebSocket session. The backend does not relay audio; the browser streams directly to Gemini's endpoint. Tool calls are intercepted by the frontend and sent to the existing Athlora API. Gemini has no direct athlete-create tool: it can only prepare a local draft after catalogue and duplicate checks, and an explicit coach confirmation/cancel action controls the eventual POST. Closing, sleeping, workspace switching, logout, and unmounting stop capture and terminate the active session.
 
 ### 3.10 Athlete progression
 
@@ -689,5 +707,7 @@ Every override mutation locks the event/result set and recomputes the whole even
 - `backend/src/services/weather.ts` implements event-day/current GraySky normalization, nullable values, US-customary-to-metric conversion, caching and provider error handling. The existing weather API wrappers and console/event components consume Athlora DTOs with safe condition fallbacks and attribution.
 
 ## AI declaration
+
+The global assistant, discipline analytics, and report contract update was generated, edited, and reviewed with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public detailed-statistics report endpoint was documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra].

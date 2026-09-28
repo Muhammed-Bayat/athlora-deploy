@@ -84,7 +84,8 @@ describe('connectGeminiLive', () => {
     expect(sent.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Sulafat');
     expect(sent.setup.systemInstruction.parts[0].text).toContain('slightly slower than normal');
     expect(sent.setup.systemInstruction.parts[0].text).toContain('Athlora');
-    expect(sent.setup.tools[0].functionDeclarations[0].name).toBe('create_athlete');
+    expect(sent.setup.tools[0].functionDeclarations[0].name).toBe('list_disciplines');
+    expect(sent.setup.tools[0].functionDeclarations.map((tool: { name: string }) => tool.name)).not.toContain('create_athlete');
 
     mockSocket.triggerMessage(JSON.stringify({ setupComplete: {} }));
     await promise;
@@ -242,7 +243,7 @@ describe('sendGeminiText', () => {
     const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'add Bob', handleToolCall);
 
     mockSocket.triggerMessage(JSON.stringify({
-      toolCall: { functionCalls: [{ id: 'call-1', name: 'create_athlete', args: { name: 'Bob' } }] },
+      toolCall: { functionCalls: [{ id: 'call-1', name: 'list_disciplines', args: { query: '100m' } }] },
     }));
 
     mockSocket.triggerMessage(JSON.stringify({
@@ -250,9 +251,9 @@ describe('sendGeminiText', () => {
     }));
 
     const transcript = await promise;
-    expect(handleToolCall).toHaveBeenCalledWith({ id: 'call-1', name: 'create_athlete', args: { name: 'Bob' } });
+    expect(handleToolCall).toHaveBeenCalledWith({ id: 'call-1', name: 'list_disciplines', args: { query: '100m' } });
     expect(mockSocket.send).toHaveBeenLastCalledWith(JSON.stringify({
-      toolResponse: { functionResponses: [{ id: 'call-1', name: 'create_athlete', response: { result: { id: 'athlete-1' } } }] },
+      toolResponse: { functionResponses: [{ id: 'call-1', name: 'list_disciplines', response: { result: { id: 'athlete-1' } } }] },
     }));
     expect(transcript).toBe('Added Bob');
   });
@@ -262,7 +263,7 @@ describe('sendGeminiText', () => {
     const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'add Bob', handleToolCall);
 
     mockSocket.triggerMessage(JSON.stringify({
-      toolCall: { functionCalls: [{ id: 'call-1', name: 'create_athlete' }] },
+      toolCall: { functionCalls: [{ id: 'call-1', name: 'list_disciplines' }] },
     }));
 
     mockSocket.triggerMessage(JSON.stringify({
@@ -272,7 +273,7 @@ describe('sendGeminiText', () => {
     await promise;
     expect(mockSocket.send).toHaveBeenLastCalledWith(JSON.stringify({
       toolResponse: {
-        functionResponses: [{ id: 'call-1', name: 'create_athlete', response: { error: 'DB failure' } }],
+        functionResponses: [{ id: 'call-1', name: 'list_disciplines', response: { error: 'DB failure' } }],
       },
     }));
   });
@@ -281,7 +282,7 @@ describe('sendGeminiText', () => {
     const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'hi');
 
     mockSocket.triggerMessage(JSON.stringify({
-      toolCall: { functionCalls: [{ id: 'call-1', name: 'create_athlete' }] },
+      toolCall: { functionCalls: [{ id: 'call-1', name: 'list_disciplines' }] },
     }));
 
     await expect(promise).rejects.toThrow('Gemini requested a tool but no tool handler is configured');
@@ -326,7 +327,7 @@ describe('sendGeminiText', () => {
     const promise = sendGeminiText(mockSocket as unknown as WebSocket, 'hi', handleToolCall);
 
     mockSocket.triggerMessage(JSON.stringify({
-      toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete' }] },
+      toolCall: { functionCalls: [{ id: 'c1', name: 'list_disciplines' }] },
     }));
 
     mockSocket.triggerMessage(JSON.stringify({
@@ -336,7 +337,7 @@ describe('sendGeminiText', () => {
     await promise;
     expect(mockSocket.send).toHaveBeenLastCalledWith(JSON.stringify({
       toolResponse: {
-        functionResponses: [{ id: 'c1', name: 'create_athlete', response: { error: 'Tool execution failed' } }],
+        functionResponses: [{ id: 'c1', name: 'list_disciplines', response: { error: 'Tool execution failed' } }],
       },
     }));
   });

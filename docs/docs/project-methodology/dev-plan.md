@@ -160,7 +160,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 2. React + Chart.js: line charts for PB/SB progression, bar charts for comparisons.
 3. Tests: Vitest for aggregation logic; RTL/Playwright for chart rendering with seeded data.
 
-**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented; full season totals and multi-discipline analysis remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports. Broader season totals and coach-facing multi-discipline comparison surfaces remain planned.
 
 ### 3.5 Offline-First Logging
 1. Frontend: Dexie/IndexedDB store mirroring `timeline_entries` shape; all live-logging writes go to IndexedDB first.
@@ -244,5 +244,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 ---
 
 ## AI Declaration
+
+The discipline analytics delivery-plan status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].

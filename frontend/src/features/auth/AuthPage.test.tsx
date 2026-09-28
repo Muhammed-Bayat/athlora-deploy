@@ -33,12 +33,14 @@ const auth0 = vi.hoisted(() => ({
   logout: vi.fn(),
   user: { name: 'Coach Avery', email: 'coach@example.com' },
 }));
+const assistant = vi.hoisted(() => ({ stopAthloraAssistant: vi.fn() }));
 
 vi.mock('@auth0/auth0-react', () => ({ useAuth0: () => auth0 }));
 vi.mock('../../api/auth');
 vi.mock('../../api/workspaces', () => workspaceApi);
 vi.mock('../../api/clubs', () => clubApi);
 vi.mock('../../api/clubBranding', () => brandingApi);
+vi.mock('../assistant/AthloraAssistantProvider', () => ({ useAthloraAssistant: () => assistant }));
 
 const currentUser: User = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -153,6 +155,7 @@ describe('AuthPage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(assistant.stopAthloraAssistant).toHaveBeenCalledOnce();
     expect(auth0.logout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
   });
 

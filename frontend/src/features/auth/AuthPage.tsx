@@ -9,6 +9,7 @@ import { inviteWorkspaceMember, leaveCurrentWorkspace, listWorkspaceInvitations,
 import { approveClubJoinRequest, listClubJoinRequests, listClubs, rejectClubJoinRequest } from '../../api/clubs';
 import type { ClubJoinRequest, WorkspaceInvitation, WorkspaceMember } from '../../types';
 import { ClubBrandingCard } from './ClubBrandingCard';
+import { useAthloraAssistant } from '../assistant/AthloraAssistantProvider';
 import styles from './AuthPage.module.css';
 
 function message(error: unknown): string {
@@ -20,6 +21,7 @@ export function AuthPage() {
   const { logout, user } = useAuth0();
   const currentUser = useCurrentUser();
   const { activeWorkspace } = useWorkspace();
+  const { stopAthloraAssistant } = useAthloraAssistant();
   const isCoach = activeWorkspace.role === 'coach';
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [ticketBusy, setTicketBusy] = useState(false);
@@ -66,6 +68,7 @@ export function AuthPage() {
     setDeleteError(null);
     try {
       await deleteCurrentAccount();
+      void stopAthloraAssistant();
       logout({ logoutParams: { returnTo: window.location.origin } });
     } catch (requestError) {
       setDeleteError(message(requestError));
@@ -78,6 +81,7 @@ export function AuthPage() {
     setLeaveBusy(true);
     setLeaveError(null);
     try {
+      void stopAthloraAssistant();
       await leaveCurrentWorkspace();
       window.dispatchEvent(new Event('athlora-workspace-left'));
     } catch (requestError) {
@@ -219,7 +223,7 @@ export function AuthPage() {
           <span>Auth0 securely manages your credentials. Athlora never receives or stores your password.</span>
           <div className={styles.actions}>
             {hasAuth0Password ? <Button onClick={() => void requestPasswordChange()} disabled={ticketBusy}>{ticketBusy ? 'Creating link...' : 'Change password'}</Button> : null}
-            <Button variant="secondary" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>Sign out</Button>
+            <Button variant="secondary" onClick={() => { void stopAthloraAssistant(); logout({ logoutParams: { returnTo: window.location.origin } }); }}>Sign out</Button>
           </div>
           {ticketUrl && <p className={styles.ticket} role="status">Your secure link is ready. <a href={ticketUrl}>Continue to Auth0</a>. The link expires in 15 minutes.</p>}
           {!hasAuth0Password && <p className={styles.ticket}>Your password is managed by your identity provider.</p>}

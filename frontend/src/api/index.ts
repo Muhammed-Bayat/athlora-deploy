@@ -12,4 +12,5 @@ export * as preferencesApi from './preferences';
 export * as workspacesApi from './workspaces';
 export * as venuesApi from './venues';
 export * as aiApi from './ai';
+export * as analyticsApi from './analytics';
 export * as meetsApi from './meets';

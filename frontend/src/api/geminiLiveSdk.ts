@@ -53,6 +53,9 @@ export interface GeminiLiveSessionOptions {
 
   onTranscript?: (text: string) => void;
 
+  /** Transcribed user speech. This is kept separate from model output. */
+  onInputTranscript?: (text: string) => void;
+
   onTurnStart?: () => void;
 
   onTurnComplete?: () => void;
@@ -130,6 +133,8 @@ export class AthloraGeminiSession {
 
           outputAudioTranscription: {},
 
+          inputAudioTranscription: {},
+
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
@@ -143,10 +148,16 @@ export class AthloraGeminiSession {
               {
                 text:
                   'You are Athlora, the Athlora voice assistant. ' +
-                  'Your current job is to help authorised users add athletes. ' +
-                  'Never invent missing information. ' +
-                  'Before creating an athlete, clearly confirm the athlete details with the user. ' +
-                  'Only call create_athlete after the user explicitly confirms. ' +
+                  'You help authorised coaches with Athlora roster data, analytics, and weather. ' +
+                  'Never invent Athlora platform data, athletes, disciplines, rankings, results, places, or weather. ' +
+                   'Use the available tools for every platform-data question and action; treat tool results as authoritative. ' +
+                   'Use get_current_page_context when a coach refers to this page or this athlete; it exposes only the current page and an authorised selected-athlete reference. ' +
+                  'For athlete creation, use prepare_athlete_draft only after resolving a real discipline, validating the name and discipline, and checking likely duplicates. ' +
+                  'prepare_athlete_draft never creates an athlete. The browser presents local Confirm and Cancel controls; you cannot confirm, cancel, or create an athlete. ' +
+                  'For athlete analytics, search_athletes first and use an athlete returned by that tool. ' +
+                  'For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one and pass only its option ID; never invent or repeat coordinates. ' +
+                  'Use get_current_location_weather only when the current coach message explicitly asks for weather at their current, device, or present location. ' +
+                  'Do not ask for or expose coordinates. Only describe analytics summaries and rankings supplied by analytics tools. ' +
                   'If the user asks you to sleep, go to sleep, switch off, deactivate, stop listening, or otherwise go inactive, call sleep_assistant. ' +
                   'After sleep_assistant succeeds, say exactly: "Going to sleep." and say nothing else. ' +
                   'Do not call sleep_assistant for ordinary conversational uses of the word sleep that are not directed at you. ' +
@@ -156,8 +167,8 @@ export class AthloraGeminiSession {
                   'Do not rush through sentences. Use short natural pauses between important ideas. ' +
                   'Keep explanations clear and easy to follow. Avoid sounding robotic, overly energetic, dramatic or like an announcer. ' +
                   'Your voice should feel like a knowledgeable coach speaking directly to an athlete. ' +
-                  'When asked to start the assistant, greet the user by saying exactly: ' +
-                  '"Good Day Coach, who are we adding today?"',
+                   'When asked to start the assistant, greet the user by saying exactly: ' +
+                   '"Good day coach, how can I help?"',
               },
             ],
           },
@@ -166,41 +177,122 @@ export class AthloraGeminiSession {
             {
               functionDeclarations: [
                 {
-                  name: 'create_athlete',
+                  name: 'get_current_page_context',
 
                   description:
-                    'Create a new athlete in Athlora after the user has explicitly confirmed the details.',
+                    'Get the current console page and, where applicable, the authorised athlete currently being viewed. Use for requests such as "this athlete" or "this page".',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {},
+                  },
+                },
+                {
+                  name: 'list_disciplines',
+
+                  description:
+                    'List real Athlora discipline definitions. Use this before referring to a discipline or preparing a draft.',
 
                   parameters: {
                     type: Type.OBJECT,
 
                     properties: {
-                      name: {
+                      query: {
                         type: Type.STRING,
                         description:
-                          'The athlete full name.',
-                      },
-
-                      dob: {
-                        type: Type.STRING,
-                        description:
-                          'Optional date of birth in YYYY-MM-DD format.',
-                      },
-
-                      gender: {
-                        type: Type.STRING,
-                        description:
-                          'Optional gender category.',
-                      },
-
-                      notes: {
-                        type: Type.STRING,
-                        description:
-                          'Optional notes about the athlete.',
+                          'Optional discipline code or label to find.',
                       },
                     },
+                  },
+                },
+                {
+                  name: 'search_athletes',
 
-                    required: ['name'],
+                  description:
+                    'Search the current Athlora workspace for athletes by name. Use this before athlete analytics.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      query: { type: Type.STRING, description: 'The athlete name or name fragment to search.' },
+                    },
+                    required: ['query'],
+                  },
+                },
+                {
+                  name: 'get_athlete_discipline_analysis',
+
+                  description:
+                    'Retrieve authoritative discipline analytics for an athlete returned by search_athletes.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      athleteId: { type: Type.STRING, description: 'An ID returned by search_athletes.' },
+                      discipline: { type: Type.STRING, description: 'A real discipline code or label.' },
+                      year: { type: Type.STRING, description: 'Optional four-digit season year or all.' },
+                    },
+                    required: ['athleteId', 'discipline'],
+                  },
+                },
+                {
+                  name: 'get_workspace_discipline_analysis',
+
+                  description:
+                    'Retrieve the authoritative workspace ranking and summaries for one real discipline.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      discipline: { type: Type.STRING, description: 'A real discipline code or label.' },
+                      year: { type: Type.STRING, description: 'Optional four-digit season year or all.' },
+                    },
+                    required: ['discipline'],
+                  },
+                },
+                {
+                  name: 'prepare_athlete_draft',
+
+                  description:
+                    'Prepare, but never create, an athlete draft. The browser validates the real discipline and duplicate names before showing local confirmation controls.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      name: { type: Type.STRING, description: 'The athlete name.' },
+                      discipline: { type: Type.STRING, description: 'A requested discipline code or label.' },
+                      dob: { type: Type.STRING, description: 'Optional date of birth in YYYY-MM-DD format.' },
+                      gender: { type: Type.STRING, description: 'Optional gender category.' },
+                      notes: { type: Type.STRING, description: 'Optional coach notes.' },
+                    },
+
+                    required: ['name', 'discipline'],
+                  },
+                },
+                {
+                  name: 'get_named_place_weather',
+
+                  description:
+                    'Get current weather for a named place through Athlora. If venue choices are returned, ask the coach to choose an option ID before calling again.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      place: { type: Type.STRING, description: 'A named venue, city, or place to search.' },
+                      venueOptionId: { type: Type.STRING, description: 'A venue option ID returned by a prior call.' },
+                    },
+                    required: ['place'],
+                  },
+                },
+                {
+                  name: 'get_current_location_weather',
+
+                  description:
+                    'Get normalized weather for the coach current browser location after an explicit current-location weather request.',
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {},
                   },
                 },
                 {
@@ -260,6 +352,7 @@ export class AthloraGeminiSession {
             this.session = null;
             this.ready = false;
             this.receivingTurn = false;
+            this.rejectPendingTurn(new Error('Gemini Live session closed'));
 
             this.options.onDisconnected?.();
           },
@@ -362,6 +455,11 @@ export class AthloraGeminiSession {
     this.receivingTurn = false;
     this.connecting = null;
 
+    this.rejectPendingTurn(new Error('Gemini Live session closed'));
+  }
+
+  private rejectPendingTurn(error: Error): void {
+    this.pendingTurnReject?.(error);
     this.clearPendingTurn();
   }
 
@@ -484,6 +582,14 @@ export class AthloraGeminiSession {
 
     const transcription =
       content.outputTranscription?.text;
+
+    const inputTranscription = (
+      content as unknown as { inputTranscription?: { text?: string } }
+    ).inputTranscription?.text;
+
+    if (inputTranscription) {
+      this.options.onInputTranscript?.(inputTranscription);
+    }
 
     const hasTurnOutput =
       parts.length > 0 ||

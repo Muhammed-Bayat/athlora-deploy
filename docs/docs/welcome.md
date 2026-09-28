@@ -63,7 +63,7 @@ The monorepo is scaffolded, committed, and all automated checks pass locally. Wh
 - **Workspace tenancy** — workspaces and memberships now form the shared authorization boundary. Existing records migrate losslessly into default UTC workspaces; the console selects an accessible workspace and scopes every request, aggregate and local view reset through `X-Workspace-Id`. Creator and result actors remain durable attribution, so an account departure removes memberships without destroying shared history.
 - **Club onboarding** — Clubs are the product-facing organization layer over the existing authorization boundary. Every existing workspace backfills to one Club; new users create a Club as coach or search all Clubs and request access. Club coaches review pending requests and choose coach or assistant access.
 - **Offline-first PWA** — the app is installable as a Progressive Web App with a service worker that caches the app shell and API responses. An offline queue (IndexedDB via Dexie) stores create/edit/undo actions when the network is unavailable, with a designated offline logger per event. On reconnect, the queue drains deterministically through a batch sync endpoint with idempotent action processing and optimistic version conflict detection.
-- **Gemini voice assistant** — real-time voice-driven athlete management using Google Gemini's BidiGenerateContentConstrained API. The frontend captures microphone audio (PCM 16kHz), streams it through a WebSocket, and receives audio responses and tool-call results (e.g. creating an athlete). Dual implementations: raw WebSocket client and `@google/genai` SDK wrapper.
+- **Global Athlora assistant and discipline analytics** — the fixed console assistant uses Google Gemini's BidiGenerateContentConstrained API for text and voice, catalogue-aware athlete/discipline analysis, opt-in weather, and direct PDF reports. Gemini can only prepare a validated local athlete draft; a coach must explicitly confirm it before the existing athlete API is called. Analytics normalize legacy 100m and finalized generic-session results without copying data, preserve result sources/placings, rank by direction-aware PB only, and reuse cached models for Tell me/PDF actions.
 - **Workspace switching** — coaches can belong to multiple workspaces and switch between them via the sidebar dropdown. Every request, aggregate, and view reset scopes to the selected workspace through `X-Workspace-Id`.
 - **Role enforcement** — coach and assistant roles are enforced through `requireOperationalAccess` and `requireCoach` middleware. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals. The final coach cannot be demoted or removed.
 - **Squad management** — workspace-scoped squad catalogue with multi-squad athlete membership, archival, and roster filtering.
@@ -105,12 +105,14 @@ This documentation site and the repository follow the course AI policy.
 
 - **Code generation:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `OpenCode[gpt-5.6-terra]`, `opencode[mimo-v2.6-flash-free]`
 - **In-line editing:** `opencode[deepseek-v4-flash-free]`, `opencode[gpt-5.6-sol]`, `Codex[GPT-5]`, `Claude-Web[Sonnet 5]`, `OpenCode[gpt-5.6-terra]`, `opencode[mimo-v2.6-flash-free]`
-- **Code review:** `opencode[gpt-5.6-sol]`
+- **Code review:** `opencode[gpt-5.6-sol]`, `OpenCode[openai/gpt-5.6-terra]`
 - Commits that contain AI-generated code carry an `Assisted-by:` footer naming every tool and model.
 - Every submitted document ends with an explicit AI usage or non-usage declaration.
 
 This section is kept current as tools and models change.
 
 ## AI declaration
+
+The global Athlora assistant and discipline-analytics status was generated, edited, and reviewed with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard preferences feature was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature was documented with the assistance of opencode[mimo-v2.6-flash-free]. The multi-discipline relay foundation status was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience (routes, API disciplines extension, cross-links, tests, and E2E coverage) was documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster status were updated with assistance from OpenCode[gpt-5.6-terra].

@@ -1,5 +1,7 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { PublicStatisticsReportEntry } from '../../api/publicStatistics';
+import { createReportDocument, drawReportSection, drawReportStatCards, drawReportTable, formatReportDate, saveReportDocument } from '../reports/pdfDocument';
+
+export { downloadFile } from '../../utils/downloadFile';
 
 function spreadsheetCell(value: string | number): string {
   const text = String(value);
@@ -19,50 +21,33 @@ export function reportCsv(entries: PublicStatisticsReportEntry[]): string {
   return rows.map((row) => row.map(spreadsheetCell).join(',')).join('\r\n');
 }
 
-export function downloadFile(content: BlobPart | Uint8Array, name: string, type: string): void {
-  const blobContent: BlobPart = content instanceof Uint8Array
-    ? content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer
-    : content;
-  const url = URL.createObjectURL(new Blob([blobContent], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export async function reportPdf(entries: PublicStatisticsReportEntry[], filters: Record<string, string>): Promise<Uint8Array> {
-  const document = await PDFDocument.create();
-  document.setTitle('Athlora public statistics report');
-  document.setSubject(`Published results report. ${Object.entries(filters).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(', ') || 'All results'}`);
-  document.setCreator('Athlora');
-  const regular = await document.embedFont(StandardFonts.Helvetica);
-  const bold = await document.embedFont(StandardFonts.HelveticaBold);
-  const rows = entries.length ? entries : [];
-  let page = document.addPage();
-  let y = 800;
-  const drawHeader = () => {
-    page.drawText('ATHLORA', { x: 48, y, size: 18, font: bold, color: rgb(0.05, 0.55, 0.72) });
-    y -= 28;
-    page.drawText('Public statistics report', { x: 48, y, size: 14, font: bold });
-    y -= 20;
-    page.drawText(document.getSubject() ?? '', { x: 48, y, size: 8, font: regular, maxWidth: 500 });
-    y -= 28;
-    page.drawText('Place  Athlete                 Club                    Discipline       Performance  Event', { x: 48, y, size: 8, font: bold });
-    y -= 14;
-  };
-  drawHeader();
-  for (const entry of rows) {
-    if (y < 48) {
-      page = document.addPage();
-      y = 800;
-      drawHeader();
-    }
-    const line = `${entry.place}      ${entry.athleteName.slice(0, 22).padEnd(23)} ${entry.clubName.slice(0, 20).padEnd(22)} ${entry.label.slice(0, 14).padEnd(16)} ${performance(entry).padEnd(12)} ${entry.eventTitle.slice(0, 24)}`;
-    page.drawText(line, { x: 48, y, size: 7.5, font: regular });
-    y -= 12;
-    page.drawText(entry.eventDate, { x: 48, y, size: 7, font: regular, color: rgb(0.25, 0.25, 0.25) });
-    y -= 11;
-  }
-  return document.save();
+  const activeFilters = Object.entries(filters).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(', ') || 'All results';
+  const report = await createReportDocument({
+    title: 'Public statistics report',
+    metadata: [{ label: 'Filters', value: activeFilters }],
+    subject: `Published results report. ${activeFilters}`,
+  });
+  const athletes = new Set(entries.map((entry) => entry.athleteId)).size;
+  const disciplines = new Set(entries.map((entry) => entry.discipline)).size;
+
+  drawReportStatCards(report, [
+    { label: 'Published performances', value: entries.length },
+    { label: 'Athletes', value: athletes },
+    { label: 'Disciplines', value: disciplines },
+  ]);
+  drawReportSection(report, 'Published performances');
+  drawReportTable(report, {
+    columns: [
+      { header: 'Place', flex: 0.55, value: (entry) => entry.place, align: 'center' },
+      { header: 'Athlete', flex: 1.35, value: (entry) => entry.athleteName },
+      { header: 'Club', flex: 1.2, value: (entry) => entry.clubName },
+      { header: 'Discipline', flex: 1.15, value: (entry) => entry.label },
+      { header: 'Performance', flex: 1, value: performance, align: 'right' },
+      { header: 'Event', flex: 2, value: (entry) => entry.eventTitle },
+      { header: 'Date', flex: 1.05, value: (entry) => formatReportDate(entry.eventDate) },
+    ],
+    rows: entries,
+  });
+  return saveReportDocument(report);
 }

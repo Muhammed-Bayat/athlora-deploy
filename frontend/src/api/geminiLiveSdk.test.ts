@@ -80,10 +80,21 @@ describe('AthloraGeminiSession', () => {
       });
       expect(config.config.systemInstruction.parts[0].text).toContain('Athlora');
       expect(config.config.systemInstruction.parts[0].text).toContain('slightly slower than normal');
+      expect(config.config.systemInstruction.parts[0].text).toContain('Never invent Athlora platform data');
+      expect(config.config.systemInstruction.parts[0].text).toContain('never creates an athlete');
+      expect(config.config.inputAudioTranscription).toEqual({});
       expect(config.config.tools[0].functionDeclarations.map((t: { name: string }) => t.name)).toEqual([
-        'create_athlete',
+        'get_current_page_context',
+        'list_disciplines',
+        'search_athletes',
+        'get_athlete_discipline_analysis',
+        'get_workspace_discipline_analysis',
+        'prepare_athlete_draft',
+        'get_named_place_weather',
+        'get_current_location_weather',
         'sleep_assistant',
       ]);
+      expect(config.config.tools[0].functionDeclarations.map((t: { name: string }) => t.name)).not.toContain('create_athlete');
     });
 
     it('fires onReady only after the Live session resolves', async () => {
@@ -232,12 +243,13 @@ describe('AthloraGeminiSession', () => {
       expect(onDisconnected).not.toHaveBeenCalled(); // close() doesn't fire onDisconnected
     });
 
-    it('clears pending turn without resolving', async () => {
+    it('rejects a pending turn when explicitly closed', async () => {
       const session = createSession();
       await session.connect();
+      const pending = session.sendText('Tell me about the roster.');
       session.close();
 
-      // Should not throw or leak
+      await expect(pending).rejects.toThrow('Gemini Live session closed');
     });
   });
 
@@ -248,14 +260,14 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete', args: { name: 'Bob' } }] },
+        toolCall: { functionCalls: [{ id: 'c1', name: 'list_disciplines', args: { query: '100m' } }] },
       });
 
       await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledWith({
-        id: 'c1', name: 'create_athlete', args: { name: 'Bob' },
+        id: 'c1', name: 'list_disciplines', args: { query: '100m' },
       }));
       expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'create_athlete', response: { result: { id: 'athlete-1' } } }],
+        functionResponses: [{ id: 'c1', name: 'list_disciplines', response: { result: { id: 'athlete-1' } } }],
       });
     });
 
@@ -280,11 +292,11 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete' }] },
+        toolCall: { functionCalls: [{ id: 'c1', name: 'search_athletes' }] },
       });
 
       await vi.waitFor(() => expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'create_athlete', response: { error: 'DB error' } }],
+        functionResponses: [{ id: 'c1', name: 'search_athletes', response: { error: 'DB error' } }],
       }));
     });
 
@@ -293,11 +305,11 @@ describe('AthloraGeminiSession', () => {
       await session.connect();
 
       fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'create_athlete' }] },
+        toolCall: { functionCalls: [{ id: 'c1', name: 'search_athletes' }] },
       });
 
       await vi.waitFor(() => expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'create_athlete', response: { error: 'No Gemini tool handler configured' } }],
+        functionResponses: [{ id: 'c1', name: 'search_athletes', response: { error: 'No Gemini tool handler configured' } }],
       }));
     });
 
@@ -318,6 +330,23 @@ describe('AthloraGeminiSession', () => {
       expect(onTurnStart).toHaveBeenCalledOnce();
       expect(onAudio).toHaveBeenCalledWith('audio1');
       expect(onTranscript).toHaveBeenCalledWith('Hello');
+    });
+
+    it('forwards input transcription separately from model output', async () => {
+      const onInputTranscript = vi.fn();
+      const onTranscript = vi.fn();
+      const session = createSession({ onInputTranscript, onTranscript });
+      await session.connect();
+
+      fireCallback('onmessage',{
+        serverContent: {
+          inputTranscription: { text: 'Yes please' },
+          outputTranscription: { text: 'I can help.' },
+        },
+      });
+
+      expect(onInputTranscript).toHaveBeenCalledWith('Yes please');
+      expect(onTranscript).toHaveBeenCalledWith('I can help.');
     });
 
     it('skips audio parts without audio mimeType', async () => {

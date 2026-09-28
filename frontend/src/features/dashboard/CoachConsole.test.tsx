@@ -10,9 +10,46 @@ vi.mock('../../utils/weatherLocation', () => ({ timezoneCoordinates: () => ({ la
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
 const permissionsQuery = vi.hoisted(() => vi.fn());
 const brandingApi = vi.hoisted(() => ({ getClubBranding: vi.fn() }));
+const assistantApi = vi.hoisted(() => ({
+  createToken: vi.fn(),
+  connect: vi.fn(),
+  sendText: vi.fn(),
+  close: vi.fn(),
+  microphoneStop: vi.fn(),
+  audioClose: vi.fn(),
+}));
 
 vi.mock('../../api/weather', () => weatherApi);
 vi.mock('../../api/clubBranding', () => brandingApi);
+vi.mock('../../api/ai', () => ({ createGeminiToken: assistantApi.createToken }));
+vi.mock('../../api/geminiLiveSdk', () => ({
+  AthloraGeminiSession: class {
+    constructor(private readonly options: { onReady?: () => void }) {}
+    async connect() { assistantApi.connect(); this.options.onReady?.(); }
+    async sendText(message: string) { return assistantApi.sendText(message); }
+    sendAudio() {}
+    endAudioStream() {}
+    close() { assistantApi.close(); }
+  },
+}));
+vi.mock('../../api/geminiAudio', () => ({
+  GeminiAudioPlayer: class {
+    async prepare() {}
+    playPcm16() {}
+    clear() {}
+    async waitUntilIdle() {}
+    close() { assistantApi.audioClose(); }
+  },
+}));
+vi.mock('../../api/geminiMicrophone', () => ({
+  GeminiMicrophone: class {
+    async start() {}
+    async stop() { assistantApi.microphoneStop(); }
+    pause() {}
+    resume() {}
+    isActive() { return false; }
+  },
+}));
 
 vi.mock('./DashboardPage', () => ({
   DashboardPage: ({
@@ -89,6 +126,8 @@ describe('CoachConsole dashboard navigation', () => {
       value: { query: permissionsQuery },
     });
     brandingApi.getClubBranding.mockResolvedValue(null);
+    assistantApi.createToken.mockResolvedValue('gemini-token');
+    assistantApi.sendText.mockResolvedValue('Unexpected model wording');
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ results: [{ latitude: -26.2041, longitude: 28.0473, timezone: 'Africa/Johannesburg' }] }),
@@ -149,6 +188,26 @@ describe('CoachConsole dashboard navigation', () => {
     expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
     expect(screen.getByRole('button', { name: 'Active Club' }).parentElement).toHaveClass(/workspaceSelect/);
     expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
+  });
+
+  it('keeps the Athlora session available when navigating between console routes', async () => {
+    const user = userEvent.setup();
+    renderConsole('/console/athletes');
+
+    await user.click(screen.getByRole('button', { name: 'Start Athlora AI' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
+    expect(within(dialog).getByText('Good day coach, how can I help?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    await user.click(navigationItem('Coach console', 'Events'));
+    expect(screen.getByText('Events list')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Athlora AI' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open Athlora AI' }));
+    expect(await screen.findByRole('dialog', { name: 'Athlora AI' })).toBeInTheDocument();
+    expect(assistantApi.createToken).toHaveBeenCalledOnce();
+    expect(assistantApi.connect).toHaveBeenCalledOnce();
+    expect(assistantApi.sendText).toHaveBeenCalledOnce();
   });
 
   it('shows the active Club option when it is the only workspace', async () => {

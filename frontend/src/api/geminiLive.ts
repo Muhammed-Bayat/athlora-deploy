@@ -142,10 +142,8 @@ export function connectGeminiLive(
               {
                 text:
                   'You are Athlora, the Athlora voice assistant. ' +
-                  'Your current job is to help authorised users add athletes. ' +
-                  'Never invent missing information. ' +
-                  'Before creating an athlete, clearly confirm the details with the user. ' +
-                  'Only use create_athlete after the user explicitly confirms. ' +
+                  'Never invent Athlora platform data. ' +
+                  'This legacy transport does not create athletes or perform mutations. ' +
                   'VOICE AND SPEAKING STYLE: Speak in a warm, calm, friendly and confident manner. ' +
                   'Use a natural conversational speaking pace that is slightly slower than normal. ' +
                   'Do not rush through sentences. Use short natural pauses between important ideas. ' +
@@ -162,41 +160,21 @@ export function connectGeminiLive(
             {
               functionDeclarations: [
                 {
-                  name: 'create_athlete',
+                  name: 'list_disciplines',
 
                   description:
-                    'Create a new athlete in Athlora after the user has explicitly confirmed the athlete details.',
+                    'List real Athlora disciplines when a configured tool handler supports it.',
 
                   parameters: {
                     type: 'OBJECT',
 
                     properties: {
-                      name: {
+                      query: {
                         type: 'STRING',
                         description:
-                          'The athlete full name.',
-                      },
-
-                      dob: {
-                        type: 'STRING',
-                        description:
-                          'Optional date of birth in YYYY-MM-DD format.',
-                      },
-
-                      gender: {
-                        type: 'STRING',
-                        description:
-                          'Optional gender category.',
-                      },
-
-                      notes: {
-                        type: 'STRING',
-                        description:
-                          'Optional notes about the athlete.',
+                          'Optional discipline code or label.',
                       },
                     },
-
-                    required: ['name'],
                   },
                 },
               ],

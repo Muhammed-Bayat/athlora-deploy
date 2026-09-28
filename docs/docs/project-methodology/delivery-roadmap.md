@@ -131,7 +131,7 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 2. Use Chart.js for PB/SB progression and comparison charts once the aggregate data is stable.
 3. Add chart tests using seeded, multi-discipline data.
 
-**Note:** Two-athlete comparison and single-athlete progression charts are implemented; full season totals and multi-discipline analysis remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports. Broader season totals and coach-facing multi-discipline comparison surfaces remain planned.
 
 #### 2.4 Offline-First Logging
 
@@ -187,5 +187,7 @@ Key outcomes:
 Every roadmap item is complete only when its implementation and documentation are aligned, relevant tests pass, and the applicable CI checks are green. The current CI runs frontend, backend, documentation, an informational frontend/backend coverage job, and credential-gated E2E jobs. The coverage job prints a short Markdown summary and does not yet impose a threshold. New work must preserve the coach-ownership boundary, responsive track-side interaction, accessible controls, and server-authoritative result derivation.
 
 ## AI Declaration
+
+The discipline analytics roadmap status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
