@@ -35,7 +35,9 @@ export interface SessionRegistration extends SessionTarget {
   id: string; eventId: string; workspaceId: string; withdrawnAt: string | null;
   withdrawnBy: string | null; createdBy: string; createdAt: string;
 }
-export interface SessionEntryInput {
+// Type alias (not interface) so the shape stays assignable to the offline
+// queue's Record<string, unknown> payload boundary.
+export type SessionEntryInput = {
   verticalState?: 'clearance' | 'failure' | 'pass' | 'void' | null;
   entryType: EntryType; value: number | null; unit: DisciplineDefinition['unit'] | null;
   isFoul: boolean; incidentType: IncidentType | null; noteText: string | null; deviceId: string | null;
