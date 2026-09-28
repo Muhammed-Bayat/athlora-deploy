@@ -199,13 +199,13 @@ export async function replaceEvent(
       if (materialChange && (currentEvent.status !== 'scheduled' || payload.status !== 'scheduled')) {
         throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture details can only change before the event starts');
       }
-      if (currentEvent.status === 'scheduled' && payload.status !== 'scheduled') {
-        await assertFixtureReadyToStart(client, eventId as string);
-      }
       if (materialChange) {
         if (!actorId || !isCanonicalUuid(actorId)) throw notFound();
         await markFixtureReacceptanceRequired(client, eventId as string, actorId);
       }
+    }
+    if (currentEvent.status === 'scheduled' && payload.status !== 'scheduled') {
+      await assertFixtureReadyToStart(client, eventId as string);
     }
 
     const result = await client.query<EventRow>(

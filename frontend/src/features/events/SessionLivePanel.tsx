@@ -11,6 +11,7 @@ import type { AthleticsEvent, IncidentType } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
 import { incidentButtons } from './disciplineIncidents';
 import { memberSummary, standingsMembers, standingsTeam } from './standingsDisplay';
+import { getIncidentTypeLabel } from '../results/resultPresentation';
 import styles from './SessionLivePanel.module.css';
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
@@ -403,7 +404,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 const result = results.find((row) => row.entrantId === entrant.id);
                 const eliminated = Boolean(result?.vertical?.eliminated);
                 const controlsDisabled = busy || !live || (vertical && eliminated);
-                const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && entry.entryType === 'attempt' && !entry.deletedAt);
+                const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty') && !entry.deletedAt);
                 const currentRecord = !result
                   ? '—'
                   : vertical
@@ -506,12 +507,12 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                       {vertical && eliminated && <p>{entrant.name} is eliminated.</p>}
                     </div>
                     {entrantEntries.length > 0 && (
-                      <ol className={styles.attemptsList} aria-label={`Attempts for ${entrant.name}`}>
+                      <ol className={styles.attemptsList} aria-label={`Entries for ${entrant.name}`}>
                         {entrantEntries.map((entry, index) => (
                           <li key={entry.id}>
                             #{entry.attemptOrder ?? index + 1} {vertical
-                              ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
-                              : `${formatResult(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}
+                              ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? (entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : '')}`
+                              : `${formatResult(entry.value, definition)} ${entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : ''} ${entry.isFoul ? 'Foul' : ''}`}
                             {entry.recorderName && ` · by ${entry.recorderName}`}
                             {!vertical && result?.selectedEntryId === entry.id && ' · official'}
                             {isCoach && live && (

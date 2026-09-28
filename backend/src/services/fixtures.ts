@@ -558,10 +558,12 @@ export async function assertFixtureReadyToStart(
   const unresolvedRsvps = await client.query<{ workspace_name: string }>(
     `SELECT w.name AS workspace_name
      FROM event_participants ep
-     JOIN event_fixture_workspaces fw
-       ON fw.event_id = ep.event_id AND fw.workspace_id = ep.participant_workspace_id
+     LEFT JOIN event_fixture_workspaces fw
+       ON fw.event_id = ep.event_id AND fw.workspace_id = ep.participant_workspace_id AND fw.role = 'guest'
      JOIN workspaces w ON w.id = ep.participant_workspace_id
-     WHERE ep.event_id = $1 AND fw.status = 'accepted' AND ep.rsvp_status IN ('pending', 'maybe')
+     WHERE ep.event_id = $1
+       AND ep.rsvp_status IN ('pending', 'maybe')
+       AND (fw.event_id IS NULL OR fw.status <> 'withdrawn')
      GROUP BY w.name, w.id
      ORDER BY lower(w.name), w.id`,
     [eventId],
