@@ -52,7 +52,7 @@ export async function recomputeSessionResult(db: DbExecutor, actor: MeetActor, e
   const session = definition.kind === 'vertical' ? await getSession(db, eventId, target.disciplineSessionId) : null;
   const prior = (await db.query<{ selected_entry_id: string | null }>('SELECT selected_entry_id FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId])).rows[0];
   const selectedEntryId = prior?.selected_entry_id ?? null;
-  const stillSelected = selectedEntryId && entries.some((entry) => entry.id === selectedEntryId && !entry.deletedAt && entry.entryType === 'attempt' && !entry.isFoul && entry.value !== null) ? selectedEntryId : null;
+  const stillSelected = selectedEntryId && entries.some((entry) => entry.id === selectedEntryId && !entry.deletedAt && entry.entryType === 'attempt' && !entry.isFoul && entry.incidentType === null && entry.value !== null && entry.value > 0) ? selectedEntryId : null;
   const derived = authoritativeResult(definition, entries, stillSelected, session?.verticalConfig);
   const before = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
   const after = await db.query(
@@ -272,7 +272,7 @@ export async function selectSessionResultEntry(actor: MeetActor, eventId: string
     const session = await getSession(db, eventId, target.disciplineSessionId);
     const definition = await getDefinition(db, session.disciplineDefinitionId);
     if (session.status !== 'in_progress' || session.resultState === 'final' || access.event.status === 'cancelled') meetConflict('SESSION_NOT_IN_PROGRESS', 'Reopen the session before selecting results');
-    if (definition.defaultRules.aggregation !== 'timed') meetConflict('DERIVED_RESULT_ONLY', 'Field results are derived from attempt history');
+    if (definition.defaultRules.aggregation === 'vertical') meetConflict('DERIVED_RESULT_ONLY', 'Vertical results are derived from the full attempt sequence');
     const entrant = await registration(db, actor, access, eventId, target, true);
     const found = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
     const before = found.rows[0];

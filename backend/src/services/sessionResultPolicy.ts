@@ -11,7 +11,7 @@ export function authoritativeResult(definition: DisciplineDefinition, entries: r
     if (!['dq', 'dns'].includes(result.outcome) && entries.some(e => !e.deletedAt && e.incidentType === 'dnf')) return { ...result, value: null, outcome: 'dnf', incident: 'dnf' };
     return result;
   }
-  if (definition.defaultRules.aggregation === 'best') return deriveMeasuredResult(entries, definition);
+  if (definition.defaultRules.aggregation === 'best') return deriveMeasuredResult(entries, definition, selectedId);
   const eligible = entries.map(e => e.entryType === 'attempt' && (e.id !== selectedId || e.isFoul || e.incidentType !== null)
     ? { ...e, entryType: 'note' as const, value: null } : e);
   const result = deriveTrackTime(eligible, 'competition', selectedId);

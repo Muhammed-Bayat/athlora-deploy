@@ -283,14 +283,23 @@ describe('SessionLivePanel', () => {
     const { container } = render(<SessionLivePanel event={legacy} canOperate isCoach />);
     expect(container).toBeEmptyDOMElement();
   });
-  it('shows automatic measured results without selection controls', async () => {
-    sessionStatus = 'in_progress';
+  it('lets coaches select an official measured mark', async () => {
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'relay-400', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });
+    api.listRegistrations.mockResolvedValue({ data: [{ id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' }], meta: { count: 1 } });
+    api.listSessionEntries.mockResolvedValue({ data: [{ id: 'entry-field', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', entryType: 'attempt', value: 6.2, unit: 'metres', isFoul: false, incidentType: null, noteText: null, recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null }] });
+    api.listSessionResults.mockResolvedValue({ data: [{ eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', outcome: 'no_result', finalResult: null, effectiveOutcome: 'no_result', effectiveResult: null, placing: null, isPb: false, isSb: false, manualOverride: null, overrideReason: null, overriddenBy: null, overriddenAt: null, selectedEntryId: null, version: 1, updatedAt: '2026-09-20T10:00:00.000Z' }] });
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
     await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
-    expect(await screen.findByText('Automatic best legal')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Start session' }));
+    const row = await screen.findByRole('group', { name: 'Ari Runner' });
+    await user.click(await within(row).findByRole('button', { name: 'Make official' }));
+    await waitFor(() => expect(api.selectSessionResultEntry).toHaveBeenCalledWith(
+      'event-1',
+      { disciplineSessionId: 'session-1', entrantId: 'athlete-a' },
+      { entryId: 'entry-field', expectedVersion: 1 },
+    ));
+    expect(screen.getByText('Awaiting selection')).toBeInTheDocument();
   });
   it('keeps official selection while hiding Undo for entries the club cannot correct', async () => {
     sessionStatus = 'in_progress';
@@ -398,6 +407,7 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /High jump Final/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
+    expect(await screen.findByRole('button', { name: 'Make results official' })).toBeInTheDocument();
     const row = await screen.findByRole('group', { name: 'Ari Runner' });
 
     expect(within(row).getByRole('button', { name: 'Void attempt 1' })).toBeInTheDocument();
