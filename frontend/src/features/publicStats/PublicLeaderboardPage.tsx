@@ -6,6 +6,8 @@ import { Input, Select } from '../../components';
 import type { PublicClub } from '../../types';
 import styles from './PublicStatsPage.module.css';
 
+const exactAge = /^(?:[5-9]|[1-9]\d|100)$/;
+
 export function PublicLeaderboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
@@ -21,6 +23,12 @@ export function PublicLeaderboardPage() {
   const club = searchParams.get('club') || '';
   const gender = searchParams.get('gender') || '';
   const age = searchParams.get('age') || '';
+  const [ageDraft, setAgeDraft] = useState(age);
+  const ageError = ageDraft !== '' && !exactAge.test(ageDraft);
+
+  useEffect(() => {
+    setAgeDraft(age);
+  }, [age]);
 
   useEffect(() => {
     void Promise.all([
@@ -56,6 +64,11 @@ export function PublicLeaderboardPage() {
       else next.delete(key);
       setSearchParams(next);
     });
+  };
+
+  const updateAge = (value: string) => {
+    setAgeDraft(value);
+    if (value === '' || exactAge.test(value)) updateFilter('age', value);
   };
 
   return (
@@ -94,11 +107,12 @@ export function PublicLeaderboardPage() {
             <Select aria-label="Gender" value={gender} onChange={(e) => updateFilter('gender', e.target.value)} options={[{ value: '', label: 'All genders' }, { value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
           </label>
           <label>
-            Age category
-            <Input type="number" min="5" max="100" placeholder="Exact age" value={age} onChange={(e) => updateFilter('age', e.target.value)} />
+            Age
+            <Input aria-invalid={ageError} type="number" min="5" max="100" step="1" inputMode="numeric" placeholder="Exact age" value={ageDraft} onChange={(e) => updateAge(e.target.value)} />
           </label>
         </div>
 
+        {ageError && <p className={styles.error} role="alert">Age must be a whole number from 5 to 100.</p>}
         {error && <p className={styles.error} role="alert">{error}</p>}
         {loading && <p className={styles.loading} role="status">Loading leaderboard...</p>}
 

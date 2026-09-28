@@ -28,6 +28,15 @@ export interface PublicStatisticsReportEntry {
   eventDate: string;
 }
 
+function parseExactAge(value: string | undefined): number | null {
+  const age = value?.trim() ?? '';
+  if (!age) return null;
+  if (!/^(?:[5-9]|[1-9]\d|100)$/.test(age)) {
+    throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Age filter is invalid');
+  }
+  return Number(age);
+}
+
 function validateQuery(query: PublicStatisticsReportQuery): void {
   if (query.club?.trim() && !isCanonicalUuid(query.club.trim())) {
     throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Club filter is invalid');
@@ -35,14 +44,7 @@ function validateQuery(query: PublicStatisticsReportQuery): void {
   if (query.gender?.trim() && !['male', 'female'].includes(query.gender.trim().toLowerCase())) {
     throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Gender filter is invalid');
   }
-  if (query.age?.trim()) {
-    const age = query.age.trim();
-    const exact = Number(age);
-    const under = age.startsWith('under-') ? Number(age.slice(6)) : NaN;
-    if ((!Number.isInteger(exact) || exact < 5 || exact > 100) && (!Number.isInteger(under) || under < 5 || under > 100)) {
-      throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Age filter is invalid');
-    }
-  }
+  parseExactAge(query.age);
   if (query.discipline !== undefined && query.discipline.trim().length > 64) {
     throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Discipline filter is invalid');
   }
@@ -100,12 +102,9 @@ export async function getPublicStatisticsReport(
     sessionConditions.push(`a.gender ILIKE ${value}`);
   }
   if (query.age?.trim()) {
-    const age = query.age.trim();
-    const value = age.startsWith('under-') ? Number(age.slice(6)) : Number(age);
-    const operator = age.startsWith('under-') ? '<=' : '=';
-    const parameter = add(value);
-    legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer ${operator} ${parameter}::integer`);
-    sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer ${operator} ${parameter}::integer`);
+    const parameter = add(parseExactAge(query.age));
+    legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = ${parameter}::integer`);
+    sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = ${parameter}::integer`);
   }
 
   const result = await db.query<{

@@ -30,5 +30,13 @@ describe('public leaderboard service', () => {
     expect(mockQuery).toHaveBeenCalledOnce();
     expect(mockQuery.mock.calls[0]?.[0]).toContain('FROM results r');
     expect(mockQuery.mock.calls[0]?.[0]).toContain("s.result_state = 'final'");
+    expect(mockQuery.mock.calls[0]?.[0]).toContain('EXTRACT(YEAR FROM age(e.date, a.dob))::integer =');
+    expect(mockQuery.mock.calls[0]?.[1]).toContain(20);
+  });
+
+  it.each(['under-20', '20.5', '4', '101', 'not-an-age'])('rejects invalid exact age %s before querying', async (age) => {
+    const query = vi.fn();
+    await expect(getPublicLeaderboard({ age }, { query } as never)).rejects.toMatchObject({ code: 'LEADERBOARD_FILTER_INVALID' });
+    expect(query).not.toHaveBeenCalled();
   });
 });

@@ -30,4 +30,17 @@ describe('PublicLeaderboardPage', () => {
     await waitFor(() => expect(getLeaderboard).toHaveBeenLastCalledWith(expect.objectContaining({ discipline: '100m' }), expect.anything()));
     expect(screen.getByRole('button', { name: 'Club' })).toBeInTheDocument();
   });
+
+  it('applies a whole-number exact age only after it is valid', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/stats/leaderboard']}><PublicLeaderboardPage /></MemoryRouter>);
+
+    const age = await screen.findByRole('spinbutton', { name: 'Age' });
+    await user.type(age, '2');
+    expect(screen.getByRole('alert')).toHaveTextContent('Age must be a whole number from 5 to 100');
+    expect(getLeaderboard).toHaveBeenLastCalledWith(expect.objectContaining({ age: '' }), expect.anything());
+
+    await user.type(age, '0');
+    await waitFor(() => expect(getLeaderboard).toHaveBeenLastCalledWith(expect.objectContaining({ age: '20' }), expect.anything()));
+  });
 });
