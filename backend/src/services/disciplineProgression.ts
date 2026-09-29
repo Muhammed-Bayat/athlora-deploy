@@ -26,7 +26,21 @@ export async function getDisciplineProgression(
   const result = await db.query<{
     event_id: string; event_date: string; event_title: string; value: string; is_new_pb: boolean; personal_best: string | null; result_count: string;
   }>(`WITH performances AS (
-    SELECT e.id AS event_id, e.date AS event_date, e.title AS event_title, r.final_result AS value, d.direction
+    SELECT e.id AS event_id, e.date AS event_date, e.title AS event_title, COALESCE(r.manual_override, r.final_result) AS value, d.direction
+    FROM results r
+    JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
+    JOIN discipline_definitions d ON d.id = $3 AND d.code = r.discipline
+    JOIN events e ON e.id = r.event_id AND e.status <> 'cancelled'
+    WHERE r.athlete_id = $2 AND r.discipline = '100m'
+      AND r.outcome = 'valid' AND COALESCE(r.manual_override, r.final_result) IS NOT NULL
+      AND (e.workspace_id = $1 OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw
+        JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id
+          AND ep.participant_workspace_id = fw.workspace_id
+        WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+          AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))
+      ${seasonCondition}
+    UNION ALL
+    SELECT e.id AS event_id, e.date AS event_date, e.title AS event_title, COALESCE(r.manual_override, r.final_result) AS value, d.direction
     FROM session_results r
     JOIN discipline_sessions s ON s.id = r.session_id
     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
