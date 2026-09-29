@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FitnessView } from './FitnessView';
@@ -126,6 +126,32 @@ describe('FitnessView', () => {
     await user.click(screen.getByRole('button', { name: 'Resolved' }));
     expect(screen.getByRole('button', { name: 'Resolved' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Right Shoulder')).toBeInTheDocument();
+    expect(screen.queryByText('Left Knee')).not.toBeInTheDocument();
+  });
+
+  it('only deletes an injury after confirming Yes', async () => {
+    const user = userEvent.setup();
+    injuryApi.listInjuries.mockResolvedValue([{
+      id: 'inj-1', workspaceId: 'ws-1', athleteId: 'ath-1', bodyRegion: 'Leg', region: 'Leg', area: 'Knee', side: 'Left', severity: 'Minor', notes: null, occurrenceDate: '2026-08-30', expectedReturnDate: null, resolvedDate: null, resolutionNotes: null, createdBy: 'user-1', updatedBy: null, createdAt: '2026-08-30T10:00:00.000Z', updatedAt: '2026-08-30T10:00:00.000Z', deletedAt: null, deletedBy: null,
+    }] satisfies Injury[]);
+    injuryApi.deleteInjury.mockResolvedValue(undefined);
+
+    render(<FitnessView athleteId="ath-1" athleteName="Ari Runner" athleteFocus="100m" athleteStatus="active" canOperate onBack={vi.fn()} onSetInactive={vi.fn()} />);
+
+    await screen.findByText('Left Knee');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Are you sure you want to delete this injury' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button').slice(-2).map((button) => button.textContent)).toEqual(['Yes', 'No']);
+    expect(injuryApi.deleteInjury).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'No' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(injuryApi.deleteInjury).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Yes' }));
+    await waitFor(() => expect(injuryApi.deleteInjury).toHaveBeenCalledWith('ath-1', 'inj-1'));
     expect(screen.queryByText('Left Knee')).not.toBeInTheDocument();
   });
 });
