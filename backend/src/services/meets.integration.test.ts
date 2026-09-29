@@ -658,6 +658,46 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(dashboard.recentPbs.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
   });
 
+  it('includes every eligible result in discipline progression graphs', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    const sprint = await definition('100m');
+    await pool.query(
+      `INSERT INTO results (event_id, athlete_id, discipline, outcome, final_result)
+       VALUES ($1, $2, '100m', 'valid', 11.5)`,
+      [eventId, athleteId],
+    );
+
+    const sprintSession = await session('100m', 'Final');
+    const sprintEntrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const sprintTarget = { disciplineSessionId: sprintSession.id, entrantId: sprintEntrant.id };
+    await registerEntrant(host, eventId, sprintTarget, transaction);
+    await open(sprintSession.id);
+    const sprintEntry = await createSessionEntry(host, eventId, sprintTarget, timed, transaction);
+    await selectSessionResultEntry(host, eventId, sprintTarget, { entryId: sprintEntry.id, expectedVersion: 1 }, transaction);
+    await changeSessionState(host, eventId, sprintSession.id, { status: 'completed', expectedVersion: 2 }, transaction);
+
+    const { getDisciplineProgression } = await import('./disciplineProgression.js');
+    const progression = await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons);
+    expect(progression.summary).toEqual({ personalBest: 11.25, resultCount: 2 });
+    expect(progression.entries.map((entry) => entry.value).sort()).toEqual([11.25, 11.5]);
+
+    const longJump = await definition('long_jump');
+    const longJumpSession = await session('long_jump', 'Long jump final');
+    const longJumpEntrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const longJumpTarget = { disciplineSessionId: longJumpSession.id, entrantId: longJumpEntrant.id };
+    await registerEntrant(host, eventId, longJumpTarget, transaction);
+    await open(longJumpSession.id);
+    const longJumpEntry = await createSessionEntry(host, eventId, longJumpTarget, { ...timed, value: 5.5, unit: 'metres' }, transaction);
+    await selectSessionResultEntry(host, eventId, longJumpTarget, { entryId: longJumpEntry.id, expectedVersion: 1 }, transaction);
+    await changeSessionState(host, eventId, longJumpSession.id, { status: 'completed', expectedVersion: 2 }, transaction);
+
+    expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).toMatchObject({
+      entries: [{ value: 5.5 }],
+      summary: { personalBest: 5.5, resultCount: 1 },
+    });
+  });
+
   it('blocks starting an event while any host or guest athlete is pending or maybe', async () => {
     await migrate();
     const { replaceEvent } = await import('./events.js');

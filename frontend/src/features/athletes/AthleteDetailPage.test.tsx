@@ -169,6 +169,38 @@ describe('AthleteDetailPage', () => {
     expect(screen.getByText('No finalized Long jump results yet.')).toBeInTheDocument();
   });
 
+  it('renders every returned result in the selected discipline progression graph', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID, ELITE_ID] }));
+    statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([
+      { athleteId: ATHLETE_ID, athleteName: 'Ari Runner', discipline: '100m', label: '100m', unit: 'seconds', direction: 'lower', precision: 2, pb: 11.25, sb: 11.25, resultCount: 2, seasonCount: 2, seasonAverage: 11.38, seasonTotal: 22.75, placing: 1 },
+      { athleteId: ATHLETE_ID, athleteName: 'Ari Runner', discipline: 'long_jump', label: 'Long jump', unit: 'metres', direction: 'higher', precision: 2, pb: 5.5, sb: 5.5, resultCount: 1, seasonCount: 1, seasonAverage: 5.5, seasonTotal: 5.5, placing: 1 },
+    ]);
+    statisticsApi.getAthleteDisciplineProgression.mockImplementation((_athleteId: string, disciplineDefinitionId: string) => Promise.resolve(
+      disciplineDefinitionId === SPRINT_ID
+        ? { entries: [{ eventId: 'legacy-100m', eventDate: '2026-08-01', eventTitle: 'Legacy meet', value: 11.5, isNewPb: true }, { eventId: 'session-100m', eventDate: '2026-09-01', eventTitle: 'Final', value: 11.25, isNewPb: true }], summary: { personalBest: 11.25, resultCount: 2 } }
+        : { entries: [{ eventId: 'long-jump', eventDate: '2026-09-02', eventTitle: 'Long jump final', value: 5.5, isNewPb: true }], summary: { personalBest: 5.5, resultCount: 1 } },
+    ));
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    const graph = await screen.findByRole('img', { name: '100m performance graph' });
+    expect(screen.getByText('2 finalized results')).toBeInTheDocument();
+    expect(graph.querySelectorAll('circle')).toHaveLength(2);
+    expect(graph).toHaveTextContent('Legacy meet, 2026-08-01: 11.50 s (PB)');
+    expect(graph).toHaveTextContent('Final, 2026-09-01: 11.25 s (PB)');
+
+    await user.click(within(screen.getByRole('tablist', { name: 'Discipline performance statistics' })).getByRole('tab', { name: 'Long jump' }));
+    const longJumpGraph = await screen.findByRole('img', { name: 'Long jump performance graph' });
+    expect(screen.getByText('1 finalized result')).toBeInTheDocument();
+    expect(longJumpGraph.querySelectorAll('circle')).toHaveLength(1);
+    expect(longJumpGraph).toHaveTextContent('Long jump final, 2026-09-02: 5.50 m (PB)');
+  });
+
   it('shows a focused identity, profile, active state, empty history, and back behavior', async () => {
     statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
       pb: 10.95,

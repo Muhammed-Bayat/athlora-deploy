@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### Athlete progression graphs — 2026-09-29
+
+- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **759 tests pass, 0 skip**. Coverage verifies every returned 100m progression point, then switches to and renders the independently scoped long-jump graph.
+- Backend: lint, strict typecheck, production build, and **750 tests pass**; **80 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. The new progression integration coverage will verify legacy 100m and finalized generic-session inclusion alongside an independently scoped long-jump result when a disposable PostgreSQL database is available.
+- Documentation: Docusaurus production build passes.
+- E2E: not run; Docker/PostgreSQL and Auth0 E2E credentials are unavailable locally.
+
 ### Global Athlora assistant and discipline analytics — 2026-09-28
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **760 tests pass, 0 skip**. Coverage includes global assistant lifecycle cleanup, strict local athlete confirmation, latest catalogue-version resolution, cached analytics actions, and Unicode-safe performance PDFs.
@@ -248,6 +255,6 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-The global assistant and discipline analytics verification status was generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
+The global assistant, discipline analytics, and athlete progression graph verification statuses were generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team support checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster verification statuses were documented with the assistance of OpenCode[gpt-5.6-terra]. The exact public-age filter verification status was documented with the assistance of OpenCode[gpt-5.6-terra].
