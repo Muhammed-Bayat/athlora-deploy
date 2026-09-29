@@ -138,6 +138,13 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 ## Current check status
 
+### Current-day calendar event layout — 2026-09-29
+
+- Frontend: targeted `EventsPage` coverage passes (**39 tests**); strict typecheck, lint (16 existing warnings, 0 errors), and production build pass. The full suite has **759 passing tests and 1 unrelated failing test**: `MeetRosterPanel.test.tsx` expects the relay tab to receive ArrowRight focus while focus remains on the intermediate 200m tab.
+- Backend: not run; this is a frontend markup and CSS selector correction with no API or backend behavior change.
+- Documentation: Docusaurus production build passes.
+- E2E: not run; the fix is component-covered and authenticated browser tests require local PostgreSQL plus Auth0 configuration.
+
 ### Athlete progression graphs — 2026-09-29
 
 - Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **759 tests pass, 0 skip**. Coverage verifies every returned 100m progression point, then switches to and renders the independently scoped long-jump graph.
@@ -255,6 +262,6 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-The global assistant, discipline analytics, and athlete progression graph verification statuses were generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
+The global assistant, discipline analytics, athlete progression graph, and current-day calendar verification statuses were generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team support checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster verification statuses were documented with the assistance of OpenCode[gpt-5.6-terra]. The exact public-age filter verification status was documented with the assistance of OpenCode[gpt-5.6-terra].

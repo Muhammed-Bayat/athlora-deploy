@@ -7,6 +7,7 @@ import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } f
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
 import { EventsPage, formattedDate } from './EventsPage';
 import { EventDetailPage } from './EventDetailPage';
+import styles from './EventsPage.module.css';
 
 const eventApi = vi.hoisted(() => ({
   listEvents: vi.fn(),
@@ -266,6 +267,22 @@ describe('EventsPage', () => {
     expect(await screen.findByRole('button', { name: 'Calendar view' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Acceleration Session')).toBeInTheDocument();
     expect(screen.getByText('TBC')).toBeInTheDocument();
+  });
+
+  it('keeps current-day event entries separate from the circular day marker', async () => {
+    const todayEvent = event({ id: '55555555-5555-4555-8555-555555555555', title: 'Today training', date: TODAY, time: '16:00:00' });
+    eventApi.listEvents.mockResolvedValueOnce({ data: [todayEvent, city], meta: { count: 2 } });
+    render(
+      <CurrentUserProvider user={currentUser}>
+        <MemoryRouter><EventsPage today={TODAY} defaultView="calendar" /></MemoryRouter>
+      </CurrentUserProvider>,
+    );
+
+    const todayLabel = new Date(`${TODAY}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    const todayCell = await screen.findByRole('button', { name: `${todayLabel}, 1 event` });
+    expect(todayCell.firstElementChild).toHaveClass(styles.calendarDay);
+    expect(within(todayCell).getByText('Today training')).toBeInTheDocument();
+    expect(todayCell.querySelector(`.${styles.calendarEvents}`)).not.toHaveClass(styles.calendarDay);
   });
 
   it('combines selected club schedules in the calendar', async () => {
