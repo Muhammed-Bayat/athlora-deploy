@@ -292,7 +292,7 @@
   color: var(--console-selected-text);
 }
 
-.calendarGrid > button.today > span {
+.calendarGrid > button.today > .calendarDay {
   display: grid;
   place-items: center;
   width: 24px;

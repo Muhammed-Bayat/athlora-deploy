@@ -1030,7 +1030,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
               const dayEvents = cell.iso ? filtered.filter((event) => event.date === cell.iso) : [];
               const label = cell.current ? `${formattedDate(cell.iso, true)}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : `Outside current month, day ${cell.day}`;
               return <button type="button" disabled={!cell.current} className={cell.iso === today ? styles.today : undefined} aria-label={label} aria-pressed={cell.iso === selectedDay} onClick={() => setSelectedDay(cell.iso)} key={`${cell.day}-${index}`}>
-                <span>{cell.day}</span>
+                <span className={styles.calendarDay}>{cell.day}</span>
                 <span className={styles.calendarEvents} aria-hidden="true">
                   {dayEvents.slice(0, 2).map((event) => <span className={styles.calendarEvent} data-club-index={clubColorForEvent(event.id) >= 0 ? clubColorForEvent(event.id) : undefined} data-shared={isJointEvent(event.id) || undefined} data-type={event.type} key={event.id}><b>{event.time?.slice(0, 5) ?? 'TBC'}</b>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)} · ` : clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.title}</span>)}
                   {dayEvents.length > 2 && <span className={styles.calendarMore}>+{dayEvents.length - 2} more</span>}
