@@ -204,7 +204,7 @@ export async function replaceEvent(
         await markFixtureReacceptanceRequired(client, eventId as string, actorId);
       }
     }
-    if (currentEvent.status === 'scheduled' && payload.status !== 'scheduled') {
+    if (currentEvent.status === 'scheduled' && payload.status === 'in_progress') {
       await assertFixtureReadyToStart(client, eventId as string);
     }
 
