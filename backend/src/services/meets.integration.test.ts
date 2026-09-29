@@ -311,9 +311,12 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(s.id);
     await expect(createSessionEntry(host, eventId, target, timed, transaction)).rejects.toMatchObject({ status: 400 });
     await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 5.9 }, transaction);
-    await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 6.2 }, transaction);
-    await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 7, isFoul: true }, transaction);
-    expect((await listSessionResults(host, eventId, s.id, pool))[0]).toMatchObject({ effectiveResult: 6.2, placing: 1, countsTowardsStatistics: false });
+    const best = await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 6.2 }, transaction);
+    const foul = await createSessionEntry(host, eventId, target, { ...timed, unit: 'metres', value: 7, isFoul: true }, transaction);
+    expect((await listSessionResults(host, eventId, s.id, pool))[0]).toMatchObject({ effectiveResult: null, placing: null, countsTowardsStatistics: false });
+    await expect(selectSessionResultEntry(host, eventId, target, { entryId: foul.id, expectedVersion: 3 }, transaction)).rejects.toMatchObject({ status: 404 });
+    const selected = await selectSessionResultEntry(host, eventId, target, { entryId: best.id, expectedVersion: 3 }, transaction);
+    expect(selected).toMatchObject({ effectiveResult: 6.2, placing: 1, countsTowardsStatistics: false });
     await withdrawEntrant(host, eventId, target, transaction);
     expect(await sessionStatistics(host, eventId, s.id, undefined, pool)).toMatchObject({ best: null, validResultCount: 0, resultCount: 1 });
     await expect(createSessionEntry(host, eventId, target, { ...timed, unit: 'metres' }, transaction)).rejects.toMatchObject({ code: 'ENTRANT_WITHDRAWN' });
@@ -666,9 +669,9 @@ describeDB('multi-discipline migration and domain integration', () => {
 
     await pool.query("UPDATE event_participants SET rsvp_status = 'yes' WHERE event_id = $1", [eventId]);
     await pool.query(
-      `INSERT INTO event_fixture_workspaces (event_id, workspace_id, role, status, accepted_revision)
-       VALUES ($1,$2,'host','accepted',1),($1,$3,'guest','accepted',1)`,
-      [eventId, host.workspaceId, other.workspaceId],
+      `INSERT INTO event_fixture_workspaces (event_id, workspace_id, role, status, accepted_revision, contact_email)
+       VALUES ($1,$2,'guest','accepted',1,'guest@test.example')`,
+      [eventId, other.workspaceId],
     );
     await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'pending')", [eventId, otherAthleteId, other.workspaceId]);
     await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });

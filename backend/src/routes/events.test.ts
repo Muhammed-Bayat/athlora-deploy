@@ -389,6 +389,9 @@ describe('PUT /api/v1/events/:id', () => {
       .mockResolvedValueOnce(synchronizedUser())
       .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
       .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
 
     const response = await request(app)
@@ -405,7 +408,7 @@ describe('PUT /api/v1/events/:id', () => {
     expect(response.body).toEqual({ data: eventBody({ status: 'in_progress' }) });
     const [lockSql] = query.mock.calls[2] as [string, unknown[]];
     expect(lockSql).toContain('FOR UPDATE');
-    const [sql, parameters] = query.mock.calls[3] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[6] as [string, unknown[]];
     expect(sql).toContain('UPDATE events');
     expect(parameters[8]).toBe('in_progress');
   });

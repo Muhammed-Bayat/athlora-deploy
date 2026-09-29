@@ -116,7 +116,8 @@ export async function getAthleteProgressionDetail(
           ${cursorCondition}
           ${typeCondition}
         UNION ALL
-        SELECT r.event_id, en.athlete_id, d.code, r.final_result, r.unit,
+        SELECT r.event_id, en.athlete_id, d.code, r.final_result,
+               CASE WHEN r.final_result IS NULL THEN NULL ELSE r.unit END AS unit,
                NULL::int AS placing, false AS is_pb, false AS is_sb,
                r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
                r.outcome, r.override_at,

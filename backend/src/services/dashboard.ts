@@ -88,7 +88,8 @@ async function listRecentResults(
           AND e.status <> 'cancelled'
           AND e.date >= $4::date AND e.date < $5::date
        UNION ALL
-       SELECT r.event_id, en.athlete_id, d.code, r.final_result, r.unit,
+       SELECT r.event_id, en.athlete_id, d.code, r.final_result,
+              CASE WHEN r.final_result IS NULL THEN NULL ELSE r.unit END AS unit,
               NULL::int, false, false,
               r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
               r.outcome, r.override_at, 'session' AS result_source,

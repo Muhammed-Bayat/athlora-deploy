@@ -247,6 +247,9 @@ describe('replaceEvent', () => {
   it('locks the row, validates the transition, and replaces the mutable fields', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress', title: 'Renamed' })] });
 
     const event = await replaceEvent(USER_ID, EVENT_ID, {
@@ -265,7 +268,7 @@ describe('replaceEvent', () => {
     const [lockSql, lockParameters] = query.mock.calls[0] as [string, unknown[]];
     expect(lockSql).toContain('FOR UPDATE');
     expect(lockParameters).toEqual([EVENT_ID, USER_ID]);
-    const [updateSql, updateParameters] = query.mock.calls[1] as [string, unknown[]];
+    const [updateSql, updateParameters] = query.mock.calls[4] as [string, unknown[]];
     expect(updateSql).toContain('UPDATE events');
     expect(updateParameters[8]).toBe('in_progress');
     expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', false);
@@ -287,6 +290,9 @@ describe('replaceEvent', () => {
   it('sends a live_logger_started notification when transitioning from scheduled to in_progress', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
 
     await replaceEvent(USER_ID, EVENT_ID, {
@@ -326,6 +332,9 @@ describe('replaceEvent', () => {
   it('does not send event_ended when not transitioning from in_progress to completed', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow()] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
 
     await replaceEvent(USER_ID, EVENT_ID, {
