@@ -87,7 +87,7 @@ export function ActiveInjuries({ injuries, canOperate, isArchived, onResolve, on
                       ) : (
                         <Button variant="ghost" onClick={() => onReopen(injury.id)}>Reopen</Button>
                       )}
-                      <Button variant="ghost" onClick={() => onDelete(injury.id)}>Delete</Button>
+                      <Button className={styles.deleteAction} variant="danger" onClick={() => onDelete(injury.id)}>Delete</Button>
                     </>
                   )}
                 </div>

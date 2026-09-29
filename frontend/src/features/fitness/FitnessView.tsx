@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button } from '../../components';
+import { Button, Modal } from '../../components';
 import { ActiveInjuries } from './ActiveInjuries';
 import { BodyViewer } from './BodyViewer';
 import { InjuryEditor } from './InjuryEditor';
@@ -31,6 +31,7 @@ export function FitnessView({
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [preview, setPreview] = useState<InjuryDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const isArchived = athleteStatus === 'archived';
 
@@ -152,10 +153,16 @@ export function FitnessView({
             isArchived={isArchived}
             onResolve={handleResolve}
             onReopen={handleReopen}
-            onDelete={handleDelete}
+            onDelete={setDeleteTarget}
           />
         </div>
       )}
+      <Modal open={deleteTarget !== null} title="Are you sure you want to delete this injury" onClose={() => setDeleteTarget(null)}>
+        <div className={styles.deleteConfirmationActions}>
+          <Button variant="danger" onClick={() => { if (deleteTarget) void handleDelete(deleteTarget); setDeleteTarget(null); }}>Yes</Button>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>No</Button>
+        </div>
+      </Modal>
     </section>
   );
 }
