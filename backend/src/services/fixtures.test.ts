@@ -188,7 +188,6 @@ describe('fixture rosters', () => {
       withdrawn_at: null,
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
     });

@@ -33,7 +33,6 @@ interface ClubSummaryRow {
   name: string;
   description: string | null;
   primary_color: string | null;
-  accent_color: string | null;
   logo_key: string | null;
   cover_key: string | null;
 }
@@ -213,7 +212,7 @@ async function findClub(
 ): Promise<ClubStatistics['club'] & { workspaceId: string }> {
   if (!isCanonicalUuid(clubId)) throw clubNotFound();
   const result = await executor.query<ClubSummaryRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key
      FROM clubs WHERE id = $1`,
     [clubId],
   );
@@ -231,14 +230,12 @@ function brandSummaryFromRow(row: {
   workspace_id: string;
   description: string | null;
   primary_color: string | null;
-  accent_color: string | null;
   logo_key: string | null;
   cover_key: string | null;
 }): NonNullable<ClubStatistics['club']['branding']> {
   return {
     description: row.description,
     primaryColor: row.primary_color,
-    accentColor: row.accent_color,
     logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
     coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
   };
@@ -246,7 +243,7 @@ function brandSummaryFromRow(row: {
 
 export async function listClubs(search: string | null): Promise<Club[]> {
   const result = await getPool().query<ClubRow & ClubSummaryRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key, created_at, updated_at
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key, created_at, updated_at
      FROM clubs
      WHERE ($1::text IS NULL OR name ILIKE '%' || $1 || '%')
      ORDER BY name, id`,

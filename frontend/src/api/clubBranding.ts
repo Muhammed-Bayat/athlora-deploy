@@ -11,7 +11,6 @@ export async function getClubBranding(): Promise<ClubBranding> {
 export async function updateClubBranding(payload: {
   description: string | null;
   primaryColor: string | null;
-  accentColor: string | null;
 }): Promise<ClubBranding> {
   const response = await request<{ data: ClubBranding }>(BRANDING_PATH, {
     method: 'PUT',

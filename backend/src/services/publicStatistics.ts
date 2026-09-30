@@ -24,7 +24,6 @@ interface PublicClubRow {
   name: string;
   description: string | null;
   primary_color: string | null;
-  accent_color: string | null;
   logo_key: string | null;
   cover_key: string | null;
 }
@@ -75,7 +74,7 @@ function dateText(value: string | Date): string {
 async function findPublicClub(clubId: unknown, executor: DbExecutor): Promise<PublicClubRow> {
   if (!isCanonicalUuid(clubId)) throw notFound();
   const result = await executor.query<PublicClubRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key
      FROM clubs
      WHERE id = $1 AND public_results_enabled = true`,
     [clubId],
@@ -89,7 +88,6 @@ function publicBrandSummary(row: PublicClubRow) {
   return {
     description: row.description,
     primaryColor: row.primary_color,
-    accentColor: row.accent_color,
     logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
     coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
   };
@@ -249,7 +247,7 @@ async function getPublicAthleteStatistics(
 
 export async function listPublicClubs(search: string | null): Promise<PublicClub[]> {
   const result = await getPool().query<PublicClubRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key
      FROM clubs
      WHERE public_results_enabled = true
        AND ($1::text IS NULL OR name ILIKE '%' || $1 || '%')

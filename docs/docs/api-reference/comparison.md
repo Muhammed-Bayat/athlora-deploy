@@ -62,7 +62,7 @@ Returns the selected season's 100m performance for the club's current roster, in
 - Total and valid 100m result counts.
 - Fastest and latest valid time.
 - Average, median, and population standard deviation of valid times.
-- Club branding summary (`description`, `primaryColor`, `accentColor`, `logoUrl`, `coverUrl`) when present.
+- Club branding summary (`description`, `primaryColor`, `logoUrl`, `coverUrl`) when present.
 
 ## Club Comparison
 
@@ -82,4 +82,4 @@ Compares exactly two distinct clubs using the same selected-season statistics re
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra].

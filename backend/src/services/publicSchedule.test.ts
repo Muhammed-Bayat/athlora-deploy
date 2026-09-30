@@ -38,7 +38,6 @@ describe('listPublicScheduleClubs', () => {
       name: 'Open Track Club',
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
     }]));
@@ -51,7 +50,6 @@ describe('listPublicScheduleClubs', () => {
       branding: {
         description: null,
         primaryColor: null,
-        accentColor: null,
         logoUrl: null,
         coverUrl: null,
       },
@@ -83,7 +81,6 @@ describe('getPublicClubSchedule', () => {
         name: 'Open Track Club',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -102,7 +99,6 @@ describe('getPublicClubSchedule', () => {
         branding: {
           description: null,
           primaryColor: null,
-          accentColor: null,
           logoUrl: null,
           coverUrl: null,
         },
@@ -144,7 +140,6 @@ describe('getPublicClubSchedule', () => {
         name: 'Open Track Club',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -164,7 +159,6 @@ describe('getPublicClubSchedule', () => {
         name: 'Open Track Club',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -206,7 +200,6 @@ describe('getPublicClubSchedule', () => {
       name: 'Club',
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
     }]))
@@ -225,7 +218,6 @@ describe('getPublicClubSchedule', () => {
       name: 'Club',
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
     }]));

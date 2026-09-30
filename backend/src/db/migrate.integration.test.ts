@@ -84,7 +84,7 @@ describeDB('migrations against a real database', () => {
     expect(await hasColumn('clubs', 'public_schedule_enabled')).toBe(true);
     expect(await hasColumn('clubs', 'description')).toBe(true);
     expect(await hasColumn('clubs', 'primary_color')).toBe(true);
-    expect(await hasColumn('clubs', 'accent_color')).toBe(true);
+    expect(await hasColumn('clubs', 'accent_color')).toBe(false);
     expect(await hasColumn('clubs', 'logo_key')).toBe(true);
     expect(await hasColumn('clubs', 'cover_key')).toBe(true);
 

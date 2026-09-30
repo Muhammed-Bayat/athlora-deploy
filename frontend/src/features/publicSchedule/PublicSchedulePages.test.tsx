@@ -20,7 +20,7 @@ const schedule = {
   club: {
     id: CLUB_ID,
     name: 'Open Track Club',
-    branding: { description: 'Sprint-focused club.', primaryColor: null, accentColor: null, logoUrl: null, coverUrl: null },
+    branding: { description: 'Sprint-focused club.', primaryColor: null, logoUrl: null, coverUrl: null },
   },
   events: [
     {

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0039_host_fixture_revision_sync.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0040_remove_club_accent_color.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -88,7 +88,6 @@ clubs
   name TEXT NOT NULL
   description TEXT NULL CHECK (length(description) <= 500)
   primary_color TEXT NULL CHECK (primary_color ~ '^#[0-9A-Fa-f]{6}$')
-  accent_color TEXT NULL CHECK (accent_color ~ '^#[0-9A-Fa-f]{6}$')
   logo_key TEXT NULL
   logo_content_type TEXT NULL
   logo_byte_size INTEGER NULL CHECK (logo_byte_size IS NULL OR logo_byte_size > 0 AND logo_byte_size <= 5242880)
@@ -740,7 +739,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0024_public_club_statistics.sql` | Club public-results setting |
 | `0025_club_public_schedule_publication.sql` | Independent club public-schedule setting |
 | `0026_user_preferences.sql` | Per-user dashboard card order, hidden cards, and saved filter presets |
-| `0027_club_branding.sql` | Club description, brand colours, logo, and cover media keys |
+| `0027_club_branding.sql` | Club description, primary colour, logo, and cover media keys |
 | `0028_multi_discipline_meet_foundation.sql` - `0031_vertical_events_catalogue.sql` | Immutable discipline catalogue and multi-discipline meet/session foundation; `events.discipline = NULL` identifies generic meets |
 | `0032_athlete_disciplines_and_season_goals.sql` | Athlete catalogue preferences and measurable private season goals |
 | `0033_guest_entrant_details.sql` | Nullable club name and private details for generic-meet entrants |
@@ -750,6 +749,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0037_backfill_legacy_100m_athlete_disciplines.sql` | Backfills `athlete_preferred_disciplines` from athletes with legacy 100m results, timeline entries, or 100m events |
 | `0038_recording_attribution.sql` | `recorded_workspace_id` on `timeline_entries` and `session_timeline_entries`, with backfill to the recording workspace |
 | `0039_host_fixture_revision_sync.sql` | Repairs host fixture-workspace `accepted_revision` rows left behind when a fixture revision advanced |
+| `0040_remove_club_accent_color.sql` | Removes the obsolete club accent colour column |
 
 ## Schema maintenance
 
@@ -757,4 +757,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra].
