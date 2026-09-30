@@ -74,6 +74,15 @@ describe('PublicMeetLogger', () => {
     expect(screen.getByRole('table')).toHaveTextContent('North Stars');
     expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Guest');
 
+    const timeInput = screen.getByLabelText('Time (s) for North Stars');
+    expect(timeInput).toHaveAttribute('type', 'text');
+    await user.type(timeInput, '48,21');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+    await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
+      'public-session', EVENT_ID, { disciplineSessionId: RELAY_SESSION_ID, entrantId: RELAY_ID },
+      expect.objectContaining({ entryType: 'attempt', value: 48.21, unit: 'seconds' }),
+    ));
+
     await user.click(screen.getByRole('tab', { name: /Long Jump Final/ }));
     expect(screen.getAllByText('Independent Athletics')).toHaveLength(2);
     expect(screen.getByRole('table')).toHaveTextContent('Casey Guest');
@@ -81,7 +90,10 @@ describe('PublicMeetLogger', () => {
     expect(screen.queryByRole('button', { name: 'Lane Inf.' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'DQ' })).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
+    const markInput = screen.getByLabelText('Mark (metres) for Casey Guest');
+    expect(markInput).toHaveAttribute('type', 'text');
+    expect(markInput).toHaveAttribute('inputmode', 'decimal');
+    await user.type(markInput, '6,45');
     await user.click(screen.getByRole('button', { name: 'Record' }));
 
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
@@ -90,11 +102,60 @@ describe('PublicMeetLogger', () => {
     ));
 
     await user.click(screen.getByRole('button', { name: 'Foul for Casey Guest' }));
-    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6.45');
+    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6,45');
     await user.click(screen.getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenLastCalledWith(
       'public-session', EVENT_ID, { disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID },
       expect.objectContaining({ entryType: 'attempt', value: 6.45, unit: 'metres', isFoul: true }),
+    ));
+  });
+
+  it('normalizes comma decimal values before queuing offline attempts', async () => {
+    const sync = { ...offlineSync(), isOnline: false };
+    const user = userEvent.setup();
+    render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={sync} />);
+
+    await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
+    await user.type(screen.getByLabelText('Mark (metres) for Casey Guest'), '6,45');
+    await user.click(screen.getByRole('button', { name: 'Record' }));
+
+    await waitFor(() => expect(sync.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      target: { disciplineSessionId: FIELD_SESSION_ID, entrantId: GUEST_ID },
+      actionType: 'create_entry',
+      payload: expect.objectContaining({ value: 6.45, unit: 'metres' }),
+    })));
+  });
+
+  it('normalizes comma decimal vertical heights before recording', async () => {
+    const verticalDefinitionId = '99999999-9999-4999-8999-999999999997';
+    const verticalSessionId = '99999999-9999-4999-8999-999999999996';
+    const verticalSnapshot: PublicMeetLoggerSnapshot = {
+      ...snapshot,
+      disciplines: [...snapshot.disciplines, {
+        id: verticalDefinitionId, code: 'high_jump', version: 1, kind: 'vertical', unit: 'metres', direction: 'higher',
+        defaultRules: { aggregation: 'vertical', entrantType: 'individual', failureLimit: 3 }, precision: 2,
+        presentation: { label: 'High jump' }, createdAt: '2026-09-01T00:00:00.000Z', source: 'catalogue',
+      }],
+      sessions: [...snapshot.sessions, {
+        id: verticalSessionId, label: 'High Jump Final', disciplineDefinitionId: verticalDefinitionId, status: 'in_progress',
+        resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [],
+        verticalConfig: { startingHeight: 1.5, heightIncrement: 0.02, failureLimit: 3, round: 'final' },
+      }],
+    };
+    vi.mocked(publicLoggerApi.getPublicMeetLoggerSnapshot).mockResolvedValue(verticalSnapshot);
+    const user = userEvent.setup();
+    render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={offlineSync()} />);
+
+    await user.click(await screen.findByRole('tab', { name: /High Jump Final/ }));
+    const heightInput = screen.getByLabelText('Target height (m) for Casey Guest');
+    expect(heightInput).toHaveAttribute('type', 'text');
+    await user.clear(heightInput);
+    await user.type(heightInput, '1,85');
+    await user.click(screen.getByRole('button', { name: 'Clearance' }));
+
+    await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
+      'public-session', EVENT_ID, { disciplineSessionId: verticalSessionId, entrantId: GUEST_ID },
+      expect.objectContaining({ value: 1.85, unit: 'metres', verticalState: 'clearance' }),
     ));
   });
 

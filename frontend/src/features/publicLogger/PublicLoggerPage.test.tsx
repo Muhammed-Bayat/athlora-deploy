@@ -46,7 +46,10 @@ describe('PublicLoggerPage', () => {
     expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).toContain('opaque-session-token');
     expect([...Array(sessionStorage.length)].map((_, index) => sessionStorage.getItem(sessionStorage.key(index)!))).not.toContain('opaque-link-token');
 
-    await user.type(screen.getByLabelText('Finish time for Nia Runner'), '11.42');
+    const finishInput = screen.getByLabelText('Finish time for Nia Runner');
+    expect(finishInput).toHaveAttribute('type', 'text');
+    expect(finishInput).toHaveAttribute('inputmode', 'decimal');
+    await user.type(finishInput, '11,42');
     await user.click(screen.getByRole('button', { name: 'Record' }));
     await waitFor(() => expect(publicLoggerApi.createPublicLoggerEntry).toHaveBeenCalledWith(
       'opaque-session-token', snapshot.event.id, expect.objectContaining({ athleteId: snapshot.participants[0].athleteId, entryType: 'attempt', value: 11.42 }),
@@ -93,7 +96,9 @@ describe('PublicLoggerPage', () => {
     expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     await user.clear(screen.getByLabelText('Finish time in seconds'));
-    await user.type(screen.getByLabelText('Finish time in seconds'), '11.40');
+    const editInput = screen.getByLabelText('Finish time in seconds');
+    expect(editInput).toHaveAttribute('type', 'text');
+    await user.type(editInput, '11,40');
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(publicLoggerApi.updatePublicLoggerEntry).toHaveBeenCalledWith('opaque-session-token', snapshot.event.id, ownEntry.id, { expectedVersion: 1, value: 11.4 }));
     await user.click(screen.getByRole('button', { name: 'Undo' }));

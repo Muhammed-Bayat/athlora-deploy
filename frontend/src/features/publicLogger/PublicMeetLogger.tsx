@@ -6,6 +6,7 @@ import {
 } from '../../api/publicLoggers';
 import { ApiError } from '../../api/client';
 import { Button, Input, OfflineRecoverySurface } from '../../components';
+import { parseDecimalInput } from '../../utils/decimalInput';
 import type { PublicOfflineSyncResult } from '../../hooks/usePublicOfflineSync';
 import { cachePublicSession, getCachedPublicSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
@@ -184,8 +185,8 @@ export function PublicMeetLogger({
   const logAttempt = (entrantId: string) => run(async () => {
     if (!sessionId || !entrantId || !definition) return;
     const raw = values[entrantId] ?? '';
-    const numeric = Number(raw);
-    if (!raw.trim() || !Number.isFinite(numeric) || numeric <= 0) {
+    const numeric = parseDecimalInput(raw);
+    if (numeric === null || numeric <= 0) {
       setError(`Enter a valid ${definition.unit === 'seconds' ? 'time' : 'measurement'} before recording.`);
       return;
     }
@@ -209,9 +210,13 @@ export function PublicMeetLogger({
   const logVerticalAttempt = (entrantId: string, verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
     if (!sessionId || !entrantId || !definition) return;
     const height = heights[entrantId] ?? String(session?.verticalConfig?.startingHeight ?? '');
-    if (height === '') return;
+    const numeric = parseDecimalInput(height);
+    if (numeric === null || numeric <= 0) {
+      setError('Enter a valid height before recording.');
+      return;
+    }
     await submitEntry(targetFor(entrantId), {
-      entryType: 'attempt', value: Number(height), unit: definition.unit, verticalState,
+      entryType: 'attempt', value: numeric, unit: definition.unit, verticalState,
       isFoul: false, incidentType: null, noteText: null, deviceId: null,
     });
   });
@@ -373,10 +378,8 @@ export function PublicMeetLogger({
                           <div className={styles.finishInputGroup}>
                             <Input
                               aria-label={`Target height (m) for ${entrant.name}`}
-                              type="number"
+                              type="text"
                               inputMode="decimal"
-                              min={session.verticalConfig?.startingHeight ?? 0.01}
-                              step={session.verticalConfig?.heightIncrement ?? 0.01}
                               value={height}
                               onChange={(input) => setHeights((prev) => ({ ...prev, [entrant.id]: input.target.value }))}
                               disabled={controlsDisabled}
@@ -384,7 +387,10 @@ export function PublicMeetLogger({
                             <Button
                               variant="secondary"
                               disabled={controlsDisabled}
-                              onClick={() => setHeights((prev) => ({ ...prev, [entrant.id]: (Number(height || session.verticalConfig?.startingHeight || 0) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2) }))}
+                              onClick={() => {
+                                const currentHeight = parseDecimalInput(height) ?? session.verticalConfig?.startingHeight ?? 0;
+                                setHeights((prev) => ({ ...prev, [entrant.id]: (currentHeight + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2) }));
+                              }}
                             >
                               Next height
                             </Button>
@@ -394,10 +400,8 @@ export function PublicMeetLogger({
                           <div className={styles.finishInputGroup}>
                             <Input
                               aria-label={`${timed ? 'Time (s)' : `Mark (${definition.unit})`} for ${entrant.name}`}
-                              type="number"
+                              type="text"
                               inputMode="decimal"
-                              min="0.01"
-                              step="0.01"
                               placeholder={timed ? '10.25' : '0.00'}
                               value={values[entrant.id] ?? ''}
                               onChange={(input) => setValues((prev) => ({ ...prev, [entrant.id]: input.target.value }))}
