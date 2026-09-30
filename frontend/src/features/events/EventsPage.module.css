@@ -155,7 +155,6 @@
   background: var(--console-surface);
 }
 
-.calendarScope > p,
 .clubPicker > p {
   margin: 0;
   color: var(--console-muted);
