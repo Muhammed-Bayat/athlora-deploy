@@ -31,7 +31,6 @@ GET /api/v1/athletes/:id/progression
     "athlete": {
       "id": "uuid",
       "name": "Usain Bolt",
-      "squadNames": ["Sprint Squad"],
       "archivedAt": null
     },
     "entries": [
@@ -158,4 +157,4 @@ This endpoint is **100m-only**. The discipline filter is hardcoded to `disciplin
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The response example was updated with OpenCode[openai/gpt-5.6-terra].

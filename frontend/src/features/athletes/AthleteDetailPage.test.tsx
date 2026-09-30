@@ -3,17 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { AthleteDisciplineStatistics } from '../../api/statistics';
-import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, ResultOutcome, Squad } from '../../types';
+import type { Athlete, AthleteResultHistoryEntry, AthleteStatisticsDetail, ResultOutcome } from '../../types';
 import { AthleteDetailPage } from './AthleteDetailPage';
 
 const athleteApi = vi.hoisted(() => ({ getAthlete: vi.fn(), updateAthlete: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const statisticsApi = vi.hoisted(() => ({ getAthleteStatistics: vi.fn(), getAthleteDisciplineStatistics: vi.fn(), getAthleteProgression: vi.fn(), getAthleteDisciplineProgression: vi.fn() }));
-const squadsApi = vi.hoisted(() => ({ listSquads: vi.fn() }));
 const injuriesApi = vi.hoisted(() => ({ listInjuries: vi.fn() }));
 vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/statistics', () => statisticsApi);
-vi.mock('../../api/squads', () => squadsApi);
 vi.mock('../../api/injuries', () => injuriesApi);
 vi.mock('../../api/meets', () => meetsApi);
 vi.mock('../fitness/FitnessView', () => ({
@@ -23,10 +21,6 @@ vi.mock('../fitness/FitnessView', () => ({
 const ATHLETE_ID = '11111111-1111-4111-8111-111111111111';
 const SPRINT_ID = '33333333-3333-4333-8333-333333333333';
 const ELITE_ID = '44444444-4444-4444-8444-444444444444';
-function squad(id: string, name: string): Squad {
-  return { id, name, archivedAt: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
-}
-
 function athlete(overrides: Partial<Athlete> = {}): Athlete {
   return {
     id: ATHLETE_ID,
@@ -34,7 +28,6 @@ function athlete(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2004-02-29',
     gender: 'Open',
-    squads: [squad(SPRINT_ID, 'Sprint A')],
     preferredDisciplineIds: [],
     seasonGoals: [],
     notes: 'Starts focus',
@@ -55,7 +48,7 @@ function history(
 ): AthleteResultHistoryEntry {
   const valid = outcome === 'valid';
   return {
-    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint A'], archivedAt: null },
+    athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
     event: {
       id: `event-${title}`,
       title,
@@ -100,7 +93,7 @@ function statistics(overrides: Partial<AthleteStatisticsDetail> = {}): AthleteSt
     latestResult: null,
     latestOutcome: 'no_result',
     updatedAt: '2026-08-17T10:00:00.000Z',
-    athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint A'], archivedAt: null },
+    athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
     resultCounts: { allTime: 0, currentYear: 0, competitionAllTime: 0, trainingAllTime: 0 },
     latest: null,
     recentResults: { competitions: [], training: [] },
@@ -113,12 +106,11 @@ function renderDetail(onBack = vi.fn(), onAthleteUpdated = vi.fn()) {
 }
 
 beforeEach(() => {
-  squadsApi.listSquads.mockResolvedValue({ data: [squad(SPRINT_ID, 'Sprint A'), squad(ELITE_ID, 'Elite')], meta: { count: 2 } });
   vi.clearAllMocks();
   athleteApi.getAthlete.mockResolvedValue(athlete());
   statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
   statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([]);
-  statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
+  statisticsApi.getAthleteProgression.mockResolvedValue({ athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null }, entries: [], pagination: { nextCursor: null, count: 0, total: 0 }, summary: { allTimePb: null, totalResults: 0, totalValid: 0 } });
   statisticsApi.getAthleteDisciplineProgression.mockResolvedValue({ entries: [], summary: { personalBest: null, resultCount: 0 } });
   injuriesApi.listInjuries.mockResolvedValue([]);
   meetsApi.listDisciplines.mockResolvedValue({ data: [], meta: { count: 0 } });
@@ -236,7 +228,7 @@ describe('AthleteDetailPage', () => {
   }, 30_000);
 
   it('uses explicit placeholders for a partial archived profile', async () => {
-    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, squads: [], notes: null, archivedAt: '2026-08-01T00:00:00.000Z', status: 'archived' }));
+    athleteApi.getAthlete.mockResolvedValue(athlete({ dob: null, gender: null, notes: null, archivedAt: '2026-08-01T00:00:00.000Z', status: 'archived' }));
     renderDetail();
 
     expect(await screen.findByText('Archived athlete')).toBeInTheDocument();
@@ -386,7 +378,7 @@ describe('AthleteDetailPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(athleteApi.updateAthlete).toHaveBeenCalledWith(ATHLETE_ID, {
-      name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', squadIds: [SPRINT_ID], notes: null, preferredDisciplineIds: [SPRINT_ID, ELITE_ID], seasonGoals: [],
+       name: 'Ari Updated', dob: '2004-02-29', gender: 'Open', notes: null, preferredDisciplineIds: [SPRINT_ID, ELITE_ID], seasonGoals: [],
     }));
     expect(await screen.findByRole('heading', { name: 'Ari Updated' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Disciplines' })).toHaveTextContent('100mLong jump');

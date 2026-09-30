@@ -20,7 +20,7 @@ The delivered release (**0.5.0**) covers the multi-discipline catalogue, shared 
 
 ```text
 users              coach identity and role
-athletes           coach-owned roster, profile, squad, notes, archival state
+athletes           coach-owned roster, profile, notes, archival state
 events             competition or training event, discipline, venue, lifecycle
 event_participants athlete assignment and RSVP state
 timeline_entries   append-only, versioned live observations and tombstones
@@ -107,11 +107,11 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 
 **Status: Complete** — Sprint 2, delivered between `v0.3.0` and `v0.4.0`.
 
-Moved the single-coach console to shared club workspaces with membership, roles, squads, injury tracking, cross-workspace fixtures, event helpers, realtime updates, and in-app reminders/notifications.
+Moved the single-coach console to shared club workspaces with membership, roles, injury tracking, cross-workspace fixtures, event helpers, realtime updates, and in-app reminders/notifications.
 
 | Work tracked | Delivered through |
 |---|---|
-| Workspace tenancy, coach/assistant roles, normalized squads, athlete lifecycle, and persisted injury/recovery records: issues `#89`, `#93` | PRs `#105`, `#107`, `#108`, `#110`, `#115`, `#118` |
+| Workspace tenancy, coach/assistant roles, athlete lifecycle, and persisted injury/recovery records: issues `#89`, `#93` | PRs `#105`, `#107`, `#108`, `#110`, `#115`, `#118` |
 | Cross-workspace fixture invitations, audited RSVPs, host lifecycle, shared calendar, and fixture notifications: issues `#93`, `#145` | PRs `#111`-`#116`, `#119`, `#164`, `#166`, `#181`, `#182`, `#196`, `#204`, `#213` |
 | Capped event helpers, public QR event logger, authorized realtime broadcast, in-app reminders, and notifications: issues `#95`, `#96`, `#146` | PRs `#125`, `#128`, `#129`, `#150`-`#152`, `#120`, `#205`-`#207` |
 | Club onboarding, assistant permission expansion, privacy/consent gate, and navigation hardening | PRs `#148`, `#149`, `#156`, `#157`, `#178`, `#183` |
@@ -120,7 +120,7 @@ Moved the single-coach console to shared club workspaces with membership, roles,
 Key outcomes:
 
 - Club workspaces with `requireOperationalAccess`/`requireCoach` role enforcement and non-enumerating membership checks.
-- Squads, athlete lifecycle states, and injury/recovery records with anatomy mapping.
+- Athlete lifecycle states and injury/recovery records with anatomy mapping.
 - Fixtures that invite other clubs without exposing unrelated workspace data, with audited RSVPs and host-authoritative results.
 - Socket.IO realtime invalidations, in-app reminders, notification actions, and capped temporary event helpers.
 
@@ -184,15 +184,15 @@ Key outcomes:
 1. Coach and assistant permissions enforced through `requireOperationalAccess` and `requireCoach` middleware. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals.
 2. Cross-workspace fixtures with hashed invitations, independent participating-team status, guest roster isolation, revision reacceptance, and withdrawals.
 3. In-app event reminders, fixture notifications, and RSVP audit trails.
-4. API and Playwright coverage for workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, and authorization boundaries.
+4. API and Playwright coverage for workspace, roles, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, and authorization boundaries.
 
 #### 2.3 Season Analysis
 
-1. Add season totals and discipline-aware athlete/squad comparisons.
+1. Add season totals and discipline-aware athlete comparisons.
 2. Render PB/SB progression and comparison charts as hand-built SVG — the project ships no charting library (`chart.js` is not a frontend dependency).
 3. Add chart tests using seeded, multi-discipline data.
 
-**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and coach-facing multi-discipline comparison surfaces have shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and coach-facing multi-discipline comparison surfaces have shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
 
 #### 2.4 Offline-First Logging
 
@@ -219,7 +219,7 @@ Key outcomes:
 - Idempotent batch sync with version conflict detection.
 - Deterministic queue drain with result recomputation.
 - Sign-out/revocation cleanup of offline data.
-- Workspace switching, coach/assistant roles, squads, athlete lifecycle, injury mapping, fixtures, RSVP, event helpers, realtime, reminders, notifications, public loggers, club onboarding, comparison, and progression charts.
+- Workspace switching, coach/assistant roles, athlete lifecycle, injury mapping, fixtures, RSVP, event helpers, realtime, reminders, notifications, public loggers, club onboarding, comparison, and progression charts.
 
 ### Stage 3: Collaborative Meets and Season Tools
 
@@ -239,7 +239,7 @@ Key outcomes:
 
 **Status: Implemented** — public leaderboards and standings, the `/stats*` public pages, and PDF/CSV export via `pdf-lib` (issues `#239`, `#240`; PRs `#277`, `#278`, `#292`).
 
-1. Add standings and explicitly allow-listed, read-only public athlete/squad result pages.
+1. Add standings and explicitly allow-listed, read-only public athlete result pages.
 2. Generate athlete and event PDF/CSV reports with `pdf-lib`.
 
 #### 3.3 Coaching Summaries and Scheduling
@@ -255,6 +255,6 @@ Every roadmap item is complete only when its implementation and documentation ar
 
 ## AI Declaration
 
-The discipline analytics roadmap status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
+The discipline analytics roadmap status and retired athlete-group functionality removal were edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The completed-roadmap and stage-status refresh was updated with the assistance of opencode[mimo-v2.6-flash-free].

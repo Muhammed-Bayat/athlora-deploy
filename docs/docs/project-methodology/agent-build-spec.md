@@ -129,14 +129,13 @@ CREATE TABLE users (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- athletes: belongs to a coach (owner), squads optional string tag for now
+-- athletes: belongs to a coach (owner)
 CREATE TABLE athletes (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   coach_id      UUID NOT NULL REFERENCES users(id),
   name          TEXT NOT NULL,
   dob           DATE,
   gender        TEXT,                             -- category, not restricted to binary
-  squad         TEXT,
   notes         TEXT,
   archived_at   TIMESTAMPTZ,                       -- archival state (non-null = archived)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -460,4 +459,4 @@ The `/docs` Docusaurus site is the living record of the project, not a one-time 
 
 ## AI Declaration
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].
+The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and OpenCode[openai/gpt-5.6-terra]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].

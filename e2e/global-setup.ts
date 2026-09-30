@@ -30,8 +30,6 @@ const APP_TABLES = [
   'workspace_membership_audit',
   'athletes',
   'athlete_status_transitions',
-  'squads',
-  'athlete_squads',
   'events',
   'event_fixture_workspaces',
   'fixture_invitations',

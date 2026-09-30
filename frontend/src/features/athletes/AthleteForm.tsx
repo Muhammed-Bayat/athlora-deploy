@@ -11,7 +11,6 @@ interface AthleteDraft {
   name: string;
   dob: string;
   gender: string;
-  squadIds: string[];
   notes: string;
   preferredDisciplineIds: string[];
   seasonGoals: AthleteSeasonGoalInput[];
@@ -24,7 +23,6 @@ function draftFor(athlete?: Athlete): AthleteDraft {
     name: athlete?.name ?? '',
     dob: athlete?.dob ?? '',
     gender: athlete?.gender ?? '',
-    squadIds: athlete?.squads?.map((squad) => squad.id) ?? [],
     notes: athlete?.notes ?? '',
     preferredDisciplineIds: athlete?.preferredDisciplineIds ?? [],
     seasonGoals: athlete?.seasonGoals ?? [],
@@ -37,7 +35,6 @@ function toPayload(draft: AthleteDraft): AthleteMutationPayload {
     name: draft.name.trim(),
     dob: draft.dob || null,
     gender: nullable(draft.gender),
-    squadIds: draft.squadIds,
     notes: nullable(draft.notes),
     preferredDisciplineIds: draft.preferredDisciplineIds,
     seasonGoals: draft.seasonGoals,
@@ -56,7 +53,7 @@ function validationErrors(error: unknown): FieldErrors {
     if (
       typeof path === 'string'
       && typeof message === 'string'
-        && ['name', 'dob', 'gender', 'squadIds', 'notes', 'preferredDisciplineIds', 'seasonGoals'].includes(path)
+        && ['name', 'dob', 'gender', 'notes', 'preferredDisciplineIds', 'seasonGoals'].includes(path)
     ) {
       fields[path as keyof AthleteDraft] ??= message;
     }

@@ -51,8 +51,7 @@ async function listRecentResults(
        SELECT r.event_id, r.athlete_id, r.discipline, r.final_result, r.unit, r.placing,
               r.is_pb AS stored_is_pb, r.is_sb, r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
               r.outcome, r.override_at, 'legacy' AS result_source,
-              a.name AS athlete_name,
-               COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
+               a.name AS athlete_name,
               a.archived_at AS athlete_archived_at,
               e.title AS event_title,
               e.type AS event_type,
@@ -93,8 +92,7 @@ async function listRecentResults(
               NULL::int, false, false,
               r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
               r.outcome, r.override_at, 'session' AS result_source,
-              a.name AS athlete_name,
-               COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
+               a.name AS athlete_name,
               a.archived_at AS athlete_archived_at,
               e.title AS event_title,
               e.type AS event_type,
@@ -331,8 +329,7 @@ export async function getDashboardSummary(
     const latestEntries = activeBase
       ? await client.query<DashboardTimelineEntryRow>(
         `SELECT te.*,
-                a.name AS athlete_name,
-                 COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
+                 a.name AS athlete_name,
                 a.archived_at AS athlete_archived_at
             FROM timeline_entries te
             JOIN athletes a ON a.id = te.athlete_id

@@ -64,7 +64,7 @@ describe('aggregate API routes', () => {
       latestResult: null,
       latestOutcome: 'no_result',
       updatedAt: '2026-08-17T10:00:00.000Z',
-      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
       resultCounts: {
         allTime: 0,
         currentYear: 0,
@@ -143,7 +143,7 @@ describe('aggregate API routes', () => {
 
   it('returns an owned athlete progression detail envelope', async () => {
     const progression = {
-      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
       entries: [],
       pagination: { nextCursor: null, count: 0, total: 0 },
       summary: { allTimePb: null, totalResults: 0, totalValid: 0 },
@@ -166,7 +166,7 @@ describe('aggregate API routes', () => {
 
   it('passes cursor, limit, and type query parameters to progression service', async () => {
     const progression = {
-      athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
       entries: [],
       pagination: { nextCursor: null, count: 0, total: 0 },
       summary: { allTimePb: null, totalResults: 0, totalValid: 0 },

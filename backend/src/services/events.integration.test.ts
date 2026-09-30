@@ -29,7 +29,7 @@ const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
   ...MEET_TEST_TABLES,
-  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
+  'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',

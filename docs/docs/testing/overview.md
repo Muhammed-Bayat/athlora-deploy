@@ -267,7 +267,6 @@ The E2E suite has **20 spec files** covering:
 | `vertical-slice.spec.ts` | Full 100m workflow: roster → event → assignment → live logging → corrections → overrides → completion → statistics → dashboard |
 | `workspace.spec.ts` | Multi-workspace switching and membership management |
 | `roles.spec.ts` | Coach vs assistant role enforcement |
-| `squads.spec.ts` | Squad management and filtering |
 | `athlete-lifecycle.spec.ts` | Active/inactive/archived transitions |
 | `injuries.spec.ts` | Injury creation and resolution |
 | `event-helpers.spec.ts` | Helper invitations and offline designation |
@@ -540,4 +539,4 @@ The submitted response evidence and form links are retained in [Stakeholder Feed
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence was documented with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra].

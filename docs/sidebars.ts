@@ -38,7 +38,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Database',
-      items: ['db-schema/overview', 'db-schema/results-derivation', 'project-methodology/squad-migration'],
+      items: ['db-schema/overview', 'db-schema/results-derivation'],
     },
     {
       type: 'category',

@@ -24,7 +24,6 @@ import {
   parsePublicLoggerEntryPayload,
   parsePublicLoggerSessionPayload,
   parseResultOverridePayload,
-  parseSquadPayload,
   parseTimelineEntryCreatePayload,
   parseTimelineEntryDeletePayload,
   parseTimelineEntryPatchPayload,
@@ -110,21 +109,18 @@ describe('event participant payloads', () => {
 
 describe('athlete payloads', () => {
   it('normalizes create and replacement payloads with omitted nullable fields', () => {
-    expect(parseAthleteCreatePayload({ name: '  Ada Runner  ', dob: '2000-02-29', squadIds: [] })).toEqual({
+    expect(parseAthleteCreatePayload({ name: '  Ada Runner  ', dob: '2000-02-29' })).toEqual({
       name: 'Ada Runner',
       dob: '2000-02-29',
       gender: null,
-      squadIds: [],
       notes: null,
     });
-    expect(parseAthleteReplacementPayload({ name: 'Ada Runner', squadIds: [] })).toEqual({
+    expect(parseAthleteReplacementPayload({ name: 'Ada Runner' })).toEqual({
       name: 'Ada Runner',
       dob: null,
       gender: null,
-      squadIds: [],
       notes: null,
     });
-    expect(parseAthleteCreatePayload({ name: 'Ada Runner', squadIds: [] }).squadIds).toEqual([]);
   });
 
   it('rejects malformed dates, blank names, unknown fields, and server fields in order', () => {
@@ -135,7 +131,6 @@ describe('athlete payloads', () => {
           dob: '2025-02-29',
           id: ATHLETE_ID,
           coachId: ATHLETE_ID,
-          squadIds: [],
           surprise: true,
         }),
       [
@@ -160,7 +155,7 @@ describe('athlete payloads', () => {
 
   it('parses catalogue discipline preferences and measurable season goals', () => {
     expect(parseAthleteCreatePayload({
-      name: 'Ada Runner', squadIds: [], preferredDisciplineIds: [ATHLETE_ID],
+      name: 'Ada Runner', preferredDisciplineIds: [ATHLETE_ID],
       seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.2, targetUnit: 'seconds', targetDate: '2026-12-31', status: 'active' }],
     })).toMatchObject({
       preferredDisciplineIds: [ATHLETE_ID],
@@ -174,10 +169,10 @@ describe('athlete list queries', () => {
     expect(parseAthleteListQuery({})).toEqual({ includeArchived: false });
   });
 
-  it('parses includeArchived and trimmed name and squad ID filters', () => {
+  it('parses includeArchived and trimmed name filters', () => {
     expect(
-      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ', squadId: ATHLETE_ID }),
-    ).toEqual({ includeArchived: true, name: 'ari', squadId: ATHLETE_ID });
+      parseAthleteListQuery({ includeArchived: 'true', name: '  ari ' }),
+    ).toEqual({ includeArchived: true, name: 'ari' });
     expect(parseAthleteListQuery({ includeArchived: 'false' })).toEqual({ includeArchived: false });
   });
 
@@ -191,12 +186,11 @@ describe('athlete list queries', () => {
 
   it('rejects unknown, malformed, blank, and non-string query values', () => {
     expectValidationError(
-      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ', squadId: 5 }),
+      () => parseAthleteListQuery({ includeArchived: 'banana', page: '1', name: '   ' }),
       [
         { path: 'includeArchived', code: 'invalid_value', message: 'Expected "true" or "false"' },
         { path: 'name', code: 'blank', message: 'Must not be blank' },
         { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
-        { path: 'squadId', code: 'invalid_type', message: 'Expected a string' },
       ],
     );
   });
@@ -724,28 +718,6 @@ describe('fixture invitation payloads', () => {
       () => parseFixtureInvitationResponsePayload({ response: 'accepted', message: 'Thanks' }),
       [{ path: 'message', code: 'not_allowed', message: 'Only change requests may include a message' }],
     );
-  });
-});
-
-describe('squad payloads', () => {
-  it('parses a valid squad name', () => {
-    expect(parseSquadPayload({ name: ' Sprinters ' })).toEqual({ name: 'Sprinters' });
-  });
-
-  it('rejects blank or missing name', () => {
-    expectValidationError(() => parseSquadPayload({ name: '   ' }), [
-      { path: 'name', code: 'blank', message: 'Must not be blank' },
-    ]);
-    expectValidationError(() => parseSquadPayload({}), [
-      { path: 'name', code: 'required', message: 'Field is required' },
-    ]);
-  });
-
-  it('rejects non-string and unknown fields', () => {
-    expectValidationError(() => parseSquadPayload({ name: 123, extra: true }), [
-      { path: 'extra', code: 'unknown_field', message: 'Field is not allowed' },
-      { path: 'name', code: 'invalid_type', message: 'Expected a string' },
-    ]);
   });
 });
 

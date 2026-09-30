@@ -66,7 +66,6 @@ const athleteRow: AthleteRow = {
   name: 'Ari Runner',
   dob: '2004-02-29',
   gender: 'open',
-  squads: [],
   notes: 'Returning from injury',
   archived_at: null,
   lifecycle_status: 'active',
@@ -102,7 +101,6 @@ const participantRow: EventParticipantRow = {
 const participantSummaryRow: EventParticipantSummaryRow = {
   ...participantRow,
   athlete_name: 'Ari Runner',
-  athlete_squad_names: [],
   athlete_archived_at: null,
 };
 
@@ -183,7 +181,6 @@ const metricsRow: DashboardMetricsRow = {
 const historyRow: AthleteResultHistoryRow = {
   ...resultRow,
   athlete_name: 'Ari Runner',
-  athlete_squad_names: [],
   athlete_archived_at: INPUT_TIMESTAMP,
   event_title: 'City Sprint Meet',
   event_type: 'competition',
@@ -215,7 +212,6 @@ const activeEventRow: DashboardActiveEventRow = {
 const dashboardTimelineRow: DashboardTimelineEntryRow = {
   ...timelineRow,
   athlete_name: 'Ari Runner',
-  athlete_squad_names: [],
   athlete_archived_at: null,
 };
 
@@ -259,7 +255,6 @@ describe('PostgreSQL row mapping', () => {
       name: 'Ari Runner',
       dob: '2004-02-29',
       gender: 'open',
-      squads: [],
       preferredDisciplineIds: [],
       seasonGoals: [],
       notes: 'Returning from injury',
@@ -273,9 +268,9 @@ describe('PostgreSQL row mapping', () => {
 
     expect(
       mapAthleteRow(
-        changed(athleteRow, { dob: null, gender: null, squads: [], notes: null }),
+        changed(athleteRow, { dob: null, gender: null, notes: null }),
       ),
-    ).toMatchObject({ dob: null, gender: null, squads: [], notes: null });
+    ).toMatchObject({ dob: null, gender: null, notes: null });
   });
 
   it('serializes a pg-style local DATE without shifting the calendar day', () => {
@@ -345,7 +340,6 @@ describe('PostgreSQL row mapping', () => {
       athlete: {
         id: ATHLETE_ID,
         name: 'Ari Runner',
-        squadNames: [],
         archivedAt: null,
       },
       statusReviewRequired: false,
@@ -353,11 +347,10 @@ describe('PostgreSQL row mapping', () => {
     expect(
       mapEventParticipantSummaryRow(
         changed(participantSummaryRow, {
-          athlete_squad_names: [],
           athlete_archived_at: INPUT_TIMESTAMP,
         }),
       ),
-    ).toMatchObject({ athlete: { squadNames: [], archivedAt: ISO_TIMESTAMP } });
+    ).toMatchObject({ athlete: { archivedAt: ISO_TIMESTAMP } });
   });
 
   it('maps a timeline entry row and converts its NUMERIC value', () => {
@@ -470,7 +463,6 @@ describe('PostgreSQL row mapping', () => {
       athlete: {
         id: ATHLETE_ID,
         name: 'Ari Runner',
-        squadNames: [],
         archivedAt: ISO_TIMESTAMP,
       },
       event: {
@@ -588,7 +580,6 @@ describe('persisted value validation', () => {
   it('rejects malformed UUIDs and empty persisted strings', () => {
     expectMappingError(() => mapUserRow(changed(userRow, { id: 'not-a-uuid' })));
     expectMappingError(() => mapUserRow(changed(userRow, { auth0_id: '  ' })));
-    expectMappingError(() => mapAthleteRow(changed(athleteRow, { squads: [{ id: 'not-a-uuid' }] })));
   });
 
   it('rejects invalid roles, enums, and fixed contract constants', () => {

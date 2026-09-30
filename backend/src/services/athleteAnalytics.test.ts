@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   getAthleteDisciplineAnalytics,
-  getSquadDisciplineAnalytics,
   getWorkspaceDisciplineAnalytics,
-  rankSquadDisciplineAthletes,
+  rankDisciplineAthletes,
   summarizeAthleteDisciplineResults,
   type AnalyticsDiscipline,
   type NormalizedAthleteResult,
@@ -13,7 +12,6 @@ import type { SeasonScope } from './seasons.js';
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const athleteId = '22222222-2222-4222-8222-222222222222';
 const otherAthleteId = '33333333-3333-4333-8333-333333333333';
-const squadId = '44444444-4444-4444-8444-444444444444';
 const disciplineDefinitionId = '55555555-5555-4555-8555-555555555555';
 const timeDiscipline: AnalyticsDiscipline = {
   code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower',
@@ -124,11 +122,11 @@ describe('athlete discipline analytics', () => {
       result(distanceDiscipline, 5.4, '2026-03-01'),
     ];
     const summary = summarizeAthleteDisciplineResults(athleteId, distanceDiscipline, longJumpHistory, season);
-    const ranking = rankSquadDisciplineAthletes(
+    const ranking = rankDisciplineAthletes(
       [
         { id: athleteId, name: 'Ari', lifecycle_status: 'active' },
         { id: otherAthleteId, name: 'Bea', lifecycle_status: 'active' },
-        { id: squadId, name: 'Cy', lifecycle_status: 'inactive' },
+        { id: '44444444-4444-4444-8444-444444444444', name: 'Cy', lifecycle_status: 'inactive' },
       ],
       distanceDiscipline,
       [...longJumpHistory, result(distanceDiscipline, 5.8, '2026-02-10', 'session_result', otherAthleteId)],
@@ -195,20 +193,6 @@ describe('athlete discipline analytics', () => {
     expect(normalizedQuery).toContain('UNION ALL');
     expect(normalizedQuery).not.toContain('INSERT INTO');
     expect(normalizedQuery).toContain("s.result_state = 'final'");
-  });
-
-  it('uses one generic not-found response for an out-of-workspace squad', async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-
-    await expect(getSquadDisciplineAnalytics(
-      workspaceId,
-      squadId,
-      'long_jump',
-      season,
-      { query } as never,
-    )).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND', message: 'Resource not found' });
-    expect(query).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0]?.[0]).toContain('FROM squads WHERE id = $1 AND workspace_id = $2');
   });
 
   it('lists active workspace athletes with any preferred definition version sharing the requested code', async () => {

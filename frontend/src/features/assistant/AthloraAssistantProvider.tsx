@@ -361,7 +361,6 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         name: draft.name,
         dob: draft.dob,
         gender: draft.gender,
-        squadIds: [],
         notes: draft.notes,
         preferredDisciplineIds: [draft.discipline.id],
         seasonGoals: [],

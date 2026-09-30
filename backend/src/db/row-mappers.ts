@@ -32,7 +32,6 @@ import {
   type Result,
   type ProgressionEntry,
   type RosterSnapshotEntry,
-  type Squad,
   type TimelineEntry,
   type User,
   type Club,
@@ -98,23 +97,13 @@ export interface AthleteRow {
   name: string;
   dob: DateValue | null;
   gender: string | null;
-  squads?: unknown;
   preferred_discipline_ids?: unknown;
   season_goals?: unknown;
-  squad?: string | null;
   notes: string | null;
   archived_at: TimestampValue | null;
   lifecycle_status?: string;
   status_changed_at?: TimestampValue;
   status_changed_by?: string | null;
-  created_at: TimestampValue;
-  updated_at: TimestampValue;
-}
-
-export interface SquadRow {
-  id: string;
-  name: string;
-  archived_at: TimestampValue | null;
   created_at: TimestampValue;
   updated_at: TimestampValue;
 }
@@ -146,8 +135,6 @@ export interface EventParticipantSummaryRow extends EventParticipantRow {
   participant_workspace_id?: string | null;
   participant_workspace_name?: string | null;
   athlete_name: string;
-  athlete_squad_names?: unknown;
-  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
   athlete_lifecycle_status?: string;
   status_review_required?: boolean;
@@ -213,8 +200,6 @@ export interface AthleteStatisticsAggregateRow extends AthleteStatisticsRow {
 
 export interface AthleteResultHistoryRow extends ResultRow {
   athlete_name: string;
-  athlete_squad_names?: unknown;
-  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
   event_title: string;
   event_type: string;
@@ -230,7 +215,6 @@ export interface AthleteResultHistoryRow extends ResultRow {
 
 export interface ProgressionEntryRow extends ResultRow {
   athlete_name: string;
-  athlete_squad_names?: unknown;
   athlete_archived_at: TimestampValue | null;
   event_title: string;
   event_type: string;
@@ -281,8 +265,6 @@ export interface DashboardActiveEventRow {
 
 export interface DashboardTimelineEntryRow extends TimelineEntryRow {
   athlete_name: string;
-  athlete_squad_names?: unknown;
-  athlete_squad?: string | null;
   athlete_archived_at: TimestampValue | null;
 }
 
@@ -612,7 +594,6 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     name: nonemptyString(row.name, 'athletes.name'),
     dob: row.dob === null ? null : databaseDate(row.dob, 'athletes.dob'),
     gender: nullableString(row.gender, 'athletes.gender'),
-    squads: row.squads === undefined ? [] : squads(row.squads, 'athletes.squads'),
     preferredDisciplineIds: Array.isArray(row.preferred_discipline_ids) ? row.preferred_discipline_ids.map((id, index) => uuid(id, `athletes.preferred_discipline_ids.${index}`)) : [],
     seasonGoals: Array.isArray(row.season_goals) ? row.season_goals.map((goal, index) => mapSeasonGoal(goal, `athletes.season_goals.${index}`)) : [],
     notes: nullableString(row.notes, 'athletes.notes'),
@@ -639,24 +620,6 @@ function mapSeasonGoal(value: unknown, field: string): import('../types/domain.j
   if (status !== 'active' && status !== 'completed') return invalid(`${field}.status`, 'invalid status');
   if (typeof goal.targetValue !== 'number' || !Number.isFinite(goal.targetValue)) return invalid(`${field}.targetValue`, 'invalid value');
   return { id: uuid(goal.id, `${field}.id`), disciplineDefinitionId: uuid(goal.disciplineDefinitionId, `${field}.disciplineDefinitionId`), targetValue: goal.targetValue, targetUnit: unit, targetDate: goal.targetDate === null ? null : databaseDate(goal.targetDate as DateValue, `${field}.targetDate`), status, createdAt: timestamp(goal.createdAt as TimestampValue, `${field}.createdAt`), updatedAt: timestamp(goal.updatedAt as TimestampValue, `${field}.updatedAt`) };
-}
-
-function squads(value: unknown, field: string): Squad[] {
-  if (!Array.isArray(value)) return invalid(field, 'expected a JSON array');
-  return value.map((item, index) => {
-    if (typeof item !== 'object' || item === null) return invalid(`${field}.${index}`, 'expected a squad object');
-    const row = item as Record<string, unknown>;
-    return {
-      id: uuid(row.id, `${field}.${index}.id`), name: nonemptyString(row.name, `${field}.${index}.name`),
-      archivedAt: nullableTimestamp(row.archivedAt, `${field}.${index}.archivedAt`),
-      createdAt: timestamp(row.createdAt, `${field}.${index}.createdAt`), updatedAt: timestamp(row.updatedAt, `${field}.${index}.updatedAt`),
-    };
-  });
-}
-
-function squadNames(value: unknown, field: string): string[] {
-  if (!Array.isArray(value)) return invalid(field, 'expected a text array');
-  return value.map((name, index) => nonemptyString(name, `${field}.${index}`));
 }
 
 export function mapEventRow(row: EventRow): AthleticsEvent {
@@ -699,7 +662,6 @@ export function mapEventParticipantSummaryRow(
     athlete: {
       id: participant.athleteId,
       name: nonemptyString(row.athlete_name, 'athletes.name'),
-       squadNames: row.athlete_squad_names === undefined ? [] : squadNames(row.athlete_squad_names, 'athletes.squad_names'),
       archivedAt:
         row.athlete_archived_at === null
           ? null
@@ -862,14 +824,12 @@ export function mapAthleteResultCounts(
 function mapAggregateAthleteIdentity(
   athleteId: unknown,
   name: unknown,
-  squadNamesValue: unknown,
   archivedAt: unknown,
   context: string,
 ): AggregateAthleteIdentity {
   return {
     id: uuid(athleteId, `${context}.id`),
     name: nonemptyString(name, `${context}.name`),
-    squadNames: squadNamesValue === undefined ? [] : squadNames(squadNamesValue, `${context}.squad_names`),
     archivedAt: nullableTimestamp(archivedAt, `${context}.archived_at`),
   };
 }
@@ -934,7 +894,6 @@ export function mapAthleteResultHistoryRow(
     athlete: mapAggregateAthleteIdentity(
       row.athlete_id,
       row.athlete_name,
-       row.athlete_squad_names,
       row.athlete_archived_at,
       'athlete history.athlete',
     ),
@@ -1073,7 +1032,6 @@ export function mapDashboardTimelineEntryRow(
     athlete: mapAggregateAthleteIdentity(
       row.athlete_id,
       row.athlete_name,
-       row.athlete_squad_names,
       row.athlete_archived_at,
       'dashboard timeline entry.athlete',
     ),

@@ -177,7 +177,6 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squads: [],
     notes: null,
     archived_at: null,
     created_at: new Date('2026-08-01T09:00:00.000Z'),

@@ -38,7 +38,7 @@ This means the "timeline" concept becomes, per event: a sequence of **attempts/s
 
 ```
 users                (id, name, email, auth0_id, role, created_at, updated_at)
-athletes             (id, coach_id, name, dob, gender, squad, notes, archived_at)
+athletes             (id, coach_id, name, dob, gender, notes, archived_at)
 events               (id, type[competition|training], discipline, title, date, time,
                       location_name, latitude, longitude, status, created_by)
 event_participants   (event_id, athlete_id, rsvp_status)
@@ -80,7 +80,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ### 2.2 Athlete & Roster Management
 - `athletes` table with coach-scoped CRUD endpoints
-- Roster list view, add/edit athlete form (name, DOB, gender, squad, notes)
+- Roster list view, add/edit athlete form (name, DOB, gender, notes)
 - Archive/restore with historical data preservation
 - Athlete performance detail with 100m statistics, PBs, SBs
 - Tests: Supertest for CRUD, RTL for roster form and list
@@ -150,19 +150,19 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 **Status: Implemented** — coach/assistant roles enforced through `requireOperationalAccess` and `requireCoach` middleware.
 
 ### 3.3 Fixtures, RSVPs, Shared Calendar
-1. Extend fixtures so another coach's squad can participate without exposing unrelated workspace data.
-2. Backend: endpoints to invite another coach's squad to a fixture, endpoints for RSVP.
+1. Extend fixtures so another club can participate without exposing unrelated workspace data.
+2. Backend: endpoints to invite another club to a fixture, endpoints for RSVP.
 3. React: shared calendar view, RSVP widget on event detail.
 4. Notifications/reminders: simple scheduled job (or Socket.IO push when connected) reminding users of upcoming events.
 
 **Status: Implemented** — cross-workspace fixtures with hashed invitations, RSVP, revision reacceptance, withdrawals, fixture notifications, event helper invitations, and offline designation.
 
 ### 3.4 Season Stats, Comparisons, Charts
-1. Backend: aggregate queries/views for season totals, per-event breakdowns, athlete-vs-athlete and squad-vs-opponent comparisons (PB/SB progression over the season).
+1. Backend: aggregate queries/views for season totals, per-event breakdowns, and athlete-vs-athlete comparisons (PB/SB progression over the season).
 2. React with hand-built SVG charts (no charting library): line charts for PB/SB progression, bar charts for comparisons.
 3. Tests: Vitest for aggregation logic; RTL/Playwright for chart rendering with seeded data.
 
-**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and multi-discipline comparison has shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and multi-discipline comparison has shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
 
 ### 3.5 Offline-First Logging
 1. Frontend: Dexie/IndexedDB store mirroring `timeline_entries` shape; all live-logging writes go to IndexedDB first.
@@ -206,8 +206,8 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 **Status: Implemented** — `standings` service and public leaderboard/standings pages (issue `#240`, PR `#292`), unauthenticated public statistics/schedule/report pages (issues `#238`, `#239`, PRs `#274`, `#278`), and PDF/CSV export via `pdf-lib` (`frontend/src/features/reports`, `frontend/src/features/publicStats/reportExport.ts`).
 
-1. DB: `standings` view aggregating results across events/fixtures for participating squads.
-2. React: public, unauthenticated read-only pages per squad/athlete (shareable link) showing results and season stats.
+1. DB: `standings` view aggregating results across events/fixtures for participating clubs.
+2. React: public, unauthenticated read-only pages per athlete (shareable link) showing results and season stats.
 3. **pdf-lib**: "Export report" button generating a PDF (and/or CSV) of an athlete's or event's results.
 
 ### 4.3 Automated Summaries & Selection Suggestions
@@ -258,6 +258,6 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ## AI Declaration
 
-The discipline analytics delivery-plan status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
+The discipline analytics delivery-plan status and retired athlete-group functionality removal were edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
 The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra]. The stage-status, chart-stack, and Sprint 3 scope corrections were updated with the assistance of opencode[mimo-v2.6-flash-free].

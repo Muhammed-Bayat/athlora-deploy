@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0040_remove_club_accent_color.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0041_remove_squads.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -20,7 +20,7 @@ The diagram below reflects the schema documented on this page. Open the [SVG ERD
 
 - A `club` maps one-to-one to a `workspace`.
 - A `workspace` has one or more `workspace_members`, but a user can belong to only one workspace.
-- Athletes, events, squads, injuries, reminders, and notifications are workspace-scoped.
+- Athletes, events, injuries, reminders, and notifications are workspace-scoped.
 - Events own fixture participation, invitations, participants, live-log entries, results, helpers, public logger links, and offline-sync receipts.
 - `timeline_entries` are created by exactly one actor: either an authenticated `users` row or a `public_logger_sessions` row.
 - Results are materialized from the timeline and are unique per event, athlete, and discipline.
@@ -131,7 +131,7 @@ account_deletions
   completed_at TIMESTAMPTZ NULL
 ```
 
-### Athletes, squads, lifecycle, and injuries
+### Athletes, lifecycle, and injuries
 
 ```text
 athletes
@@ -141,7 +141,6 @@ athletes
   name TEXT NOT NULL
   dob DATE NULL
   gender TEXT NULL
-  squad TEXT NULL                         -- legacy compatibility field
   notes TEXT NULL
   archived_at TIMESTAMPTZ NULL
   lifecycle_status TEXT NOT NULL DEFAULT 'active'
@@ -151,24 +150,6 @@ athletes
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   UQ (id, workspace_id)                   -- composite target for workspace-safe FKs
-
-squads
-  id UUID PK DEFAULT gen_random_uuid()
-  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
-  name TEXT NOT NULL CHECK (trim(name) <> '')
-  archived_at TIMESTAMPTZ NULL
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  UQ index (workspace_id, lower(name))
-  UQ (id, workspace_id)                   -- composite target for workspace-safe FKs
-
-athlete_squads
-  athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
-  squad_id UUID PK, FK -> squads.id ON DELETE RESTRICT
-  workspace_id UUID NOT NULL
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  FK (athlete_id, workspace_id) -> athletes(id, workspace_id) ON DELETE CASCADE
-   FK (squad_id, workspace_id) -> squads(id, workspace_id) ON DELETE RESTRICT
 
 athlete_preferred_disciplines
   athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
@@ -717,7 +698,6 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0004_account_lifecycle.sql` | Account-deletion tombstone |
 | `0005_workspace_tenancy.sql` | Workspaces and workspace-scoped athletes/events |
 | `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, invitations, membership audit |
-| `0007_workspace_squads.sql` | Squads and normalized athlete memberships |
 | `0008_athlete_lifecycle.sql` | Athlete states, transition audit, participant reviews |
 | `0009_intermediate_fixtures.sql` | Fixture workspaces, invitations, responses, participant workspace ownership |
 | `0010_fixture_workspace_status_index.sql` | Non-unique fixture status index |
@@ -750,6 +730,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0038_recording_attribution.sql` | `recorded_workspace_id` on `timeline_entries` and `session_timeline_entries`, with backfill to the recording workspace |
 | `0039_host_fixture_revision_sync.sql` | Repairs host fixture-workspace `accepted_revision` rows left behind when a fixture revision advanced |
 | `0040_remove_club_accent_color.sql` | Removes the obsolete club accent colour column |
+| `0041_remove_squads.sql` | Removes retired athlete-group data and related tables |
 
 ## Schema maintenance
 
@@ -757,4 +738,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra].

@@ -61,7 +61,6 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squads: [],
     preferred_discipline_ids: [],
     season_goals: [],
     notes: null,
@@ -82,7 +81,6 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squads: [],
     notes: null,
     archivedAt: null,
     status: 'active',
@@ -150,22 +148,6 @@ describe('GET /api/v1/athletes', () => {
     expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
   });
 
-  it('filters by name and squad ID', async () => {
-    configureAuth();
-    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [athleteRow()] });
-
-    const response = await request(app)
-      .get(`/api/v1/athletes?name=ari&squadId=${ATHLETE_ID}`)
-      .set('Authorization', 'Bearer valid');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ data: [athleteBody()], meta: { count: 1 } });
-    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(sql).toContain('name ILIKE $2');
-    expect(sql).toContain('axs.squad_id = $3');
-    expect(parameters).toEqual([USER_ID, '%ari%', ATHLETE_ID]);
-  });
-
   it('rejects an invalid query value with the validation envelope', async () => {
     configureAuth();
     query.mockResolvedValueOnce(synchronizedUser());
@@ -209,14 +191,13 @@ describe('POST /api/v1/athletes', () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
-      .mockResolvedValueOnce({ rows: [] })
+       .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
       .mockResolvedValueOnce({ rows: [athleteRow()] });
 
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Runner', dob: '2010-04-12', squadIds: [] });
+      .send({ name: 'Ari Runner', dob: '2010-04-12' });
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ data: athleteBody() });
@@ -232,7 +213,7 @@ describe('POST /api/v1/athletes', () => {
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: '   ', squadIds: [] });
+      .send({ name: '   ' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -251,7 +232,7 @@ describe('POST /api/v1/athletes', () => {
     const response = await request(app)
       .post('/api/v1/athletes')
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Runner', squadIds: [], coachId: USER_ID, createdBy: USER_ID });
+      .send({ name: 'Ari Runner', coachId: USER_ID, createdBy: USER_ID });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -272,7 +253,7 @@ describe('GET /api/v1/athletes/:id', () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] })
       .mockResolvedValueOnce({ rows: [athleteRow()] });
 
     const response = await request(app)
@@ -315,15 +296,14 @@ describe('PUT /api/v1/athletes/:id', () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] })
+      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID, lifecycle_status: 'active' }] })
       .mockResolvedValueOnce({ rows: [athleteRow({ name: 'Ari Two', gender: 'f' })] });
 
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Two', gender: 'f', squadIds: [] });
+      .send({ name: 'Ari Two', gender: 'f' });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: athleteBody({ name: 'Ari Two', gender: 'f' }) });
@@ -339,7 +319,7 @@ describe('PUT /api/v1/athletes/:id', () => {
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ squadIds: [] });
+      .send({});
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatchObject({
@@ -358,7 +338,7 @@ describe('PUT /api/v1/athletes/:id', () => {
     const response = await request(app)
       .put(`/api/v1/athletes/${ATHLETE_ID}`)
       .set('Authorization', 'Bearer valid')
-      .send({ name: 'Ari Two', squadIds: [] });
+      .send({ name: 'Ari Two' });
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual(resourceNotFound);
@@ -370,12 +350,12 @@ describe('DELETE /api/v1/athletes/:id', () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] })
       .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'active' }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [athleteRow({ lifecycle_status: 'archived', archived_at: new Date('2026-08-03T10:00:00.000Z') })] });
+       .mockResolvedValueOnce({ rows: [] })
+       .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+       .mockResolvedValueOnce({ rows: [] })
+       .mockResolvedValueOnce({ rows: [athleteRow({ lifecycle_status: 'archived', archived_at: new Date('2026-08-03T10:00:00.000Z') })] });
 
     const response = await request(app)
       .delete(`/api/v1/athletes/${ATHLETE_ID}`)
@@ -406,12 +386,12 @@ describe('POST /api/v1/athletes/:id/unarchive', () => {
     configureAuth();
     query
       .mockResolvedValueOnce(synchronizedUser())
-      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [athleteRow()] })
       .mockResolvedValueOnce({ rows: [{ lifecycle_status: 'archived' }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: null })] });
+       .mockResolvedValueOnce({ rows: [] })
+       .mockResolvedValueOnce({ rows: [{ id: ATHLETE_ID }] })
+       .mockResolvedValueOnce({ rows: [] })
+       .mockResolvedValueOnce({ rows: [athleteRow({ archived_at: null })] });
 
     const response = await request(app)
       .post(`/api/v1/athletes/${ATHLETE_ID}/unarchive`)

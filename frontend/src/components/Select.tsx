@@ -10,7 +10,7 @@ export interface SelectOption {
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   options: SelectOption[];
   variant?: 'filter' | 'field';
-  icon?: 'squad' | 'status';
+  icon?: 'status';
   dotColors?: Record<string, string>;
   compact?: boolean;
   menuPlacement?: 'down' | 'up';

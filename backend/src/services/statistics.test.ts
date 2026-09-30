@@ -20,7 +20,6 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: null,
     gender: null,
-    squads: [],
     notes: null,
     archived_at: null,
     created_at: TIMESTAMP,
@@ -69,7 +68,6 @@ function historyRow(
     override_at: null,
     updated_at: TIMESTAMP,
     athlete_name: 'Ari Runner',
-    athlete_squad_names: [],
     athlete_archived_at: null,
     event_title: 'City Sprint',
     event_type: 'competition',
@@ -108,7 +106,6 @@ describe('getAthleteStatisticsDetail', () => {
       athlete: {
         id: ATHLETE_ID,
         name: 'Ari Runner',
-        squadNames: [],
         archivedAt: '2026-08-17T10:00:00.000Z',
       },
       pb: null,

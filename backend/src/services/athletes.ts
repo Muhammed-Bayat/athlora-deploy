@@ -11,8 +11,6 @@ import type {
 } from '../validation/payloads.js';
 
 const ATHLETE_COLUMNS = `a.id, a.coach_id, a.name, a.dob, a.gender, a.notes, a.archived_at, a.lifecycle_status, a.status_changed_at, a.status_changed_by, a.created_at, a.updated_at,
-  COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'archivedAt', s.archived_at, 'createdAt', s.created_at, 'updatedAt', s.updated_at) ORDER BY lower(s.name), s.id)
-    FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), '[]'::json) AS squads,
   COALESCE((SELECT json_agg(apd.discipline_definition_id ORDER BY apd.discipline_definition_id) FROM athlete_preferred_disciplines apd WHERE apd.athlete_id = a.id), '[]'::json) AS preferred_discipline_ids,
   COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g WHERE g.athlete_id = a.id), '[]'::json) AS season_goals`;
 
@@ -50,10 +48,6 @@ export async function listAthletes(
   if (query.name !== undefined) {
     parameters.push(`%${escapeLike(query.name)}%`);
     conditions.push(`a.name ILIKE $${parameters.length} ESCAPE '\\'`);
-  }
-  if (query.squadId !== undefined) {
-    parameters.push(query.squadId);
-    conditions.push(`EXISTS (SELECT 1 FROM athlete_squads axs WHERE axs.athlete_id = a.id AND axs.squad_id = $${parameters.length})`);
   }
 
   const result = await executor.query<AthleteRow>(
@@ -96,11 +90,9 @@ export async function createAthlete(
   }
 
   const operation = async (client: DbExecutor) => {
-    await verifySquads(workspaceId, payload.squadIds ?? [], client);
     await verifyDisciplineProfile(payload, client);
     const result = await client.query<{ id: string }>('INSERT INTO athletes (workspace_id, coach_id, name, dob, gender, notes, status_changed_by) VALUES ($1, $2, $3, $4, $5, $6, $2) RETURNING id', [workspaceId, userId, payload.name, payload.dob, payload.gender, payload.notes]);
     const athlete = result.rows[0];
-    await replaceMemberships(workspaceId, athlete.id, payload.squadIds ?? [], client);
     if (payload.preferredDisciplineIds !== undefined || payload.seasonGoals !== undefined) await replaceDisciplineProfile(athlete.id, payload, client);
     return getAthlete(workspaceId, athlete.id, client);
   };
@@ -116,7 +108,6 @@ export async function replaceAthlete(
   requireScopedId(workspaceId, athleteId);
 
   const operation = async (client: DbExecutor) => {
-    await verifySquads(workspaceId, payload.squadIds ?? [], client);
     await verifyDisciplineProfile(payload, client);
     const result = await client.query<{ id: string; lifecycle_status: AthleteLifecycleStatus }>(
       `UPDATE athletes
@@ -134,7 +125,6 @@ export async function replaceAthlete(
     if (updated.lifecycle_status === 'archived') {
       throw new ApiError(409, 'ATHLETE_ARCHIVED_READ_ONLY', 'Archived athletes must be restored before editing');
     }
-    await replaceMemberships(workspaceId, athleteId, payload.squadIds ?? [], client);
     if (payload.preferredDisciplineIds !== undefined || payload.seasonGoals !== undefined) await replaceDisciplineProfile(athleteId, payload, client);
     return getAthlete(workspaceId, athleteId, client);
   };
@@ -189,16 +179,6 @@ async function replaceDisciplineProfile(athleteId: string, payload: AthleteCreat
       [athleteId, goal.disciplineDefinitionId, goal.targetValue, goal.targetUnit, goal.targetDate, goal.status],
     );
   }
-}
-
-async function verifySquads(workspaceId: string, squadIds: string[], executor: DbExecutor): Promise<void> {
-  if (squadIds.length === 0) return;
-  const result = await executor.query<{ id: string }>('SELECT id FROM squads WHERE workspace_id = $1 AND id = ANY($2::uuid[])', [workspaceId, squadIds]);
-  if (result.rows.length !== squadIds.length) throw new ApiError(400, 'INVALID_SQUAD_IDS', 'All squads must belong to the current workspace');
-}
-async function replaceMemberships(workspaceId: string, athleteId: string, squadIds: string[], executor: DbExecutor): Promise<void> {
-  await executor.query('DELETE FROM athlete_squads WHERE athlete_id = $1', [athleteId]);
-  if (squadIds.length > 0) await executor.query('INSERT INTO athlete_squads (workspace_id, athlete_id, squad_id) SELECT $1, $2, unnest($3::uuid[])', [workspaceId, athleteId, squadIds]);
 }
 
 export async function setAthleteStatus(

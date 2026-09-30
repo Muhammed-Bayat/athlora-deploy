@@ -44,8 +44,6 @@ test.describe('migration verification', () => {
       'session_timeline_entries',
       'session_results',
       'meet_domain_audit',
-      'squads',
-      'athlete_squads',
       'athlete_status_transitions',
       'fixture_invitations',
       'fixture_invitation_responses',

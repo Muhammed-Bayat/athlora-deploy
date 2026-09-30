@@ -46,7 +46,7 @@ const previewTabs = [
 
 const faqs = [
   ['Who is Athlora built for?', 'Athlora is built for athletics coaches running a squad, from club and school coaches to performance staff managing a full season.'],
-  ['What can I actually track?', 'Rosters with discipline, squad and status; personal bests and trial history; meets, time trials and training camps; and a live squad performance trend.'],
+  ['What can I actually track?', 'Rosters with discipline and status; personal bests and trial history; meets, time trials and training camps; and a live squad performance trend.'],
   ['Do my athletes need an account?', "No. Athlora is a coach-facing console. You manage the roster, calendar and trends without asking athletes to adopt another app."],
   ['Can I import an existing roster?', 'Yes. Start with your existing squad, then keep athlete, event and performance context connected as the season develops.'],
   ['Is there a cost to get started?', 'Create an account and set up your squad at no cost to try Athlora.' ],

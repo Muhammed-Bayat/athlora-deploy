@@ -27,7 +27,7 @@ const EMPTY_SUMMARY: DashboardSummary = {
 
 function history(overrides: Partial<AthleteResultHistoryEntry> = {}): AthleteResultHistoryEntry {
   return {
-    athlete: { id: 'athlete-1', name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null },
+    athlete: { id: 'athlete-1', name: 'Ari Runner', archivedAt: null },
     event: {
       id: 'past-event', title: 'Winter Classic', type: 'competition', discipline: '100m',
       date: '2026-08-10', time: '09:30:00', locationName: 'Central Stadium', status: 'completed',
@@ -47,7 +47,7 @@ function history(overrides: Partial<AthleteResultHistoryEntry> = {}): AthleteRes
 
 function populatedSummary(): DashboardSummary {
   const archived = history({
-    athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squadNames: [], archivedAt: '2026-08-12T00:00:00.000Z' },
+    athlete: { id: 'athlete-archived', name: 'Bea Sprinter', archivedAt: '2026-08-12T00:00:00.000Z' },
     result: { ...history().result, athleteId: 'athlete-archived', outcome: 'dq', finalResult: null, isPb: false },
     effectiveResult: null,
     effectiveOutcome: 'dq',
@@ -84,7 +84,7 @@ function liveSummary(): DashboardSummary {
       progress: { participantCount: 3, athletesWithEntriesCount: 1, resolvedResultsCount: 2, entryCount: 4, completionPercent: 67 },
       latestEntries: [
         {
-          athlete: { id: 'athlete-archived', name: 'Bea Sprinter', squadNames: [], archivedAt: '2026-08-12T00:00:00.000Z' },
+          athlete: { id: 'athlete-archived', name: 'Bea Sprinter', archivedAt: '2026-08-12T00:00:00.000Z' },
           entry: {
             id: 'entry-1', eventId: 'live-event', athleteId: 'athlete-archived', discipline: '100m',
             entryType: 'split', value: 6.12, unit: 'seconds', isFoul: false, incidentType: 'lane_infringement',
@@ -154,7 +154,6 @@ describe('DashboardPage', () => {
     expect(roster).toHaveTextContent('No PB');
     expect(roster).toHaveTextContent('Long jump');
     expect(roster).toHaveTextContent('6.45 m');
-    expect(roster).not.toHaveTextContent('No squad assigned');
     await user.click(rosterButtons[0]);
 
     const events = screen.getByRole('region', { name: 'Upcoming events' });

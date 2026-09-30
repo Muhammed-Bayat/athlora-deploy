@@ -30,7 +30,7 @@ const connectionString = process.env.TEST_DATABASE_URL;
 const describeDB = connectionString ? describe : describe.skip;
 const TABLES = [
   ...MEET_TEST_TABLES,
-  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
+  'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',
@@ -165,7 +165,6 @@ describeDB('cross-coach ownership isolation against a real database', () => {
           name: 'Sneak Edit',
           dob: null,
           gender: null,
-          squadIds: [],
           notes: null,
         }, executor),
       ),
