@@ -202,7 +202,7 @@ Coding prompt - doc - files
 
 **[19:06:33] Muhammed Bayat:** My talking points for the call so I don’t forget 😭
 
-**[19:27:51] Vikram Mahalingam:** GIT_METHODOLOGY.md ‎[00002344-GIT_METHODOLOGY.md](./screenshots/00002344-GIT_METHODOLOGY.md)
+**[19:27:51] Vikram Mahalingam:** GIT_METHODOLOGY.md ‎<a href="/sprints/sprint-1/00002344-GIT_METHODOLOGY.md" data-noBrokenLinkCheck>00002344-GIT_METHODOLOGY.md</a>
 
 **[20:28:24] Aaliah Reddy:** everyone ready?
 
@@ -212,7 +212,7 @@ Coding prompt - doc - files
 
 **[20:35:26] Muhammed Bayat:** ‎![00002348-PHOTO-2026-08-05-20-35-26.jpg](./screenshots/00002348-PHOTO-2026-08-05-20-35-26.jpg)
 
-**[20:37:51] Muhammed Bayat:** Full Stack Project Requirements - AI Policy Compliant.md ‎[00002349-Full Stack Project Requirements - AI Policy Compliant.md](./screenshots/00002349-Full%20Stack%20Project%20Requirements%20-%20AI%20Policy%20Compliant.md)
+**[20:37:51] Muhammed Bayat:** Full Stack Project Requirements - AI Policy Compliant.md ‎<a href="/sprints/sprint-1/00002349-Full%20Stack%20Project%20Requirements%20-%20AI%20Policy%20Compliant.md" data-noBrokenLinkCheck>00002349-Full Stack Project Requirements - AI Policy Compliant.md</a>
 
 **[20:47:00] Tyra:** [REDACTED — Trello board invite link]
 
@@ -236,7 +236,7 @@ Coding prompt - doc - files
 
 **[21:08:23] Aaliah Reddy:** ‎![00002361-PHOTO-2026-08-05-21-08-23.jpg](./screenshots/00002361-PHOTO-2026-08-05-21-08-23.jpg)
 
-**[21:09:45] Aaliah Reddy:** Meetings.md ‎[00002362-Meetings.md](./screenshots/00002362-Meetings.md)
+**[21:09:45] Aaliah Reddy:** Meetings.md ‎<a href="/sprints/sprint-1/00002362-Meetings.md" data-noBrokenLinkCheck>00002362-Meetings.md</a>
 
 **[21:17:00] Aaliah Reddy:** ‎![00002363-PHOTO-2026-08-05-21-17-00.jpg](./screenshots/00002363-PHOTO-2026-08-05-21-17-00.jpg)
 

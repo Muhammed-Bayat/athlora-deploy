@@ -1,3 +1,7 @@
+---
+sidebar_position: 5
+---
+
 # High Jump and Pole Vault
 
 Vertical sessions use metres (two decimal places) and highest clearance wins.
