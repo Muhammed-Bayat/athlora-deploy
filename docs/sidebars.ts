@@ -22,7 +22,18 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Architecture',
-       items: ['architecture/overview', 'architecture/anatomy-surface-map', 'architecture/offline-sync', 'tech-stack/stack', 'tech-stack/third-party'],
+      items: [
+        'architecture/overview',
+        'architecture/anatomy-surface-map',
+        'architecture/offline-sync',
+        'architecture/vertical-events',
+        'architecture/multi-discipline-foundation-plan',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Tech Stack',
+      items: ['tech-stack/stack', 'tech-stack/third-party'],
     },
     {
       type: 'category',
@@ -76,6 +87,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'sprints/sprint-3/meeting-records',
             'sprints/sprint-3/client-meetings',
+            'sprints/sprint-3/user-stories',
             'sprints/sprint-3/raw-meeting-transcript',
           ],
         },

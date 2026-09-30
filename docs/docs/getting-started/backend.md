@@ -47,7 +47,7 @@ S3_SECRET_ACCESS_KEY=
 S3_PUBLIC_BASE_URL=
 ```
 
-The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint.
+The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint. `PUBLIC_LOGGER_SESSION_TTL_MINUTES` is optional: it overrides the lifetime of public logger session links in minutes (default `120`, clamped between `15` and `240`); leave it unset to use the default.
 
 Club branding uploads require an S3-compatible object store (`S3_*`). When `S3_PUBLIC_BASE_URL` is unset, media is served from the API at `/api/v1/media/clubs/{workspaceId}/{filename}`. Local development can use any S3-compatible endpoint (for example MinIO).
 
@@ -69,21 +69,23 @@ The Playwright E2E suite runs the backend on port `4100` with `CORS_ORIGINS=http
 ## Layout
 
 ```text
-src/routes        API route declarations (auth, ai, athletes, clubs, clubBranding, comparison,
-                  dashboard, eventHelpers, fixtures, fixtureNotifications, injuries, media,
-                  participants, publicLoggers, publicSchedule, publicStatistics, publicSync,
-                  reminders, results, statistics, sync, timeline, venues, weather, workspaces)
+src/routes        API route declarations (ai, analytics, auth, clubBranding, clubs, comparison,
+                  dashboard, eventHelpers, fixtures, fixtureNotifications, injuries, media, meets,
+                  participants, preferences, publicLoggers, publicMeets, publicSchedule,
+                  publicStatistics, publicSync, reminders, results, statistics, sync, timeline,
+                  venues, weather, workspaces; the athletes, events, and squads routers are
+                  declared inline in routes/index.ts — there is no athletes route file)
 src/controllers   HTTP request and response handling
-src/services      coach-scoped persistence and business logic (33 modules)
+src/services      coach-scoped persistence and business logic (53 modules)
 src/middleware    authentication, ownership, capabilities, validation, errors, club media upload
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations (29 SQL files), row mappers, and transactions
+src/db            pg client, migrations (41 SQL files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 
 ## Database and migrations
 
-Migrations in `src/db/migrations` are sequential, checksum-tracked SQL files. The runner records them in `schema_migrations`, takes a PostgreSQL advisory lock to prevent concurrent runs, and applies each pending migration transactionally. Do not edit an applied migration; create the next numbered migration instead.
+Migrations in `src/db/migrations` are sequential, checksum-tracked SQL files: 41 files numbered `0001`…`0039` (the numbers `0019` and `0022` each appear twice), with `0039_host_fixture_revision_sync.sql` the latest. The runner records them in `schema_migrations`, takes a PostgreSQL advisory lock to prevent concurrent runs, and applies each pending migration transactionally. Do not edit an applied migration; create the next numbered migration instead.
 
 `npm start` runs migrations before starting the production server. The schema uses `gen_random_uuid()`, so PostgreSQL 13 or later is required.
 

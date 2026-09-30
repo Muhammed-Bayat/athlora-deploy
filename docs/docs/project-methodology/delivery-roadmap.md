@@ -14,7 +14,7 @@ Athlora is intended to support a complete athletics meet and season:
 - **Measured field events:** horizontal jumps, throws, high jump, and pole vault.
 - **Meet and season workflows:** athletes, training, competitions, assignments, live results, PB/SB progression, weather, shared fixtures, reporting, and scheduling.
 
-The delivered vertical slice is currently **100m timing in seconds**. It proves the shared foundations, not the permanent product boundary. Every additional discipline must add its own contract, validation, logger controls, result derivation, placing rules, PB/SB comparison, and tests.
+The delivered release (**0.5.0**) covers the multi-discipline catalogue, shared fixtures, public statistics and schedule, offline sync, club branding, and the coaching assistant. What remains from the product direction above is multi-events (heptathlon/decathlon) and automated season scheduling. Every delivered discipline must still add its own contract, validation, logger controls, result derivation, placing rules, PB/SB comparison, and tests.
 
 ## Core Model
 
@@ -103,6 +103,65 @@ Polished the public landing experience and authenticated console after the core 
 
 The console uses real dashboard data rather than mockup figures. The landing page and console retain responsive and reduced-motion behavior.
 
+### Phase 5: Shared Workspaces, Roles, and Fixtures
+
+**Status: Complete** — Sprint 2, delivered between `v0.3.0` and `v0.4.0`.
+
+Moved the single-coach console to shared club workspaces with membership, roles, squads, injury tracking, cross-workspace fixtures, event helpers, realtime updates, and in-app reminders/notifications.
+
+| Work tracked | Delivered through |
+|---|---|
+| Workspace tenancy, coach/assistant roles, normalized squads, athlete lifecycle, and persisted injury/recovery records: issues `#89`, `#93` | PRs `#105`, `#107`, `#108`, `#110`, `#115`, `#118` |
+| Cross-workspace fixture invitations, audited RSVPs, host lifecycle, shared calendar, and fixture notifications: issues `#93`, `#145` | PRs `#111`-`#116`, `#119`, `#164`, `#166`, `#181`, `#182`, `#196`, `#204`, `#213` |
+| Capped event helpers, public QR event logger, authorized realtime broadcast, in-app reminders, and notifications: issues `#95`, `#96`, `#146` | PRs `#125`, `#128`, `#129`, `#150`-`#152`, `#120`, `#205`-`#207` |
+| Club onboarding, assistant permission expansion, privacy/consent gate, and navigation hardening | PRs `#148`, `#149`, `#156`, `#157`, `#178`, `#183` |
+| Fitness anatomy maps, venue search, and the GraySky weather migration | PRs `#79`, `#117`, `#140`, `#195`, `#219` |
+
+Key outcomes:
+
+- Club workspaces with `requireOperationalAccess`/`requireCoach` role enforcement and non-enumerating membership checks.
+- Squads, athlete lifecycle states, and injury/recovery records with anatomy mapping.
+- Fixtures that invite other clubs without exposing unrelated workspace data, with audited RSVPs and host-authoritative results.
+- Socket.IO realtime invalidations, in-app reminders, notification actions, and capped temporary event helpers.
+
+### Phase 6: Offline PWA, Comparisons, and Release Hardening
+
+**Status: Complete** — Sprint 2, closed at `v0.4.0`.
+
+| Work tracked | Delivered through |
+|---|---|
+| Installable offline-first PWA (service worker, manifest, background replay) | PRs `#158`, `#209` |
+| Two-athlete comparison, all-time progression, club comparisons, multi-entity comparisons, and season filters | PRs `#122`, `#127`, `#208`, `#215`, `#217`, `#221` |
+| Public statistics landing presentation | PR `#210` |
+| First Gemini voice assistant release and audio stabilization | PRs `#161`, `#229` |
+| Expanded E2E suite, coverage lift (61.9% → 78.6%), testing/DB/API docs, and sprint records | PRs `#160`, `#193`, `#216`, `#222`, `#223`, `#224`, `#230`, `#233` |
+
+### Phase 7: Multi-Discipline Meets and Public Surfaces
+
+**Status: Complete** — Sprint 3, delivered between `v0.4.0` and `v0.5.0`, with regression fixes through PR `#322`.
+
+| Work tracked | Delivered through |
+|---|---|
+| Sprint 3 client follow-ups: past-event ordering, accessible chart colours, AI voice command/idle sleep, split publication flags: issues `#234`-`#237` | PRs `#255`-`#258` |
+| Dashboard preferences and saved views, club branding and media endpoints: issues `#241`, `#243` | PRs `#262`, `#263` |
+| Idempotent offline batch sync, offline recovery surface, and conflict reconciliation: issues `#253`, `#252`, `#254` | PRs `#264`, `#275`, `#285` |
+| Multi-discipline meet foundation plus timed, measured, and vertical discipline catalogues (migrations `0028`-`0031`): issues `#244`-`#247` | PRs `#265`-`#270` |
+| Athlete preferred disciplines/goals, session rosters with guest entrants, and relay teams: issues `#242`, `#248`, `#249` | PRs `#271`-`#273` |
+| Official result finalization and automatic places: issue `#250` | PR `#276` |
+| Public club schedule, filtered leaderboards, statistics reports, and multi-discipline public meet logging: issues `#238`-`#240`, `#251` | PRs `#274`, `#277`, `#278`, `#279` |
+| Athlete discipline performance views, all-discipline comparison, tabbed meet logger, per-session rosters, recorder attribution, field official-result selection, and incident undo | PRs `#286`, `#288`-`#290`, `#294`-`#301` |
+| Public athlete leaderboard and club standings | PR `#292` |
+| Discipline-aware Gemini assistant, dashboard simplification, and the `0.5.0` version bump | PRs `#303`, `#305`, `#306` |
+| Regression fixes (unit-only session rows, progression history, calendar current-day entries, injury delete confirmation): issue `#316` | PRs `#308`, `#320`-`#322` |
+
+Key outcomes:
+
+- One meet container hosts many discipline sessions with entrants, session rosters, guests, and relays, while legacy 100m history stays untouched.
+- Timed, horizontal-jump/throw, and vertical (high jump/pole vault) rules with countback, elimination, and automatic places.
+- Unauthenticated public schedule, statistics, report, leaderboard, and standings surfaces gated by independent club publication flags.
+- Offline logging with idempotent batch sync, duplicate receipts, conflict evidence, and coach-led resolution before finalization.
+- Club branding/media endpoints, dashboard personalisation, and a discipline-aware Gemini assistant.
+
 ## Planned Roadmap
 
 ### Stage 2: Full Athletics Events and Connected Coaching
@@ -110,6 +169,8 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 **Status: In Progress**
 
 #### 2.1 Discipline Expansion
+
+**Status: Implemented** — the full athletics catalogue ships in migrations `0029`-`0031`, with browser coverage in `e2e/tests/vertical-events.spec.ts` and `e2e/tests/relay-session.spec.ts`.
 
 1. Add timed contracts for 200m/400m, middle and long distance, hurdles, relays, and race walks.
 2. Add measured contracts for long jump, triple jump, throws, high jump, and pole vault.
@@ -128,10 +189,10 @@ The console uses real dashboard data rather than mockup figures. The landing pag
 #### 2.3 Season Analysis
 
 1. Add season totals and discipline-aware athlete/squad comparisons.
-2. Use Chart.js for PB/SB progression and comparison charts once the aggregate data is stable.
+2. Render PB/SB progression and comparison charts as hand-built SVG — the project ships no charting library (`chart.js` is not a frontend dependency).
 3. Add chart tests using seeded, multi-discipline data.
 
-**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports. Broader season totals and coach-facing multi-discipline comparison surfaces remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and coach-facing multi-discipline comparison surfaces have shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
 
 #### 2.4 Offline-First Logging
 
@@ -162,24 +223,30 @@ Key outcomes:
 
 ### Stage 3: Collaborative Meets and Season Tools
 
-**Status: Planned**
+**Status: In Progress** — 3.1 and 3.2 are implemented; 3.3 is still planned.
 
 #### 3.1 Multi-Device Offline Merge
+
+**Status: Implemented** — client-generated `actionId`s, idempotent `POST /api/v1/sync/batch` with durable receipts, `expectedVersion` conflict detection, and coach resolution through `GET …/resolution` and `POST …/conflicts/:conflictId/resolve` (`backend/src/routes/meets.ts:23`-`24`, migrations `0020`, `0036`).
 
 1. Give every locally created action a unique ID before it reaches the server.
 2. Add batch sync in PostgreSQL transactions with version checks and a durable audit trail.
 3. Keep concurrent new entries, resolve concurrent edits deterministically, and preserve undo tombstones.
 4. Recompute results after each accepted batch so every device converges on the same outcome.
-5. Test different reconnection orders across two simulated devices.
+5. Test different reconnection orders across two simulated devices — a dedicated two-device suite does not exist yet; ordering is covered indirectly by `backend/src/services/sync.test.ts`, `backend/src/services/sync.integration.test.ts`, and `e2e/tests/offline-logging.spec.ts`.
 
 #### 3.2 Public Results and Exports
+
+**Status: Implemented** — public leaderboards and standings, the `/stats*` public pages, and PDF/CSV export via `pdf-lib` (issues `#239`, `#240`; PRs `#277`, `#278`, `#292`).
 
 1. Add standings and explicitly allow-listed, read-only public athlete/squad result pages.
 2. Generate athlete and event PDF/CSV reports with `pdf-lib`.
 
 #### 3.3 Coaching Summaries and Scheduling
 
-1. Add rule-based summaries such as consecutive PBs and selection suggestions; this remains deterministic application logic, not an external AI service.
+**Status: Planned**
+
+1. Add rule-based summaries such as consecutive PBs and selection suggestions. The product now ships an external Gemini assistant (`@google/genai`, PR `#303`) for discipline-aware coaching queries, but this specific schedule/selection summary work is unbuilt and would stay deterministic application logic rather than model output.
 2. Generate season schedules from fixtures, venues, and availability, with athlete and venue clash warnings.
 
 ## Quality Gates
@@ -190,4 +257,4 @@ Every roadmap item is complete only when its implementation and documentation ar
 
 The discipline analytics roadmap status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
-This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The completed-roadmap and stage-status refresh was updated with the assistance of opencode[mimo-v2.6-flash-free].

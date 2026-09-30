@@ -6,7 +6,7 @@ sidebar_position: 1
 
 The authoritative contract for the legacy 100m vertical slice and the catalogue-backed multi-discipline APIs. It defines the request/response DTOs for athletes, events, participants, timeline entries, results, statistics, dashboard data, and discipline analytics.
 
-All paths in this document are relative to `/api/v1`.
+All paths in this document are relative to `/api/v1`. The only route outside that prefix is the unauthenticated liveness probe `GET /health` (registered in `backend/src/app.ts` before the `/api/v1` mount), which returns the bare body `{ "status": "ok" }` rather than a `data` envelope.
 
 Athlora's product scope is a full athletics meet, not only 100m. Additional track, relay, race-walk, jump, throw, and vertical-event contracts will extend this document with their own units, validation, entry shapes, derivation, placing, and PB/SB rules. Until those contracts are implemented, this page remains exact for the shipped 100m API.
 
@@ -16,13 +16,14 @@ Legacy 100m endpoints retain their exact seconds-only behavior. Generic meet ses
 
 ## 1. Contract constants
 
-Defined once in `backend/src/types/domain.ts` and mirrored in `frontend/src/types/index.ts`:
+`DISCIPLINE_100M` and `RESULT_UNIT_SECONDS` are defined once in `backend/src/types/domain.ts` and mirrored in `frontend/src/types/index.ts`:
 
 | Constant | Value | Meaning |
 |---|---|---|
 | `DISCIPLINE_100M` | `'100m'` | Canonical MVP discipline; `type Discipline = '100m'` |
 | `RESULT_UNIT_SECONDS` | `'seconds'` | Canonical MVP unit; `type ResultUnit = 'seconds'` |
-| `DISCIPLINE_KIND` | `{ '100m': 'track' }` | Discipline → result rules branch (`track` | `field`) |
+
+`DISCIPLINE_KIND` (`{ '100m': 'track' }`, the discipline → result-rules branch `track` | `field`) lives in `backend/src/services/resultDerivation.ts`, not in `types/domain.ts`, and the frontend mirrors only `RESULT_UNIT_SECONDS` — there is no frontend copy of `DISCIPLINE_KIND`.
 
 `timeline_entries.discipline` and `results.discipline` are typed `Discipline` (`'100m'`); `unit` is `ResultUnit | null` (`'seconds' | null`).
 
@@ -50,6 +51,8 @@ Success responses wrap payloads in `data`; lists add `meta.count`; errors use th
 { "error": { "code": "VALIDATION_ERROR", "message": "Human-readable message", "details": {} } }
 ```
 
+**Envelope exceptions:** a small number of routes deliberately return unwrapped objects instead of `{ data }`, and report failures as a bare `{ "error": "message" }` string instead of the structured error object. These are the event-helper routes (`POST|GET /events/:eventId/helpers/invitations`, the rotate/status/revoke routes, and `POST /events/helpers/redeem` — see `backend/src/controllers/eventHelpers.ts`) and the public logger batch sync `POST /public/logger/sync/batch` (see `backend/src/routes/publicSync.ts`). The offline-logger designation routes in `backend/src/routes/sync.ts` wrap success in `{ data }` but emit a local `{ "error": { "code": "VALIDATION_ERROR", ... } }` body for a missing `deviceId` or grant IDs. `GET /health` returns a bare status object. Every other route follows the rules above unless a section says otherwise.
+
 Mutation payload validation failures return HTTP `400` with code `VALIDATION_ERROR`, message `Request validation failed`, and an ordered issue list:
 
 ```json
@@ -68,7 +71,7 @@ Mutation payload validation failures return HTTP `400` with code `VALIDATION_ERR
 
 Mutation payloads use strict field allow-lists. Unknown fields and server-controlled identifiers, ownership/audit fields, derived fields, and timestamps are rejected rather than ignored. Malformed JSON uses the same envelope. Malformed resource identifiers in URL paths retain the ownership contract's non-enumerating `404 NOT_FOUND` response.
 
-Unless explicitly noted, application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row. Resource requests may include `X-Workspace-Id: <UUID>` to select one of the caller's memberships; omitted headers select the earliest membership. An inaccessible workspace returns `403 WORKSPACE_ACCESS_DENIED`.
+Unless explicitly noted, application resource routes require `Authorization: Bearer <auth0 JWT>` and a synchronized application-user row. Resource requests may include `X-Workspace-Id: <UUID>` to select one of the caller's memberships; omitted headers select the earliest membership (ordered by membership creation). A header value that is not a canonical UUID returns `400 WORKSPACE_ID_INVALID`. A workspace the caller does not belong to — as well as a caller with no memberships at all — matches no membership row, so the resource route answers `403 AUTH_USER_NOT_SYNCHRONIZED` (the same response as an unsynchronized identity) rather than a workspace-specific code. `403 WORKSPACE_ACCESS_DENIED` exists only in `backend/src/services/workspaces.ts` (`resolveWorkspace`) and is not returned by the resource-route middleware chain.
 
 ### 3.1 Authentication context and ownership
 
@@ -131,7 +134,7 @@ A fixture connects one hosted, scheduled 100m competition to one or more guest w
 
 | Method & path | Actor | Purpose |
 |---|---|---|
-| `POST /events/:eventId/fixture-invitations` | Host coach | Create a pending invitation; body `{ email, expiresInDays? }` |
+| `POST /events/:eventId/fixture-invitations` | Host coach | Create a pending invitation; body `{ targetClubId, expiresInDays? }` where `targetClubId` is the target club's canonical UUID (required) and `expiresInDays` is an integer 1–30 (default 7) |
 | `GET /events/:eventId/fixture-invitations` | Host workspace | Read invitation state and response history summary |
 | `POST /events/:eventId/fixture-invitations/:invitationId/resend` | Host coach | Revoke and replace a pending/declined/change-request invitation |
 | `DELETE /events/:eventId/fixture-invitations/:invitationId` | Host coach | Revoke an unused invitation |
@@ -176,11 +179,11 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 |---|---|
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=` | Compare two athletes side by side |
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=&scope=cross-club` | Compare two athletes from distinct clubs |
-| `GET /athletes/comparison/multi?athleteIds=` | Compare multiple selected athletes |
+| `GET /athletes/comparison/multi?athleteId=&athleteId=…` | Compare multiple selected athletes; repeat the `athleteId` parameter once per athlete (2–5 unique UUIDs, otherwise `422 ATHLETE_IDS_INVALID`) |
 | `GET /clubs/:clubId/athletes?q=` | Search a club's non-archived roster for comparison selection |
-| `GET /clubs/:clubId/statistics` | Get all-time 100m club roster statistics |
-| `GET /clubs/comparison?club1Id=&club2Id=` | Compare all-time 100m statistics for two clubs |
-| `GET /clubs/comparison/multi?clubIds=` | Compare multiple clubs' 100m statistics |
+| `GET /clubs/:clubId/statistics` | Get 100m club statistics for the selected season (roster counts are always all-time; result metrics default to the current UTC year) |
+| `GET /clubs/comparison?club1Id=&club2Id=` | Compare selected-season 100m statistics for two clubs |
+| `GET /clubs/comparison/multi?clubId=&clubId=…` | Compare multiple clubs' statistics; repeat the `clubId` parameter once per club (2–5 unique UUIDs, otherwise `422 CLUB_IDS_INVALID`) |
 | `GET /clubs/calendar` | Get events for selected accessible clubs' shared calendar |
 | `GET /clubs/publication` | Read the active club's independent public-results and public-schedule settings |
 | `PUT /clubs/publication` | Update both publication settings as a full replacement (coach only) |
@@ -192,7 +195,7 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 | `DELETE /clubs/branding/cover` | Clear the club cover (coach only) |
 | `GET /media/clubs/:workspaceId/:filename` | Serve a stored brand asset with immutable cache and `nosniff` |
 
-The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
+The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Both athlete comparison routes (pair and `multi`) accept `scope=cross-club` and `year=<YYYY|all>`; both club comparison routes accept `year=<YYYY|all>`, defaulting to the current UTC year when omitted. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
 
 ### 3.4a Discipline analytics
 
@@ -243,23 +246,24 @@ Event helpers are external users granted read or read/write access to a specific
 
 | Method & path | Purpose |
 |---|---|
-| `POST /events/:eventId/helpers/invitations` | Create a helper invitation; body `{ email, role, expiresInDays? }` |
+| `POST /events/:eventId/helpers/invitations` | Create a helper invitation; body `{ maxCap? }` (integer 1–50, default 10) |
 | `GET /events/:eventId/helpers/invitations` | List helper invitations for the event |
 | `POST /events/:eventId/helpers/invitations/:invitationId/rotate` | Rotate (replace) an invitation token |
 | `PATCH /events/:eventId/helpers/invitations/:invitationId` | Update an invitation's status |
 | `DELETE /events/:eventId/helpers/grants/:grantId` | Revoke a helper grant |
 
-**Redemption endpoint (public, rate-limited):**
+**Redemption endpoint (authenticated, rate-limited):**
 
 | Method & path | Purpose |
 |---|---|
-| `POST /events/helpers/redeem` | Redeem an invitation; body `{ code }` |
+| `POST /events/helpers/redeem` | Redeem an invitation; body `{ secret }` or `{ humanCode }`. Requires a valid Auth0 JWT (`verifyAuth0Token`) and is rate-limited per IP; it is not a public route. |
 
 **Offline designation endpoints (authenticated):**
 
 | Method & path | Purpose |
 |---|---|
 | `POST /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Designate a grant as the offline logger |
+| `GET /events/:eventId/helpers/offline-logger` | Read the event's current designation; `{ data: { grantId, userId, name, deviceId } | null }` |
 | `DELETE /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Revoke offline logger designation |
 | `POST /events/:eventId/helpers/transfer-offline-logger` | Transfer offline logger designation between grants |
 
@@ -304,21 +308,23 @@ The token is exchanged by the frontend SDK (`@google/genai`) to establish a `Bid
 
 | Method & path | Purpose |
 |---|---|
-| `GET /athletes/:id/progression` | Cursor-paginated all-time 100m progression with running PB |
+| `GET /athletes/:id/progression` | Cursor-paginated 100m progression with running PB |
 
-Query parameters: `cursor` (pagination token), `limit` (page size, default 50, max 200), `type` (`competition` or `training` filter). Returns chronological entries with effective result/outcome (incorporating manual overrides), a running PB indicator, and a summary of all-time PB and total result counts.
+Query parameters: `cursor` (pagination token), `limit` (page size, default 50, max 200), `type` (`competition` or `training` filter), `year` (`YYYY` or `all`). The season scope defaults to the **current UTC year**, not all-time — omit `year` for the current season or pass `all` for every recorded result (see `backend/src/services/seasons.ts` and the [progression reference](./progression)). Returns chronological entries with effective result/outcome (incorporating manual overrides), a running PB indicator, and a summary of the selected scope's PB and total result counts.
 
 ### 3.11 Offline sync
 
 | Method & path | Purpose |
 |---|---|
 | `POST /sync/batch` | Process a batch of offline queue actions |
+| `GET /events/:eventId/sessions/:disciplineSessionId/resolution` | Read the session's recorded offline-conflict evidence and resolution state (coach only) |
+| `POST /events/:eventId/sessions/:disciplineSessionId/conflicts/:conflictId/resolve` | Acknowledge/resolve one recorded conflict; body `{ reason }` (string, required), coach only |
 
 Request body: `{ deviceId, eventId, actions }`. `eventId` must be a canonical UUID owned by the active workspace, and logging must be open (`in_progress`). `actions` is a non-empty array of at most **50** items. Each action requires a canonical UUID `actionId`, an `actionType` of `create_entry` | `edit_entry` | `undo_entry`, an object `payload`, and an ISO `clientTimestamp`; `expectedVersion` is an optional integer. Structural failures return `400 VALIDATION_ERROR` before processing. Ownership failures return `404 NOT_FOUND`; a completed/cancelled event returns `409 EVENT_NOT_IN_PROGRESS`.
 
 Each action is processed idempotently against `sync_action_receipts`. On retry, an originally accepted action returns `duplicate` (with `entryId`/`serverVersion`); an originally rejected action returns `rejected` with the original code. Per-action rejection codes include `VERSION_CONFLICT` (stale expected version), `EVENT_NOT_IN_PROGRESS`, `INVALID_ACTION`, and `INTERNAL_ERROR`. Accepted and rejected receipts are independent — one rejected action never blocks accepted siblings in the same batch.
 
-For multi-discipline session actions, a stale edit also creates immutable offline-conflict evidence with device, action, attempted payload, expected/current versions, and source timestamps. Only an event-owning coach can review or acknowledge that evidence. Session finalization rejects unresolved conflicts with `409 OFFLINE_CONFLICT_RESOLUTION_REQUIRED`; the coach must acknowledge the conflict and use the existing official-entry selection before finalizing.
+For multi-discipline session actions, a stale edit also creates immutable offline-conflict evidence with device, action, attempted payload, expected/current versions, and source timestamps. Only an event-owning coach can review that evidence through `GET .../sessions/:disciplineSessionId/resolution` and acknowledge it through `POST .../sessions/:disciplineSessionId/conflicts/:conflictId/resolve`. Session finalization rejects unresolved conflicts with `409 OFFLINE_CONFLICT_RESOLUTION_REQUIRED`; the coach must acknowledge the conflict and use the existing official-entry selection before finalizing.
 
 Response envelope: `{ data: { receipts, recomputedResults } }`. `recomputedResults` is `true` only when at least one action was newly accepted and the server actually recomputed event results after the batch.
 
@@ -335,7 +341,11 @@ The publication owner controls two independent flags through `GET|PUT /clubs/pub
 | `GET /public/statistics/leaderboard` | List finalized individual public leaderboard rows |
 | `GET /public/statistics/standings` | List public shared-fixture club standings using 5/3/1 placement points |
 | `GET /public/statistics/report/disciplines` | List canonical configured disciplines for public report and leaderboard filters |
-| `GET /public/statistics/report` | List live detailed, filterable published performance rows for public CSV/PDF reports |
+| `GET /public/statistics/report` | List live detailed, filterable published performance rows for public CSV/PDF reports; returns `meta.count` and `meta.generatedAt` alongside `data` |
+| `GET /public/statistics/clubs/:clubId/vertical` | Published vertical-event PB/SB statistics for a club's roster; optional `year` (default current UTC year) |
+| `GET /public/statistics/clubs/:clubId/disciplines` | Published per-discipline PB/SB statistics for a club's roster; optional `year` (default current UTC year) |
+
+The two club discipline endpoints return `404 NOT_FOUND` for an unknown, non-canonical, or unpublished club, and resolve `year=all` to the current UTC year.
 
 When a club has enabled schedule publication (regardless of the results flag), these unauthenticated, read-only schedule endpoints are available:
 
@@ -399,6 +409,7 @@ statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 | `status` | Exact lifecycle state (`'active'`, `'inactive'`, or `'archived'`) |
 | `name` | Case-insensitive substring match on `name` |
 | `squadId` | Canonical UUID; returns athletes with that membership without multiplying roster rows |
+| `year` | Accepted for shared season URL state: `'all'` or a four-digit Gregorian year, otherwise `400`. The roster is not season-scoped, so it never filters rows. |
 
 Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable. Repeating an athlete status request for its current state is a successful no-op. Every real transition is workspace-authorized, actor-attributed, and flags existing event assignments for coach review.
 
@@ -441,7 +452,8 @@ status, createdAt, updatedAt
 | `PATCH /events/:eventId/sessions/:sessionId` | Change session status with `expectedVersion` |
 | `GET`/`POST /events/:eventId/entrants` | Read/create the protected shared entrant pool |
 | `PATCH /events/:eventId/entrants/:entrantId` | Coach-only relay team rename/member rewrite while the meet is `scheduled` and no session entries exist |
-| `GET`/`POST`/`DELETE /events/:eventId/sessions/:sessionId/entrants/:entrantId` | List, add, or withdraw an independent registration |
+| `GET /events/:eventId/sessions/:sessionId/entrants` | List the registrations for one session |
+| `POST`/`DELETE /events/:eventId/sessions/:sessionId/entrants/:entrantId` | Add or withdraw an independent registration |
 | `GET`/`POST`/`PUT`/`DELETE .../entrants/:entrantId/entries[/:entryId]` | Session-scoped timeline entries (create/edit/undo) |
 | `GET`/`PUT .../results[/:entrantId]` | Session result reads, manual overrides, and coach-selected official attempt for timed/measured sessions (`PUT .../results/:entrantId/selection`) |
 | `GET .../statistics` | Session/entrant statistics |
@@ -495,8 +507,9 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 | `status` | Exact match on `status` |
 | `dateFrom` | Inclusive lower bound on `date` (Gregorian `YYYY-MM-DD`) |
 | `dateTo` | Inclusive upper bound on `date`; `dateFrom` must not be after `dateTo` |
+| `year` | Season scope: `'all'` or a four-digit Gregorian year. Omitting it (including a request with no parameters at all) defaults to the **current UTC year**; an unparseable value returns `422 SEASON_YEAR_INVALID` |
 
-Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `createdAt`, then `id`, so the ordering is stable.
+Event results are ordered by `date` ASC, then `time` ASC (nulls last), then `createdAt`, then `id`, so the ordering is stable. Because the season scope is always applied, `GET /events` with no query parameters lists only the current UTC year's events — pass `year=all` for the full history.
 
 Event create/full-replacement request DTO: `type` (required), `discipline`, `title` (required), `date` (required), `time`, `locationName`, `latitude`, `longitude`, `status` (create defaults to `scheduled`; full replacement requires it). `PUT` is a full replacement, so omitted nullable fields become `null`, and the replacement `status` drives the transition check. Coordinates must be finite numbers in the inclusive latitude range `-90..90` and longitude range `-180..180`. `createdBy` is always server-derived from the authenticated user and is rejected from request bodies.
 
@@ -549,21 +562,22 @@ Venue search is an optional convenience, not event persistence: choosing a resul
 ### 4.6 Event participant
 
 ```
-eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'), statusReviewRequired,
+eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'|'maybe'), statusReviewRequired,
 athlete { id, name, squad, archivedAt, status }
 ```
 
-Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
+Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained and accepts `pending`, `yes`, `no`, and `maybe`. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
 
 | Method & path | Purpose |
 |---|---|
 | `GET /events/:eventId/participants` | List assigned athletes in stable name order |
 | `POST /events/:eventId/participants` | Assign an active owned athlete; body `{ athleteId }`, returns `201` |
+| `PUT /events/:eventId/participants/rsvp` | Coach bulk RSVP replacement; body `{ updates: [{ athleteId, rsvpStatus }] }` with 1–100 rows and each `athleteId` at most once; returns `{ data, meta: { count } }` |
 | `PUT /events/:eventId/participants/:athleteId` | Idempotently replace RSVP status; body `{ rsvpStatus }` |
 | `DELETE /events/:eventId/participants/:athleteId` | Remove the assignment; returns `204` |
 | `POST /events/:eventId/participants/:athleteId/status-review/acknowledge` | Acknowledge that athlete's lifecycle review item; returns `204` |
 
-Assignment defaults `rsvpStatus` to `pending`. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; archived and inactive athletes cannot be newly assigned and return `409 ATHLETE_ARCHIVED` and `409 ATHLETE_INACTIVE` respectively. A real lifecycle transition does not remove existing assignments; it creates a per-event, per-athlete review item. Coaches acknowledge review items independently, so a later change for one athlete cannot clear another athlete's alert. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
+Assignment defaults `rsvpStatus` to `pending`. The bulk route applies the same per-row rules inside a single transaction — ownership, duplicate/absent-row handling, archived/inactive conflicts, RSVP audit rows, and the result recomputation triggered by a `no` — and one failing row aborts the whole batch with that row's error, so no partial update is committed. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; archived and inactive athletes cannot be newly assigned and return `409 ATHLETE_ARCHIVED` and `409 ATHLETE_INACTIVE` respectively. A real lifecycle transition does not remove existing assignments; it creates a per-event, per-athlete review item. Coaches acknowledge review items independently, so a later change for one athlete cannot clear another athlete's alert. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
 ### 4.7 Timeline entry (the live log)
 
@@ -619,6 +633,16 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 ### 4.9 Statistics
 
+| Method & path | Purpose |
+|---|---|
+| `GET /athletes/:athleteId/statistics` | Owner-scoped 100m summary and purpose-built history (documented below) |
+| `GET /athletes/:id/statistics/vertical` | Per-discipline vertical-event PB/SB rows for the athlete |
+| `GET /athletes/:id/statistics/disciplines` | Per-discipline PB/SB and season aggregates for the athlete |
+| `GET /athletes/:id/statistics/disciplines/:disciplineDefinitionId/progression` | Season progression for one catalogue discipline |
+| `GET /athletes/:id/statistics/relays` | Relay history for the athlete |
+
+All five are authenticated, athlete-ownership-checked routes that return `{ data: ... }`. The four catalogue routes accept `year` (`YYYY` or `all`), defaulting to the current UTC year; `vertical` and `disciplines` resolve `year=all` back to the current UTC year, while the progression route honours `all` as an all-time scope.
+
 `GET /api/v1/athletes/:athleteId/statistics` returns one owner-scoped 100m summary and its purpose-built history in `{ data }`:
 
 ```
@@ -655,6 +679,8 @@ Every override mutation locks the event/result set and recomputes the whole even
 ```
 
 ### 4.10 Dashboard data
+
+Two authenticated routes are mounted at `/api/v1/dashboard`: `GET /dashboard/summary` (documented below) and `GET /dashboard/disciplines`, which returns the workspace-wide per-discipline statistics array used by the dashboard cards as `{ data: [...] }`. The disciplines route accepts `year` (`YYYY` or `all`), defaulting to the current UTC year and resolving `all` back to the current UTC year.
 
 `GET /api/v1/dashboard/summary?year=2026` returns one `{ data }` object with the same keys in summary and live modes. Omit `year` for the current UTC calendar year, provide a four-digit year for history, or use `year=all` for all-time result aggregates.
 
@@ -710,4 +736,4 @@ Every override mutation locks the event/result set and recomputes the whole even
 
 The global assistant, discipline analytics, and report contract update was generated, edited, and reviewed with the assistance of OpenCode[openai/gpt-5.6-terra].
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public detailed-statistics report endpoint was documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public detailed-statistics report endpoint was documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra]. The missing endpoints (health probe, offline-logger read, bulk RSVP, catalogue statistics, dashboard disciplines, public club statistics, conflict resolution), the corrected request/response contracts, and the envelope-exception notes were updated with the assistance of opencode[mimo-v2.6-flash-free].

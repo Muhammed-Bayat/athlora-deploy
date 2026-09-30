@@ -32,7 +32,10 @@ VITE_API_BASE_URL=http://localhost:4000
 VITE_AUTH0_DOMAIN=your-tenant.eu.auth0.com
 VITE_AUTH0_CLIENT_ID=your-spa-client-id
 VITE_AUTH0_AUDIENCE=https://api.example.com
+VITE_REALTIME_URL=http://localhost:4000
 ```
+
+`VITE_REALTIME_URL` is optional: it points at the API's Socket.IO endpoint, and without it the app stays fully functional using HTTP refresh (`src/features/realtime/useRealtimeRoom.ts`).
 
 `VITE_*` values are embedded in the browser build. They must contain only public configuration, never Management API credentials or database URLs. In Auth0, register `http://localhost:5173` as an allowed callback URL, logout URL, and web origin.
 
@@ -51,7 +54,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 
 ## Application structure
 
-- `src/features` contains feature-owned UI for landing, authentication, dashboard, athletes, events, live logging, and results.
+- `src/features` contains feature-owned UI across 16 areas: assistant, athletes, auth, comparison, dashboard, events, fitness, fixtures, landing, publicLogger, publicSchedule, publicStats, realtime, reports, results, and timeline (live logging lives in `features/timeline`).
 - `src/components` contains reusable accessible controls and async states.
 - `src/api` contains the typed fetch client and one module per API resource. It preserves the API error code, message, status, and validation details.
 - `src/types` mirrors the API's camel-case DTOs. The current contract is 100m results in seconds; later contracts will add the units and entry shapes required by track, relays, jumps, throws, and vertical events.
@@ -63,7 +66,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 - Club branding settings on the Account page: description, accessible brand colours, logo and cover upload (PNG/JPEG/WebP ≤5 MB), with live WCAG contrast checks. Branding is applied through the shared `ClubBadge` component on the console footer/switcher, fixture team lists, public stats cards, and comparison tables, with an initials fallback when no logo is set.
 
 - Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
-- API-backed dashboard with summary, live-event, loading, onboarding, and recovery states. The signature summary hero is fixed at the top; a **Customize dashboard** dialog reorders cards with move up/down buttons and toggles hideable cards (required season/status cards stay visible). Preferences hydrate from `GET /api/v1/preferences` without blocking the default layout and save through `PUT /api/v1/preferences`.
+- API-backed dashboard with a fixed layout: a summary mode (the signature summary hero, an onboarding prompt when the roster is empty, the season selector, status attention and stat row, an upcoming-events panel, and a roster snapshot) and a live mode (live-event hero and latest-entries feed) while an event is `in_progress`, each with loading and recovery states. The layout is not user-configurable — the **Customize dashboard** dialog, card reordering and hidden-card controls, and saved views were removed in the dashboard simplification; the backend `GET|PUT /api/v1/preferences` API still exists, but the dashboard UI no longer reads or writes it.
 - Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
 - Event creation, explicit OpenStreetMap venue search/pin-coordinate selection with manual fallback, lifecycle changes, participant RSVP management, results, manual corrections, and event-day GraySky forecasts.
 - Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
@@ -73,7 +76,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 - Gemini Live voice assistant with microphone capture (PCM 16kHz), audio playback (PCM 24kHz), tool calls for athlete creation, interruption handling, and session lifecycle management.
 - Cross-club fixture system: guest fixture management, team roster assignment, RSVP tracking, finish-time recording, result corrections, team withdrawal, fixture notifications with unread badges, and incoming invitation workflows (accept/decline/request changes).
 - Public logger links: coach-created shareable token links allowing external guests to start sessions, view event snapshots, and record results/incidents without Auth0.
-- Offline-first PWA with Dexie/IndexedDB (4-table schema: offlineActions, cachedEvents, cachedParticipants, cachedTimeline), action queue (enqueue/pending/markSynced/markFailed/reset), batch sync engine, event data caching, offline designation guards, and data cleanup.
+- Offline-first PWA with two Dexie/IndexedDB databases: the per-user store at `version(2)` with five tables (`offlineActions`, `cachedEvents`, `cachedParticipants`, `cachedTimeline`, `cachedSessions`) and the public-logger store (`publicOfflineActions`, `publicCachedSnapshots`, `publicCachedSessions`), action queue (enqueue/pending/markSynced/markFailed/reset), batch sync engine, event data caching, offline designation guards, and data cleanup.
 - Two-athlete 100m comparison page with dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), URL-param-driven athlete selection, and two independent coach publication toggles (public results vs public schedule) that call `PUT /clubs/publication` with both flags as a full replacement.
 - Single-athlete all-time 100m progression chart with PB milestones, chart/table toggle, cursor-based pagination, and accessibility features.
 - Real-time Socket.IO event subscriptions for live invalidation notifications, with connection state management, deduplication, and workspace-aware authorization.
@@ -84,24 +87,30 @@ The dashboard and other authenticated views wait for `PUT /api/v1/auth/me` to fi
 ## Canonical console routes
 
 - `/console` — dashboard
+- `/console/stats` — season stats (the same summary dashboard view)
 - `/console/athletes` and `/console/athletes/:athleteId` — roster and athlete detail
 - `/console/comparison` — two-athlete 100m comparison
-- `/console/events` and `/console/events/:eventId` — event list and direct-loadable event detail
-- `/console/fixtures` — cross-club fixture management
+- `/console/events` and `/console/events/:eventId` — event list, cross-club fixture management, and direct-loadable event detail
 - `/console/live` and `/console/live/:eventId` — live logger and selected event
 - `/console/account` — account management
+
+`/console/fixtures` is no longer a view: the route redirects to `/console/events` (`frontend/src/App.tsx`), which now hosts the fixture surfaces, and the sidebar has no Fixtures entry.
 
 Unauthenticated console visits return to the requested canonical path after Auth0 completes. Event list date, type, and status filters are retained in its query string when opening and returning from detail.
 
 ## Public routes
 
-Public surfaces are short-circuited in `src/main.tsx` before the Auth0 provider mounts, so they work without Auth0 environment variables:
+Only the logger, stats, and schedule paths are short-circuited in `src/main.tsx` before the Auth0 provider mounts, so those surfaces work without Auth0 environment variables:
 
-- `/` — marketing landing page (renders for any unauthenticated path inside the app router)
 - `/log/:token` — public logger session
 - `/stats` — public performance index (gated by `publicResultsEnabled`)
+- `/stats/leaderboard` — public leaderboard
+- `/stats/standings` — public standings
+- `/stats/report` — detailed public statistics report
 - `/schedule` — public schedule club index (gated by `publicScheduleEnabled`)
 - `/schedule/:clubId` — published club schedule showing only upcoming meets
+
+Every other path — including `/` — falls through to the `Auth0Provider`, so the app will not boot without the `VITE_AUTH0_*` values; unauthenticated visitors then see the marketing landing page for any path, and `/` redirects to `/console` once authenticated. `/invitations/:token` (`frontend/src/App.tsx`) accepts a workspace invitation inside the app router after Auth0 loads.
 
 The schedule pages live in `src/features/publicSchedule` and consume `src/api/publicSchedule.ts` (`requestPublic`, no auth headers). They render club identity via `ClubBadge`, an explicit search of published clubs on the index, a dedicated non-disclosing unavailable state for disabled/unknown clubs (both are the same generic `404`), an empty state for clubs with no upcoming meets, accessible `<time>` date/time rendering, and a responsive single-column layout below 820px. Landing navigation, the public stats header, and the public stats club card link to these routes; no console-only routes or roster data are referenced.
 
@@ -119,11 +128,11 @@ npm run build
 For browser-level coverage of the full stack, use the [E2E guide](./e2e).
 - The app shell renders with **Athlora** branding and an ink sidebar. The roster, event-management and dashboard views are live against the typed API.
 - Weather presets use paired semantic surface, text, control, status and focus colors across the authenticated console. `night` and `night-rain` keep dashboards, forms, dialogs, badges, result boards, empty states and live-logging controls consistently dark and readable without changing the approved Athlora palette; disabling Weather FX removes the weather theme.
-- The console shell is a premium dark aurora redesign of `Athlora_Premium_Dashboard.html` with a light "Aurora Mist/Ice" toggle (`localStorage` `athlora-theme`, `theme-light` class on `<html>`). The topbar shows a live weather readout for the coach's device location (geolocation with timezone-city fallback, refreshed every 10 minutes while visible) proxied through `GET /api/v1/weather/current`, a weather-effects toggle with an animated scene, and a live clock. Dashboard, Athletes, Events, Live Logger and Account views all consume the same `--console-*` tokens; the mockup dashboard's fabricated numbers are replaced with real aggregate data.
+- The console shell is a premium dark aurora redesign of `docs/docs/sprints/sprint-1/screenshots/00002803-Athlora_Premium_Dashboard.html` with a light "Aurora Mist/Ice" toggle (`localStorage` `athlora-theme`, `theme-light` class on `<html>`). The topbar shows a live weather readout for the coach's device location (geolocation with timezone-city fallback, refreshed every 10 minutes while visible) proxied through `GET /api/v1/weather/current`, a weather-effects toggle with an animated scene, and a live clock. Dashboard, Athletes, Events, Live Logger and Account views all consume the same `--console-*` tokens; the mockup dashboard's fabricated numbers are replaced with real aggregate data.
 - Auth0 Universal Login is wired through `@auth0/auth0-react` for sign-up, sign-in, password help and sign-out. After synchronization, the console loads accessible workspaces, restores a validated per-subject selection, sends it centrally as `X-Workspace-Id`, and exposes an accessible sidebar switcher. Switching resets and remounts dashboard, roster, events, and live logger state so similarly named resources cannot leak between workspaces. Account deletion removes the caller's identity and memberships, not shared workspace data.
 - API failures use a typed `ApiError` that preserves the backend HTTP status, error code, message and details, including `AUTH_USER_NOT_SYNCHRONIZED` recovery information. Account synchronization failures display the safe API error code and correlation reference so operators can match a failed sign-in to backend logs without collecting credentials. Single-resource response envelopes are unwrapped by the shared client and empty successful responses are handled without JSON parse failures.
 - `src/api/statistics.ts` and `src/api/dashboard.ts` expose the combined athlete statistics/history and dashboard summary resources through DTOs mirrored from the backend. Athlete performance detail consumes the statistics resource directly. The dashboard consumes the stable summary/live aggregate with loading and retry states, active-event progress and latest entries, onboarding, factual roster/event/result/PB panels, and targeted navigation to athlete details, event details and the selected live logger. Summary mode uses the approved signature hero with a live greeting/clock and reduced-motion-aware orbit animation, while every displayed count comes from the aggregate.
-- Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; Google Fonts (Space Grotesk, Satoshi, Inter — loaded with Space Grotesk as the mono) load in `index.html`. The premium console's `--console-*` namespace (dark aurora default + `html.theme-light` overrides) lives on the shell in `CoachConsole.module.css`.
+- Design tokens from the approved mockups are encoded once in `src/styles/tokens.css`; `index.html` loads Bebas Neue, Inter, Space Mono, and Space Grotesk from Google Fonts plus Satoshi from Fontshare (Satoshi is not a Google Font), and the tokens set Satoshi/Inter as the base family with Space Grotesk as the mono. The premium console's `--console-*` namespace (dark aurora default + `html.theme-light` overrides) lives on the shell in `CoachConsole.module.css`.
 - `src/features/athletes/AthletesPage.tsx` consumes the coach-owned UUID athlete DTO through `src/api/athletes.ts`. It loads active, inactive, and archived athletes, provides immediate name/discipline/status filters plus status counts and badges, renders distinct loading/error-retry/empty/filter-empty states, and persists create, full-replacement edit, lifecycle transition, archive and restore operations. Assigned disciplines are the athlete's effective roster groups, so one athlete can appear under multiple discipline filters without a separate squad selection. `AthleteForm` is shared by roster and detail editing; archived athlete profiles are read-only until restored.
 - `AthleteDetailPage` combines the editable API profile with owner-scoped 100m statistics in a performance-first layout: a featured athlete identity panel, PB/calendar-year SB/count KPI strip, compact profile details and keyboard-accessible competition/training history tabs. Full-width result rows keep effective times, overrides, incidents, PB/SB and cancelled/non-scoring states explicit in text. Profile and statistics requests load and retry independently, while opening and returning move focus between the detail heading and the exact originating roster action without adding a routing dependency.
 - Archive confirmation explains that event assignments, timeline entries and results are preserved. Shared modal focus management supports Escape, Tab containment, focus restoration and blocked dismissal during submission; success/error feedback is announced and the responsive card grid collapses for mobile use.
@@ -146,8 +155,8 @@ The production SPA is deployed to Vercel:
 https://athlora-deploy.vercel.app
 ```
 
-Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/`. `frontend/vercel.json` rewrites direct SPA routes, including email invitation links, to `index.html`; retain this file when changing Vercel settings. Configure the same four `VITE_*` values in Vercel and register the production URL in Auth0's callback, logout, and web-origin settings.
+Vercel runs `npm ci` and `npm run build` from `/frontend`, then publishes `dist/`. `frontend/vercel.json` rewrites direct SPA routes, including email invitation links, to `index.html`; retain this file when changing Vercel settings. Configure the same five `VITE_*` values in Vercel and register the production URL in Auth0's callback, logout, and web-origin settings.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding settings and branded surface wiring were documented with the assistance of opencode[mimo-v2.6-flash-free]. The multi-discipline meet roster, session live logger, and public session-results surfaces were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule routes and feature description were documented with the assistance of opencode[mimo-v2.6-flash-free]. The themed event-discipline selector and roster-tab behavior were documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication toggles on the comparison page were documented with the assistance of opencode[mimo-v2.6-flash-free]. The dashboard customization and saved views were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding settings and branded surface wiring were documented with the assistance of opencode[mimo-v2.6-flash-free]. The multi-discipline meet roster, session live logger, and public session-results surfaces were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule routes and feature description were documented with the assistance of opencode[mimo-v2.6-flash-free]. The themed event-discipline selector and roster-tab behavior were documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with OpenCode[gpt-5.6-terra]. The console/public route lists, environment variables, dashboard simplification, offline Dexie schema, feature inventory, and mockup/font references were updated with the assistance of opencode[mimo-v2.6-flash-free].

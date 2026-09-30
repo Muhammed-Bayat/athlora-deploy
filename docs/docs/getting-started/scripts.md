@@ -10,7 +10,7 @@ This page records the repository-level quality gates, CI behavior, and deployed 
 
 Each package has its own `package.json`; run commands with `npm --prefix <package> run <script>` from the repository root, or run them inside the package directory.
 - `.gitignore`, `.editorconfig`, `README.md` (with the **AI Usage** section) at the repo root.
-- Mockups `SDP-Landing.html`, `SDP-Coach-Console.html` and `Athlora_Premium_Dashboard.html` (premium console redesign) are tracked at the root as the design source of truth.
+- Mockups `SDP-Landing.html` and `SDP-Coach-Console.html` are tracked at the repo root as the design source of truth; the premium console redesign mockup lives at `docs/docs/sprints/sprint-1/screenshots/00002803-Athlora_Premium_Dashboard.html`.
 
 | Package | Primary checks |
 |---|---|
@@ -29,6 +29,7 @@ The backend also provides `db:migrate` for source migrations and `db:migrate:pro
 | `frontend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `backend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `docs` | `npm ci`, `npm run build` |
+| `coverage` | `npm ci` (frontend, backend), `npm run test:coverage` (frontend, backend), `node scripts/generate-coverage-report.mjs` |
 | `e2e` | PostgreSQL on port `55432`, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
 
 The `e2e` job first detects whether the seven repository secrets are present (via a step output — not `secrets` in `if:`), then provisions an isolated PostgreSQL cluster inside the job container on port `55432` so host-networked Gitea runners cannot collide with an existing database on `5432`. Provisioning is root/sudo-aware: act runner images often run as root without a `sudo` binary, so the job elevates only when needed and switches to the `postgres` user with `runuser`/`su` instead of `sudo -u`. Playwright `global-setup` migrates and truncates that database before every run. When any of the seven secrets are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
@@ -38,6 +39,7 @@ The `e2e` job first detects whether the seven repository secrets are present (vi
 | `frontend` | Install, lint, type-check, test, and build the SPA. |
 | `backend` | Install, lint, type-check, test, and build the API. |
 | `docs` | Install and build the Docusaurus site. |
+| `coverage` | Install frontend and backend dependencies, generate both coverage summaries, and build the combined quality report. |
 | `e2e` | Install all test dependencies, provision PostgreSQL on isolated port `55432` (root/sudo-aware), install Chromium, and run Playwright when Auth0 secrets are available. |
 
 The E2E job uses an in-job PostgreSQL cluster and a disposable `athlora_e2e` database. It skips with an explicit message until these repository secrets are configured:
@@ -119,10 +121,10 @@ Projects:
 |---------|------|-------|
 | `auth-setup` | `auth.setup.ts` | Signs in through Auth0 Universal Login once and saves `storageState` to `e2e/.auth/coach.json` |
 | `smoke` | `smoke.spec.ts` | Unauthenticated landing-page smoke test + axe audit |
-| `desktop-chromium` | `vertical-slice.spec.ts` | Full serial slice at desktop viewport |
-| `mobile-chromium` | `vertical-slice.spec.ts` | Same serial slice at Pixel 5 viewport |
+| `desktop-chromium` | All authenticated spec files (`testIgnore` excludes only `auth.setup.ts` and `smoke.spec.ts`) | Full authenticated suite at desktop viewport |
+| `mobile-chromium` | The same authenticated spec files | Same suite at Pixel 5 viewport |
 
-Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates all application tables (including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) before each run. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, fixtures, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations.
+Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates all application tables (including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) before each run. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations, plus keyboard-navigation and 320px no-horizontal-scroll checks. `e2e/tests/accessibility.spec.ts` still contains a `fixtures` audit entry, but the console nav has no Fixtures item — `/console/fixtures` redirects to `/console/events` (`frontend/src/App.tsx`).
 
 ## Coverage Reports
 
@@ -136,125 +138,16 @@ node scripts/generate-coverage-report.mjs
 
 The commands create ignored JSON coverage summaries. The Gitea `coverage` job prints a short Markdown table with frontend, backend, and combined line, branch, and function coverage; it appends the same table to the runner job summary when supported. Coverage is informational until the team agrees on a baseline and threshold.
 
-## Current check status
+## Recording check status
 
-### Current-day calendar event layout — 2026-09-29
+Record a status snapshot only when a change needs verification evidence: run the affected package gates (lint, typecheck, test, build — plus coverage and the browser suite where configured), then replace the table below with that run's date and results. Dated totals go stale as specs, tests, and migrations are added, so read every number from the current tree at run time rather than carrying an older snapshot forward, and keep at most one snapshot in this section.
 
-- Frontend: targeted `EventsPage` coverage passes (**39 tests**); strict typecheck, lint (16 existing warnings, 0 errors), and production build pass. The full suite has **759 passing tests and 1 unrelated failing test**: `MeetRosterPanel.test.tsx` expects the relay tab to receive ArrowRight focus while focus remains on the intermediate 200m tab.
-- Backend: not run; this is a frontend markup and CSS selector correction with no API or backend behavior change.
-- Documentation: Docusaurus production build passes.
-- E2E: not run; the fix is component-covered and authenticated browser tests require local PostgreSQL plus Auth0 configuration.
-
-### Athlete progression graphs — 2026-09-29
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **759 tests pass, 0 skip**. Coverage verifies every returned 100m progression point, then switches to and renders the independently scoped long-jump graph.
-- Backend: lint, strict typecheck, production build, and **750 tests pass**; **80 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. The new progression integration coverage will verify legacy 100m and finalized generic-session inclusion alongside an independently scoped long-jump result when a disposable PostgreSQL database is available.
-- Documentation: Docusaurus production build passes.
-- E2E: not run; Docker/PostgreSQL and Auth0 E2E credentials are unavailable locally.
-
-### Global Athlora assistant and discipline analytics — 2026-09-28
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **760 tests pass, 0 skip**. Coverage includes global assistant lifecycle cleanup, strict local athlete confirmation, latest catalogue-version resolution, cached analytics actions, and Unicode-safe performance PDFs.
-- Backend: lint, strict typecheck, and production build pass; **750 tests pass, 78 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. Coverage includes protected athlete/squad/workspace analytics, legacy/generic result normalization, direction-aware PB-only ranks, all-time SB behavior, and catalogue-version-safe preferred-discipline queries.
-- Documentation: Docusaurus strict typecheck and production build pass after the protected analytics and safe-assistant contract updates.
-- E2E: not run; this change has focused frontend/backend coverage, while the authenticated browser suite requires local PostgreSQL plus Auth0 configuration.
-
-### Exact public age filters — 2026-09-28
-
-- Frontend: strict typecheck and production build pass; **738 tests pass, 0 skip**. Coverage includes exact-age draft validation and query application on both the public report and leaderboard pages.
-- Backend: strict typecheck and production build pass; **736 tests pass, 78 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. Coverage rejects retired age categories, decimals, and out-of-range ages before querying either public-statistics endpoint.
-- Documentation: Docusaurus production build passes after the exact-age API contract update.
-- E2E: not run; the focused UI/API suites cover the filter behavior, while the browser suite requires local PostgreSQL plus Auth0 configuration.
-
-### Themed event and public statistics controls — 2026-09-27
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **699 tests pass, 0 skip**. Coverage confirms session logging and vertical-event listbox selection, report URL filters, the public-leaderboard discipline picker, and the themed active-club switcher, including its one-club listbox.
-- Backend: not run; this is a frontend presentation and shared-control change with no API, schema, or backend behavior change.
-- Documentation: Docusaurus production build passes after this verification-status update.
-- E2E: not run; the change has focused component coverage and the authenticated browser suite requires local PostgreSQL plus Auth0 configuration.
-
-### Discipline-filtered fixture rosters — 2026-09-27
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **697 tests pass, 0 skip**. Coverage includes session-specific preferred-discipline filtering, guest registration through meet APIs rather than legacy participant APIs, generic meet fixture controls, and themed multi-discipline fixture roster guidance.
-- Backend: lint, strict typecheck, and production build pass; **708 tests pass, 70 database-gated tests skip** because `TEST_DATABASE_URL` is not configured. Participant-list isolation is unit-covered; the disposable-database integration suite covers the strict preferred-discipline registration rule when configured.
-- Documentation: Docusaurus production build passes after product-status, frontend behavior, fixture API, and meet-contract updates.
-- E2E: not run; the authenticated suite requires local PostgreSQL plus Auth0 configuration. The changed guest workflow has frontend and backend unit coverage, while its database integration coverage remains gated on `TEST_DATABASE_URL`.
-
-### Event discipline selection and roster tabs — 2026-09-26
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck and production build pass; **688 tests pass, 0 skip**. Coverage includes grouped multi-discipline selection cards, disabled vertical choices pending height configuration, keyboard session-tab navigation, session-specific roster display, and existing 100m regression behavior.
-- Backend: lint, strict typecheck, and production build pass; **706 tests pass, 69 database-gated tests skip**. Existing participant RSVP coverage applies to multi-discipline rosters without a schema or API change.
-- Documentation: Docusaurus typecheck and production build pass after product-status, frontend behavior, and verification updates.
-- E2E: not run; this change is frontend-only and does not alter the authenticated API or schema contract.
-
-### Whole-meet public logger — 2026-09-25
-
-- Frontend: lint passes with 17 existing warnings (0 errors); strict typecheck and build pass; **682 tests pass, 0 skip**. Coverage includes active-session selection, relay/guest-safe summaries, field observations, target-scoped API writes, legacy snapshot dispatch, and legacy 100m regression behavior.
-- Backend: lint, strict typecheck, and build pass; **706 tests pass, 69 database-gated tests skip**. Coverage includes public meet snapshots, own-session entry mutation boundaries, public-note rejection, link/session normalization, and mixed legacy/targeted offline-sync rejection.
-- Documentation: Docusaurus typecheck and production build pass after the public logger endpoint, privacy, offline target-scoping, and product-status updates.
-- E2E: `e2e/tests/public-logger.spec.ts` now covers an active multi-discipline meet link opened in a separate unauthenticated browser context. It was not executed locally because the required `DATABASE_URL` and Auth0 E2E configuration are unavailable; even Playwright discovery fails fast without `DATABASE_URL`.
-
-### Public club schedule experience — 2026-09-24
-
-- Frontend: lint passes with 17 existing warnings (0 errors); strict typecheck/build pass; **668 tests pass, 0 skip** (includes the new `publicSchedule` API wrapper and `publicSchedule` page suites plus landing/public-stats navigation tests).
-- Backend: lint, strict typecheck and build pass; **685 tests pass, 58 database-gated tests skip** (includes the expanded public-schedule service/route suites asserting the `disciplines` projection and legacy fallback).
-- Documentation: Docusaurus typecheck and production build pass after the public-schedule API, contract §3.12, frontend route, backend, overview, welcome, and E2E updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count unchanged for the full 36-migration set; no new migration in this change).
-- E2E: `e2e/tests/public-schedule.spec.ts` was added (seeded enabled/disabled/unknown/empty coverage, `<time datetime>` assertion, axe audit on both pages, landing nav link) but is credential-gated in CI and was not run locally.
-
-### Relay team support — 2026-09-24
-
-- Frontend: lint passes with 17 existing warnings (0 errors); strict typecheck/build pass; **658 tests pass, 0 skip** (includes `SessionLivePanel` start/log/official-selection/offline paths and public stats mock coverage for session results).
-- Backend: lint, strict typecheck and build pass; **682 tests pass, 58 database-gated tests skip** (includes selection-aware derivation, roster update/validation, public club session results, and athlete relay-history suites).
-- Documentation: Docusaurus typecheck and production build pass after the relay catalogue, contract, derivation, and public-statistics updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0034_relay_catalogue_and_official_entry.sql` and the full 36-migration set).
-
-### Authenticated offline batch sync — 2026-09-23
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **644 tests pass, 0 skip** (includes the rewritten sync-engine batch drain, `toSyncAction` mapper, and receipt-handling suites).
-- Backend: lint, strict typecheck and build pass; **642 tests pass, 43 database-gated tests skip** (includes the new `POST /sync/batch` route validation/ownership suite, expanded processSyncBatch receipt tests, and 3 DB-gated sync integration tests for idempotent retries).
-- Documentation: Docusaurus typecheck and production build pass after the offline-sync architecture and contract §3.11 updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count unchanged for the full 29-migration set plus the new sync integration file).
-
-### User dashboard preferences — 2026-09-23
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **635 tests pass, 0 skip** (includes new customize-dialog, hidden-cards, and saved-views dashboard tests).
-- Backend: lint, strict typecheck and build pass; **613 tests pass, 40 database-gated tests skip** (includes the new preferences validation, service, and route suites).
-- Documentation: Docusaurus typecheck and production build pass after the preferences contract/schema updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0026_user_preferences.sql` and the full 28-migration set).
-
-### Independent publication flags and public schedule — 2026-09-23
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **632 tests pass, 0 skip**.
-- Backend: lint, strict typecheck and build pass; **600 tests pass, 40 database-gated tests skip** (includes the new publication and public-schedule unit/API suites).
-- Documentation: Docusaurus typecheck and production build pass after the split-flag docs updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0025_club_public_schedule_publication.sql` and the full 27-migration set).
-
-### Club branding — 2026-09-23
-
-- Frontend: lint passes with 16 existing warnings (0 errors); strict typecheck/build pass; **642 tests pass, 0 skip** (includes new `ClubBadge`, contrast-utils, and branding-aware surface tests).
-- Backend: lint, strict typecheck and build pass; **632 tests pass, 40 database-gated tests skip** (includes the new branding route, payload-validation, color-contrast, media-storage, and public-DTO suites).
-- Documentation: Docusaurus typecheck and production build pass after the branding contract/schema updates.
-- Migration integration suite remains gated on `TEST_DATABASE_URL` (expected list/count refreshed for `0027_club_branding.sql` and the full 29-migration set).
-
-### GraySky migration verification — 2026-09-14
-
-- Frontend: lint passes with 12 existing warnings; strict typecheck/build pass; **530 tests pass, 4 skip**.
-- Backend: lint, strict typecheck and build pass; **568 tests pass, 40 database-gated tests skip**.
-- Documentation: Docusaurus production build passes.
-- Isolated Chromium weather checks with mocked API responses: 390px and 1440px, dark and light themes; current/daily rendering, attribution, no horizontal overflow and no browser exceptions verified. This is separate from the Auth0/database E2E suite.
-- GraySky live verification passed for Johannesburg: `https://graysky.net/api/forecast?lat=-26.2041&lon=28.0473` returned a `200` `forecast` envelope with `units: "us"`. The backend parser tests cover that live shape and its metric conversions; the earlier supplied `/free/v1/forecast/...` path remains unavailable.
-
-The implemented Stage 1 checks pass locally, and the same frontend/backend/docs gates run in Gitea Actions CI on every push/PR. The `e2e` job runs in CI once the Auth0/E2E secrets are configured and skips (with a message) until then:
-
-| Package | Checks | Result |
-|---------|--------|--------|
-| `frontend` | lint, typecheck, test, coverage, build | passing |
-| `backend` | lint, typecheck, test, coverage, build | passing |
-| `docs` | build | passing |
-| `e2e` | Playwright (Chromium) + axe | configured (smoke + spec files covering workspace, roles, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, public schedule, authorization, migration, accessibility, routing, analytics, comparison, offline, fixtures, vertical slice + relay session logging); first green run pending Docker Postgres + `e2e/.env` + Auth0 E2E credentials |
-
-The backend suite includes 43 database integration tests that exercise real SQL against PostgreSQL: 7 migration tests (including multiple accepted fixture workspaces), 1 account-deletion graph/isolation test, 5 athlete-persistence tests, 6 event-persistence tests, 5 participant-persistence tests, 10 timeline-persistence tests, 2 aggregate tests covering effective statistics/year boundaries/archival/cancellation plus deterministic dashboard modes/progress/upcoming/history ownership, 3 cross-coach authorization tests, 1 injury-persistence test, and 3 offline sync-batch idempotency/lifecycle tests. They are gated behind `TEST_DATABASE_URL` and skip when it is unset, so CI stays green without a database.
+| Metric (snapshot 2026-09-30) | Count |
+|---|---|
+| Frontend unit test files | 103 |
+| Backend test files (11 integration) | 96 |
+| E2E spec files | 24 |
+| Backend migrations | 41 |
 
 ## Definition of done
 
@@ -264,4 +157,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 The global assistant, discipline analytics, athlete progression graph, and current-day calendar verification statuses were generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team support checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster verification statuses were documented with the assistance of OpenCode[gpt-5.6-terra]. The exact public-age filter verification status was documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team support checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster verification statuses were documented with the assistance of OpenCode[gpt-5.6-terra]. The exact public-age filter verification status was documented with the assistance of OpenCode[gpt-5.6-terra]. The CI job tables, Playwright project table, accessibility target list, mockup reference, and check-status section were updated with the assistance of opencode[mimo-v2.6-flash-free].

@@ -51,7 +51,7 @@ Sprint milestones are delivery checkpoints, not a restriction on useful work. At
 
 ## 3. The Visual Board
 
-The team uses a **Gitea Projects** board as the single source of truth for all work tracking. Every piece of work — features, bugs, documentation, infrastructure — is represented as a card on the board.
+The team uses a **Gitea Projects** board as the primary live view of work status. It is not the only record: Gitea issues carry scope and acceptance criteria, delivery rows sequence the Sprint's work, and the separate [bug tracker](./bug-tracker) records defects, with the [delivery roadmap](./delivery-roadmap) keeping the longer-range status. The board is the common surface those records move across. Every piece of work — features, bugs, documentation, infrastructure — is represented as a card on the board.
 
 ### 3.1 Board Columns
 
@@ -130,10 +130,10 @@ Each Sprint record contains the evidence appropriate to the work completed:
 - User-story and UAT progress where verification evidence exists.
 - A short improvement action for the next Sprint.
 
-The Sprint 1 folder contains both concise meeting records and the retained raw chat transcript. The transcript is the source evidence; the concise records are an accurate summary of its material decisions and outcomes.
+All three Sprint folders (`sprint-1`, `sprint-2`, `sprint-3`) share the same structure: both concise meeting records and the retained raw chat transcript, alongside client-meeting notes and user stories. The transcript is the source evidence; the concise records are an accurate summary of its material decisions and outcomes.
 
 ---
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. The work-tracking and sprint-structure clarifications were updated with the assistance of opencode[mimo-v2.6-flash-free].

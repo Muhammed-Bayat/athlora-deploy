@@ -33,7 +33,7 @@ Common types:
 - `chore`: perform maintenance that does not change application behavior.
 - `refactor`: restructure code without changing its behavior.
 
-Use an optional scope when it makes the affected area clearer, for example `feat(auth): add Google OAuth login`. Mark a breaking change with `!` before the colon and explain it in a `BREAKING CHANGE:` footer.
+Use an optional scope when it makes the affected area clearer, for example `feat(meets): add official entry selection`. Mark a breaking change with `!` before the colon and explain it in a `BREAKING CHANGE:` footer.
 
 When AI generated code in the commit, add an `Assisted-by:` footer naming every contributing tool and model, as required by the project's AI policy. AI in-line editing and AI code review do not require a footer on every commit, but all code-generation, in-line-editing, and code-review tools and models must be attributed in the repository's `README.md`. Use explicit non-usage statements there for categories the team does not use.
 
@@ -43,9 +43,9 @@ Submitted documents must end with either an AI usage declaration naming the purp
 ### Examples
 
 ```
-feat(auth): add Google OAuth login option
+feat(meets): add field official result selection
 
-fix(cart): calculate discounted total correctly
+fix(calendar): preserve current-day event entries
 
 docs: update setup instructions for new developers
 
@@ -53,7 +53,7 @@ chore: remove unused date-picker dependency
 
 chore(deps): bump React to 18.3.1
 
-feat(events): add score endpoint
+feat(results): add official finalization and automatic places
 
 Assisted-by: ChatGPT-Web[GPT-5.6 Thinking]
 
@@ -64,9 +64,9 @@ Assisted-by: Claude-Code[Claude Sonnet 5], ChatGPT-Web[GPT-5.5]
 
 ---
 
-## 2. Branching Strategy (GitHub Flow)
+## 2. Branching Strategy (Gitea Flow)
 
-We use **GitHub Flow** — simple, fast, and well-suited to a small team shipping continuously to a web app.
+We use **Gitea Flow** — the GitHub Flow pattern hosted on Gitea: simple, fast, and well-suited to a small team shipping continuously to a web app. (The repository and its pull requests live on Gitea, not GitHub.)
 
 ### The rules
 
@@ -74,9 +74,9 @@ We use **GitHub Flow** — simple, fast, and well-suited to a small team shippin
 2. **Branch off `main` for any work.** New feature, bug fix, experiment — all get their own branch.
 3. **Name branches descriptively**, using a type prefix:
    ```
-   feature/checkout-page
-   fix/cart-total-bug
-   chore/upgrade-node
+   feature/public-leaderboard-standings
+   fix/calendar-current-day-event-layout
+   chore/bump-version-0.5.0
    ```
 4. **The agent commits; the developer branches and pushes.** In agent-driven sessions, the agent creates every commit on the branch — following the Conventional Commits format and adding the required `Assisted-by:` footer — while the developer's only Git responsibilities are creating the branch, pushing it, and reviewing/merging the PR (see "Agent-Assisted Workflow" below).
 5. **Open a Pull Request (PR) when the change is ready to merge.** Use it as the merge record and link it to the tracked work where applicable.

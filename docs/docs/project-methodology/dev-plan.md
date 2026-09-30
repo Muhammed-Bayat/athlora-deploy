@@ -62,7 +62,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 **Stack:** React + Vite + TypeScript, CSS, Node.js + Express, PostgreSQL (Neon), Auth0, GraySky Free, Vitest, RTL, Supertest, Gitea Actions, Vercel, Render, Docusaurus + Cloudflare Pages.
 
-**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html`, `SDP-Coach-Console.html`, and `Athlora_Premium_Dashboard.html` (brand "Athlora", labelled "SDP" in the mockups as a placeholder: Space Grotesk headings, Satoshi body, Space Grotesk mono for results, deep-ink navy + teal/cyan/blue palette). All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
+**Design source of truth:** the frontend mirrors the approved mockups `SDP-Landing.html`, `SDP-Coach-Console.html`, and `Athlora_Premium_Dashboard.html` (kept at `docs/docs/sprints/sprint-1/screenshots/00002803-Athlora_Premium_Dashboard.html`; brand "Athlora", labelled "SDP" in the mockups as a placeholder: Space Grotesk headings, Satoshi body, Space Grotesk mono for results, deep-ink navy + teal/cyan/blue palette). All tokens are defined in the build spec — Section 6 — and no other colours/fonts should be introduced.
 
 **Status: Complete**
 
@@ -129,15 +129,17 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ## 3. Stage 2 — Intermediate (Sprint 2)
 
-**New stack:** IndexedDB + Dexie, vite-plugin-pwa, Socket.IO, Chart.js, Playwright.
+**New stack:** IndexedDB + Dexie, vite-plugin-pwa, Socket.IO, hand-built SVG charts (no charting library), Playwright.
 
-**Status: In Progress**
+**Status: In Progress** — discipline expansion (3.1), roles (3.2), fixtures/RSVP (3.3), and offline logging (3.5) are implemented; season stats/comparisons (3.4) remains partially implemented.
 
 ### 3.1 Discipline Expansion
 1. Add timed contracts for 200m/400m, middle and long distance, hurdles, relays, and race walks.
 2. Add measured contracts for long jump, triple jump, throws, high jump, and pole vault.
 3. Give every discipline explicit unit, validation, timeline-entry, derivation, placing, PB/SB, and presentation rules.
 4. Add migration, unit, API, component, and browser coverage with each discipline; do not loosen the 100m contract as a shortcut.
+
+**Status: Implemented** — migrations `0029`-`0031` (plus the relay catalogue in `0034`), derivation services, and e2e coverage in `vertical-events.spec.ts` and `relay-session.spec.ts`.
 
 ### 3.2 Roles & Permissions
 1. Enforce coach and assistant permissions. Assistants can create/edit athletes and log events; coaches manage members, join requests, participant rosters, and fixture withdrawals.
@@ -157,15 +159,15 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ### 3.4 Season Stats, Comparisons, Charts
 1. Backend: aggregate queries/views for season totals, per-event breakdowns, athlete-vs-athlete and squad-vs-opponent comparisons (PB/SB progression over the season).
-2. React + Chart.js: line charts for PB/SB progression, bar charts for comparisons.
+2. React with hand-built SVG charts (no charting library): line charts for PB/SB progression, bar charts for comparisons.
 3. Tests: Vitest for aggregation logic; RTL/Playwright for chart rendering with seeded data.
 
-**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports. Broader season totals and coach-facing multi-discipline comparison surfaces remain planned.
+**Status: Partially implemented** — two-athlete comparison and single-athlete progression charts are implemented. Protected normalized athlete, squad, and workspace discipline analysis now combines legacy 100m and finalized generic-session results with direction-aware PB ranking and PDF exports, and multi-discipline comparison has shipped (`GET /api/v1/athletes/comparison/multi`, `GET /api/v1/clubs/comparison/multi`). Broader season totals remain planned.
 
 ### 3.5 Offline-First Logging
 1. Frontend: Dexie/IndexedDB store mirroring `timeline_entries` shape; all live-logging writes go to IndexedDB first.
 2. vite-plugin-pwa: service worker + manifest so the app installs and the shell loads with no connection.
-3. Background sync: on reconnect, queue drains and POSTs to the backend in order; conflicts at this stage are simply "last write wins" (true merge logic is Stage 3).
+3. Background sync: on reconnect, queue drains and POSTs batches to the backend in order. Conflicts are no longer "last write wins": optimistic `expectedVersion` checks reject stale authenticated edits with `409 TIMELINE_ENTRY_VERSION_CONFLICT`, duplicate `actionId`s return idempotent receipts, conflict evidence is retained, and a coach resolves each conflict before finalization (merge rules delivered with Stage 3 work).
 4. Socket.IO: when online, broadcast new/edited entries to other connected clients viewing the same event (live updates).
 5. Tests: Playwright test that simulates offline (toggle network), logs entries, restores network, and asserts entries synced.
 
@@ -175,7 +177,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 - Core features (discipline expansion, roles, fixtures/RSVP, stats/charts, offline logging) implemented with automated UI+API tests.
 - API documented (Docusaurus API reference) and externally reachable from Render.
 - Database schema documented (ERD + migrations) in `/docs`.
-- Third-party packages (Dexie, Socket.IO, Chart.js) documented with why each was chosen.
+- Third-party packages (Dexie, Socket.IO) and the hand-built SVG chart approach documented with why each was chosen.
 - Gitea Projects actively tracking issues.
 - Testing docs: describe unit/integration/E2E strategy.
 
@@ -185,9 +187,11 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 **New stack:** unique action IDs, PostgreSQL transactions, record version numbers, merge rules, pdf-lib, scheduling logic, rule-based summaries.
 
-**Status: Planned**
+**Status: In Progress** — 4.1 (multi-device merge) and 4.2 (standings, public pages, PDF export) are implemented; 4.3 (rule-based summaries) and 4.4 (season scheduling) are still planned.
 
 ### 4.1 Multi-Device Collaborative Offline Logging (core hard problem)
+
+**Status: Implemented** — client `actionId`s, idempotent `POST /api/v1/sync/batch` with durable receipts, `expectedVersion` conflict detection, and coach conflict resolution (`backend/src/routes/meets.ts:23`-`24`, migrations `0020` and `0036`).
 1. Every locally-created `timeline_entries` row gets a client-generated **unique action ID** (UUID) at creation time, before any server contact — prevents duplicate saves on retry/resync.
 2. Add a `version` integer to `timeline_entries`/`results`; every edit increments it.
 3. Sync endpoint accepts a batch of actions tagged with device ID + action ID + timestamp; server applies them inside a **PostgreSQL transaction** so a batch either fully commits or rolls back.
@@ -196,17 +200,26 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
    - Two *edits* to the *same* entry → resolved by version number + a deterministic tiebreaker (e.g., server timestamp, or "most specific/latest valid attempt wins" for a field-event PB), with the losing edit retained in an audit trail rather than discarded silently.
    - Deletes (undos) are tombstones, not hard deletes, so a late-arriving edit to an undone entry doesn't resurrect bad data unexpectedly.
 5. Recompute `results` server-side after each merged batch so all clients converge on the same derived result regardless of reconnection order.
-6. Tests: Playwright/integration tests simulating two "devices" logging and reconnecting in different orders, asserting final state is identical either way — this is the most important test suite in the project.
+6. Tests: **the two-device simulation is not yet built.** No automated suite logs from two devices and reconnects them in different orders. Current coverage is `backend/src/services/sync.test.ts` (unit), `backend/src/services/sync.integration.test.ts` (real database, idempotent/duplicate receipts), and `e2e/tests/offline-logging.spec.ts` (single-client offline queue drain). The two-device reconnection-order suite remains an outstanding Stage 3 test item.
 
 ### 4.2 League/Standings + Public Pages
+
+**Status: Implemented** — `standings` service and public leaderboard/standings pages (issue `#240`, PR `#292`), unauthenticated public statistics/schedule/report pages (issues `#238`, `#239`, PRs `#274`, `#278`), and PDF/CSV export via `pdf-lib` (`frontend/src/features/reports`, `frontend/src/features/publicStats/reportExport.ts`).
+
 1. DB: `standings` view aggregating results across events/fixtures for participating squads.
 2. React: public, unauthenticated read-only pages per squad/athlete (shareable link) showing results and season stats.
 3. **pdf-lib**: "Export report" button generating a PDF (and/or CSV) of an athlete's or event's results.
 
 ### 4.3 Automated Summaries & Selection Suggestions
-1. **Rule-based** (explicitly non-AI-service, per the requirements doc) logic: e.g., flag "3 consecutive PBs," "biggest improvement this season," or suggest a relay/selection lineup by best recent times per leg — implemented as plain backend functions, unit-tested.
+
+**Status: Planned**
+
+1. **Rule-based** (explicitly non-AI-service, per the requirements doc) logic: e.g., flag "3 consecutive PBs," "biggest improvement this season," or suggest a relay/selection lineup by best recent times per leg — implemented as plain backend functions, unit-tested. Note: the product separately ships a Gemini assistant (`@google/genai`, PR `#303`) for free-form coaching queries; it does not implement these deterministic summaries.
 
 ### 4.4 Season Scheduling
+
+**Status: Planned**
+
 1. Scheduling logic: given a list of fixtures/venues/athlete availability, generate a proposed season calendar and flag clashes (same athlete double-booked, venue double-booked).
 2. React: schedule view with clash warnings surfaced inline.
 
@@ -238,7 +251,7 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 |---|---|---|
 | Sprint 1 | Stage 1 setup + start of Basic build | Infra, auth, roster, events, project docs/methodology |
 | Sprint 2 | Finish Stage 1 + all of Stage 2 | Live logging, results/dashboard, roles, offline PWA, stats/charts |
-| Sprint 3 | Start Stage 3 | Multi-device merge, standings, scheduling, PDF export |
+| Sprint 3 | Start Stage 3 | Multi-discipline meets, official-result selection, public statistics/schedule/report/leaderboards, club branding, dashboard personalisation, AI assistant (standings, PDF export, and multi-device merge also landed; automated scheduling did not) |
 | Sprint 4 (Submission) | Finish + polish Stage 3 | Accessibility, performance, full docs, public pages, final API polish |
 
 ---
@@ -247,4 +260,4 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 The discipline analytics delivery-plan status was edited with the assistance of OpenCode[openai/gpt-5.6-terra].
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].
+The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra]. The stage-status, chart-stack, and Sprint 3 scope corrections were updated with the assistance of opencode[mimo-v2.6-flash-free].
