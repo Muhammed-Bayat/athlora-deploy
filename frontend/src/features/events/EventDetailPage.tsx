@@ -136,7 +136,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
 
   const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
-    <header className={styles.viewHeader}><div><p className={styles.eyebrow}>{event.discipline === null ? 'Multi-discipline meet' : '100m season calendar'}</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
+    <header className={styles.viewHeader}><div><p className={styles.eyebrow}>{event.discipline === null ? 'Multi-discipline meet' : 'Season calendar'}</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
     {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
       <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>

@@ -964,7 +964,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     <section aria-labelledby="events-heading" aria-busy={loading}>
       <header className={styles.viewHeader}>
         <div>
-          <p className={styles.eyebrow}>100m season calendar</p>
+          <p className={styles.eyebrow}>Season calendar</p>
           <h1 id="events-heading">Events</h1>
           <p>{loading ? 'Loading events...' : `${filtered.length} event${filtered.length === 1 ? '' : 's'} shown for ${seasonLabel(season)}`}</p>
         </div>
