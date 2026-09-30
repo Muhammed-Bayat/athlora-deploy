@@ -13,6 +13,7 @@ import { purgePublicOfflineDB } from '../../offline/publicDb';
 import { usePublicOfflineSync } from '../../hooks/usePublicOfflineSync';
 import type { IncidentType, PublicLoggerSnapshot } from '../../types';
 import { Button, Input, Modal, OfflineRecoverySurface } from '../../components';
+import { normalizeDecimalInput } from '../../utils/decimalInput';
 import { getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import { PublicMeetLogger } from './PublicMeetLogger';
 function getDeviceId(): string {
@@ -131,13 +132,14 @@ export function PublicLoggerPage() {
   const record = async (athleteId: string, entryType: 'attempt' | 'penalty', incidentType?: IncidentType) => {
     if (!session || !snapshot) return;
     const raw = finishInputs[athleteId] ?? '';
-    if (entryType === 'attempt' && (!raw.trim() || !has100mHundredthPrecision(raw) || Number(raw) < 0.01 || Number(raw) > 99.99)) {
+    const normalized = normalizeDecimalInput(raw);
+    if (entryType === 'attempt' && (!normalized || !has100mHundredthPrecision(normalized) || Number(normalized) < 0.01 || Number(normalized) > 99.99)) {
       setError('Enter a finish time from 0.01 to 99.99 seconds using no more than two decimal places.'); return;
     }
     setBusy(`${athleteId}-${entryType}`); setError(null);
 
     const payload = entryType === 'attempt'
-      ? { athleteId, entryType, value: Number(raw), unit: 'seconds' as const, isFoul: false as const, incidentType: null, noteText: null }
+      ? { athleteId, entryType, value: Number(normalized), unit: 'seconds' as const, isFoul: false as const, incidentType: null, noteText: null }
       : { athleteId, entryType, value: null, unit: null, isFoul: false as const, incidentType: incidentType ?? 'false_start', noteText: null };
 
     try {
@@ -154,13 +156,14 @@ export function PublicLoggerPage() {
 
   const saveEdit = async () => {
     if (!session || !snapshot || !editing) return;
-    if (editing.entryType === 'attempt' && (!has100mHundredthPrecision(editValue) || Number(editValue) < 0.01 || Number(editValue) > 99.99)) {
+    const normalized = normalizeDecimalInput(editValue);
+    if (editing.entryType === 'attempt' && (!normalized || !has100mHundredthPrecision(normalized) || Number(normalized) < 0.01 || Number(normalized) > 99.99)) {
       setError('Enter a finish time from 0.01 to 99.99 seconds using no more than two decimal places.'); return;
     }
     setBusy(`edit-${editing.id}`); setError(null);
 
     const payload = editing.entryType === 'attempt'
-      ? { expectedVersion: editing.version, value: Number(editValue) }
+      ? { expectedVersion: editing.version, value: Number(normalized) }
       : { expectedVersion: editing.version, incidentType: editIncident };
 
     try {
@@ -272,11 +275,8 @@ export function PublicLoggerPage() {
                     <div className={styles.finishInputGroup}>
                       <Input
                         aria-label={`Finish time for ${participant.name}`}
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min="0.01"
-                        max="99.99"
-                        step="0.01"
                         placeholder="10.25"
                         value={value}
                         onChange={(event) => setFinishInputs((current) => ({ ...current, [participant.athleteId]: event.target.value }))}
@@ -341,11 +341,8 @@ export function PublicLoggerPage() {
           {editing.entryType === 'attempt' ? (
             <Input
               aria-label="Finish time in seconds"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min="0.01"
-              max="99.99"
-              step="0.01"
               value={editValue}
               onChange={(event) => setEditValue(event.target.value)}
             />
