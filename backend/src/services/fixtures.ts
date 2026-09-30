@@ -674,7 +674,6 @@ export async function getGuestFixture(workspaceId: string, eventId: unknown): Pr
 
 const PARTICIPANT_COLUMNS = `ep.event_id, ep.athlete_id, ep.rsvp_status,
   a.name AS athlete_name,
-  COALESCE((SELECT array_agg(s.name ORDER BY lower(s.name), s.id) FROM athlete_squads axs JOIN squads s ON s.id = axs.squad_id WHERE axs.athlete_id = a.id), ARRAY[]::text[]) AS athlete_squad_names,
   a.archived_at AS athlete_archived_at, a.lifecycle_status AS athlete_lifecycle_status,
   false AS status_review_required`;
 

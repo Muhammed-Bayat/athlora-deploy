@@ -53,8 +53,6 @@ export interface AthleteCreatePayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squadIds?: string[];
-  squad?: string | null;
   notes: string | null;
   preferredDisciplineIds?: string[];
   seasonGoals?: Array<{ id?: string; disciplineDefinitionId: string; targetValue: number; targetUnit: 'seconds' | 'metres' | 'cm'; targetDate: string | null; status: 'active' | 'completed' }>;
@@ -64,8 +62,6 @@ export interface AthleteReplacementPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squadIds?: string[];
-  squad?: string | null;
   notes: string | null;
   preferredDisciplineIds?: string[];
   seasonGoals?: AthleteCreatePayload['seasonGoals'];
@@ -75,8 +71,6 @@ export interface AthleteListQuery {
   includeArchived: boolean;
   status?: AthleteLifecycleStatus;
   name?: string;
-  squadId?: string;
-  squad?: string;
 }
 
 export interface AthleteProgressionQuery {
@@ -199,11 +193,10 @@ export interface FixtureInvitationResponsePayload {
   message: string | null;
 }
 
-const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'squadIds', 'notes', 'preferredDisciplineIds', 'seasonGoals'] as const;
-const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'squadId', 'year'] as const;
+const ATHLETE_FIELDS = ['name', 'dob', 'gender', 'notes', 'preferredDisciplineIds', 'seasonGoals'] as const;
+const ATHLETE_LIST_QUERY_FIELDS = ['includeArchived', 'status', 'name', 'year'] as const;
 const ATHLETE_PROGRESSION_QUERY_FIELDS = ['cursor', 'limit', 'type', 'year'] as const;
 const ATHLETE_STATUS_FIELDS = ['status'] as const;
-const SQUAD_FIELDS = ['name'] as const;
 const EVENT_LIST_QUERY_FIELDS = ['type', 'status', 'dateFrom', 'dateTo', 'year'] as const;
 const WEATHER_CURRENT_QUERY_FIELDS = ['latitude', 'longitude'] as const;
 const VENUE_SEARCH_QUERY_FIELDS = ['q'] as const;
@@ -608,7 +601,7 @@ function requiredUuidArray(payload: PayloadObject, field: string, issues: Valida
   const seen = new Set<string>();
   values.forEach((value, index) => {
     if (!isCanonicalUuid(value)) issues.push(issue(`${field}.${index}`, 'invalid_format', 'Expected a canonical UUID'));
-    else if (seen.has(value)) issues.push(issue(`${field}.${index}`, 'duplicate', 'Squad IDs must be unique'));
+    else if (seen.has(value)) issues.push(issue(`${field}.${index}`, 'duplicate', 'IDs must be unique'));
     else { seen.add(value); ids.push(value); }
   });
   return ids;
@@ -769,7 +762,6 @@ function parseAthlete(input: unknown): AthleteCreatePayload {
     name: requiredString(payload, 'name', issues),
     dob: nullableDate(payload, 'dob', issues),
     gender: nullableString(payload, 'gender', issues),
-    squadIds: requiredUuidArray(payload, 'squadIds', issues),
     notes: nullableString(payload, 'notes', issues),
     ...(hasOwn(payload, 'preferredDisciplineIds') ? { preferredDisciplineIds: optionalUuidArray(payload, 'preferredDisciplineIds', issues) } : {}),
     ...(hasOwn(payload, 'seasonGoals') ? { seasonGoals: parseSeasonGoals(payload, issues) } : {}),
@@ -839,9 +831,7 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
 
   const name = optionalQueryString(input, 'name', issues);
   const status = optionalQueryEnum(input, 'status', ATHLETE_LIFECYCLE_STATUSES, issues);
-  const squadId = optionalQueryString(input, 'squadId', issues);
   const year = optionalQueryString(input, 'year', issues);
-  if (squadId !== undefined && !isCanonicalUuid(squadId)) issues.push(issue('squadId', 'invalid_format', 'Expected a canonical UUID'));
   if (year !== undefined && year !== 'all' && !/^[1-9][0-9]{3}$/.test(year)) {
     issues.push(issue('year', 'invalid_value', 'Expected "all" or a four-digit Gregorian year'));
   }
@@ -853,7 +843,6 @@ export function parseAthleteListQuery(input: Record<string, unknown>): AthleteLi
     includeArchived,
     ...(status === undefined ? {} : { status }),
     ...(name === undefined ? {} : { name }),
-    ...(squadId === undefined ? {} : { squadId }),
   };
 }
 
@@ -896,14 +885,6 @@ export function parseAthleteStatusPayload(input: unknown): AthleteStatusPayload 
   return { status };
 }
 
-export function parseSquadPayload(input: unknown): { name: string } {
-  const payload = payloadObject(input);
-  const issues: ValidationIssue[] = [];
-  rejectUnknownFields(payload, SQUAD_FIELDS, issues);
-  const name = requiredString(payload, 'name', issues);
-  if (issues.length > 0) throwValidation(issues);
-  return { name };
-}
 
 function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload {
   const payload = payloadObject(input);

@@ -280,10 +280,8 @@ export interface Athlete {
   name: string;
   dob: string | null;
   gender: string | null;
-  squads?: Squad[];
   preferredDisciplineIds: string[];
   seasonGoals: AthleteSeasonGoal[];
-  squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
   status: AthleteStatus;
@@ -305,20 +303,10 @@ export interface AthleteSeasonGoal {
   updatedAt: string;
 }
 
-export interface Squad {
-  id: string;
-  name: string;
-  archivedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface AthleteMutationPayload {
   name: string;
   dob: string | null;
   gender: string | null;
-  squadIds?: string[];
-  squad?: string | null;
   notes: string | null;
   preferredDisciplineIds: string[];
   seasonGoals: AthleteSeasonGoalInput[];
@@ -332,8 +320,6 @@ export interface AthleteListFilters {
   includeArchived?: boolean;
   status?: AthleteStatus;
   name?: string;
-  squadId?: string;
-  squad?: string;
   year?: string;
 }
 
@@ -415,8 +401,6 @@ export interface EventParticipant {
 export interface EventParticipantAthleteSummary {
   id: string;
   name: string;
-  squadNames?: string[];
-  squad?: string | null;
   archivedAt: string | null;
   status: AthleteStatus;
 }
@@ -601,8 +585,6 @@ export interface AthleteStatistics {
 export interface AggregateAthleteIdentity {
   id: string;
   name: string;
-  squadNames?: string[];
-  squad?: string | null;
   archivedAt: string | null;
 }
 

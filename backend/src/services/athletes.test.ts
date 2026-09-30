@@ -38,7 +38,6 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squads: [],
     preferred_discipline_ids: [],
     season_goals: [],
     notes: null,
@@ -59,7 +58,6 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     name: 'Ari Runner',
     dob: '2010-04-12',
     gender: null,
-    squads: [],
     notes: null,
     archivedAt: null,
     status: 'active',
@@ -97,17 +95,15 @@ describe('listAthletes', () => {
     expect(parameters).toEqual([USER_ID]);
   });
 
-  it('filters by case-insensitive name substring and squad ID membership', async () => {
+  it('filters by case-insensitive name substring', async () => {
     query.mockResolvedValue({ rows: [] });
 
-    await listAthletes(USER_ID, { includeArchived: true, name: 'ari_%', squadId: ATHLETE_ID });
+    await listAthletes(USER_ID, { includeArchived: true, name: 'ari_%' });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('name ILIKE $2');
     expect(sql).toContain('ILIKE $2 ESCAPE');
-    expect(sql).toContain('EXISTS (SELECT 1 FROM athlete_squads');
-    expect(sql).toContain('axs.squad_id = $3');
-    expect(parameters).toEqual([USER_ID, '%ari\\_\\%%', ATHLETE_ID]);
+    expect(parameters).toEqual([USER_ID, '%ari\\_\\%%']);
   });
 
   it('rejects a malformed coach id without querying', async () => {
@@ -149,7 +145,6 @@ describe('createAthlete', () => {
       name: 'Ari Runner',
       dob: '2010-04-12',
       gender: null,
-      squadIds: [],
       notes: null,
     }, { query } as never);
 
@@ -169,7 +164,6 @@ describe('replaceAthlete', () => {
       name: 'Ari Two',
       dob: null,
       gender: null,
-      squadIds: [],
       notes: null,
     }, { query } as never);
 
@@ -188,7 +182,6 @@ describe('replaceAthlete', () => {
         name: 'Ari Two',
         dob: null,
         gender: null,
-        squadIds: [],
         notes: null,
       }, { query } as never),
     ).rejects.toMatchObject(genericNotFound);
@@ -196,7 +189,7 @@ describe('replaceAthlete', () => {
 
   it('rejects goal units and values that do not match catalogue definitions', async () => {
     query.mockResolvedValue({ rows: [{ id: ATHLETE_ID, unit: 'seconds', precision: 2 }] });
-    const payload = { name: 'Ari Runner', dob: null, gender: null, squadIds: [], notes: null, preferredDisciplineIds: [ATHLETE_ID], seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.234, targetUnit: 'seconds' as const, targetDate: null, status: 'active' as const }] };
+    const payload = { name: 'Ari Runner', dob: null, gender: null, notes: null, preferredDisciplineIds: [ATHLETE_ID], seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.234, targetUnit: 'seconds' as const, targetDate: null, status: 'active' as const }] };
 
     await expect(replaceAthlete(USER_ID, ATHLETE_ID, payload, { query } as never)).rejects.toMatchObject({ code: 'INVALID_GOAL_TARGET' });
     expect(query).toHaveBeenCalledWith(expect.stringContaining('discipline_definitions'), [[ATHLETE_ID]]);

@@ -14,7 +14,7 @@ const describeDB = connectionString ? describe : describe.skip;
 
 const TABLES = [
   ...MEET_TEST_TABLES,
-  'athlete_squads', 'squads', 'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
+  'workspace_membership_audit', 'workspace_invitations', 'workspace_members', 'workspaces',
   'account_deletions',
   'results',
   'timeline_entries',
@@ -105,7 +105,7 @@ describeDB('event participants against a real database', () => {
       eventId,
       athleteId,
       rsvpStatus: 'pending',
-      athlete: { id: athleteId, name: 'Ari Runner', squadNames: [], archivedAt: null },
+      athlete: { id: athleteId, name: 'Ari Runner', archivedAt: null },
     });
     await expect(listEventParticipants(coachId, eventId, pool)).resolves.toEqual([assigned]);
 

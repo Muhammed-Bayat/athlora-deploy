@@ -15,13 +15,13 @@ const RSVP_OPTIONS: Array<{ value: RsvpStatus; label: string }> = [
   { value: 'no', label: 'Not attending' },
 ];
 
-function entrantDescription(entrant: MeetEntrant, athlete: Athlete | undefined, entrants: MeetEntrant[]): string {
+function entrantDescription(entrant: MeetEntrant, entrants: MeetEntrant[]): string {
   if (entrant.kind === 'relay') {
     const legs = entrant.memberIds.map((id) => entrants.find((item) => item.id === id)?.name ?? 'Member').join(' -> ');
     return legs ? `Relay team: ${legs}` : 'Relay team';
   }
   if (entrant.kind === 'guest') return entrant.clubName ? `External entrant - ${entrant.clubName}` : 'External entrant';
-  return athlete?.squads?.map((squad) => squad.name).join(', ') || 'No squad assigned';
+  return 'Athlete';
 }
 
 export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId, isGuest }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean; activeWorkspaceId: string; isGuest: boolean }) {
@@ -211,7 +211,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       {athletePickerOpen && <section className={styles.athletePicker} aria-label={`Add athletes to ${definition?.presentation.label ?? 'session'} roster`}>
         <div><h3>Choose athletes</h3><p>Select one or more active athletes who have this discipline selected.</p></div>
         {availableAthletes.length === 0 && <p className={styles.empty}>No eligible active athletes are available for {definition?.presentation.label ?? 'this discipline'}.</p>}
-        {availableAthletes.length > 0 && <div className={styles.athleteChoices}>{availableAthletes.map((athlete) => <label className={styles.athleteChoice} key={athlete.id}><input type="checkbox" checked={selectedAthleteIds.includes(athlete.id)} onChange={(input) => setSelectedAthleteIds((current) => input.target.checked ? [...current, athlete.id] : current.filter((id) => id !== athlete.id))} /><span><strong>{athlete.name}</strong><small>{athlete.squads?.map((squad) => squad.name).join(', ') || 'No squad assigned'}</small></span></label>)}</div>}
+        {availableAthletes.length > 0 && <div className={styles.athleteChoices}>{availableAthletes.map((athlete) => <label className={styles.athleteChoice} key={athlete.id}><input type="checkbox" checked={selectedAthleteIds.includes(athlete.id)} onChange={(input) => setSelectedAthleteIds((current) => input.target.checked ? [...current, athlete.id] : current.filter((id) => id !== athlete.id))} /><span><strong>{athlete.name}</strong></span></label>)}</div>}
         <div className={styles.pickerActions}><Button onClick={() => void addSelectedAthletes()} disabled={busy || selectedAthleteIds.length === 0}>{relaySession ? `Add ${selectedAthleteIds.length || ''} athlete${selectedAthleteIds.length === 1 ? '' : 's'} to team pool` : `Add ${selectedAthleteIds.length || ''} athlete${selectedAthleteIds.length === 1 ? '' : 's'}`}</Button><Button variant="ghost" onClick={() => { setAthletePickerOpen(false); setSelectedAthleteIds([]); }} disabled={busy}>Cancel</Button></div>
       </section>}
 
@@ -229,7 +229,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
         if (!entrant) return null;
         const athlete = entrant.athleteId ? athletes.find((item) => item.id === entrant.athleteId) : undefined;
         return <li key={registration.id}>
-          <span className={styles.entrantIdentity}><strong>{entrant.name}</strong><small>{entrantDescription(entrant, athlete, entrants)}{athlete && <i data-status={athlete.status}>{athlete.status[0].toUpperCase() + athlete.status.slice(1)}</i>}</small></span>
+          <span className={styles.entrantIdentity}><strong>{entrant.name}</strong><small>{entrantDescription(entrant, entrants)}{athlete && <i data-status={athlete.status}>{athlete.status[0].toUpperCase() + athlete.status.slice(1)}</i>}</small></span>
           <div className={styles.entrantActions}>{canManageEntrant(entrant) && !relaySession && entrant.athleteId && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
             {canAddToRoster && canManageEntrant(entrant) && entrant.kind === 'relay' && relaySession && editingRelayId !== entrant.id && <Button variant="secondary" onClick={() => beginEditRelay(entrant)} disabled={busy}>Edit team</Button>}
             {canManageEntrant(entrant) && <Button variant="ghost" aria-label={`Remove ${entrant.name} from session`} onClick={() => void run(async () => { await meets.withdrawEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id }); })} disabled={busy}>Remove</Button>}

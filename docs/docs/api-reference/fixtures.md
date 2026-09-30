@@ -62,7 +62,7 @@ Sets status to `revoked`. Only works on `pending`, `declined`, or `change_reques
 GET /events/:eventId/fixture-rosters
 ```
 
-Returns `{ data: FixtureTeamRoster[] }` with each team's participants. Uses the safe participant summary (name, squads, archive status) — never exposes guest private athlete fields.
+Returns `{ data: FixtureTeamRoster[] }` with each team's participants. Uses the safe participant summary (name, archive status) — never exposes guest private athlete fields.
 
 ### Host result override
 

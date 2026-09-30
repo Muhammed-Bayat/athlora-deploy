@@ -1,5 +1,3 @@
-const SQUAD = 'E2E';
-
 export function uniqueToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -18,10 +16,6 @@ export function eventNames(token: string) {
     competition: `E2E Competition ${token}`,
     training: `E2E Training ${token}`,
   };
-}
-
-export function squadName(): string {
-  return SQUAD;
 }
 
 export function todayIso(): string {

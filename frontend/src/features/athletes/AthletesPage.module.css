@@ -408,7 +408,7 @@
 :global(html.theme-light) .card::before { background: linear-gradient(90deg, transparent, rgba(0, 146, 188, 0.32), transparent); }
 :global(html.theme-light) .card:hover { border-color: rgba(0, 146, 188, 0.25); box-shadow: 0 20px 42px rgba(20, 33, 40, 0.12); }
 :global(html.theme-light) .card h2, :global(html.theme-light) .details dd { color: #152B34; }
-:global(html.theme-light) .squad, :global(html.theme-light) .notes, :global(html.theme-light) .injurySummary { color: #53636A; }
+:global(html.theme-light) .notes, :global(html.theme-light) .injurySummary { color: #53636A; }
 :global(html.theme-light) .disciplines { color: #007B9F; }
 :global(html.theme-light) .details dt { color: #697980; }
 :global(html.theme-light) .activeBadge { color: #05657E; background: #E3F4F5; }

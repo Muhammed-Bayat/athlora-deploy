@@ -23,7 +23,6 @@ function athleteRow(overrides: Partial<AthleteRow> = {}): AthleteRow {
     name: 'Ari Runner',
     dob: null,
     gender: null,
-    squads: [],
     notes: null,
     archived_at: null,
     created_at: TIMESTAMP,
@@ -49,7 +48,6 @@ function progressionRow(overrides: Partial<ProgressionEntryRow> = {}): Progressi
     override_at: null,
     updated_at: TIMESTAMP,
     athlete_name: 'Ari Runner',
-    athlete_squad_names: [],
     athlete_archived_at: null,
     event_title: 'City Sprint',
     event_type: 'competition',
@@ -391,44 +389,6 @@ describe('getTwoAthleteComparison', () => {
 
     expect(comparison.athletes[0].athlete.archivedAt).not.toBeNull();
     expect(comparison.athletes[0].athlete.name).toBe('Archived Athlete');
-  });
-
-  it('handles multiple squad memberships without duplicating statistics', async () => {
-    const a1Row = athleteRow({
-      id: ATHLETE_1_ID,
-      squads: [
-        { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Sprint A', archivedAt: null, createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-        { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Sprint B', archivedAt: null, createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-      ],
-    });
-    const a2Row = athleteRow({ id: ATHLETE_2_ID, name: 'Athlete Two' });
-
-    const a1Results = [
-      queryRow(
-        { event_id: EVENT_1_ID, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
-        { summary_pb: 11.50, summary_total: 1, summary_valid: 1 },
-      ),
-    ];
-
-    const a2Results = [
-      queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
-        { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
-      ),
-    ];
-
-    const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [a1Row] })
-      .mockResolvedValueOnce({ rows: a1Results })
-      .mockResolvedValueOnce({ rows: [a2Row] })
-      .mockResolvedValueOnce({ rows: a2Results });
-
-    const comparison = await getTwoAthleteComparison(
-      USER_ID, ATHLETE_1_ID, ATHLETE_2_ID, runner(query),
-    );
-
-    expect(comparison.athletes[0].validResultCount).toBe(1);
-    expect(comparison.athletes[0].athlete.squadNames).toEqual(['Sprint A', 'Sprint B']);
   });
 
   it('returns aligned progression entries sorted chronologically', async () => {

@@ -80,7 +80,7 @@ const discipline = {
   defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test',
 };
 const athlete = {
-  id: '22222222-2222-4222-8222-222222222222', coachId: 'coach-1', name: 'Ari Runner', dob: null, gender: null, squads: [],
+  id: '22222222-2222-4222-8222-222222222222', coachId: 'coach-1', name: 'Ari Runner', dob: null, gender: null,
   preferredDisciplineIds: [], seasonGoals: [], notes: null, archivedAt: null, status: 'active', statusChangedAt: '2026-01-01T00:00:00.000Z', statusChangedBy: null,
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -251,7 +251,7 @@ describe('AthloraAssistantProvider', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm and create' }));
 
     await waitFor(() => expect(athleteApi.createAthlete).toHaveBeenCalledWith({
-      name: 'Jordan Sprinter', dob: null, gender: null, squadIds: [], notes: null,
+      name: 'Jordan Sprinter', dob: null, gender: null, notes: null,
       preferredDisciplineIds: [discipline.id], seasonGoals: [],
     }));
     expect(screen.queryByRole('heading', { name: 'Confirm athlete draft' })).not.toBeInTheDocument();

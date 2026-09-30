@@ -59,14 +59,6 @@ export interface AthleteDisciplineAnalytics {
   history: NormalizedAthleteResult[];
 }
 
-export interface SquadDisciplineAnalytics {
-  squad: { id: string; name: string };
-  discipline: AnalyticsDiscipline;
-  season: SeasonScope;
-  ranking: DisciplineAnalyticsRanking;
-  athletes: RankedDisciplineAthlete[];
-}
-
 export interface WorkspaceDisciplineAnalytics {
   discipline: AnalyticsDiscipline;
   season: SeasonScope;
@@ -118,7 +110,7 @@ interface NormalizedResultRow extends DisciplineRow {
   placing: number | string | null;
 }
 
-export interface SquadAnalyticsAthlete {
+export interface AnalyticsAthlete {
   id: string;
   name: string;
   lifecycle_status: AthleteLifecycleStatus;
@@ -258,8 +250,8 @@ export function summarizeAthleteDisciplineResults(
 }
 
 /** Ranks only on a visible personal-best factor; no composite score is calculated. */
-export function rankSquadDisciplineAthletes(
-  athletes: readonly SquadAnalyticsAthlete[],
+export function rankDisciplineAthletes(
+  athletes: readonly AnalyticsAthlete[],
   discipline: AnalyticsDiscipline,
   results: readonly NormalizedAthleteResult[],
   season: SeasonScope = parseSeasonYear(undefined),
@@ -303,16 +295,6 @@ async function requireAthlete(workspaceId: string, athleteId: unknown, executor:
   const result = await executor.query<{ id: string }>(
     'SELECT id FROM athletes WHERE id = $1 AND workspace_id = $2',
     [athleteId, workspaceId],
-  );
-  if (!result.rows[0]) throw notFound();
-  return result.rows[0];
-}
-
-async function requireSquad(workspaceId: string, squadId: unknown, executor: DbExecutor): Promise<{ id: string; name: string }> {
-  if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(squadId)) throw notFound();
-  const result = await executor.query<{ id: string; name: string }>(
-    'SELECT id, name FROM squads WHERE id = $1 AND workspace_id = $2',
-    [squadId, workspaceId],
   );
   if (!result.rows[0]) throw notFound();
   return result.rows[0];
@@ -437,39 +419,6 @@ export async function getAthleteDisciplineAnalytics(
   return summarizeAthleteDisciplineResults(athlete.id, discipline, results, season);
 }
 
-export async function getSquadDisciplineAnalytics(
-  workspaceId: string,
-  squadId: unknown,
-  disciplineCode: unknown,
-  season: SeasonScope = parseSeasonYear(undefined),
-  executor: DbExecutor = getPool(),
-): Promise<SquadDisciplineAnalytics> {
-  const squad = await requireSquad(workspaceId, squadId, executor);
-  const discipline = toDiscipline(await requireDiscipline(disciplineCode, executor));
-  const athletes = await executor.query<SquadAnalyticsAthlete>(
-    `SELECT a.id, a.name, a.lifecycle_status
-     FROM athletes a
-     JOIN athlete_squads memberships ON memberships.athlete_id = a.id
-     WHERE memberships.squad_id = $1 AND a.workspace_id = $2 AND a.lifecycle_status <> 'archived'
-     ORDER BY lower(a.name), a.id`,
-    [squad.id, workspaceId],
-  );
-  const results = await listNormalizedResults(
-    workspaceId,
-    discipline.code,
-    athletes.rows.map((athlete) => athlete.id),
-    executor,
-  );
-
-  return {
-    squad,
-    discipline,
-    season,
-    ranking: rankingPolicy(discipline),
-    athletes: rankSquadDisciplineAthletes(athletes.rows, discipline, results, season),
-  };
-}
-
 export async function getWorkspaceDisciplineAnalytics(
   workspaceId: string,
   disciplineCode: unknown,
@@ -479,7 +428,7 @@ export async function getWorkspaceDisciplineAnalytics(
   if (!isCanonicalUuid(workspaceId)) throw notFound();
   const resolvedDiscipline = await requireDiscipline(disciplineCode, executor);
   const discipline = toDiscipline(resolvedDiscipline);
-  const athletes = await executor.query<SquadAnalyticsAthlete>(
+  const athletes = await executor.query<AnalyticsAthlete>(
     `SELECT a.id, a.name, a.lifecycle_status
      FROM athletes a
      JOIN athlete_preferred_disciplines preferences ON preferences.athlete_id = a.id
@@ -502,6 +451,6 @@ export async function getWorkspaceDisciplineAnalytics(
     discipline,
     season,
     ranking: rankingPolicy(discipline),
-    athletes: rankSquadDisciplineAthletes(athletes.rows, discipline, results, season),
+    athletes: rankDisciplineAthletes(athletes.rows, discipline, results, season),
   };
 }

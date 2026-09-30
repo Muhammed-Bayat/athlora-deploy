@@ -124,7 +124,7 @@ Workspace membership is server-derived and is the authorization boundary: athlet
 
 Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
-Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, squads, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`), and mutate club branding (description, colours, logo, cover). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
+Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`), and mutate club branding (description, colours, logo, cover). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -204,14 +204,13 @@ All discipline analytics routes are authenticated and resolve their workspace fr
 | Method & path | Purpose |
 |---|---|
 | `GET /analytics/athletes/:id/disciplines/:discipline` | Owner-scoped normalized discipline analysis for one athlete |
-| `GET /analytics/squads/:squadId/disciplines/:discipline` | Active squad members with descriptive factors and PB-only ranks |
 | `GET /analytics/disciplines/:discipline/athletes` | Active preferred-discipline athletes in the active workspace with descriptive factors and PB-only ranks |
 
-The athlete route uses the standard non-enumerating ownership check. Unknown/inaccessible athletes, squads, and discipline codes return the generic `404 NOT_FOUND`; no route accepts a workspace identifier. Workspace rankings include athletes whose preferred discipline has the requested code across retained catalogue versions, without duplicate rows.
+The athlete route uses the standard non-enumerating ownership check. Unknown/inaccessible athletes and discipline codes return the generic `404 NOT_FOUND`; no route accepts a workspace identifier. Workspace rankings include athletes whose preferred discipline has the requested code across retained catalogue versions, without duplicate rows.
 
 An athlete response contains `{ athleteId, discipline, season, pb, sb, latest, first, average, median, improvement, recentTrend, resultCount, recentResults, history }`. Every normalized history row carries a stable source-qualified `id`, `source` (`legacy_result` or `session_result`), original `sourceResultId`, athlete/discipline metadata, event metadata, raw `value`, and nullable `place`. The service reads legacy valid, non-cancelled 100m rows and finalized valid individual generic-session results in place; it does not create a migration or copy historical data.
 
-Squad/workspace responses contain `{ discipline, season, ranking, athletes }`. `ranking` explicitly records its `pb` basis, catalogue direction, ordering, tie behavior, unranked behavior, and available descriptive factors. Equal PBs share a rank; name/ID only order tied rows for display. There is no composite promising-athlete score or weighting.
+Workspace responses contain `{ discipline, season, ranking, athletes }`. `ranking` explicitly records its `pb` basis, catalogue direction, ordering, tie behavior, unranked behavior, and available descriptive factors. Equal PBs share a rank; name/ID only order tied rows for display. There is no composite promising-athlete score or weighting.
 
 ### 3.5 Public logger links
 
@@ -380,13 +379,13 @@ id, auth0Id, name, email, role ('coach'|'assistant'), createdAt, updatedAt
 ### 4.2 Athlete
 
 ```
-id, coachId, name, dob (ISO date|null), gender (string|null), squads (Squad[]), preferredDisciplineIds (UUID[]),
+id, coachId, name, dob (ISO date|null), gender (string|null), preferredDisciplineIds (UUID[]),
 seasonGoals (AthleteSeasonGoal[]),
 notes (string|null), status ('active'|'inactive'|'archived'), archivedAt (ISO|null),
 statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 ```
 
-**Lifecycle rule:** active athletes can be newly assigned to events. Inactive athletes remain visible and editable but cannot be newly assigned. Archived athletes are hidden by default, read-only until restored, and cannot be newly assigned. Archiving is reversible and preserves event participation, timeline entries, results, squads, and injuries. `statusChangedAt` and `statusChangedBy` identify the current transition; the database retains the full transition audit.
+**Lifecycle rule:** active athletes can be newly assigned to events. Inactive athletes remain visible and editable but cannot be newly assigned. Archived athletes are hidden by default, read-only until restored, and cannot be newly assigned. Archiving is reversible and preserves event participation, timeline entries, results, and injuries. `statusChangedAt` and `statusChangedBy` identify the current transition; the database retains the full transition audit.
 
 **Endpoints:**
 
@@ -408,34 +407,17 @@ statusChangedAt (ISO), statusChangedBy (UUID|null), createdAt, updatedAt
 | `includeArchived` | `'true'` or `'false'` (default `'false'`). When `false`, archived athletes are excluded. |
 | `status` | Exact lifecycle state (`'active'`, `'inactive'`, or `'archived'`) |
 | `name` | Case-insensitive substring match on `name` |
-| `squadId` | Canonical UUID; returns athletes with that membership without multiplying roster rows |
 | `year` | Accepted for shared season URL state: `'all'` or a four-digit Gregorian year, otherwise `400`. The roster is not season-scoped, so it never filters rows. |
 
 Roster results are ordered by `LOWER(name)` ASC, then `createdAt`, then `id`, so the ordering is stable. Repeating an athlete status request for its current state is a successful no-op. Every real transition is workspace-authorized, actor-attributed, and flags existing event assignments for coach review.
 
-Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `squadIds` (an optional, duplicate-free UUID array), `notes`, `preferredDisciplineIds`, and `seasonGoals` — all optional except `name`. Each preferred discipline must be an ID from the immutable shared catalogue. A season goal has an optional existing `id`, a catalogue `disciplineDefinitionId`, positive `targetValue`, matching `targetUnit`, optional `targetDate`, and `status` (`active` or `completed`). The service rejects unknown disciplines, unit mismatches, and values beyond the definition precision. Supplying either profile array replaces that collection, so goals are created, edited, completed, or removed through the existing protected create/update flows. These fields are returned only by protected athlete endpoints and are never included in public statistics, comparisons, schedules, or logger responses.
+Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`, `notes`, `preferredDisciplineIds`, and `seasonGoals` — all optional except `name`. Each preferred discipline must be an ID from the immutable shared catalogue. A season goal has an optional existing `id`, a catalogue `disciplineDefinitionId`, positive `targetValue`, matching `targetUnit`, optional `targetDate`, and `status` (`active` or `completed`). The service rejects unknown disciplines, unit mismatches, and values beyond the definition precision. Supplying either profile array replaces that collection, so goals are created, edited, completed, or removed through the existing protected create/update flows. These fields are returned only by protected athlete endpoints and are never included in public statistics, comparisons, schedules, or logger responses.
 
-`PUT` replaces the membership set and nullable fields; it never touches `archivedAt`. Every squad ID must belong to the active workspace. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
+`PUT` replaces mutable fields; it never touches `archivedAt`. `archivedAt` is set via the dedicated archive/unarchive actions, not through the generic update. `coachId` is always server-derived from the authenticated user and is rejected from request bodies.
 
 `GET /athletes/injury-summaries` avoids per-card injury requests. It returns only athletes with active records; absent athletes are healthy. Each row contains `athleteId`, `activeInjuryCount`, `highestSeverity`, and an `activeInjuries` array of `{ bodyRegion, area, side, severity }`. Resolved and soft-deleted injuries are excluded.
 
-### 4.3 Squad
-
-```
-id, name, archivedAt (ISO|null), createdAt, updatedAt
-```
-
-Squads are scoped to the active workspace and their names are case-insensitively unique within it. They are archived and restored rather than hard-deleted; archived squads remain on existing athletes but are excluded from new selection by default.
-
-| Method & path | Purpose |
-|---|---|
-| `GET /squads` | List active workspace squads; `includeArchived=true` includes archived squads |
-| `POST /squads` | Create a squad (coach only) |
-| `PUT /squads/:id` | Rename a squad (coach only) |
-| `DELETE /squads/:id` | Archive a squad (coach only) |
-| `POST /squads/:id/unarchive` | Restore a squad (coach only) |
-
-### 4.4 Event
+### 4.3 Event
 
 ```
 id, createdBy, type ('competition'|'training'), discipline ('100m'|null), title, date (ISO date),
@@ -563,7 +545,7 @@ Venue search is an optional convenience, not event persistence: choosing a resul
 
 ```
 eventId, athleteId, rsvpStatus ('pending'|'yes'|'no'|'maybe'), statusReviewRequired,
-athlete { id, name, squad, archivedAt, status }
+athlete { id, name, archivedAt, status }
 ```
 
 Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained and accepts `pending`, `yes`, `no`, and `maybe`. Participant responses include the athlete summary needed by event detail and live logging while keeping the assignment key explicit.
@@ -649,7 +631,7 @@ All five are authenticated, athlete-ownership-checked routes that return `{ data
 {
   athleteId, discipline ('100m'), unit ('seconds'), pb (number|null), sb (number|null),
   resultsCount, latestResult (number|null), latestOutcome, updatedAt,
-  athlete: { id, name, squad, archivedAt },
+   athlete: { id, name, archivedAt },
   resultCounts: { allTime, currentYear, competitionAllTime, trainingAllTime },
   latest: AthleteResultHistoryEntry|null,
   recentResults: {
@@ -671,7 +653,7 @@ All five are authenticated, athlete-ownership-checked routes that return `{ data
 
 ```
 {
-  athlete: { id, name, squad, archivedAt },
+   athlete: { id, name, archivedAt },
   event: { id, title, type, discipline, date, time, locationName, status },
   result: Result,
   effectiveResult, effectiveOutcome, countsTowardsStatistics
@@ -690,7 +672,7 @@ Two authenticated routes are mounted at `/api/v1/dashboard`: `GET /dashboard/sum
   athletesCount, activeAthletesCount, inactiveAthletesCount, archivedAthletesCount, statusReviewCount,
   upcomingEventCount, seasonPbs,
   activeEvent: DashboardActiveEvent|null,
-  rosterSnapshot: RosterSnapshotEntry[],      // { athleteId, name, squad, discipline, pb }
+   rosterSnapshot: RosterSnapshotEntry[],      // { athleteId, name, discipline, pb }
   upcomingEvents: DashboardUpcomingEvent[],
   recentResults: AthleteResultHistoryEntry[],
   recentPbs: AthleteResultHistoryEntry[]
@@ -721,7 +703,7 @@ Two authenticated routes are mounted at `/api/v1/dashboard`: `GET /dashboard/sum
 - `backend/src/services/resultDerivation.ts` implements the §2 outcome mapping, the §5 competition/training timing rules, `deriveEffectiveResult` (manual override), `calculatePlacings` and `checkPbSb`.
 - `backend/src/validation` provides strict shared payload parsers, `backend/src/db/row-mappers.ts` owns snake-case PostgreSQL serialization and deliberate numeric conversion, and `backend/src/db/transaction.ts` provides atomic mutation/recomputation transactions.
 - `backend/src/services/athletes.ts` implements the §4.2 roster CRUD, lifecycle transitions/audit, and filtering behavior; the API route tests (`backend/src/routes/athletes.test.ts`) and service tests (`backend/src/services/athletes.test.ts`) cover idempotent actor-attributed transitions and assignment review flags, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/athletes.integration.test.ts`) proving archival preserves timeline entries and results.
-- `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/inactive/archived athletes, filter by name/squad/status, create, fully replace mutable fields, transition status, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
+- `frontend/src/features/athletes/AthletesPage.tsx` and `frontend/src/api/athletes.ts` implement the §4.2 coach workflow against those DTOs: list active/inactive/archived athletes, filter by name/status, create, fully replace mutable fields, transition status, archive and restore. RTL and API-wrapper tests cover async states, strict payloads, validation, persistence feedback and keyboard interaction.
 - `backend/src/services/events.ts` implements the §4.3 event CRUD, filters, status transitions, cancellation, and the in-progress logging guard; the API route tests (`backend/src/routes/events.test.ts`) and service tests (`backend/src/services/events.test.ts`) cover it, with a `TEST_DATABASE_URL`-gated integration suite (`backend/src/services/events.integration.test.ts`) proving the lifecycle, cancellation history, and cross-coach isolation.
 - `frontend/src/features/events/EventsPage.tsx` and `frontend/src/api/events.ts` implement the §4.3 coach workflow: API-backed list/calendar views, local date/type/status filtering, strict create/full-replacement edit payloads, event detail, and confirmed start/complete/cancel transitions. RTL and API-wrapper tests cover asynchronous states, filters, payloads, validation, detail and lifecycle failures.
 - `backend/src/services/participants.ts` implements the §4.5 assignment list/create/update/remove/review-acknowledgment behavior, active-athlete guard, duplicate conflict and history-preserving removal. Route/service tests cover the API and a `TEST_DATABASE_URL`-gated integration suite proves persistence, archival, idempotent updates, ownership isolation and preservation of timeline/results history.

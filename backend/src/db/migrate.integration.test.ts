@@ -55,6 +55,15 @@ describeDB('migrations against a real database', () => {
     return result.rowCount === 1;
   };
 
+  const hasTable = async (table: string) => {
+    const result = await pool.query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = $1`,
+      [table],
+    );
+    return result.rowCount === 1;
+  };
+
   const hasIndex = async (name: string) => {
     const result = await pool.query('SELECT 1 FROM pg_indexes WHERE indexname = $1', [name]);
     return result.rowCount === 1;
@@ -77,7 +86,9 @@ describeDB('migrations against a real database', () => {
     expect(await hasColumn('athletes', 'workspace_id')).toBe(true);
     expect(await hasColumn('athletes', 'lifecycle_status')).toBe(true);
     expect(await hasColumn('athletes', 'status_changed_by')).toBe(true);
-    expect(await hasColumn('athlete_squads', 'squad_id')).toBe(true);
+    expect(await hasTable('athlete_squads')).toBe(false);
+    expect(await hasTable('squads')).toBe(false);
+    expect(await hasColumn('athletes', 'squad')).toBe(false);
     expect(await hasColumn('events', 'fixture_revision')).toBe(true);
     expect(await hasColumn('event_participants', 'participant_workspace_id')).toBe(true);
     expect(await hasColumn('clubs', 'public_results_enabled')).toBe(true);

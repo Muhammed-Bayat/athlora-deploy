@@ -18,7 +18,7 @@ When you create an account, Auth0 (our authentication provider) collects your em
 
 As a coach, you enter information about the athletes you manage. This includes:
 
-- **Profile data:** name, date of birth, gender, squad assignment, and notes
+- **Profile data:** name, date of birth, gender, and notes
 - **Performance data:** 100m times, event results, personal bests, and season bests
 - **Health data:** injury records including body region, area, side, severity, occurrence date, expected return date, resolution date, and notes
 
@@ -97,4 +97,4 @@ For questions about this privacy policy, please contact us through the Athlora a
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The weather-provider disclosure was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The weather-provider disclosure was edited with OpenCode[openai/gpt-6-astra]. The profile-data disclosure was updated with OpenCode[openai/gpt-5.6-terra].

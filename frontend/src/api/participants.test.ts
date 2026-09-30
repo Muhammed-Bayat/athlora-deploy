@@ -14,7 +14,7 @@ const participant: EventParticipantSummary = {
   eventId: EVENT_ID,
   athleteId: ATHLETE_ID,
   rsvpStatus: 'pending',
-  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: ['Sprint'], archivedAt: null, status: 'active' },
+  athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null, status: 'active' },
   statusReviewRequired: false,
 };
 

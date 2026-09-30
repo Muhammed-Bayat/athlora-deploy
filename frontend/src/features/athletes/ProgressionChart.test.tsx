@@ -10,7 +10,7 @@ vi.mock('../../api/statistics', () => statisticsApi);
 const ATHLETE_ID = '11111111-1111-4111-8111-111111111111';
 
 const progression: ProgressionDetail = {
-  athlete: { id: ATHLETE_ID, name: 'Ari Runner', squadNames: [], archivedAt: null },
+  athlete: { id: ATHLETE_ID, name: 'Ari Runner', archivedAt: null },
   entries: [
     {
       event: {

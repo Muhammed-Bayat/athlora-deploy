@@ -71,7 +71,6 @@ function timelineRow(): DashboardTimelineEntryRow {
     updated_at: TIMESTAMP,
     deleted_at: null,
     athlete_name: 'Ari Runner',
-    athlete_squad_names: [],
     athlete_archived_at: TIMESTAMP,
   };
 }
@@ -93,7 +92,6 @@ function historyRow(): AthleteResultHistoryRow {
     override_at: null,
     updated_at: TIMESTAMP,
     athlete_name: 'Ari Runner',
-    athlete_squad_names: [],
     athlete_archived_at: TIMESTAMP,
     event_title: 'City Sprint',
     event_type: 'competition',

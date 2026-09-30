@@ -213,11 +213,8 @@ export interface Athlete {
   name: string;
   dob: string | null;
   gender: string | null;
-  squads?: Squad[];
   preferredDisciplineIds: string[];
   seasonGoals: AthleteSeasonGoal[];
-  /** @deprecated migration-only compatibility; application reads use squads. */
-  squad?: string | null;
   notes: string | null;
   archivedAt: string | null;
   status: AthleteLifecycleStatus;
@@ -235,14 +232,6 @@ export interface AthleteSeasonGoal {
   targetUnit: 'seconds' | 'metres' | 'cm';
   targetDate: string | null;
   status: SeasonGoalStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Squad {
-  id: string;
-  name: string;
-  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -303,8 +292,6 @@ export interface EventParticipant {
 export interface EventParticipantAthleteSummary {
   id: string;
   name: string;
-  squadNames?: string[];
-  squad?: string | null;
   archivedAt: string | null;
   status?: AthleteLifecycleStatus;
 }
@@ -412,8 +399,6 @@ export interface AthleteStatistics {
 export interface AggregateAthleteIdentity {
   id: string;
   name: string;
-  squadNames?: string[];
-  squad?: string | null;
   archivedAt: string | null;
   status?: AthleteLifecycleStatus;
 }

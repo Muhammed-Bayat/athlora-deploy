@@ -50,7 +50,7 @@ function participant(
     eventId: EVENT_ID,
     athleteId,
     rsvpStatus: 'yes',
-    athlete: { id: athleteId, name, squadNames: ['Sprint'], archivedAt: null, status: 'active' },
+    athlete: { id: athleteId, name, archivedAt: null, status: 'active' },
     statusReviewRequired: false,
     ...overrides,
   };
@@ -63,7 +63,6 @@ function athlete(athleteId: string, name: string, overrides: Partial<Athlete> = 
     name,
     dob: null,
     gender: null,
-    squads: [],
     preferredDisciplineIds: [],
     seasonGoals: [],
     notes: null,
@@ -230,26 +229,23 @@ describe('EventResultsView', () => {
   it('renders PB/SB for an assigned partial athlete and identifies an archived historical result', () => {
     renderView({
       participants: [participant('assigned', 'Assigned Runner', {
-        athlete: { id: 'assigned', name: 'Assigned Runner', squadNames: ['Development'], archivedAt: null, status: 'active' },
+        athlete: { id: 'assigned', name: 'Assigned Runner', archivedAt: null, status: 'active' },
       })],
       results: [
         result('assigned', { finalResult: 10.75, isPb: true, isSb: true }),
         result('historical', { finalResult: 11.7, placing: 2 }),
       ],
       athletes: [athlete('historical', 'Former Runner', {
-        squads: [{ id: '22222222-2222-4222-8222-222222222222', name: 'Senior', archivedAt: null, createdAt: '2026-08-01T10:00:00.000Z', updatedAt: '2026-08-01T10:00:00.000Z' }],
         archivedAt: '2026-07-01T10:00:00.000Z',
       })],
     });
 
     const assignedRow = screen.getByText('Assigned Runner').closest('li')!;
-    expect(assignedRow).toHaveTextContent('Development');
     expect(within(assignedRow).getByText('PB')).toBeInTheDocument();
     expect(within(assignedRow).getByText('SB')).toBeInTheDocument();
     expect(within(assignedRow).queryByText('Historical result')).not.toBeInTheDocument();
 
     const historicalRow = screen.getByText('Former Runner').closest('li')!;
-    expect(historicalRow).toHaveTextContent('Senior');
     expect(within(historicalRow).getByText('Archived')).toBeInTheDocument();
     expect(within(historicalRow).getByText('Historical result')).toBeInTheDocument();
   });

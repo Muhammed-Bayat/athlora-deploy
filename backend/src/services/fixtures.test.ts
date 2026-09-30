@@ -199,7 +199,7 @@ describe('fixture rosters', () => {
       ] })
       .mockResolvedValueOnce({ rows: [{
         event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', participant_workspace_id: HOST_WORKSPACE_ID,
-        athlete_name: 'Host Runner', athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
+        athlete_name: 'Host Runner', athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
       }] });
 
     const rosters = await listHostedFixtureRosters(HOST_WORKSPACE_ID, EVENT_ID);
@@ -222,7 +222,7 @@ describe('updateGuestFixtureParticipant', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{
         event_id: EVENT_ID, athlete_id: ATHLETE_ID, rsvp_status: 'yes', athlete_name: 'Guest Runner',
-        athlete_squad_names: [], athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
+        athlete_archived_at: null, athlete_lifecycle_status: 'active', status_review_required: false,
       }] })
       .mockResolvedValueOnce({ rows: [] });
 

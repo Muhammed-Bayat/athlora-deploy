@@ -8,8 +8,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 // data that is unique to that project, so desktop and mobile runs never
 // interfere with each other.
 
-const SQUAD = 'E2E';
-
 function names(token: string) {
   return {
     alpha: `E2E Alpha ${token}`,
@@ -53,7 +51,6 @@ async function addAthlete(page: Page, name: string): Promise<void> {
   await dialog.getByLabel('Athlete name').fill(name);
   await dialog.getByLabel('Date of birth').fill('2010-01-15');
   await dialog.getByLabel('Gender category').fill('Female');
-  await dialog.getByLabel('Discipline group / squad').fill(SQUAD);
   await dialog.getByRole('button', { name: 'Add athlete', exact: true }).click();
   await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
 }

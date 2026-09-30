@@ -44,8 +44,8 @@ describe('MeetRosterPanel', () => {
       : [{ id: 'relay-registration', disciplineSessionId: 'session-relay', entrantId: 'team', withdrawnAt: null }],
     }));
     athletes.listAthletes.mockResolvedValue({ data: [
-      { id: 'athlete', name: 'Ari Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'], squads: [] },
-      { id: 'athlete-2', name: 'Bea Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'], squads: [] },
+      { id: 'athlete', name: 'Ari Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'] },
+      { id: 'athlete-2', name: 'Bea Runner', status: 'active', preferredDisciplineIds: ['track', 'relay'] },
     ] });
     participants.listEventParticipants.mockResolvedValue({ data: [{ athleteId: 'athlete', rsvpStatus: 'pending' }] });
     fixturesApi.listGuestFixtureParticipants.mockResolvedValue({ data: [], meta: { count: 0 } });
@@ -62,7 +62,7 @@ describe('MeetRosterPanel', () => {
     expect(screen.queryByRole('button', { name: 'Add session' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Register for session' })).not.toBeInTheDocument();
     expect(screen.queryByText('Guest entrant')).not.toBeInTheDocument();
-    expect(await screen.findByRole('list', { name: 'Session roster' })).toHaveTextContent('Ari RunnerNo squad assignedActive');
+    expect(await screen.findByRole('list', { name: 'Session roster' })).toHaveTextContent('Ari RunnerAthleteActive');
     expect(screen.queryByText('Gia Guest')).not.toBeInTheDocument();
     expect(screen.getByText('Pending 1 · Yes 0 · No 0 · Maybe 0')).toBeInTheDocument();
 
@@ -76,7 +76,8 @@ describe('MeetRosterPanel', () => {
 
     trackTab.focus();
     await user.keyboard('{ArrowRight}');
-    expect(await screen.findByRole('tab', { name: /4 x 100m relay/i, selected: true })).toHaveFocus();
+    const relayTab = await screen.findByRole('tab', { name: /4 x 100m relay/i, selected: true });
+    await waitFor(() => expect(relayTab).toHaveFocus());
   });
 
   it('shows relay creation only for a selected relay session and never exposes guest entry', async () => {
@@ -101,8 +102,8 @@ describe('MeetRosterPanel', () => {
     api.listEntrants.mockResolvedValue({ data: [] });
     api.listRegistrations.mockResolvedValue({ data: [] });
     athletes.listAthletes.mockResolvedValue({ data: [
-      { id: 'hammer-athlete', name: 'Hana Hammer', status: 'active', preferredDisciplineIds: ['hammer'], squads: [] },
-      { id: 'sprinter', name: 'Sami Sprinter', status: 'active', preferredDisciplineIds: ['track'], squads: [] },
+      { id: 'hammer-athlete', name: 'Hana Hammer', status: 'active', preferredDisciplineIds: ['hammer'] },
+      { id: 'sprinter', name: 'Sami Sprinter', status: 'active', preferredDisciplineIds: ['track'] },
     ] });
 
     render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
@@ -120,7 +121,7 @@ describe('MeetRosterPanel', () => {
     api.listSessions.mockResolvedValue({ data: [{ id: 'session-track', disciplineDefinitionId: 'track', label: '200m', status: 'scheduled', version: 1 }] });
     api.listEntrants.mockImplementation(async () => ({ data: guestEntrants, meta: { count: guestEntrants.length } }));
     api.listRegistrations.mockImplementation(async () => ({ data: guestRegistrations, meta: { count: guestRegistrations.length } }));
-    athletes.listAthletes.mockResolvedValue({ data: [{ id: 'guest-athlete', name: 'Gia Guest', status: 'active', preferredDisciplineIds: ['track'], squads: [] }] });
+    athletes.listAthletes.mockResolvedValue({ data: [{ id: 'guest-athlete', name: 'Gia Guest', status: 'active', preferredDisciplineIds: ['track'] }] });
     api.createEntrant.mockImplementation(async () => {
       guestEntrants = [{ id: 'guest-entrant', workspaceId: 'guest-workspace', kind: 'athlete', athleteId: 'guest-athlete', name: 'Gia Guest', clubName: null, details: null, memberIds: [] }];
       return guestEntrants[0];

@@ -751,7 +751,7 @@ export function ParticipantManager({
             const participantBusy = busy?.endsWith(participant.athleteId) ?? false;
             const ownsParticipant = participant.participantWorkspaceId === undefined || participant.participantWorkspaceId === activeWorkspace.id;
             return <li key={participant.athleteId}>
-              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.athlete.squadNames?.join(', ') || 'No squad assigned'}{participant.participantWorkspaceName && <span> · {participant.participantWorkspaceName}</span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
+              <span className={styles.participantIdentity}><b>{participant.athlete.name}</b><small>{participant.participantWorkspaceName && <span>{participant.participantWorkspaceName} · </span>}<i data-status={participant.athlete.status}>{formattedAthleteStatus(participant.athlete.status)}</i>{participant.statusReviewRequired && <i className={styles.reviewBadge}>Status review required</i>}</small></span>
                 {isCoach && canEditRoster && ownsParticipant && <><span className={styles.srOnly}>RSVP for {participant.athlete.name}</span>
                 <Select id={`participant-rsvp-${participant.athleteId}`} aria-label={`RSVP for ${participant.athlete.name}`} value={participant.rsvpStatus} onChange={(input) => { operationTriggerRef.current = input.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button') ?? input.currentTarget; void updateRsvp(participant, input.target.value as RsvpStatus); }} options={[
                 { value: 'pending', label: 'Pending' },
@@ -776,7 +776,7 @@ export function ParticipantManager({
         {!athletesLoading && athletesError && <div className={styles.inlineError} role="alert"><p>{athletesError}</p><Button variant="secondary" onClick={() => setAthleteReloadKey((key) => key + 1)}>Retry roster</Button></div>}
          {!athletesLoading && !athletesError && <div><Select id="event-athlete-candidate" aria-label="Assign an active athlete" value={candidateId} onChange={(input) => setCandidateId(input.target.value)} options={[
           { value: '', label: candidates.length ? 'Choose an athlete' : 'No active athletes available' },
-           ...candidates.map((athlete) => ({ value: athlete.id, label: `${athlete.name}${athlete.squads?.length ? ` · ${athlete.squads.map((squad) => squad.name).join(', ')}` : ''}` })),
+            ...candidates.map((athlete) => ({ value: athlete.id, label: athlete.name })),
         ]} disabled={participantsLoading || Boolean(busy) || Boolean(participantsError) || candidates.length === 0} /><Button onClick={(event) => { operationTriggerRef.current = event.currentTarget; void assign(); }} disabled={participantsLoading || Boolean(busy) || !candidateId || Boolean(participantsError)}>{busy === 'assign' ? 'Assigning...' : 'Assign athlete'}</Button></div>}
        </div>}
 

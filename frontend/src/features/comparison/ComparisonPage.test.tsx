@@ -48,7 +48,7 @@ const DISCIPLINES = [
 const comparisonResult = {
   athletes: [
     {
-      athlete: { id: ATHLETE_1.id, name: 'Alice Sprint', squadNames: [], archivedAt: null },
+      athlete: { id: ATHLETE_1.id, name: 'Alice Sprint', archivedAt: null },
       pb: 11.20,
       latestEffectiveResult: 11.30,
       latestEffectiveOutcome: 'valid',
@@ -64,7 +64,7 @@ const comparisonResult = {
       disciplines: [{ ...DISCIPLINES[0], pb: 11.20, latestEffectiveResult: 11.30, validResultCount: 5, average: 11.35, consistency: 0.12, improvement: 0.30, progression: [{ date: '2026-01-01', result: 11.50 }, { date: '2026-02-01', result: 11.30 }] }, { ...DISCIPLINES[1], pb: 6.42, latestEffectiveResult: 6.42, validResultCount: 2, average: 6.31, consistency: 0.11, improvement: 0.24, progression: [{ date: '2026-01-01', result: 6.20 }, { date: '2026-02-01', result: 6.42 }] }],
     },
     {
-      athlete: { id: ATHLETE_2.id, name: 'Bob Dash', squadNames: [], archivedAt: null },
+      athlete: { id: ATHLETE_2.id, name: 'Bob Dash', archivedAt: null },
       pb: 11.50,
       latestEffectiveResult: 11.60,
       latestEffectiveOutcome: 'valid',

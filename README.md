@@ -125,7 +125,7 @@ node scripts/generate-coverage-report.mjs
 npm run build --prefix docs
 ```
 
-See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The expanded E2E suite covers 15+ spec files including workspace switching, role enforcement, squads, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization boundaries, migration verification, accessibility deep audit, routing, and analytics.
+See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The expanded E2E suite covers 15+ spec files including workspace switching, role enforcement, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization boundaries, migration verification, accessibility deep audit, routing, and analytics.
 
 ## Services and Documentation
 
@@ -142,7 +142,7 @@ See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The
 
 ## AI Usage
 
-The global Athlora assistant, discipline analytics, shared PDF reports, tests, and this update were generated and edited with OpenCode[openai/gpt-5.6-terra]; the same tool/model performed targeted code review. No separate AI planning tool was used for this update.
+The global Athlora assistant, discipline analytics, shared PDF reports, tests, and documentation updates for retired athlete-group functionality were generated and edited with OpenCode[openai/gpt-5.6-terra]; the same tool/model performed targeted code review. No separate AI planning tool was used for this update.
 
 ### AI Declaration
 

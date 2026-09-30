@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import * as athletes from '../controllers/athletes.js';
 import * as events from '../controllers/events.js';
-import * as squads from '../controllers/squads.js';
 import timelineRouter from './timeline.js';
 import resultsRouter from './results.js';
 import participantsRouter from './participants.js';
@@ -42,7 +41,6 @@ import {
   parseAthleteStatusPayload,
   parseEventCreatePayload,
   parseEventReplacementPayload,
-  parseSquadPayload,
 } from '../validation/payloads.js';
 
 const router = Router();
@@ -81,13 +79,6 @@ eventsRouter.put(
 eventsRouter.delete('/:id', requireOperationalAccess(), requireEventHostOwnership(), events.deleteEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
-const squadsRouter = Router();
-squadsRouter.get('/', squads.list);
-squadsRouter.post('/', requireOperationalAccess(), validateBody(parseSquadPayload), squads.create);
-squadsRouter.put('/:id', requireOperationalAccess(), validateBody(parseSquadPayload), squads.update);
-squadsRouter.delete('/:id', requireOperationalAccess(), squads.archive);
-squadsRouter.post('/:id/unarchive', requireOperationalAccess(), squads.unarchive);
-
 router.use('/auth', authRouter);
 router.use('/public/logger', publicLoggerRouter);
 router.use('/public/logger', publicMeetsRouter);
@@ -121,7 +112,6 @@ router.use(
 router.use('/dashboard', verifyAuth0Token, resolveApplicationUser, dashboardRouter);
 router.use('/analytics', verifyAuth0Token, resolveApplicationUser, analyticsRouter);
 router.use('/preferences', verifyAuth0Token, resolveApplicationUser, preferencesRouter);
-router.use('/squads', verifyAuth0Token, resolveApplicationUser, squadsRouter);
 router.use('/weather', verifyAuth0Token, resolveApplicationUser, weatherRouter);
 router.use('/venues', verifyAuth0Token, resolveApplicationUser, venuesRouter);
 router.use('/disciplines', verifyAuth0Token, resolveApplicationUser, disciplinesRouter);

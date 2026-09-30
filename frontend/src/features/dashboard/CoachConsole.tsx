@@ -43,7 +43,7 @@ const WEATHER_PRESETS: ReadonlyArray<{ id: WeatherPreset; label: string; tempera
   { id: 'night-rain', label: 'Night rain', temperature: 11 },
 ];
 const PAGE_COPY: Record<ConsoleView, { title: string; subtitle: string }> = {
-  dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your squad' },
+  dashboard: { title: 'Dashboard', subtitle: 'A live snapshot of your roster' },
   stats: { title: 'Season Stats', subtitle: 'Teams, athletes, results, and performance trends' },
   athletes: { title: 'Athletes', subtitle: 'Manage your active and archived roster' },
   comparison: { title: 'Compare Performance', subtitle: 'Compare athlete progression and all-time club performance' },
@@ -526,8 +526,8 @@ export function CoachConsole() {
         </div>
       </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
-      <section className={styles.readiness} aria-label="Squad readiness">
-        <header><span>Squad readiness</span></header>
+      <section className={styles.readiness} aria-label="Roster readiness">
+        <header><span>Roster readiness</span></header>
         <p>Active roster<b>{rosterCount ?? '—'}</b></p>
         <p>Upcoming events<b>{eventUpcomingCount ?? '—'}</b></p>
       </section>

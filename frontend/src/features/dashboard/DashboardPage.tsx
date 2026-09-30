@@ -102,7 +102,7 @@ function SummaryHeroCopy({ summary }: { summary: DashboardSummary }) {
       <div className={styles.summaryMeta}>
         <div><small>Local time</small><strong><time dateTime={now.toISOString()}>{now.toLocaleTimeString('en-GB')}</time></strong></div>
         <div><small>Active roster</small><strong>{summary.activeAthletesCount}</strong></div>
-        <div><small>Squad readiness</small><strong>{readiness}%</strong></div>
+        <div><small>Roster readiness</small><strong>{readiness}%</strong></div>
       </div>
     </div>
   );

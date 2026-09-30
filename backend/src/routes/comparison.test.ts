@@ -57,7 +57,7 @@ describe('comparison API route', () => {
     const comparison: ComparisonDetail = {
       athletes: [
         {
-          athlete: { id: ATHLETE_1_ID, name: 'Athlete One', squadNames: [], archivedAt: null },
+          athlete: { id: ATHLETE_1_ID, name: 'Athlete One', archivedAt: null },
           pb: 11.20,
           latestEffectiveResult: 11.20,
           latestEffectiveOutcome: 'valid',
@@ -70,7 +70,7 @@ describe('comparison API route', () => {
           disciplines: [],
         },
         {
-          athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', squadNames: [], archivedAt: null },
+          athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', archivedAt: null },
           pb: 11.80,
           latestEffectiveResult: 11.80,
           latestEffectiveOutcome: 'valid',
@@ -116,13 +116,13 @@ describe('comparison API route', () => {
     const comparison: ComparisonDetail = {
       athletes: [
         {
-          athlete: { id: ATHLETE_1_ID, name: 'Athlete One', squadNames: [], archivedAt: null },
+          athlete: { id: ATHLETE_1_ID, name: 'Athlete One', archivedAt: null },
           pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
           totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
           disciplines: [],
         },
         {
-          athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', squadNames: [], archivedAt: null },
+          athlete: { id: ATHLETE_2_ID, name: 'Athlete Two', archivedAt: null },
           pb: null, latestEffectiveResult: null, latestEffectiveOutcome: 'no_result', validResultCount: 0,
           totalResultCount: 0, average: null, consistency: null, improvement: null, progression: [],
           disciplines: [],
