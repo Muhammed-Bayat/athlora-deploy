@@ -1004,7 +1004,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
           <button type="button" aria-pressed={calendarScope === 'team'} onClick={() => setCalendarScope('team')}>My team</button>
           <button type="button" aria-pressed={calendarScope === 'combined'} onClick={() => setCalendarScope('combined')}>Club calendars</button>
         </div>
-        {calendarScope === 'team' ? <p>Your events and accepted shared fixtures.</p> : <div className={styles.clubPicker}>
+        {calendarScope === 'team' ? null : <div className={styles.clubPicker}>
           <div><label htmlFor="calendar-club-search">Add clubs to the calendar</label><Input id="calendar-club-search" value={clubSearch} onChange={(input) => setClubSearch(input.target.value)} placeholder="Search clubs" /></div>
           {clubResults.length > 0 && <ul className={styles.clubResults}>{clubResults.filter((club) => club.workspaceId !== activeWorkspace.id && !selectedClubs.some((selected) => selected.id === club.id)).map((club) => <li key={club.id}><span>{club.name}</span><Button variant="ghost" onClick={() => { setSelectedClubs((current) => [...current, club]); setClubSearch(''); setClubResults([]); }}>Add</Button></li>)}</ul>}
           {selectedClubs.length > 0 && <ul className={styles.selectedClubs} aria-label="Selected clubs">{selectedClubs.map((club, index) => <li data-club-index={index % 4} key={club.id}><i aria-hidden="true" />{club.name}<button type="button" aria-label={`Remove ${club.name}`} onClick={() => setSelectedClubs((current) => current.filter((selected) => selected.id !== club.id))}>×</button></li>)}</ul>}
