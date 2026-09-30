@@ -67,7 +67,6 @@ beforeEach(() => {
   brandingApi.getClubBranding.mockResolvedValue({
     description: null,
     primaryColor: null,
-    accentColor: null,
     logoUrl: null,
     logoContentType: null,
     coverUrl: null,

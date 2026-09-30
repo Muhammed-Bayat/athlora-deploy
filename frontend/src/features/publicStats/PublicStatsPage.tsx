@@ -115,7 +115,6 @@ function PublicClubDisciplineComparisonPanel({ clubs, season, disciplines }: { c
 
 function ClubStatCard({ statistics, season, discipline }: { statistics: PublicClubStatistics; season: SeasonValue; discipline: PublicDiscipline }) {
   const branding = statistics.club.branding;
-  const accentColor = branding?.accentColor ?? undefined;
   const disciplineResults = statistics.athletes.flatMap((athlete) => athlete.disciplines ?? []).filter((entry) => entry.discipline === discipline.discipline);
   const resultCount = disciplineResults.reduce((total, entry) => total + entry.validResultCount, 0);
   const best = disciplineResults.length === 0 ? null : discipline.direction === 'lower'
@@ -129,16 +128,11 @@ function ClubStatCard({ statistics, season, discipline }: { statistics: PublicCl
   ];
 
   return (
-    <article
-      className={styles.clubCard}
-      onPointerMove={setTilt}
-      onPointerLeave={resetTilt}
-      style={accentColor ? { borderColor: accentColor } : undefined}
-    >
+    <article className={styles.clubCard} onPointerMove={setTilt} onPointerLeave={resetTilt}>
       <div className={styles.cardSheen} aria-hidden="true" />
       <div className={styles.clubIdentity}>
         <span>ATHLORA / CLUB RESULTS</span>
-        <i aria-hidden="true" style={accentColor ? { background: accentColor, boxShadow: `0 0 14px ${accentColor}` } : undefined} />
+        <i aria-hidden="true" />
         <h2>
           <ClubBadge name={statistics.club.name} branding={branding} size="lg" decorative />
           <span>{statistics.club.name}</span>

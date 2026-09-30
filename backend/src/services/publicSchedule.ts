@@ -24,7 +24,6 @@ interface PublicScheduleClubRow {
   name: string;
   description: string | null;
   primary_color: string | null;
-  accent_color: string | null;
   logo_key: string | null;
   cover_key: string | null;
 }
@@ -97,7 +96,6 @@ function publicBrandSummary(row: PublicScheduleClubRow) {
   return {
     description: row.description,
     primaryColor: row.primary_color,
-    accentColor: row.accent_color,
     logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
     coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
   };
@@ -108,7 +106,7 @@ export async function listPublicScheduleClubs(
   executor: DbExecutor = getPool(),
 ): Promise<PublicClub[]> {
   const result = await executor.query<PublicScheduleClubRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key
      FROM clubs
      WHERE public_schedule_enabled = true
        AND ($1::text IS NULL OR name ILIKE '%' || $1 || '%')
@@ -126,7 +124,7 @@ export async function getPublicClubSchedule(
 ): Promise<PublicClubSchedule> {
   if (!isCanonicalUuid(clubId)) throw notFound();
   const clubResult = await executor.query<PublicScheduleClubRow>(
-    `SELECT id, workspace_id, name, description, primary_color, accent_color, logo_key, cover_key
+    `SELECT id, workspace_id, name, description, primary_color, logo_key, cover_key
      FROM clubs
      WHERE id = $1 AND public_schedule_enabled = true`,
     [clubId],

@@ -12,7 +12,6 @@ interface BrandingRow {
   workspace_id: string;
   description: string | null;
   primary_color: string | null;
-  accent_color: string | null;
   logo_key: string | null;
   logo_content_type: string | null;
   cover_key: string | null;
@@ -23,7 +22,6 @@ const BRANDING_COLUMNS = `
   workspace_id,
   description,
   primary_color,
-  accent_color,
   logo_key,
   logo_content_type,
   cover_key,
@@ -38,7 +36,6 @@ function mapBranding(row: BrandingRow): ClubBranding {
   return {
     description: row.description,
     primaryColor: row.primary_color,
-    accentColor: row.accent_color,
     logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
     logoContentType: row.logo_content_type,
     coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
@@ -51,7 +48,6 @@ export function toBrandSummary(row: Partial<BrandingRow> & { workspace_id?: stri
   return {
     description: row.description ?? null,
     primaryColor: row.primary_color ?? null,
-    accentColor: row.accent_color ?? null,
     logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
     coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
   };
@@ -74,18 +70,17 @@ export async function getClubBranding(
 
 export async function updateClubBranding(
   workspaceId: string,
-  payload: { description: string | null; primaryColor: string | null; accentColor: string | null },
+  payload: { description: string | null; primaryColor: string | null },
   executor: DbExecutor = getPool(),
 ): Promise<ClubBranding> {
   const result = await executor.query<BrandingRow>(
     `UPDATE clubs
-     SET description = $2,
-         primary_color = $3,
-         accent_color = $4,
-         updated_at = now()
+      SET description = $2,
+          primary_color = $3,
+          updated_at = now()
      WHERE workspace_id = $1
      RETURNING ${BRANDING_COLUMNS}`,
-    [workspaceId, payload.description, payload.primaryColor, payload.accentColor],
+    [workspaceId, payload.description, payload.primaryColor],
   );
   const row = result.rows[0];
   if (!row) throw clubNotFound();

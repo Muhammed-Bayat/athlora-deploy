@@ -35,7 +35,7 @@ GET /api/v1/public/schedule/clubs?q={name}
 Returns up to 100 clubs with a published schedule matching the optional case-insensitive name search. Unpublished clubs are never returned.
 
 ```json
-{ "data": [{ "id": "uuid", "name": "Open Track Club", "branding": { "description": null, "primaryColor": null, "accentColor": null, "logoUrl": null, "coverUrl": null } }], "meta": { count: 1 } }
+{ "data": [{ "id": "uuid", "name": "Open Track Club", "branding": { "description": null, "primaryColor": null, "logoUrl": null, "coverUrl": null } }], "meta": { count: 1 } }
 ```
 
 ## Upcoming club schedule
@@ -52,7 +52,7 @@ Returns `404 NOT_FOUND` if the club is unknown or its schedule is not published.
     "club": {
       "id": "uuid",
       "name": "Open Track Club",
-      "branding": { "description": null, "primaryColor": null, "accentColor": null, "logoUrl": null, "coverUrl": null }
+      "branding": { "description": null, "primaryColor": null, "logoUrl": null, "coverUrl": null }
     },
     "events": [
       {
@@ -75,4 +75,4 @@ Events are ordered by date ascending, then time ascending (nulls last), then cre
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free]. The `disciplines` event field and ordering/branding clarifications were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free]. The `disciplines` event field and ordering/branding clarifications were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra].

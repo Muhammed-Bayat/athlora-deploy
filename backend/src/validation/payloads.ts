@@ -98,7 +98,6 @@ export interface ClubPublicationPayload {
 export interface ClubBrandingPayload {
   description: string | null;
   primaryColor: string | null;
-  accentColor: string | null;
 }
 
 export type UserPreferencesPayload = UserPreferences;
@@ -244,7 +243,7 @@ const RESULT_OVERRIDE_FIELDS = ['manualOverride', 'overrideReason'] as const;
 const FIXTURE_INVITATION_CREATE_FIELDS = ['targetClubId', 'expiresInDays'] as const;
 const FIXTURE_INVITATION_RESPONSE_FIELDS = ['response', 'message'] as const;
 const CLUB_PUBLICATION_FIELDS = ['publicResultsEnabled', 'publicScheduleEnabled'] as const;
-const CLUB_BRANDING_FIELDS = ['description', 'primaryColor', 'accentColor'] as const;
+const CLUB_BRANDING_FIELDS = ['description', 'primaryColor'] as const;
 const CLUB_BRANDING_DESCRIPTION_MAX = 500;
 
 type PayloadObject = Record<string, unknown>;
@@ -304,7 +303,7 @@ export function parseClubPublicationPayload(input: unknown): ClubPublicationPayl
 
 function optionalBrandingColor(
   payload: PayloadObject,
-  field: 'primaryColor' | 'accentColor',
+  field: 'primaryColor',
   issues: ValidationIssue[],
 ): string | null {
   if (!hasOwn(payload, field) || payload[field] === null) return null;
@@ -347,10 +346,9 @@ export function parseClubBrandingPayload(input: unknown): ClubBrandingPayload {
   }
 
   const primaryColor = optionalBrandingColor(payload, 'primaryColor', issues);
-  const accentColor = optionalBrandingColor(payload, 'accentColor', issues);
 
   if (issues.length > 0) throwValidation(issues);
-  return { description, primaryColor, accentColor };
+  return { description, primaryColor };
 }
 
 const PREFERENCES_FIELDS = ['dashboardCardOrder', 'dashboardHiddenCards', 'dashboardSavedFilters'] as const;

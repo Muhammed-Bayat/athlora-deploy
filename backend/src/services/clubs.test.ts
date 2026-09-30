@@ -52,7 +52,6 @@ describe('listClubs', () => {
       name: 'Sprinters',
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
       created_at: new Date(),
@@ -69,7 +68,6 @@ describe('listClubs', () => {
       branding: {
         description: null,
         primaryColor: null,
-        accentColor: null,
         logoUrl: null,
         coverUrl: null,
       },
@@ -154,7 +152,6 @@ describe('club comparison data', () => {
         name: 'Sprinters',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -183,7 +180,6 @@ describe('club comparison data', () => {
         name: 'Sprinters',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -205,7 +201,6 @@ describe('club comparison data', () => {
         branding: {
           description: null,
           primaryColor: null,
-          accentColor: null,
           logoUrl: null,
           coverUrl: null,
         },
@@ -238,7 +233,6 @@ describe('club comparison data', () => {
         name: 'Sprinters',
         description: null,
         primary_color: null,
-        accent_color: null,
         logo_key: null,
         cover_key: null,
       }]))
@@ -260,7 +254,7 @@ describe('club comparison data', () => {
     query
       .mockResolvedValueOnce(poolRow([{
         id: CLUB_ID, workspace_id: WORKSPACE_ID, name: 'Sprinters', description: null,
-        primary_color: null, accent_color: null, logo_key: null, cover_key: null,
+        primary_color: null, logo_key: null, cover_key: null,
       }]))
       .mockResolvedValueOnce(poolRow([{
         active_count: '1', inactive_count: '0', archived_count: '0', total_count: '1',
@@ -304,7 +298,6 @@ describe('club comparison data', () => {
       name,
       description: null,
       primary_color: null,
-      accent_color: null,
       logo_key: null,
       cover_key: null,
     });

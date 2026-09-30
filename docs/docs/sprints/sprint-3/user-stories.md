@@ -131,10 +131,10 @@ Stories are ordered by the team's delivery-row plan (quick wins, parallel founda
 ### US-006: Club Branding and Media
 - **Issue:** #243
 - **Priority:** Medium
-- **User Story:** As a coach, I want to add my club's description, colours, logo, and cover image, so that public pages and the console present a recognizable club identity.
+- **User Story:** As a coach, I want to add my club's description, primary colour, logo, and cover image, so that public pages and the console present a recognizable club identity.
 
 #### Acceptance Criteria (Given/When/Then)
-1. **Given** I am a coach, **When** I upload a club logo and cover via the club branding endpoints, **Then** the media is stored and served through the media API, and `club.branding` (`description`, `primaryColor`, `accentColor`, `logoUrl`, `coverUrl`) reflects the update.
+1. **Given** I am a coach, **When** I upload a club logo and cover via the club branding endpoints, **Then** the media is stored and served through the media API, and `club.branding` (`description`, `primaryColor`, `logoUrl`, `coverUrl`) reflects the update.
 2. **Given** a club with branding set, **When** public statistics or schedule pages render, **Then** the club badge/identity uses the stored branding, falling back to name initials when `logoUrl` is null.
 3. **Given** an invalid upload (wrong type or oversized file), **When** submitted, **Then** the API rejects it with `400 VALIDATION_ERROR` without changing existing branding.
 4. **Given** object storage is not configured, **When** an upload is attempted, **Then** the request fails gracefully without corrupting existing branding (media storage is deferred until the bucket is available).
@@ -428,3 +428,4 @@ Stories are ordered by the team's delivery-row plan (quick wins, parallel founda
 This document was generated and refined with the assistance of AI tools:
 - **Code Generation & Documentation Synthesis:** `opencode[muse-spark]`
 - **In-line Review & Structuring:** `opencode[muse-spark]`
+- **Club Accent-Colour Removal:** `OpenCode[openai/gpt-5.6-terra]`

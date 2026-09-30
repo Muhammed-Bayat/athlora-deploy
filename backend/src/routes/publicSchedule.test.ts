@@ -22,7 +22,6 @@ describe('public schedule routes', () => {
       branding: {
         description: null,
         primaryColor: null,
-        accentColor: null,
         logoUrl: null,
         coverUrl: null,
       },
@@ -38,7 +37,6 @@ describe('public schedule routes', () => {
         branding: {
           description: null,
           primaryColor: null,
-          accentColor: null,
           logoUrl: null,
           coverUrl: null,
         },
@@ -56,7 +54,6 @@ describe('public schedule routes', () => {
         branding: {
           description: null,
           primaryColor: null,
-          accentColor: null,
           logoUrl: null,
           coverUrl: null,
         },
@@ -85,7 +82,6 @@ describe('public schedule routes', () => {
       branding: {
         description: null,
         primaryColor: null,
-        accentColor: null,
         logoUrl: null,
         coverUrl: null,
       },

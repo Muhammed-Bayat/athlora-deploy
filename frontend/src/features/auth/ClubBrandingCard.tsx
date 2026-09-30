@@ -36,7 +36,6 @@ export function ClubBrandingCard() {
   const [loading, setLoading] = useState(true);
   const [description, setDescription] = useState('');
   const [primaryColor, setPrimaryColor] = useState('');
-  const [accentColor, setAccentColor] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -47,7 +46,6 @@ export function ClubBrandingCard() {
     setBranding(next);
     setDescription(next.description ?? '');
     setPrimaryColor(next.primaryColor ?? '');
-    setAccentColor(next.accentColor ?? '');
   }, []);
 
   useEffect(() => {
@@ -62,8 +60,7 @@ export function ClubBrandingCard() {
   }, [activeWorkspace.id, applyBranding]);
 
   const primaryIssue = colorIssue(primaryColor);
-  const accentIssue = colorIssue(accentColor);
-  const canSave = Boolean(branding) && !primaryIssue && !accentIssue && !busy;
+  const canSave = Boolean(branding) && !primaryIssue && !busy;
 
   const saveDetails = async (event: FormEvent) => {
     event.preventDefault();
@@ -75,7 +72,6 @@ export function ClubBrandingCard() {
       applyBranding(await updateClubBranding({
         description: description.trim() || null,
         primaryColor: primaryColor ? primaryColor.toUpperCase() : null,
-        accentColor: accentColor ? accentColor.toUpperCase() : null,
       }));
       setStatus('Branding saved.');
     } catch (requestError) {
@@ -130,7 +126,6 @@ export function ClubBrandingCard() {
   const previewBranding = {
     description: description || null,
     primaryColor: primaryColor || null,
-    accentColor: accentColor || null,
     logoUrl: branding?.logoUrl ?? null,
     coverUrl: branding?.coverUrl ?? null,
   };
@@ -159,7 +154,6 @@ export function ClubBrandingCard() {
               {description && <p>{description}</p>}
               <div className={styles.swatches} aria-hidden="true">
                 <span style={primaryColor && isHexColor(primaryColor) ? { background: primaryColor, color: pickForeground(primaryColor) } : undefined}>Primary</span>
-                <span style={accentColor && isHexColor(accentColor) ? { background: accentColor, color: pickForeground(accentColor) } : undefined}>Accent</span>
               </div>
             </div>
             {branding.coverUrl && <img className={styles.coverPreview} src={branding.coverUrl} alt="" />}
@@ -192,18 +186,6 @@ export function ClubBrandingCard() {
                     />
                     <code>{primaryColor || 'not set'}</code>
                     {primaryIssue && <small role="alert">{primaryIssue}</small>}
-                  </div>
-                  <div className={styles.brandingField}>
-                    <label htmlFor="club-accent-color">Accent colour</label>
-                    <input
-                      id="club-accent-color"
-                      type="color"
-                      value={isHexColor(accentColor) ? accentColor : '#45BED7'}
-                      onChange={(event) => setAccentColor(event.target.value.toUpperCase())}
-                      disabled={busy}
-                    />
-                    <code>{accentColor || 'not set'}</code>
-                    {accentIssue && <small role="alert">{accentIssue}</small>}
                   </div>
                 </div>
                 <div className={styles.actions}>

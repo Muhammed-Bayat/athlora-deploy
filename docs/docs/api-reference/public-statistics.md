@@ -48,7 +48,6 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
       "branding": {
         "description": "City athletics club",
         "primaryColor": "#001D3C",
-        "accentColor": "#45BED7",
         "logoUrl": "/api/v1/media/clubs/uuid/logo-....png",
         "coverUrl": null
       }
@@ -148,4 +147,4 @@ GET /api/v1/public/statistics/standings?season={year|all}
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report and exact public age filtering were documented with the assistance of OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report and exact public age filtering were documented with the assistance of OpenCode[gpt-5.6-terra]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra].

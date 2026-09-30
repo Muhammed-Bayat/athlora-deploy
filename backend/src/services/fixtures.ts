@@ -41,7 +41,6 @@ export interface FixtureTeam {
   branding?: {
     description?: string | null;
     primaryColor?: string | null;
-    accentColor?: string | null;
     logoUrl?: string | null;
     coverUrl?: string | null;
   };
@@ -600,11 +599,11 @@ async function fixtureTeams(executor: DbExecutor, eventId: string): Promise<Fixt
   const result = await executor.query<{
     workspace_id: string; workspace_name: string; status: FixtureWorkspaceStatus;
     accepted_revision: number; withdrawn_at: Date | string | null;
-    description: string | null; primary_color: string | null; accent_color: string | null;
+    description: string | null; primary_color: string | null;
     logo_key: string | null; cover_key: string | null;
   }>(
     `SELECT fw.workspace_id, w.name AS workspace_name, fw.status, fw.accepted_revision, fw.withdrawn_at,
-            c.description, c.primary_color, c.accent_color, c.logo_key, c.cover_key
+             c.description, c.primary_color, c.logo_key, c.cover_key
      FROM event_fixture_workspaces fw JOIN workspaces w ON w.id = fw.workspace_id
      LEFT JOIN clubs c ON c.workspace_id = fw.workspace_id
      WHERE fw.event_id = $1 ORDER BY CASE fw.role WHEN 'host' THEN 0 ELSE 1 END, lower(w.name), w.id`,
@@ -619,7 +618,6 @@ async function fixtureTeams(executor: DbExecutor, eventId: string): Promise<Fixt
     branding: {
       description: row.description,
       primaryColor: row.primary_color,
-      accentColor: row.accent_color,
       logoUrl: row.logo_key ? publicMediaPath(row.workspace_id, row.logo_key) : null,
       coverUrl: row.cover_key ? publicMediaPath(row.workspace_id, row.cover_key) : null,
     },

@@ -25,7 +25,6 @@ const query = vi.fn();
 const BRANDING = {
   description: 'City athletics club',
   primaryColor: '#001D3C',
-  accentColor: '#45BED7',
   logoUrl: null,
   logoContentType: null,
   coverUrl: null,
@@ -64,7 +63,7 @@ beforeEach(() => {
 describe('club branding routes', () => {
   it('requires authentication for every branding method', async () => {
     expect((await request(app).get('/api/v1/clubs/branding')).status).toBe(401);
-    expect((await request(app).put('/api/v1/clubs/branding').send({ description: null, primaryColor: null, accentColor: null })).status).toBe(401);
+    expect((await request(app).put('/api/v1/clubs/branding').send({ description: null, primaryColor: null })).status).toBe(401);
     expect((await request(app).post('/api/v1/clubs/branding/logo')).status).toBe(401);
     expect((await request(app).delete('/api/v1/clubs/branding/logo')).status).toBe(401);
     expect(brandingService.getClubBranding).not.toHaveBeenCalled();
@@ -82,19 +81,18 @@ describe('club branding routes', () => {
     expect(brandingService.getClubBranding).toHaveBeenCalledWith(WORKSPACE_ID);
   });
 
-  it('lets a coach update description and colours', async () => {
+  it('lets a coach update description and primary colour', async () => {
     query.mockResolvedValueOnce(applicationUser('coach'));
 
     const response = await request(app)
       .put('/api/v1/clubs/branding')
       .set('Authorization', 'Bearer valid')
-      .send({ description: 'City athletics club', primaryColor: '#001D3C', accentColor: '#45BED7' });
+      .send({ description: 'City athletics club', primaryColor: '#001D3C' });
 
     expect(response.status).toBe(200);
     expect(brandingService.updateClubBranding).toHaveBeenCalledWith(WORKSPACE_ID, {
       description: 'City athletics club',
       primaryColor: '#001D3C',
-      accentColor: '#45BED7',
     });
   });
 
@@ -104,7 +102,7 @@ describe('club branding routes', () => {
     const response = await request(app)
       .put('/api/v1/clubs/branding')
       .set('Authorization', 'Bearer valid')
-      .send({ description: null, primaryColor: null, accentColor: null });
+      .send({ description: null, primaryColor: null });
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('WORKSPACE_CAPABILITY_DENIED');

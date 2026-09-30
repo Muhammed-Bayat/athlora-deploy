@@ -16,7 +16,6 @@ export interface User {
 export interface ClubBranding {
   description: string | null;
   primaryColor: string | null;
-  accentColor: string | null;
   logoUrl: string | null;
   logoContentType: string | null;
   coverUrl: string | null;
@@ -26,7 +25,6 @@ export interface ClubBranding {
 export interface ClubBrandSummary {
   description?: string | null;
   primaryColor?: string | null;
-  accentColor?: string | null;
   logoUrl?: string | null;
   coverUrl?: string | null;
 }

@@ -24,7 +24,6 @@ export const updateBranding: RequestHandler = async (req, res, next) => {
     const branding = await updateClubBranding(getApplicationUserContext(req).workspaceId, {
       description: req.body.description,
       primaryColor: req.body.primaryColor,
-      accentColor: req.body.accentColor,
     });
     res.json({ data: branding });
   } catch (error) { next(error); }
