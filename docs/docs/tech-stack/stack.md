@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Tech Stack
 
-Athlora is a non-monolithic athletics coaching application: a browser SPA, a REST API, and PostgreSQL are separate services. The current implementation is deliberately limited to 100m timing so the team can make live logging, corrections, result derivation, and coach ownership reliable before expanding to the full athletics meet: races, hurdles, relays, race walks, jumps, throws, and vertical events.
+Athlora is a non-monolithic athletics coaching application: a browser SPA, a REST API, and PostgreSQL are separate services. The shipped implementation covers the multi-discipline catalogue — timed track races including hurdles and race walks, measured jumps and throws, vertical events, and relays — alongside the original legacy 100m contract, plus shared cross-club fixtures, public statistics/schedules/reports, offline logging, club branding, and the console assistant. Multi-events and automated season scheduling remain future work.
 
 ## Implemented Stack
 | Layer | Tool | Why |
@@ -59,6 +59,7 @@ Athlora is a non-monolithic athletics coaching application: a browser SPA, a RES
 - **Three.js / React Three Fiber / Drei**: on-demand anatomical body viewer for persistent injury mapping with topology-bound surface heat maps.
 - **@google/genai**: Google Gemini SDK for the Live voice assistant, providing the `BidiGenerateContentConstrained` WebSocket API and tool-call interception.
 - **qrcode**: QR code generation for public logger link sharing.
+- **pdf-lib**: client-side PDF generation in the SPA for downloadable public statistics reports and assistant-generated PDF reports.
 
 - `dotenv` loads server-only local configuration; browser configuration is restricted to public `VITE_*` values.
 - `tsx` provides the API's watch-mode development server without a separate build step.
@@ -79,23 +80,17 @@ All authenticated dialogs (add, edit, correction, confirmation) use the shared `
 
 ## Planned Stack
 
-These tools are in the development plan but are **not** current runtime dependencies. They will be introduced only with the feature they support.
-
-| Stage | Technology | Intended Athlora use | Why it is deferred |
-|---|---|---|---|
-| Stage 3 | `pdf-lib` | Downloadable athlete or event reports. | Exports depend on stable results, public/reporting requirements, and agreed layout. |
-
-Planned work also includes discipline expansion, role-based authorization refinements, shared fixtures enhancement, offline merge rules, public result pages, scheduling, and rule-based coaching summaries. These are product capabilities rather than currently selected packages; their implementation will be documented when their contracts are agreed.
+There are no currently deferred packages. The remaining product capabilities — multi-events and automated season scheduling — are product features rather than selected technologies; their implementation will be documented when their contracts are agreed.
 
 The complete direct-dependency register, including versions, licenses, sources, purposes, and operational notes, is maintained in [Third-party software and services](./third-party).
 
 ## Deliberate Constraints
 
-- The currently shipped live contract supports 100m results in seconds only. The product scope is the full athletics meet; each added discipline requires coordinated validation, UI, schema, derivation, placing, PB/SB, and test changes.
+- The shipped catalogue covers timed track disciplines (including hurdles and race walks), measured jumps and throws, vertical events, and relays, alongside the legacy 100m contract. Multi-events and automated season scheduling remain out of scope until their contracts are agreed; each added capability requires coordinated validation, UI, schema, derivation, placing, PB/SB, and test changes.
 - The frontend and backend remain separate services. A fused framework is intentionally not used.
 - Derived results remain server-authoritative. A manual override is audited rather than replacing the original timeline record.
 - No third-party service receives the Auth0 Management API secret except the backend; it is never exposed through the frontend build.
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The multi-discipline catalogue status update was edited with Qoder.
