@@ -126,6 +126,20 @@ export interface SessionResult extends SessionTarget {
   updatedAt: string;
 }
 
+export interface EventFinalResult {
+  entrantId: string;
+  name: string;
+  clubName: string;
+  discipline: string;
+  disciplineLabel: string;
+  finalResult: number | null;
+  outcome: ResultOutcome;
+  unit: DisciplineDefinition['unit'];
+  precision: number;
+  placing: number | null;
+  relayMembers: string[];
+}
+
 export interface SessionStatistics {
   disciplineSessionId: string;
   entrantId: string | null;

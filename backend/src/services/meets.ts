@@ -1,7 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
-import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
+import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
@@ -129,6 +129,48 @@ export async function listEntrants(actor: MeetActor, eventId: string, db: DbExec
     [eventId],
   );
   return result.rows.map((row) => mapMeetRow<MeetEntrant>(row));
+}
+
+export async function listEventFinalResults(actor: MeetActor, eventId: string, db: DbExecutor = getPool()): Promise<EventFinalResult[]> {
+  const access = await meetAccess(db, actor, eventId);
+  if (access.event.status !== 'completed') return [];
+  const result = await db.query<{
+    entrant_id: string; name: string; club_name: string; code: string; discipline_label: string;
+    final_result: string | null; outcome: EventFinalResult['outcome']; unit: EventFinalResult['unit'];
+    precision: string | number; final_place: string | null; relay_members: string[];
+  }>(
+    `SELECT en.id AS entrant_id, en.name, COALESCE(en.club_name, c.name, w.name) AS club_name,
+            d.code, d.presentation->>'label' AS discipline_label, r.final_result, r.outcome,
+            d.unit, d.precision, r.final_place,
+            COALESCE((SELECT json_agg(member.name ORDER BY rm.leg)
+              FROM relay_members rm
+              JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
+              WHERE rm.relay_id = en.id AND rm.event_id = en.event_id), '[]'::json) AS relay_members
+     FROM session_results r
+     JOIN discipline_sessions s ON s.id = r.session_id AND s.event_id = r.event_id
+     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+     JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id AND se.withdrawn_at IS NULL
+     JOIN meet_entrants en ON en.id = r.entrant_id AND en.event_id = r.event_id
+     LEFT JOIN clubs c ON c.workspace_id = en.workspace_id
+     LEFT JOIN workspaces w ON w.id = en.workspace_id
+     WHERE r.event_id = $1 AND s.status = 'completed' AND s.result_state = 'final'
+       AND d.code = ANY($2::text[])
+     ORDER BY array_position($2::text[], d.code), r.final_place NULLS LAST, lower(en.name), en.id`,
+    [eventId, SUPPORTED_DISCIPLINE_CODES],
+  );
+  return result.rows.map((row) => ({
+    entrantId: row.entrant_id,
+    name: row.name,
+    clubName: row.club_name,
+    discipline: row.code,
+    disciplineLabel: row.discipline_label,
+    finalResult: row.final_result === null ? null : Number(row.final_result),
+    outcome: row.outcome,
+    unit: row.unit,
+    precision: Number(row.precision),
+    placing: row.final_place === null ? null : Number(row.final_place),
+    relayMembers: row.relay_members,
+  }));
 }
 
 export async function createEntrant(actor: MeetActor, eventId: string, input: EntrantCreateInput, transaction: MeetTransaction = withTransaction): Promise<MeetEntrant> {
