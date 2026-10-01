@@ -10,6 +10,7 @@ router.get('/:eventId/sessions', meets.sessions);
 router.post('/:eventId/sessions', requireOperationalAccess(), meets.createSession);
 router.patch('/:eventId/sessions/:disciplineSessionId', requireCoach(), meets.changeSession);
 router.get('/:eventId/entrants', meets.entrants);
+router.get('/:eventId/final-results', meets.finalResults);
 router.post('/:eventId/entrants', requireCoach(), meets.createEntrant);
 router.patch('/:eventId/entrants/:entrantId', requireCoach(), meets.updateEntrant);
 router.get('/:eventId/sessions/:disciplineSessionId/entrants', meets.registrations);

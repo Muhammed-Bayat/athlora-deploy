@@ -1,6 +1,6 @@
 import { request } from './client';
 import type { ApiList, EventStatus } from '../types';
-import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, MeetEntrant, SessionEntry, SessionEntryInput, SessionOverrideInput, SessionRegistration, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget, SessionResolution } from '../types/meets';
+import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetEntrant, SessionEntry, SessionEntryInput, SessionOverrideInput, SessionRegistration, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget, SessionResolution } from '../types/meets';
 
 const eventPath = (eventId: string) => `/api/v1/events/${encodeURIComponent(eventId)}`;
 const sessionPath = (eventId: string, sessionId: string) => `${eventPath(eventId)}/sessions/${encodeURIComponent(sessionId)}`;
@@ -13,6 +13,7 @@ export const listSessions = (eventId: string) => request<ApiList<DisciplineSessi
 export const createSession = (eventId: string, body: { disciplineDefinitionId: string; label: string; verticalConfig?: import('../types/meets').VerticalConfig }) => mutate<DisciplineSession>(`${eventPath(eventId)}/sessions`, 'POST', body);
 export const changeSessionState = (eventId: string, sessionId: string, status: EventStatus, expectedVersion: number) => mutate<DisciplineSession>(sessionPath(eventId, sessionId), 'PATCH', { status, expectedVersion });
 export const listEntrants = (eventId: string) => request<ApiList<MeetEntrant>>(`${eventPath(eventId)}/entrants`);
+export const listEventFinalResults = (eventId: string) => request<ApiList<EventFinalResult>>(`${eventPath(eventId)}/final-results`);
 export const createEntrant = (eventId: string, body: EntrantCreateInput) => mutate<MeetEntrant>(`${eventPath(eventId)}/entrants`, 'POST', body);
 export const updateEntrant = (eventId: string, entrantId: string, body: EntrantUpdateInput) => mutate<MeetEntrant>(`${eventPath(eventId)}/entrants/${encodeURIComponent(entrantId)}`, 'PATCH', body);
 export const listRegistrations = (eventId: string, sessionId: string) => request<ApiList<SessionRegistration>>(`${sessionPath(eventId, sessionId)}/entrants`);

@@ -19,7 +19,7 @@ vi.mock('./VenuePreview', () => ({ VenuePreview: () => <p>Venue map</p> }));
 vi.mock('./PublicLoggerPanel', () => ({ PublicLoggerPanel: () => <section aria-label="Public logger links">Public logger links</section> }));
 vi.mock('./FixtureHostPanel', () => ({ FixtureHostPanel: () => <section aria-label="Host fixture controls">Host fixture controls</section> }));
 vi.mock('./MeetRosterPanel', () => ({ MeetRosterPanel: ({ isGuest }: { isGuest: boolean }) => <section aria-label="Multi-discipline roster">{isGuest ? 'Guest discipline tabs' : 'Host discipline tabs'}</section> }));
-vi.mock('./SessionLivePanel', () => ({ SessionLivePanel: () => <section aria-label="Session live logger">Session live logger</section> }));
+vi.mock('./EventFinalResults', () => ({ EventFinalResults: () => <section aria-label="Event final results">Event final results</section> }));
 vi.mock('./GuestRosterPanel', () => ({ GuestRosterPanel: ({ scheduled }: { scheduled: boolean }) => <section aria-label="Guest roster">Guest roster {scheduled ? 'editable' : 'read only'}</section> }));
 vi.mock('../results/EventResultsSection', () => ({ EventResultsSection: () => <section aria-label="Event results">Event results</section> }));
 vi.mock('../results/ResultCorrectionForm', () => ({ ResultCorrectionForm: () => null }));
@@ -117,12 +117,13 @@ describe('EventDetailPage', () => {
     await waitFor(() => expect(screen.queryAllByRole('region', { name: 'Host fixture controls' })).toHaveLength(1));
   });
 
-  it('shows the session live logger in both team event views while keeping public logger links hidden', async () => {
+  it('shows final results instead of the session live logger in both team event views', async () => {
     const multiDisciplineEvent = { ...event, discipline: null };
     render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
 
     await screen.findByRole('region', { name: 'Multi-discipline roster' });
-    expect(screen.getByRole('region', { name: 'Session live logger' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Event final results' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Session live logger' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
 
     workspace.id = 'guest-workspace';
@@ -130,7 +131,7 @@ describe('EventDetailPage', () => {
     render(<EventDetailPage eventId={event.id} initialEvent={multiDisciplineEvent} onBack={vi.fn()} />);
 
     await waitFor(() => expect(screen.getAllByRole('region', { name: 'Multi-discipline roster' })).toHaveLength(2));
-    expect(screen.getAllByRole('region', { name: 'Session live logger' })).toHaveLength(2);
+    expect(screen.getAllByRole('region', { name: 'Event final results' })).toHaveLength(2);
     expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
   });
 

@@ -39,6 +39,7 @@ function handler(operation: (req: Request) => Promise<unknown>, status = 200): R
 export const catalogue = handler(() => meets.listDisciplines());
 export const sessions = handler((req) => meets.listSessions(actor(req), parameter(req, 'eventId')));
 export const entrants = handler((req) => meets.listEntrants(actor(req), parameter(req, 'eventId')));
+export const finalResults = handler((req) => meets.listEventFinalResults(actor(req), parameter(req, 'eventId')));
 export const createSession = handler(async (req) => {
   const eventId = parameter(req, 'eventId');
   const session = await meets.createSession(actor(req), eventId, parseSessionCreate(req.body));

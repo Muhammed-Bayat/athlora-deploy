@@ -61,6 +61,11 @@ export interface SessionResult extends SessionTarget {
   effectiveOutcome: ResultOutcome; countsTowardsStatistics: boolean; placing: number | null;
   version: number; createdAt: string; updatedAt: string;
 }
+export interface EventFinalResult {
+  entrantId: string; name: string; clubName: string; discipline: string; disciplineLabel: string;
+  finalResult: number | null; outcome: ResultOutcome; unit: DisciplineDefinition['unit']; precision: number;
+  placing: number | null; relayMembers: string[];
+}
 export interface SessionStatistics {
   disciplineSessionId: string; entrantId: string | null; disciplineDefinitionId: string;
   unit: DisciplineDefinition['unit']; direction: DisciplineDefinition['direction'];

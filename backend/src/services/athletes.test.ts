@@ -194,7 +194,7 @@ describe('replaceAthlete', () => {
     await expect(replaceAthlete(USER_ID, ATHLETE_ID, payload, { query } as never)).rejects.toMatchObject({ code: 'INVALID_GOAL_TARGET' });
     expect(query).toHaveBeenCalledWith(expect.stringContaining('discipline_definitions'), [
       [ATHLETE_ID],
-      ['100m', '200m', '400m', '800m', '1500m', '100mh', '400mh', 'long_jump', 'high_jump', 'triple_jump', 'javelin', 'discus', 'shot_put', '4x100m'],
+      ['100m', '200m', '400m', '800m', '1500m', '100mh', '400mh', '4x100m', 'high_jump', 'long_jump', 'triple_jump', 'javelin', 'discus', 'shot_put'],
     ]);
 
     query.mockClear();
