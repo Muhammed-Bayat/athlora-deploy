@@ -8,7 +8,7 @@ The authoritative contract for the legacy 100m vertical slice and the catalogue-
 
 All paths in this document are relative to `/api/v1`. The only route outside that prefix is the unauthenticated liveness probe `GET /health` (registered in `backend/src/app.ts` before the `/api/v1` mount), which returns the bare body `{ "status": "ok" }` rather than a `data` envelope.
 
-Athlora's product scope is a full athletics meet, not only 100m. Additional track, relay, race-walk, jump, throw, and vertical-event contracts will extend this document with their own units, validation, entry shapes, derivation, placing, and PB/SB rules. Until those contracts are implemented, this page remains exact for the shipped 100m API.
+Athlora's product scope is a full athletics meet, not only 100m. The catalogue-backed track, relay, race-walk, jump, throw, and vertical-event contracts are implemented through the generic meet, session, and analytics routes below; they carry their own units, validation, entry shapes, derivation, placing, and PB/SB rules. The legacy `/events` timeline slice remains 100m-only.
 
 The database schema stays permissive (`discipline` is free-form `TEXT`; the `unit` column allows `seconds`/`metres`/`cm`) so later disciplines are added by new migrations without changing this contract. The discipline/unit fixation happens in the TypeScript domain types and the pure result-derivation service — never by a database CHECK on the discipline value.
 
@@ -124,7 +124,7 @@ Workspace membership is server-derived and is the authorization boundary: athlet
 
 Clubs are the user-facing organization layer. Each Club maps one-to-one to a backing workspace, retaining resource isolation while allowing signed-in users to discover Clubs and request coach-approved membership.
 
-Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`), and mutate club branding (description, colours, logo, cover). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
+Workspace roles are only `coach` and `assistant`. Both roles have operational access to athletes, events, injuries, public logger links, and fixture logging/invitation workflows. Only the `coach` role may correct or undo authenticated timeline entries and override results; assistants can record entries but cannot override another actor's work. Coaches also exclusively administer Club membership and invitations, review Club join requests, change any event participant roster, withdraw a fixture team, update either publication setting (`publicResultsEnabled` or `publicScheduleEnabled`), and mutate club branding (description, primary color, logo, cover). Public logger officials may correct or undo only entries from their own public session. Every restricted action is checked by backend middleware as well as omitted from the console. Invitation tokens are stored only as hashes, expire, can be revoked or replaced through resend, bind to the accepted Auth0 account email, and become unusable after first acceptance. Membership invitation, resend, acceptance, revocation, role changes, and removals are recorded in `workspace_membership_audit`.
 
 To prevent resource enumeration, a malformed identifier, nonexistent row, wrong parent relationship and cross-coach row all return the same `404 NOT_FOUND` response with message `Resource not found` and empty details.
 
@@ -146,9 +146,9 @@ A fixture connects one hosted, scheduled 100m competition to one or more guest w
 | `GET /fixtures/incoming` | Invited guest workspace | List incoming fixture invitations |
 | `POST /fixtures/incoming/:invitationId/respond` | Invited coach | Accept, decline, or request a change; body `{ response, message? }` |
 | `GET /fixtures` / `GET /fixtures/:eventId` | Accepted guest workspace | List/read fixture-safe details |
-| `GET|POST|PUT|DELETE /fixtures/:eventId/participants` | Accepted guest coach | Read/manage only the active guest workspace's roster and RSVP state |
+| `GET` / `POST` / `PUT` / `DELETE` on `/fixtures/:eventId/participants` | Accepted guest coach | Read/manage only the active guest workspace's roster and RSVP state |
 | `POST /fixtures/:eventId/withdrawal` | Guest coach | Withdraw before start |
-| `GET|POST|PATCH|DELETE /fixtures/:eventId/entries` | Accepted guest coach | Read/write only the guest team's timeline entries |
+| `GET` / `POST` / `PATCH` / `DELETE` on `/fixtures/:eventId/entries` | Accepted guest coach | Read/write only the guest team's timeline entries |
 | `GET /fixtures/:eventId/results` | Accepted guest workspace | Read only the guest team's results |
 | `PUT /fixtures/:eventId/results/:athleteId` | Accepted guest coach | Correct only the guest team's result |
 
@@ -181,21 +181,21 @@ Injury create/update DTO: `bodyRegion` (required), `area`, `side`, `severity`, `
 | `GET /athletes/comparison?athlete1Id=&athlete2Id=&scope=cross-club` | Compare two athletes from distinct clubs |
 | `GET /athletes/comparison/multi?athleteId=&athleteId=…` | Compare multiple selected athletes; repeat the `athleteId` parameter once per athlete (2–5 unique UUIDs, otherwise `422 ATHLETE_IDS_INVALID`) |
 | `GET /clubs/:clubId/athletes?q=` | Search a club's non-archived roster for comparison selection |
-| `GET /clubs/:clubId/statistics` | Get 100m club statistics for the selected season (roster counts are always all-time; result metrics default to the current UTC year) |
-| `GET /clubs/comparison?club1Id=&club2Id=` | Compare selected-season 100m statistics for two clubs |
+| `GET /clubs/:clubId/statistics` | Get club statistics for the selected season (legacy 100m aggregate plus per-discipline `disciplines[]`; roster counts are always all-time, result metrics default to the current UTC year) |
+| `GET /clubs/comparison?club1Id=&club2Id=` | Compare selected-season club statistics for two clubs |
 | `GET /clubs/comparison/multi?clubId=&clubId=…` | Compare multiple clubs' statistics; repeat the `clubId` parameter once per club (2–5 unique UUIDs, otherwise `422 CLUB_IDS_INVALID`) |
 | `GET /clubs/calendar` | Get events for selected accessible clubs' shared calendar |
 | `GET /clubs/publication` | Read the active club's independent public-results and public-schedule settings |
 | `PUT /clubs/publication` | Update both publication settings as a full replacement (coach only) |
-| `GET /clubs/branding` | Read the active club's branding (description, colours, logo/cover URLs) |
-| `PUT /clubs/branding` | Update description and brand colours (coach only; WCAG AA pair required) |
+| `GET /clubs/branding` | Read the active club's branding (`description`, `primaryColor`, `logoUrl`, `logoContentType`, `coverUrl`, `coverContentType`) |
+| `PUT /clubs/branding` | Update `description` and `primaryColor` (coach only; the color must keep WCAG AA contrast against white or ink) |
 | `POST /clubs/branding/logo` | Replace the club logo (coach only; multipart `file`, PNG/JPEG/WebP ≤5 MB) |
 | `DELETE /clubs/branding/logo` | Clear the club logo (coach only) |
 | `POST /clubs/branding/cover` | Replace the club cover (coach only; multipart `file`, PNG/JPEG/WebP ≤5 MB) |
 | `DELETE /clubs/branding/cover` | Clear the club cover (coach only) |
 | `GET /media/clubs/:workspaceId/:filename` | Serve a stored brand asset with immutable cache and `nosniff` |
 
-The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Both athlete comparison routes (pair and `multi`) accept `scope=cross-club` and `year=<YYYY|all>`; both club comparison routes accept `year=<YYYY|all>`, defaulting to the current UTC year when omitted. Club statistics include roster counts, result counts, fastest/latest/average/median times, and population standard deviation. Every comparison is 100m-only and uses effective result rules, including accepted guest-fixture results for the athlete's own club.
+The default athlete endpoint is restricted to the caller's club. `scope=cross-club` requires athletes from different clubs and returns safe performance information only. Both athlete comparison routes (pair and `multi`) accept `scope=cross-club` and `year=<YYYY|all>`; both club comparison routes accept `year=<YYYY|all>`, defaulting to the current UTC year when omitted. Every comparison and club-statistics response carries both shapes: the legacy top-level 100m aggregate (best/latest/valid count/average/standard deviation/improvement) and a per-discipline breakdown — `disciplines[]` (roster counts, result counts, fastest/latest/average/median values, and population standard deviation, each with its catalogue unit, precision, and direction) plus `availableDisciplines` for filter UIs. Results use effective result rules, including accepted guest-fixture results for the athlete's own club. Only the legacy `/events` timeline endpoints are pinned to 100m.
 
 ### 3.4a Discipline analytics
 
@@ -262,7 +262,7 @@ Event helpers are external users granted read or read/write access to a specific
 | Method & path | Purpose |
 |---|---|
 | `POST /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Designate a grant as the offline logger |
-| `GET /events/:eventId/helpers/offline-logger` | Read the event's current designation; `{ data: { grantId, userId, name, deviceId } | null }` |
+| `GET /events/:eventId/helpers/offline-logger` | Read the event's current designation; returns `{ data: { grantId, userId, name, deviceId } }` or `null` |
 | `DELETE /events/:eventId/helpers/grants/:grantId/designate-offline-logger` | Revoke offline logger designation |
 | `POST /events/:eventId/helpers/transfer-offline-logger` | Transfer offline logger designation between grants |
 
@@ -335,7 +335,7 @@ The publication owner controls two independent flags through `GET|PUT /clubs/pub
 |---|---|
 | `GET /public/statistics/seasons` | List publicly available seasons |
 | `GET /public/statistics/clubs` | Search clubs with published results |
-| `GET /public/statistics/clubs/:clubId` | Get published club 100m statistics |
+| `GET /public/statistics/clubs/:clubId` | Get published club statistics (`availableDisciplines`, per-discipline `disciplines[]`, and per-athlete discipline rows) |
 | `GET /public/statistics/comparison` | Compare published athlete performance |
 | `GET /public/statistics/leaderboard` | List finalized individual public leaderboard rows |
 | `GET /public/statistics/standings` | List public shared-fixture club standings using 5/3/1 placement points |

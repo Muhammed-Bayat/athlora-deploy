@@ -6,7 +6,7 @@ sidebar_position: 2
 
 `results` are never typed in by hand — they are derived from `timeline_entries`. The derivation logic lives as pure functions in `backend/src/services/resultDerivation.ts`, unit-tested with Vitest. Every derivation returns `{ value, incident, outcome }`, where `outcome` is `no_result` | `valid` | `dq` | `dnf` | `dns`.
 
-The deployed derivation implementation is fixed to **100m** (track, timed) with unit **seconds** at the API/service boundary — see the [100m data/API contract](/docs/api-reference/contract). `DISCIPLINE_KIND` currently maps `'100m'` → `'track'`. Athlora is intended to cover a full athletics meet; each further discipline will add tested derivation and ranking rules rather than reusing sprint timing where it does not apply.
+The legacy `timeline_entries` → `results` derivation is fixed to **100m** (track, timed) with unit **seconds** at the API/service boundary — see the [100m data/API contract](/docs/api-reference/contract), and `DISCIPLINE_KIND` still maps `'100m'` → `'track'`. Multi-discipline session results derive through the catalogue-backed services instead — `timedDerivation.ts`, `measuredDerivation.ts`, and `verticalScoring.ts` — so each discipline carries its own unit, precision, direction, and ranking rules rather than reusing sprint timing where it does not apply.
 
 ## Timed disciplines (track)
 
@@ -49,7 +49,7 @@ Timed sessions rank valid official results in ascending time; measured sessions 
 
 ## PB/SB rules
 
-For the deployed 100m contract, `is_pb` is true when the athlete's effective result is lower than every previously recorded effective result for the same discipline; `is_sb` is true when it beats the best effective result recorded in the current season. A derived valid result or a `no_result` promoted by an override can count; voided outcomes never set PB/SB. The stored `outcome` and `final_result` remain the raw derivation for auditability while statistics use the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season. Measured-event contracts will use higher-is-better comparisons instead.
+For the legacy 100m contract, `is_pb` is true when the athlete's effective result is lower than every previously recorded effective result for the same discipline; `is_sb` is true when it beats the best effective result recorded in the current season. A derived valid result or a `no_result` promoted by an override can count; voided outcomes never set PB/SB. The stored `outcome` and `final_result` remain the raw derivation for auditability while statistics use the override value. Both flags are computed by `checkPbSb`, taking a calendar-year window for the season. Catalogue disciplines are direction-aware already: `disciplineProgression.ts` and `disciplineStatistics.ts` compare with the catalogue `direction`, so measured and vertical events use higher-is-better comparisons.
 
 The statistics and dashboard services repeat the same effective-result precedence in owner-scoped SQL: DQ/DNF/DNS remain void before an override is considered, then a positive override may replace a valid value or promote `no_result`. Athlete history retains cancelled rows with `countsTowardsStatistics: false`; PB, SB, counts, roster PBs and dashboard recent feeds exclude cancelled events.
 

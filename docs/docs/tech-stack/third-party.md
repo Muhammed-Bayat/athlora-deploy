@@ -420,7 +420,7 @@ db.version(1).stores({
 
 ### Backend batch sync
 
-`backend/src/services/sync.ts` (296 lines) processes the batch:
+`backend/src/services/sync.ts` (393 lines) processes the batch:
 
 - **Idempotency:** checks `sync_action_receipts` for existing `action_id` before processing.
 - **Optimistic concurrency:** edits use `WHERE version = $expectedVersion`.
@@ -478,7 +478,7 @@ Socket.IO provides reliable WebSocket communication with automatic fallback to p
 
 ### Backend
 
-`backend/src/realtime/index.ts` (148 lines):
+`backend/src/realtime/index.ts` (159 lines):
 
 **Dynamic loading:** Socket.IO is loaded via `Function('specifier', 'return import(specifier)')('socket.io')` to avoid static bundling issues.
 
@@ -600,7 +600,7 @@ The project uses hand-built SVG charts rather than Chart.js to avoid a runtime d
 
 ### Implementation
 
-**Progression chart** — `frontend/src/features/athletes/ProgressionChart.tsx` (370 lines):
+**Progression chart** — `frontend/src/features/athletes/ProgressionChart.tsx` (371 lines):
 
 - Fetches data via `getAthleteProgression(athleteId, { year })`.
 - `buildChartGeometry()` computes scaled x/y coordinates:
@@ -783,7 +783,7 @@ Coaches upload a club logo and cover image as multipart form data. Bytes are sni
 
 **Backend integration:** 8 `TEST_DATABASE_URL`-gated test files exercising real PostgreSQL — migrations, athlete/event/participant/timeline persistence, aggregates, cross-coach authorization, and injuries.
 
-**E2E (Playwright):** 20 spec files in `e2e/tests/` running against real Auth0, backend, frontend, and PostgreSQL. Projects: `auth-setup`, `smoke`, `desktop-chromium`, `mobile-chromium`. Auth setup fills Auth0 Universal Login forms and saves browser state. Serial execution (`workers: 1`) with per-project unique data.
+**E2E (Playwright):** 23 spec files in `e2e/tests/` running against real Auth0, backend, frontend, and PostgreSQL. Projects: `auth-setup`, `smoke`, `desktop-chromium`, `mobile-chromium`. Auth setup fills Auth0 Universal Login forms and saves browser state. Serial execution (`workers: 1`) with per-project unique data.
 
 **Accessibility (axe-core):** `@axe-core/playwright` audits dashboard, roster, events, live logger, comparison, fixtures, account, and athlete detail pages against WCAG 2.0/2.1 A/AA. Fails on critical or serious violations.
 

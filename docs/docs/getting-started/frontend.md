@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Frontend
 
-The `/frontend` package is the Athlora React single-page application. It is a separate deployment from the Express API and communicates only through authenticated HTTP/JSON requests. The shipped live-logging UI covers 100m; the product roadmap expands it into the full athletics-meet interface.
+The `/frontend` package is the Athlora React single-page application. It is a separate deployment from the Express API and communicates only through authenticated HTTP/JSON requests. The shipped live-logging UI covers the legacy 100m timeline slice plus catalogue-backed multi-discipline sessions (timed, measured, vertical, relay).
 
 ## Requirements
 
@@ -57,19 +57,19 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 - `src/features` contains feature-owned UI across 16 areas: assistant, athletes, auth, comparison, dashboard, events, fitness, fixtures, landing, publicLogger, publicSchedule, publicStats, realtime, reports, results, and timeline (live logging lives in `features/timeline`).
 - `src/components` contains reusable accessible controls and async states.
 - `src/api` contains the typed fetch client and one module per API resource. It preserves the API error code, message, status, and validation details.
-- `src/types` mirrors the API's camel-case DTOs. The current contract is 100m results in seconds; later contracts will add the units and entry shapes required by track, relays, jumps, throws, and vertical events.
+- `src/types` mirrors the API's camel-case DTOs. The contract is catalogue-driven: units, precision, direction, and labels come from `discipline_definitions`, so timed, measured, vertical, and relay entry shapes already share one DTO surface alongside the legacy 100m timeline types.
 - `src/styles/tokens.css` contains shared visual tokens. Component and feature styling uses CSS modules.
 
 ## Implemented features
 
 - Authenticated coach console with roster, events, live logging, comparison, and account surfaces.
-- Club branding settings on the Account page: description, accessible brand colours, logo and cover upload (PNG/JPEG/WebP ≤5 MB), with live WCAG contrast checks. Branding is applied through the shared `ClubBadge` component on the console footer/switcher, fixture team lists, public stats cards, and comparison tables, with an initials fallback when no logo is set.
+- Club branding settings on the Account page: description, a single accessible primary color with a live WCAG contrast check against white/ink, and logo/cover upload (PNG/JPEG/WebP ≤5 MB). Branding is applied through the shared `ClubBadge` component on the console footer/switcher, fixture team lists, public stats cards, and comparison tables, with an initials fallback when no logo is set.
 
 - Auth0 Universal Login, application-user synchronization, account password links, sign-out, and permanent account deletion.
 - API-backed dashboard with a fixed layout: a summary mode (the signature summary hero, an onboarding prompt when the roster is empty, the season selector, status attention and stat row, an upcoming-events panel, and a roster snapshot) and a live mode (live-event hero and latest-entries feed) while an event is `in_progress`, each with loading and recovery states. The layout is not user-configurable — the **Customize dashboard** dialog, card reordering and hidden-card controls, and saved views were removed in the dashboard simplification; the backend `GET|PUT /api/v1/preferences` API still exists, but the dashboard UI no longer reads or writes it.
 - Athlete roster management, archival/restoration, editable athlete profiles, current 100m performance statistics, PBs, and SBs. Lightweight SVG injury summaries show active count, highest severity, mapped body regions, and accessible text without loading the Three.js Fitness viewer.
 - Event creation, explicit OpenStreetMap venue search/pin-coordinate selection with manual fallback, lifecycle changes, participant RSVP management, results, manual corrections, and event-day GraySky forecasts.
-- Mobile-first live 100m logging with finishes, incidents, version-aware corrections, undo, derived standings, and lifecycle guards. These interaction and recovery patterns are the base for future race, relay, jump, throw, and height-entry controls.
+- Mobile-first live logging: the legacy timeline console records 100m finishes and incidents, while `SessionLivePanel` handles timed, measured, vertical, relay, guest, and incident observations for catalogue sessions — all with version-aware corrections, undo, derived standings, and lifecycle guards.
 - Multi-discipline meet detail: `MeetRosterPanel` presents catalogue sessions as keyboard-accessible roster tabs with event-level RSVP controls and athlete cards. Coaches add active athletes through a compact picker; relay-team creation and editing appear only in a selected relay session. Direct guest-entry and session-creation controls are not displayed. `SessionLivePanel` provides session-scoped logging with offline enqueue, attempt history, coach official-attempt selection for timed and measured disciplines, full-result officialization for vertical sessions, read-time standings, and CSV export; it renders only for `discipline: null` meets. Public Stats club mode includes published session/team standings via `PublicSessionResults` with safe member summaries.
 - A responsive coach console with an optional weather-effects display (9 canvas particle presets: rain, snow, sparks, storm lightning, etc.), theme preference, live clock, and current local weather readout.
 - A shell-contained athlete Fitness & Injury Map sub-view with progressive body-region selection, live previews, persistent injury records and resolution, and an on-demand React Three Fiber anatomical body viewer.
@@ -77,7 +77,7 @@ The Playwright E2E suite boots a separate Vite dev server on `http://localhost:5
 - Cross-club fixture system: guest fixture management, team roster assignment, RSVP tracking, finish-time recording, result corrections, team withdrawal, fixture notifications with unread badges, and incoming invitation workflows (accept/decline/request changes).
 - Public logger links: coach-created shareable token links allowing external guests to start sessions, view event snapshots, and record results/incidents without Auth0.
 - Offline-first PWA with two Dexie/IndexedDB databases: the per-user store at `version(2)` with five tables (`offlineActions`, `cachedEvents`, `cachedParticipants`, `cachedTimeline`, `cachedSessions`) and the public-logger store (`publicOfflineActions`, `publicCachedSnapshots`, `publicCachedSessions`), action queue (enqueue/pending/markSynced/markFailed/reset), batch sync engine, event data caching, offline designation guards, and data cleanup.
-- Two-athlete 100m comparison page with dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), URL-param-driven athlete selection, and two independent coach publication toggles (public results vs public schedule) that call `PUT /clubs/publication` with both flags as a full replacement.
+- Athlete and club comparison page (pair and multi) with per-discipline tabs, dual progression chart, metric comparison table (PB, latest, average, consistency, improvement), URL-param-driven selection, and two independent coach publication toggles (public results vs public schedule) that call `PUT /clubs/publication` with both flags as a full replacement.
 - Single-athlete all-time 100m progression chart with PB milestones, chart/table toggle, cursor-based pagination, and accessibility features.
 - Real-time Socket.IO event subscriptions for live invalidation notifications, with connection state management, deduplication, and workspace-aware authorization.
 - Club discovery and join-request workflow: search clubs, create clubs, send/withdraw/approve/reject join requests, and manage club membership.
@@ -89,7 +89,7 @@ The dashboard and other authenticated views wait for `PUT /api/v1/auth/me` to fi
 - `/console` — dashboard
 - `/console/stats` — season stats (the same summary dashboard view)
 - `/console/athletes` and `/console/athletes/:athleteId` — roster and athlete detail
-- `/console/comparison` — two-athlete 100m comparison
+- `/console/comparison` — athlete and club comparison (pair and multi, per-discipline tabs)
 - `/console/events` and `/console/events/:eventId` — event list, cross-club fixture management, and direct-loadable event detail
 - `/console/live` and `/console/live/:eventId` — live logger and selected event
 - `/console/account` — account management

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 9
 ---
 
 # Athlete Progression
@@ -153,7 +153,7 @@ Requires a valid Auth0 token and athlete ownership (the athlete must belong to t
 
 ## Scope
 
-This endpoint is **100m-only**. The discipline filter is hardcoded to `discipline = '100m'`. Additional discipline progression will be added in future iterations.
+This endpoint is **100m-only**: the discipline filter is hardcoded to `discipline = '100m'`, so it reads the legacy `results` table. Per-discipline progression for every catalogue discipline is already available at `GET /athletes/:id/statistics/disciplines/:disciplineDefinitionId/progression` (see the [discipline analytics section](./contract)).
 
 ## AI declaration
 

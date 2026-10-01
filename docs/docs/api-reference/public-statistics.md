@@ -1,10 +1,26 @@
 ---
-sidebar_position: 3
+sidebar_position: 7
 ---
 
 # Public Statistics
 
-The public Stats page exposes all-time 100m performance only for clubs that a coach has explicitly published. It does not require an Athlora account or an Auth0 token.
+The public Stats page exposes published performance across every catalogue discipline — legacy 100m plus timed, measured, vertical, and relay session results — for clubs that a coach has explicitly published. It does not require an Athlora account or an Auth0 token.
+
+```
+GET /api/v1/public/statistics/seasons
+GET /api/v1/public/statistics/clubs
+GET /api/v1/public/statistics/clubs/{clubId}
+GET /api/v1/public/statistics/clubs/{clubId}/session-results
+GET /api/v1/public/statistics/clubs/{clubId}/vertical
+GET /api/v1/public/statistics/clubs/{clubId}/disciplines
+GET /api/v1/public/statistics/comparison
+GET /api/v1/public/statistics/report
+GET /api/v1/public/statistics/report/disciplines
+GET /api/v1/public/statistics/leaderboard
+GET /api/v1/public/statistics/standings
+```
+
+Every endpoint below is documented in its own section.
 
 ## Publication Control
 
@@ -21,7 +37,7 @@ Both endpoints require an authenticated member of the active club workspace. Onl
 
 The two flags are independent. `publicResultsEnabled` gates this page's public statistics endpoints (named athlete performance, detailed reports, leaderboards). `publicScheduleEnabled` gates the separate public schedule endpoints only — turning it on or off never changes results visibility, and vice versa. The PUT body is a full replacement and requires both booleans.
 
-Publishing results is reversible. It makes the club name, non-archived athlete names, all-time 100m metric summaries, and finalized detailed report performances available from the public statistics endpoints. It never exposes athlete profile information, injuries, notes, raw timeline entries, audit fields, or manual-override metadata.
+Publishing results is reversible. It makes the club name, non-archived athlete names, published metric summaries for every catalogue discipline, and finalized detailed report performances available from the public statistics endpoints. It never exposes athlete profile information, injuries, notes, raw timeline entries, audit fields, or manual-override metadata.
 
 ## Published Clubs
 
@@ -37,7 +53,7 @@ Returns up to 100 published clubs matching the optional case-insensitive name se
 GET /api/v1/public/statistics/clubs/{clubId}
 ```
 
-Returns `404 NOT_FOUND` if the club is unknown or not published. The response contains the established club-level all-time aggregate and current public athlete cards:
+Returns `404 NOT_FOUND` if the club is unknown or not published. The response contains the club-level aggregate (legacy 100m top level plus per-discipline `disciplines[]`), `availableDisciplines` for filter UIs, and current public athlete cards:
 
 ```json
 {
@@ -55,6 +71,26 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
     "roster": { "active": 12, "inactive": 1, "archived": 2, "total": 15 },
     "fastestValidTime": 10.91,
     "averageValidTime": 11.4,
+    "availableDisciplines": [
+      { "discipline": "100m", "label": "100m", "unit": "seconds", "precision": 2, "direction": "lower" }
+    ],
+    "disciplines": [
+      {
+        "discipline": "long_jump",
+        "label": "Long jump",
+        "unit": "metres",
+        "precision": 2,
+        "direction": "higher",
+        "rosterAthleteCount": 8,
+        "distinctAthletesWithValidResults": 5,
+        "totalResultCount": 17,
+        "validResultCount": 15,
+        "fastestValidResult": 6.42,
+        "averageValidResult": 5.98,
+        "medianValidResult": 6.1,
+        "populationStandardDeviation": 0.31
+      }
+    ],
     "athletes": [
       {
         "athlete": { "id": "uuid", "name": "Ari Runner" },
@@ -64,7 +100,22 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
         "totalResultCount": 3,
         "average": 11.1,
         "consistency": 0.13,
-        "improvement": 0.24
+        "improvement": 0.24,
+        "disciplines": [
+          {
+            "discipline": "long_jump",
+            "label": "Long jump",
+            "unit": "metres",
+            "precision": 2,
+            "direction": "higher",
+            "pb": 6.42,
+            "latestEffectiveResult": 6.1,
+            "validResultCount": 4,
+            "average": 6.05,
+            "consistency": 0.22,
+            "improvement": 0.31
+          }
+        ]
       }
     ]
   }
@@ -74,6 +125,15 @@ Returns `404 NOT_FOUND` if the club is unknown or not published. The response co
 Archived athletes are excluded from `athletes`. Club aggregates retain their existing all-time comparison semantics. Effective-result rules are identical to the authenticated comparison API: cancelled events and void outcomes are excluded from valid metrics, a positive manual override takes precedence, and accepted guest-fixture results count for the athlete's club.
 
 `club.branding` is present only when results publication is enabled. Media URLs may be null when no logo or cover has been uploaded; clients fall back to initials derived from the club name when `logoUrl` is null.
+
+## Seasons and athlete comparison
+
+```
+GET /api/v1/public/statistics/seasons
+GET /api/v1/public/statistics/comparison?athleteId={uuid}&athleteId={uuid}&year={year|all}
+```
+
+`/seasons` lists every year with published performances plus the current year. `/comparison` compares two to five published athletes (repeat `athleteId` once per athlete; otherwise `422 ATHLETE_IDS_INVALID`) and returns each athlete's safe identity, per-discipline bests, and chronological 100m progression for charting. It never exposes date of birth, notes, injuries, or other private profile fields.
 
 ## Published session and team results
 
@@ -122,6 +182,15 @@ Returns `404 NOT_FOUND` if the club is unknown or not published (`publicResultsE
 ```
 
 Relay `members` expose only ordered leg number, display name, and guest flag. Raw `memberIds`, athlete UUIDs for members, notes, incidents, override audit fields, and private entrant details are never returned. Team times never write athlete `results` rows and therefore never affect individual PB/SB statistics. Read-time placing uses standard competition ranking with ties. The public Stats page renders these tables under the published club view.
+
+## Published discipline and vertical statistics
+
+```
+GET /api/v1/public/statistics/clubs/{clubId}/vertical?year={year|all}
+GET /api/v1/public/statistics/clubs/{clubId}/disciplines?year={year|all}
+```
+
+Both return per-athlete PB/SB statistics for a published club's roster — `/vertical` scoped to vertical events, `/disciplines` covering every catalogue discipline. They return `404 NOT_FOUND` for an unknown, non-canonical, or unpublished club, and resolve `year=all` to the current UTC year.
 
 ## Detailed Statistics Reports
 

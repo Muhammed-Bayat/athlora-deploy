@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Sprint 2 Raw Meeting Transcript
@@ -2232,7 +2232,7 @@ bug 5: explore season statistics button on landing page is unnecessary because i
 
 **[21:16:32] Vareshan Rajah:** I'm talking about like going through the testing docs, show him how we did it and make sure we've got all that done properly
 
-**[21:16:41] Aaliah Reddy:** Athlora — Sprint 2 User Testing & Feedback.pdf • ‎4 pages ‎[Attachment: 00004003-Athlora — Sprint 2 User Testing & Feedback.pdf](./screenshots/00004003-Athlora — Sprint 2 User Testing & Feedback.pdf)
+**[21:16:41] Aaliah Reddy:** Athlora — Sprint 2 User Testing & Feedback.pdf • ‎4 pages ‎[Attachment: 00004003-Athlora — Sprint 2 User Testing & Feedback.pdf](./screenshots/00004003-Athlora%20%E2%80%94%20Sprint%202%20User%20Testing%20%26%20Feedback.pdf)
 
 **[21:17:32] Vareshan Rajah:** This invitation issue is a massive fix that has to happen so I think we should leave it for next sprint, coz I liked how the request to join a club worked😭
 
