@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Backend
 
-The `/backend` package is the Athlora Express REST API. It owns authentication verification, coach-scoped data access, PostgreSQL persistence, result derivation, and third-party weather boundaries. API routes are mounted below `/api/v1`; `GET /health` is public. The deployed contract currently supports 100m timing, while the API/data model is the foundation for the full athletics-meet roadmap.
+The `/backend` package is the Athlora Express REST API. It owns authentication verification, coach-scoped data access, PostgreSQL persistence, result derivation, and third-party weather boundaries. API routes are mounted below `/api/v1`; `GET /health` is public. The deployed contract covers the legacy 100m timeline slice plus the catalogue-backed multi-discipline meet routes (timed, measured, vertical, and relay sessions) with their own units, precision, and result rules.
 
 ## Requirements
 
@@ -76,16 +76,16 @@ src/routes        API route declarations (ai, analytics, auth, clubBranding, clu
                    venues, weather, workspaces; the athletes and events routers are
                   declared inline in routes/index.ts — there is no athletes route file)
 src/controllers   HTTP request and response handling
-src/services      coach-scoped persistence and business logic (53 modules)
+src/services      coach-scoped persistence and business logic (52 modules)
 src/middleware    authentication, ownership, capabilities, validation, errors, club media upload
 src/validation    strict DTO and primitive parsers
-src/db            pg client, migrations (41 SQL files), row mappers, and transactions
+src/db            pg client, migrations (43 SQL files), row mappers, and transactions
 src/types         domain DTOs and authenticated request context
 ```
 
 ## Database and migrations
 
-Migrations in `src/db/migrations` are sequential, checksum-tracked SQL files: 41 files numbered `0001`…`0039` (the numbers `0019` and `0022` each appear twice), with `0039_host_fixture_revision_sync.sql` the latest. The runner records them in `schema_migrations`, takes a PostgreSQL advisory lock to prevent concurrent runs, and applies each pending migration transactionally. Do not edit an applied migration; create the next numbered migration instead.
+Migrations in `src/db/migrations` are sequential, checksum-tracked SQL files: 43 files numbered `0001`…`0041` (the numbers `0019` and `0022` each appear twice), with `0041_remove_squads.sql` the latest. The runner records them in `schema_migrations`, takes a PostgreSQL advisory lock to prevent concurrent runs, and applies each pending migration transactionally. It can baseline the original six-table schema if `0001_init.sql` was applied manually before the runner existed, but rejects partial schemas and modified applied migrations. Checksums are computed over line-ending-normalized content, so they are stable across platforms (LF vs CRLF checkouts). Do not edit an applied migration; create the next numbered migration instead.
 
 `npm start` runs migrations before starting the production server. The schema uses `gen_random_uuid()`, so PostgreSQL 13 or later is required.
 
@@ -94,17 +94,17 @@ Set `TEST_DATABASE_URL` to enable the PostgreSQL integration tests. Use a separa
 ## Implemented API capabilities
 
 - Auth0 JWT verification, synchronized local users, durable account-deletion tombstones, password-ticket generation, and non-enumerating ownership checks.
-- Coach-owned athlete CRUD with archive/restore, current 100m athlete statistics, results history, PBs, and SBs. Statistics will gain discipline-aware views as new events are implemented.
+- Coach-owned athlete CRUD with archive/restore, discipline-aware athlete statistics (`GET /athletes/:id/statistics`, `.../statistics/disciplines/...`, `.../vertical`, `.../relays`), results history, PBs, and SBs — direction-aware so measured and vertical disciplines rank higher-is-better.
 - Workspace-scoped active injury summaries for roster cards, grouped server-side to avoid an injury request for every athlete. Resolved and deleted records remain available through athlete injury history but never appear in compact summaries.
-- Event CRUD for the current 100m slice, forward-only lifecycle transitions, cancellation that preserves history, participants, RSVPs, and event-day forecasts. The lifecycle model will be reused for the remaining athletics disciplines.
+- Event CRUD for the legacy 100m timeline slice (`POST /events` still accepts only `'100m'` or `null` for `discipline`), forward-only lifecycle transitions, cancellation that preserves history, participants, RSVPs, and event-day forecasts. Catalogue-backed multi-discipline meets are created with `discipline: null` and managed through the session routes below.
 - Cross-workspace 100m fixtures with hashed invitations, independent participating-team status, guest roster isolation, revision reacceptance, withdrawals, timeline logging, and result correction.
-- Timeline entries for current 100m finishes, incidents, and notes with optimistic versions, soft-delete undo, transaction locks, and automatic result recomputation. Future contracts will add measured attempts, fouls, heights, relay legs, and discipline-specific result rules.
+- Timeline entries for the legacy 100m finishes, incidents, and notes with optimistic versions, soft-delete undo, transaction locks, and automatic result recomputation. Measured attempts, fouls, heights, and relay legs are handled by the multi-discipline session routes with their own catalogue-driven result rules (`timedDerivation`, `measuredDerivation`, `verticalScoring`).
 - Online event updates use Socket.IO after a successful HTTP mutation. Connections present an Auth0 token and explicitly subscribe to one event; server-side checks require current workspace membership, accepted fixture participation, or an active helper grant. Messages are typed invalidations (`realtime:invalidate`) with a unique ID, event ID, affected resources, and timestamp. Clients always refetch canonical HTTP state, so an unavailable, duplicate, or stale message cannot create a false write result. Helper grants lose event-room access after revocation and after the two-hour read-only window following completion or cancellation.
 - Derived results, placement, PB/SB flags, and audited manual overrides.
 - Owner-scoped dashboard aggregates and current-weather proxying for the coach console.
 - Optional OpenStreetMap venue lookup through an authenticated Nominatim boundary. It has strict `q` validation, a five-second timeout, safe provider errors, a five-minute process-memory cache, and a one-second process-local provider throttle. The public provider receives only an explicit submitted venue query, never Auth0 credentials or client requests on each keystroke.
 - Injury CRUD with body-region/area/side/severity mapping, resolution/reopening, and soft-delete. Active summaries are workspace-scoped and grouped for roster display.
-- Two-athlete 100m comparison with PB, latest result, valid count, average, consistency, and improvement metrics.
+- Athlete and club comparisons (pair and multi, in-workspace and cross-club) with PB, latest result, valid count, average, consistency, and improvement metrics — a legacy 100m aggregate plus per-discipline `disciplines[]` and `availableDisciplines`.
 - Athlete progression endpoint with cursor-based pagination, running PB indicator, effective result/outcome, and type filtering.
 - Event helper invitations with secret/human-code redemption, grant lifecycle, and offline-logger designation/transfer. Only one grant per event may be the offline logger.
 - Public logger links: coaches create shareable token-authenticated links; external guests start sessions, view event snapshots, and record entries without Auth0.
@@ -131,7 +131,6 @@ curl http://localhost:4000/health
 ```
 
 The unit and API suites cover validation, ownership, authorization, migrations, result derivation/recomputation, account lifecycle, weather boundaries, and resource services. The database integration suites skip cleanly when `TEST_DATABASE_URL` is absent.
-The runner records names and SHA-256 checksums in `schema_migrations`, serializes concurrent runs with a PostgreSQL advisory lock, and applies each migration transactionally. It can baseline the original six-table schema if `0001_init.sql` was applied manually before the runner existed, but rejects partial schemas and modified applied migrations. Checksums are computed over line-ending-normalized content, so they are stable across platforms (LF vs CRLF checkouts). Production `npm start` runs pending migrations before starting the API. `gen_random_uuid()` requires PostgreSQL 13+.
 
 ## Current state
 

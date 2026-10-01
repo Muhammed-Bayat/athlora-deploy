@@ -18,8 +18,8 @@ When you create an account, Auth0 (our authentication provider) collects your em
 
 As a coach, you enter information about the athletes you manage. This includes:
 
-- **Profile data:** name, date of birth, gender, and notes
-- **Performance data:** 100m times, event results, personal bests, and season bests
+- **Profile data:** name, date of birth, gender, preferred disciplines, season goals, and notes
+- **Performance data:** race times, measured marks, vertical clearances, relay team results, event results, personal bests, and season bests
 - **Health data:** injury records including body region, area, side, severity, occurrence date, expected return date, resolution date, and notes
 
 You are responsible for obtaining any necessary consent from athletes (or their parents/guardians) before entering their data into Athlora.
@@ -27,8 +27,8 @@ You are responsible for obtaining any necessary consent from athletes (or their 
 ### Event and competition data
 
 - Event details (title, date, time, venue, type)
-- Participant assignments and RSVP status
-- Timeline entries (finishes, incidents, notes)
+- Participant assignments, meet sessions, entrant registrations, and RSVP status
+- Timeline and session entries (finishes, attempts, clearances, incidents, notes)
 - Derived results, placings, and manual overrides
 
 ### Usage data

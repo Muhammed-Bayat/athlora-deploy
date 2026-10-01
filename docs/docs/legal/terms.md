@@ -12,7 +12,7 @@ By creating an account or using Athlora, you agree to these terms and conditions
 
 ## Description of service
 
-Athlora is a web application for athletics coaches to manage rosters, plan competitions and training, log results live, derive statistics, and collaborate around a season. The current implementation supports 100m timing.
+Athlora is a web application for athletics coaches to manage rosters, plan competitions and training, log results live, derive statistics, and collaborate around a season. The current implementation covers timed races, measured jumps and throws, vertical events, and relays, alongside the original 100m timing contract.
 
 ## Account requirements
 

@@ -1,10 +1,10 @@
 ---
-sidebar_position: 2
+sidebar_position: 6
 ---
 
-# 100m Comparisons
+# Comparisons
 
-The Compare page supports calendar-year and all-time 100m athlete and club analysis. All responses use effective results: void outcomes are excluded and a positive manual override takes precedence over the recorded final result.
+The Compare page supports calendar-year and all-time athlete and club analysis across every catalogue discipline. All responses use effective results: void outcomes are excluded and a positive manual override takes precedence over the recorded final result.
 
 ## Season Scope
 
@@ -30,7 +30,17 @@ GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}&scope=cross-
 - The response contains only the existing safe comparison identity and performance fields. It never exposes date of birth, notes, injury data, or other private athlete profile fields.
 - The UI requires users to select two clubs first, then search each club's roster by name before selecting the athletes.
 
-Both athlete endpoints return side-by-side scoped 100m bests, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting.
+Both athlete endpoints return side-by-side scoped bests, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting. They also return `availableDisciplines` and a per-athlete `disciplines[]` array, so the Compare page renders one tab per catalogue discipline alongside the legacy aggregate fields.
+
+### Multi-Athlete Comparison
+
+```
+GET /api/v1/athletes/comparison/multi?athleteId={uuid}&athleteId={uuid}&year=2026
+```
+
+- Repeat `athleteId` once per athlete; 2–5 unique UUIDs are required, otherwise `422 ATHLETE_IDS_INVALID`.
+- Accepts the same `scope=cross-club` and `year` parameters as the pair routes; cross-club multi requires athletes from at least two club workspaces.
+- Returns `{ athletes: [...], availableDisciplines: [...] }` with the same per-athlete shape as the pair endpoint.
 
 ## Club Roster Lookup
 
@@ -55,14 +65,16 @@ This authenticated lookup supports the cross-club athlete selectors. `q` is opti
 GET /api/v1/clubs/{clubId}/statistics?year=2026
 ```
 
-Returns the selected season's 100m performance for the club's current roster, including:
+Returns the selected season's performance for the club's current roster. The response carries the legacy 100m aggregate at the top level:
 
 - Roster counts for active, inactive, archived, and total athletes.
 - Distinct athletes with valid results.
-- Total and valid 100m result counts.
-- Fastest and latest valid time.
-- Average, median, and population standard deviation of valid times.
+- Total and valid 100m result counts (`total100mResultCount`, `valid100mResultCount`).
+- Fastest and latest valid 100m time.
+- Average, median, and population standard deviation of valid 100m times.
 - Club branding summary (`description`, `primaryColor`, `logoUrl`, `coverUrl`) when present.
+
+…plus the per-discipline breakdown `availableDisciplines` and `disciplines[]`. Each discipline entry carries its catalogue metadata (`code`, label, unit, precision, direction) with roster counts, distinct athletes with valid results, total/valid result counts, and fastest/latest/average/median/standard-deviation values for that discipline.
 
 ## Club Comparison
 
@@ -72,9 +84,17 @@ GET /api/v1/clubs/comparison?club1Id={uuid}&club2Id={uuid}
 
 Compares exactly two distinct clubs using the same selected-season statistics returned by the single-club endpoint. Duplicate club IDs return `400 DUPLICATE_CLUB_ID`; unknown clubs return `404 CLUB_NOT_FOUND`.
 
+### Multi-Club Comparison
+
+```
+GET /api/v1/clubs/comparison/multi?clubId={uuid}&clubId={uuid}
+```
+
+Repeat `clubId` once per club; 2–5 unique UUIDs are required, otherwise `422 CLUB_IDS_INVALID`. Returns `{ clubs: [...] }` where each element is the single-club statistics object above.
+
 ## Effective Result Scope
 
-- The discipline is fixed to 100m and values are measured in seconds.
+- The legacy top-level aggregate is pinned to 100m and measured in seconds; `disciplines[]` entries use their own catalogue unit (seconds, metres, cm) and direction (lower-is-better or higher-is-better).
 - Cancelled events are excluded.
 - `dq`, `dnf`, and `dns` outcomes never count as valid results.
 - A positive `manualOverride` is used instead of `finalResult`.

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 1
 ---
 
 # Automatic Testing Practices
@@ -185,7 +185,7 @@ Set `TEST_DATABASE_URL` to enable them. Use a **disposable database** because th
 
 ### What is tested
 
-The backend has **9 integration test files** covering:
+The backend has **11 integration test files** covering:
 
 | File | Coverage |
 |---|---|
@@ -198,6 +198,8 @@ The backend has **9 integration test files** covering:
 | `services/authorization.integration.test.ts` | Two-coach isolation for athletes, events, participants, timeline, statistics |
 | `services/injuries.integration.test.ts` | Injury CRUD persistence |
 | `services/accounts.integration.test.ts` | Account lifecycle and workspace persistence |
+| `services/meets.integration.test.ts` | Migration upgrades/schema install, catalogue sessions, entrant kinds and registrations, session results/corrections, relay official selection |
+| `services/sync.integration.test.ts` | Offline batch sync: idempotent receipts, rejected-action retries, `EVENT_NOT_IN_PROGRESS` guard |
 
 ### Setup
 
@@ -260,7 +262,7 @@ The Playwright config lives at `e2e/playwright.config.ts`:
 
 ### What is tested
 
-The E2E suite has **20 spec files** covering:
+The E2E suite has **23 spec files** covering:
 
 | Spec | Coverage |
 |---|---|
@@ -282,13 +284,17 @@ The E2E suite has **20 spec files** covering:
 | `analytics.spec.ts` | Analytics features |
 | `comparison.spec.ts` | Two-athlete comparison |
 | `offline-logging.spec.ts` | Offline sync E2E |
+| `public-schedule.spec.ts` | Published schedule visibility without sign-in, empty/unavailable states, axe |
+| `public-statistics-report.spec.ts` | Public report filters in the shareable URL and axe audit |
+| `relay-session.spec.ts` | Relay setup, team logging, official selection, and standings |
+| `vertical-events.spec.ts` | High jump setup, progression, audited attempts, and finalized placing |
 | `smoke.spec.ts` | Anonymous landing page + axe |
 
 ### Global setup
 
 Before any tests run, `global-setup.ts`:
 1. Runs `npm run db:migrate` against the E2E database
-2. Truncates all **29 application tables** with `CASCADE` for a clean slate
+2. Truncates its 30-entry `APP_TABLES` list with `CASCADE` for a clean slate (the live schema has 43 tables; catalogue and session tables are migration-seeded and left in place)
 
 ### Auth setup
 
