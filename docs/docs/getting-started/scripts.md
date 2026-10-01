@@ -124,7 +124,7 @@ Projects:
 | `desktop-chromium` | All authenticated spec files (`testIgnore` excludes only `auth.setup.ts` and `smoke.spec.ts`) | Full authenticated suite at desktop viewport |
 | `mobile-chromium` | The same authenticated spec files | Same suite at Pixel 5 viewport |
 
-Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates all application tables (including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) before each run. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations, plus keyboard-navigation and 320px no-horizontal-scroll checks. `e2e/tests/accessibility.spec.ts` still contains a `fixtures` audit entry, but the console nav has no Fixtures item — `/console/fixtures` redirects to `/console/events` (`frontend/src/App.tsx`).
+Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates its 30-entry application table list (`APP_TABLES`, including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) with `CASCADE` before each run; the catalogue and session tables (`discipline_definitions`, `discipline_sessions`, `session_*`, `meet_*`, `relay_members`, and the offline/public sync logs) are seeded by migrations and deliberately left in place, so the live schema holds 43 tables in total. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations, plus keyboard-navigation and 320px no-horizontal-scroll checks. `e2e/tests/accessibility.spec.ts` still contains a `fixtures` audit entry, but the console nav has no Fixtures item — `/console/fixtures` redirects to `/console/events` (`frontend/src/App.tsx`).
 
 ## Coverage Reports
 
@@ -142,12 +142,12 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 Record a status snapshot only when a change needs verification evidence: run the affected package gates (lint, typecheck, test, build — plus coverage and the browser suite where configured), then replace the table below with that run's date and results. Dated totals go stale as specs, tests, and migrations are added, so read every number from the current tree at run time rather than carrying an older snapshot forward, and keep at most one snapshot in this section.
 
-| Metric (snapshot 2026-09-30) | Count |
+| Metric (snapshot 2026-10-01) | Count |
 |---|---|
 | Frontend unit test files | 103 |
 | Backend test files (11 integration) | 96 |
-| E2E spec files | 24 |
-| Backend migrations | 41 |
+| E2E spec files | 23 |
+| Backend migrations | 43 |
 
 ## Definition of done
 

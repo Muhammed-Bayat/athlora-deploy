@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 6
 ---
 
 # Delivery Roadmap
@@ -14,7 +14,7 @@ Athlora is intended to support a complete athletics meet and season:
 - **Measured field events:** horizontal jumps, throws, high jump, and pole vault.
 - **Meet and season workflows:** athletes, training, competitions, assignments, live results, PB/SB progression, weather, shared fixtures, reporting, and scheduling.
 
-The delivered release (**0.5.0**) covers the multi-discipline catalogue, shared fixtures, public statistics and schedule, offline sync, club branding, and the coaching assistant. What remains from the product direction above is multi-events (heptathlon/decathlon) and automated season scheduling. Every delivered discipline must still add its own contract, validation, logger controls, result derivation, placing rules, PB/SB comparison, and tests.
+The delivered release (**0.5.0**) covers the multi-discipline catalogue, shared fixtures, public statistics and schedule, offline sync, club branding, and the coaching assistant. What remains from the product direction above is multi-events (heptathlon/decathlon) and automated season scheduling. Two breaking schema changes landed after the `v0.5.0` tag: `0040_remove_club_accent_color.sql` (single `primaryColor` branding) and `0041_remove_squads.sql` (squad feature and API removal). Any discipline added to the catalogue must ship its own contract, validation, logger controls, result derivation, placing rules, PB/SB comparison, and tests.
 
 ## Core Model
 
@@ -138,7 +138,7 @@ Key outcomes:
 
 ### Phase 7: Multi-Discipline Meets and Public Surfaces
 
-**Status: Complete** — Sprint 3, delivered between `v0.4.0` and `v0.5.0`, with regression fixes through PR `#322`.
+**Status: Complete** — Sprint 3, delivered between `v0.4.0` and `v0.5.0`, with regression fixes and post-release cleanup through PR `#332`.
 
 | Work tracked | Delivered through |
 |---|---|
@@ -153,6 +153,8 @@ Key outcomes:
 | Public athlete leaderboard and club standings | PR `#292` |
 | Discipline-aware Gemini assistant, dashboard simplification, and the `0.5.0` version bump | PRs `#303`, `#305`, `#306` |
 | Regression fixes (unit-only session rows, progression history, calendar current-day entries, injury delete confirmation): issue `#316` | PRs `#308`, `#320`-`#322` |
+| Stale docsite refresh, club accent-colour removal (`0040`), and public-logger decimal inputs | PRs `#323`-`#325` |
+| Squad feature/API/schema removal (`0041`), events calendar copy, and dialog/top-bar layering: issue `#310` | PRs `#330`-`#332` |
 
 Key outcomes:
 

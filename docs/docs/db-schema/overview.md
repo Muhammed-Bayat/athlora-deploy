@@ -10,11 +10,11 @@ PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types be
 
 ## Entity relationship diagram
 
-The diagram below reflects the schema documented on this page. Open the [SVG ERD](/img/erd.svg) for a zoomable version.
+Open the [SVG ERD](/img/erd.svg) for a zoomable version.
 
 <img src="/img/erd.svg" alt="Athlora database entity relationship diagram" />
 
-*The diagram shows the Stage-1 core schema; the multi-discipline catalogue tables documented below are authoritative for the sessions, entrants, and catalogue model.*
+*The diagram shows only the Stage-1 core schema, not the full schema documented on this page. The tables documented below are authoritative for the multi-discipline catalogue, sessions, entrants, branding, and sync model.*
 
 ## Relationship summary
 
@@ -698,6 +698,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0004_account_lifecycle.sql` | Account-deletion tombstone |
 | `0005_workspace_tenancy.sql` | Workspaces and workspace-scoped athletes/events |
 | `0006_workspace_roles_and_invitations.sql` | Coach/assistant roles, invitations, membership audit |
+| `0007_workspace_squads.sql` | Squad/athlete-group tables (removed by `0041_remove_squads.sql`) |
 | `0008_athlete_lifecycle.sql` | Athlete states, transition audit, participant reviews |
 | `0009_intermediate_fixtures.sql` | Fixture workspaces, invitations, responses, participant workspace ownership |
 | `0010_fixture_workspace_status_index.sql` | Non-unique fixture status index |
