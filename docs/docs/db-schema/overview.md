@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0041_remove_squads.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0042_event_archive.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -221,6 +221,7 @@ events
   fixture_revision INTEGER NOT NULL DEFAULT 1 CHECK (> 0)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  archived_at TIMESTAMPTZ NULL
 
 event_fixture_workspaces
   event_id UUID PK, FK -> events.id ON DELETE CASCADE
@@ -680,6 +681,7 @@ event_reminder_mutes
 
 - Roster lookup: `athletes(workspace_id, lifecycle_status, lower(name))`.
 - Event lookup: `events(created_by, status, date, time, created_at, id)` and `(status, date)`.
+- Archived events: partial `events(workspace_id, archived_at, date) WHERE archived_at IS NOT NULL`.
 - Active event feed: `timeline_entries(event_id, created_at DESC, id DESC)` where `deleted_at IS NULL`.
 - Result statistics: `results(athlete_id, discipline, event_id)`.
 - RSVP audit: `event_participant_rsvp_audit(event_id, athlete_id, changed_at DESC)`.
@@ -732,6 +734,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0039_host_fixture_revision_sync.sql` | Repairs host fixture-workspace `accepted_revision` rows left behind when a fixture revision advanced |
 | `0040_remove_club_accent_color.sql` | Removes the obsolete club accent colour column |
 | `0041_remove_squads.sql` | Removes retired athlete-group data and related tables |
+| `0042_event_archive.sql` | Adds `events.archived_at` for reversible soft-archived events plus a partial index over archived workspace events |
 
 ## Schema maintenance
 
@@ -739,4 +742,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra]. Migration `0042_event_archive.sql` (event soft-archive column and partial index) was documented with the assistance of opencode[mimo-v2.6-flash-free].

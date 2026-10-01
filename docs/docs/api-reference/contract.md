@@ -291,7 +291,7 @@ Notifications include `fixture_started`, `fixture_invited`, `fixture_reacceptanc
 | `GET /reminders/unread-count` | Get the unread reminder count |
 | `POST /reminders/:reminderId/read` | Mark a reminder as read |
 
-Reminders are in-app records generated for upcoming events. They are not push, email, or device notifications.
+Reminders are in-app records generated for upcoming events. Archived events are skipped. They are not push, email, or device notifications.
 
 ### 3.9 AI integration
 
@@ -422,7 +422,7 @@ Athlete create/full-replacement request DTO: `name` (required), `dob`, `gender`,
 ```
 id, createdBy, type ('competition'|'training'), discipline ('100m'|null), title, date (ISO date),
 time (HH:mm:ss|null), locationName (string|null), latitude (number|null), longitude (number|null),
-status, createdAt, updatedAt
+status, archivedAt (ISO|null), createdAt, updatedAt
 ```
 
 `discipline: '100m'` is the existing event contract and keeps the participant, timeline, and result controls. `discipline: null` is a multi-discipline meet: its catalogue-backed sessions, shared entrant pool, relay legs, and per-session registrations are available only through protected meet endpoints. An athlete can register only for a session whose catalogue definition is in their preferred disciplines (`409 ATHLETE_DISCIPLINE_MISMATCH` otherwise); sessions intentionally allow zero registrations. Accepted fixture guests read and mutate only their own entrants and registrations, while the host can read every club's session roster. Athlete preferences, goals, notes, and other private profile fields are never present in those or public meet responses.
@@ -471,6 +471,8 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 
 **Cancellation rule:** cancelling an event keeps its timeline entries and results rows but marks them non-scoring; the dashboard and statistics ignore cancelled events. `cancelled` is not a delete — `DELETE /events/:id` only sets `status = 'cancelled'`.
 
+**Archiving rule:** archiving is a reversible soft-hide orthogonal to `status`. `POST /events/:id/archive` stamps `archivedAt` on a `scheduled`, `completed`, or `cancelled` event and returns `{ data: event }`; an `in_progress` event returns `409 EVENT_IN_PROGRESS` and an already archived event returns `409 EVENT_ALREADY_ARCHIVED`. `POST /events/:id/unarchive` clears `archivedAt` and returns `{ data: event }`; an event that is not archived returns `409 EVENT_NOT_ARCHIVED`. Archived events are excluded from the default `GET /events` list, the dashboard upcoming counts, event reminders, and the public club schedule, and they cannot receive participant or fixture-team mutations (`409 EVENT_ARCHIVED`). They remain readable through `GET /events/:id`, keep their lifecycle status and all history/results (archived completed events still score statistics), and appear only under the `status=archived` list filter, where the response `status` stays the underlying lifecycle value.
+
 **Endpoints:**
 
 | Method & path | Purpose |
@@ -481,13 +483,15 @@ Any other move returns `409 INVALID_EVENT_TRANSITION` with `details: { from, to 
 | `GET /events/:id/weather` | Fetch the owned event's GraySky daily forecast |
 | `PUT /events/:id` | Full replacement of mutable fields + status transition |
 | `DELETE /events/:id` | Cancel (sets `status = 'cancelled'`); returns `{ data: event }` |
+| `POST /events/:id/archive` | Soft-archive (stamps `archivedAt`); returns `{ data: event }` |
+| `POST /events/:id/unarchive` | Clear `archivedAt`; returns `{ data: event }` |
 
 `GET /events` accepts strict query parameters (unknown parameters are rejected with `400`):
 
 | Parameter | Behavior |
 |---|---|
 | `type` | Exact match on `type` (`'competition'` or `'training'`) |
-| `status` | Exact match on `status` |
+| `status` | Exact match on `status`, or the pseudo-status `archived` to return only archived events (any lifecycle status) |
 | `dateFrom` | Inclusive lower bound on `date` (Gregorian `YYYY-MM-DD`) |
 | `dateTo` | Inclusive upper bound on `date`; `dateFrom` must not be after `dateTo` |
 | `year` | Season scope: `'all'` or a four-digit Gregorian year. Omitting it (including a request with no parameters at all) defaults to the **current UTC year**; an unparseable value returns `422 SEASON_YEAR_INVALID` |
@@ -560,7 +564,7 @@ Composite key `(eventId, athleteId)`. `rsvp_status` is CHECK-constrained and acc
 | `DELETE /events/:eventId/participants/:athleteId` | Remove the assignment; returns `204` |
 | `POST /events/:eventId/participants/:athleteId/status-review/acknowledge` | Acknowledge that athlete's lifecycle review item; returns `204` |
 
-Assignment defaults `rsvpStatus` to `pending`. The bulk route applies the same per-row rules inside a single transaction — ownership, duplicate/absent-row handling, archived/inactive conflicts, RSVP audit rows, and the result recomputation triggered by a `no` — and one failing row aborts the whole batch with that row's error, so no partial update is committed. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; archived and inactive athletes cannot be newly assigned and return `409 ATHLETE_ARCHIVED` and `409 ATHLETE_INACTIVE` respectively. A real lifecycle transition does not remove existing assignments; it creates a per-event, per-athlete review item. Coaches acknowledge review items independently, so a later change for one athlete cannot clear another athlete's alert. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
+Assignment defaults `rsvpStatus` to `pending`. The bulk route applies the same per-row rules inside a single transaction — ownership, duplicate/absent-row handling, archived/inactive conflicts, RSVP audit rows, and the result recomputation triggered by a `no` — and one failing row aborts the whole batch with that row's error, so no partial update is committed. A duplicate POST returns `409 PARTICIPANT_ALREADY_ASSIGNED`; archived and inactive athletes cannot be newly assigned and return `409 ATHLETE_ARCHIVED` and `409 ATHLETE_INACTIVE` respectively. Any participant assignment, RSVP, or removal against an archived event returns `409 EVENT_ARCHIVED`. A real lifecycle transition does not remove existing assignments; it creates a per-event, per-athlete review item. Coaches acknowledge review items independently, so a later change for one athlete cannot clear another athlete's alert. Removing an assignment deletes only the composite-key row: existing timeline entries and results remain intact. Malformed, missing, wrong-parent and cross-coach event/athlete/participant identifiers use the standard non-enumerating `404 NOT_FOUND` response.
 
 ### 4.7 Timeline entry (the live log)
 
@@ -681,7 +685,7 @@ Two authenticated routes are mounted at `/api/v1/dashboard`: `GET /dashboard/sum
 ```
 
 - `athletesCount` counts all owned athletes; `activeAthletesCount`, `inactiveAthletesCount`, and `archivedAthletesCount` make the lifecycle distribution explicit. `rosterSnapshot` includes active athletes only. `statusReviewCount` is the number of unacknowledged per-assignment lifecycle review items. Historical recent result/PB rows retain archived athlete identity.
-- `upcomingEvents` are owned 100m `scheduled` events with `date >= asOfDate`; cancelled, completed, active and legacy non-100m events are not upcoming. Ordering is date/time/creation/ID ascending and `upcomingEventCount` mirrors the array length.
+- `upcomingEvents` are owned 100m `scheduled` events with `date >= asOfDate`; cancelled, completed, active, archived, and legacy non-100m events are not upcoming. Ordering is date/time/creation/ID ascending and `upcomingEventCount` mirrors the array length.
 - `seasonPbs` counts non-cancelled `isPb` rows in the selected season. `recentResults` returns ten non-cancelled rows and `recentPbs` returns five non-cancelled PB rows in that same scope, both in deterministic reverse event order.
 - One active event is selected from owned 100m `in_progress` events by date ascending, time ascending with nulls last, creation ascending, then ID ascending. This is a presentation rule; multiple events may remain in progress.
 - A live `activeEvent` contains the event identity, ten latest active timeline entries with athlete identity, and progress over its current participant set: participant count, distinct participants with active entries, resolved participant result count, active participant entry count, and rounded completion percentage. Effective valid/DQ/DNF/DNS outcomes are resolved; `no_result` is unresolved.
@@ -719,4 +723,4 @@ Two authenticated routes are mounted at `/api/v1/dashboard`: `GET /dashboard/sum
 
 The global assistant, discipline analytics, and report contract update was generated, edited, and reviewed with the assistance of OpenCode[openai/gpt-5.6-terra].
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public detailed-statistics report endpoint was documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra]. The missing endpoints (health probe, offline-logger read, bulk RSVP, catalogue statistics, dashboard disciplines, public club statistics, conflict resolution), the corrected request/response contracts, and the envelope-exception notes were updated with the assistance of opencode[mimo-v2.6-flash-free]. The offline-logger route wording was corrected with OpenCode[gpt-5.6-terra].
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding endpoints were documented with the assistance of opencode[mimo-v2.6-flash-free]. The offline sync §3.11 batch contract and athlete discipline/season-goal contract were updated with the assistance of opencode[mimo-v2.6-flash-free] and OpenCode[gpt-5.6-terra]. Guest entrant club/detail fields were documented with OpenCode[gpt-5.6-terra]. Relay catalogue seeds, coach-selected official entry selection, and relay roster patch contract were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule `disciplines` event field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public detailed-statistics report endpoint was documented with the assistance of OpenCode[gpt-5.6-terra]. Measured official-attempt selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra]. The missing endpoints (health probe, offline-logger read, bulk RSVP, catalogue statistics, dashboard disciplines, public club statistics, conflict resolution), the corrected request/response contracts, and the envelope-exception notes were updated with the assistance of opencode[mimo-v2.6-flash-free]. The offline-logger route wording was corrected with OpenCode[gpt-5.6-terra]. The event archive/unarchive contract (`archivedAt`, `status=archived`, error codes, guard behaviour) was documented with the assistance of opencode[mimo-v2.6-flash-free].
