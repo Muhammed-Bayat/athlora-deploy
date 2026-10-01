@@ -28,6 +28,7 @@ import {
   type Club,
   type EventParticipantSummary,
   type EventMutationPayload,
+  type EventListStatus,
   type EventStatus,
   type EventType,
   type RsvpStatus,
@@ -794,12 +795,13 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const location = useLocation();
   const navigate = useNavigate();
   const [events, setEvents] = useState<AthleticsEvent[]>([]);
+  const [archivedEvents, setArchivedEvents] = useState<AthleticsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [dateTab, setDateTab] = useState<DateTab>(() => searchParams.get('date') === 'past' || searchParams.get('date') === 'all' ? searchParams.get('date') as DateTab : 'upcoming');
   const [typeFilter, setTypeFilter] = useState<EventType | ''>(() => searchParams.get('type') === 'competition' || searchParams.get('type') === 'training' ? searchParams.get('type') as EventType : '');
-  const [statusFilter, setStatusFilter] = useState<EventStatus | ''>(() => ['scheduled', 'in_progress', 'completed', 'cancelled'].includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventStatus : '');
+  const [statusFilter, setStatusFilter] = useState<EventListStatus | ''>(() => (['scheduled', 'in_progress', 'completed', 'cancelled', 'archived'] as string[]).includes(searchParams.get('status') ?? '') ? searchParams.get('status') as EventListStatus : '');
   const [view, setView] = useState<EventView>(() => {
     if (defaultView) return defaultView;
     return 'calendar';
@@ -838,6 +840,24 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
       current = false;
     };
   }, [activeWorkspace.id, reloadKey, season]);
+
+  useEffect(() => {
+    if (statusFilter !== 'archived') {
+      setArchivedEvents([]);
+      return undefined;
+    }
+    let current = true;
+    void listEvents({ status: 'archived', ...(seasonQueryValue(season) ? { year: season } : {}) })
+      .then(({ data }) => {
+        if (current) setArchivedEvents(sortedEvents(data));
+      })
+      .catch(() => {
+        if (current) setArchivedEvents([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [activeWorkspace.id, reloadKey, season, statusFilter]);
 
   useEffect(() => {
     const query = clubSearch.trim();
@@ -888,12 +908,19 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   }, [events, loadError, loading, onUpcomingCountChange, today]);
 
   const storeEvent = (event: AthleticsEvent) => {
-    setEvents((current) => sortedEvents([...current.filter((item) => item.id !== event.id), event]));
+    const isArchived = event.archivedAt !== null;
+    setEvents((current) => sortedEvents(isArchived
+      ? current.filter((item) => item.id !== event.id)
+      : [...current.filter((item) => item.id !== event.id), event]));
+    setArchivedEvents((current) => sortedEvents(isArchived
+      ? [...current.filter((item) => item.id !== event.id), event]
+      : current.filter((item) => item.id !== event.id)));
   };
 
+  const baseSource = statusFilter === 'archived' ? archivedEvents : events;
   const calendarSource = calendarScope === 'combined'
-    ? Array.from(new Map([...events, ...clubEvents.map(({ event }) => event)].map((event) => [event.id, event])).values())
-    : events;
+    ? Array.from(new Map([...baseSource, ...clubEvents.map(({ event }) => event)].map((event) => [event.id, event])).values())
+    : baseSource;
   const clubsForEvent = (eventId: string) => clubEvents.filter(({ event }) => event.id === eventId).map(({ clubName }) => clubName);
   const clubNameForEvent = (eventId: string) => clubsForEvent(eventId).join(', ');
   const clubColorForEvent = (eventId: string) => {
@@ -901,10 +928,15 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     return clubId ? selectedClubs.findIndex((club) => club.id === clubId) % 4 : -1;
   };
   const isJointEvent = (eventId: string) => events.some((event) => event.id === eventId) && clubsForEvent(eventId).length > 0;
+  const statusMatches = (event: AthleticsEvent) => {
+    if (statusFilter === 'archived') return event.archivedAt !== null;
+    if (statusFilter) return event.archivedAt === null && event.status === statusFilter;
+    return event.archivedAt === null;
+  };
   const filtered = sortedEvents(
     calendarSource.filter((event) => {
       const dateMatches = dateTab === 'all' || (dateTab === 'upcoming' ? event.date >= today : event.date < today);
-      return dateMatches && (!typeFilter || event.type === typeFilter) && (!statusFilter || event.status === statusFilter);
+      return dateMatches && (!typeFilter || event.type === typeFilter) && statusMatches(event);
     }),
     dateTab === 'past',
   );
@@ -939,7 +971,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     });
   };
 
-  const updateFilters = (next: { date?: DateTab; type?: EventType | ''; status?: EventStatus | '' }) => {
+  const updateFilters = (next: { date?: DateTab; type?: EventType | ''; status?: EventListStatus | '' }) => {
     const params = new URLSearchParams(searchParams);
     const values = { date: dateTab, type: typeFilter, status: statusFilter, ...next };
     if (values.date === 'upcoming') params.delete('date'); else params.set('date', values.date);
@@ -984,12 +1016,13 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
             { value: 'training', label: 'Training' },
           ]} />
           <label className={styles.srOnly} htmlFor="event-status-filter">Filter by event status</label>
-          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F' }} value={statusFilter} onChange={(input) => { const value = input.target.value as EventStatus | ''; setStatusFilter(value); updateFilters({ status: value }); }} options={[
+          <Select id="event-status-filter" icon="status" dotColors={{ scheduled: '#0092BC', in_progress: '#8AE9F2', completed: '#005E83', cancelled: '#E2664F', archived: '#6B7280' }} value={statusFilter} onChange={(input) => { const value = input.target.value as EventListStatus | ''; setStatusFilter(value); if (value === 'archived' && dateTab !== 'all') { setDateTab('all'); updateFilters({ status: value, date: 'all' }); } else updateFilters({ status: value }); }} options={[
             { value: '', label: 'All statuses' },
             { value: 'scheduled', label: 'Scheduled' },
             { value: 'in_progress', label: 'In progress' },
             { value: 'completed', label: 'Completed' },
             { value: 'cancelled', label: 'Cancelled' },
+            { value: 'archived', label: 'Archived' },
           ]} />
           <div className={styles.viewToggle} role="group" aria-label="Event view">
             <button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}>☷</button>
@@ -1078,7 +1111,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
                             <strong>{event.title}</strong>
                             <span>
                               <i data-type={event.type}>{formattedType(event.type)}</i>
-                              <i data-status={event.status}>{formattedStatus(event.status)}</i>
+                              <i data-status={event.archivedAt !== null ? 'archived' : event.status}>{event.archivedAt !== null ? 'Archived' : formattedStatus(event.status)}</i>
                               {clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}
                             </span>
                             <small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small>
@@ -1101,7 +1134,7 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
                       if (onOpenEvent) onOpenEvent(event.id); else if (location.pathname.startsWith('/console')) navigate(detailPath); else setSelectedId(event.id);
                     }}>
                     <time className={styles.dateBlock} dateTime={event.date}><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</small></time>
-                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.status}>{formattedStatus(event.status)}</i>{clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}</span><small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
+                    <span className={styles.eventBody}><strong>{event.title}</strong><span><i data-type={event.type}>{formattedType(event.type)}</i><i data-status={event.archivedAt !== null ? 'archived' : event.status}>{event.archivedAt !== null ? 'Archived' : formattedStatus(event.status)}</i>{clubNameForEvent(event.id) && <i className={styles.clubBadge} data-club-index={clubColorForEvent(event.id)} data-shared={isJointEvent(event.id) || undefined}>{isJointEvent(event.id) ? `Together · ${clubNameForEvent(event.id)}` : clubNameForEvent(event.id)}</i>}</span><small>{clubNameForEvent(event.id) ? `${clubNameForEvent(event.id)} · ` : ''}{event.time ?? 'Time not set'} · {event.locationName ?? 'Location not set'}</small></span>
                     <span aria-hidden="true">›</span>
                   </button>
                 </Card>

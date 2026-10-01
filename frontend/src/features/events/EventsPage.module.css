@@ -493,6 +493,11 @@
   background: var(--console-badge-danger-surface);
 }
 
+[data-status='archived'] {
+  color: var(--console-muted);
+  background: var(--console-soft);
+}
+
 .eventBody small {
   color: var(--console-muted);
   overflow-wrap: anywhere;
@@ -839,6 +844,15 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-top: var(--space-6);
+}
+
+.archiveEventButton {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  border: 1px solid var(--console-danger-text, var(--ink-900));
+  background-color: var(--console-danger-surface, var(--alert));
+  color: var(--console-danger-text, var(--ink-900));
 }
 
 .form {

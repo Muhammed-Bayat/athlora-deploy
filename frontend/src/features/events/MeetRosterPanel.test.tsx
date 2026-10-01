@@ -13,7 +13,7 @@ vi.mock('../../api/athletes', () => athletes);
 vi.mock('../../api/participants', () => participants);
 vi.mock('../../api/fixtures', () => fixturesApi);
 
-const event: AthleticsEvent = { id: 'event-1', workspaceId: 'workspace-1', createdBy: 'coach-1', type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
+const event: AthleticsEvent = { id: 'event-1', workspaceId: 'workspace-1', createdBy: 'coach-1', type: 'competition', discipline: null, title: 'Open meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'scheduled', archivedAt: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
 
 async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, label: string, option: string | RegExp) {
   const trigger = screen.getByRole('button', { name: label });

@@ -12,7 +12,7 @@ vi.mock('../../utils/downloadFile', () => downloads);
 const event: AthleticsEvent = {
   id: 'event-1', workspaceId: 'club-1', createdBy: 'coach-1', type: 'competition', discipline: null,
   title: 'City Meet', date: '2026-10-01', time: null, locationName: null, latitude: null, longitude: null,
-  status: 'scheduled', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+  status: 'scheduled', archivedAt: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
 };
 
 describe('EventFinalResults', () => {

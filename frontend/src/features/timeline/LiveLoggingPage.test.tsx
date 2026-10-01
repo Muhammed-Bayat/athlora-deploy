@@ -54,6 +54,7 @@ describe('LiveLoggingPage', () => {
     latitude: null,
     longitude: null,
     status: 'scheduled' as const,
+    archivedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   };

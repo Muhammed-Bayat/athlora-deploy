@@ -81,6 +81,7 @@ function event(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
     latitude: -26.2041,
     longitude: 28.0473,
     status: 'scheduled',
+    archivedAt: null,
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',
     ...overrides,
@@ -479,6 +480,24 @@ describe('EventsPage', () => {
     await user.selectOptions(screen.getByLabelText('Filter by event type'), 'training');
     expect(screen.getByRole('button', { name: /Acceleration Session/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /August Time Trial/ })).not.toBeInTheDocument();
+  });
+
+  it('shows only archived events under the Archived status filter', async () => {
+    const archivedEvent = event({ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', title: 'Retired Relay', date: '2026-08-12', status: 'completed', archivedAt: '2026-08-15T09:00:00.000Z' });
+    const user = userEvent.setup();
+    eventApi.listEvents
+      .mockResolvedValueOnce({ data: [past, cancelled, city, training], meta: { count: 4 } })
+      .mockResolvedValueOnce({ data: [archivedEvent], meta: { count: 1 } });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /City Sprint Meet/ })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Filter by event status'), 'archived');
+
+    const card = await screen.findByRole('button', { name: /Retired Relay/ });
+    expect(card).toHaveTextContent('Archived');
+    expect(screen.queryByRole('button', { name: /City Sprint Meet/ })).not.toBeInTheDocument();
+    expect(eventApi.listEvents).toHaveBeenLastCalledWith({ status: 'archived' });
+    expect(await screen.findByText(/1 event shown/)).toBeInTheDocument();
   });
 
   it('validates and creates an event with an exact normalized payload', async () => {

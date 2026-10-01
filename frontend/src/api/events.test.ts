@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent, EventMutationPayload, EventWeatherForecast } from '../types';
-import { cancelEvent, createEvent, getEventWeather, listEvents, updateEvent } from './events';
+import { archiveEvent, cancelEvent, createEvent, getEventWeather, listEvents, unarchiveEvent, updateEvent } from './events';
 
 const event: AthleticsEvent = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -15,6 +15,7 @@ const event: AthleticsEvent = {
   latitude: -26.2041,
   longitude: 28.0473,
   status: 'scheduled',
+  archivedAt: null,
   createdAt: '2026-08-16T10:00:00.000Z',
   updatedAt: '2026-08-16T10:00:00.000Z',
 };
@@ -110,6 +111,23 @@ describe('event API', () => {
 
     await expect(cancelEvent(event.id)).resolves.toEqual(cancelled);
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('archives and unarchives an event with POST endpoints', async () => {
+    const archived = { ...event, archivedAt: '2026-10-01T09:00:00.000Z' };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: archived })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(archiveEvent(event.id)).resolves.toEqual(archived);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(`/api/v1/events/${event.id}/archive`);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: event })));
+    await expect(unarchiveEvent(event.id)).resolves.toEqual(event);
+    expect(fetchMock.mock.calls[1]?.[0]).toContain(`/api/v1/events/${event.id}/unarchive`);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
   });
 
   it('unwraps an event forecast and forwards cancellation', async () => {
