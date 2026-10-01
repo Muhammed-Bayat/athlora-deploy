@@ -294,7 +294,12 @@ describe('PostgreSQL row mapping', () => {
       status: 'scheduled',
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
+      archivedAt: null,
     });
+
+    expect(
+      mapEventRow(changed(eventRow, { archived_at: INPUT_TIMESTAMP })),
+    ).toMatchObject({ archivedAt: ISO_TIMESTAMP });
 
     expect(
       mapEventRow(

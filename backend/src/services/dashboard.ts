@@ -188,6 +188,7 @@ export async function getDashboardSummary(
          (SELECT COUNT(*) FROM events
            WHERE workspace_id = $1
             AND status = 'scheduled'
+             AND archived_at IS NULL
              AND date >= $2::date
              AND date <= ($2::date + INTERVAL '7 days'))
            AS upcoming_event_count,
@@ -427,6 +428,7 @@ export async function getDashboardSummary(
         LEFT JOIN athletes a ON a.id = ep.athlete_id AND a.workspace_id = $1
         WHERE e.workspace_id = $1
          AND e.status = 'scheduled'
+          AND e.archived_at IS NULL
           AND e.date >= $2::date
           AND e.date <= ($2::date + INTERVAL '7 days')
        GROUP BY e.id

@@ -6,7 +6,7 @@ const mockOverrideResultRecord = vi.fn();
 vi.mock('../controllers/results.js', () => ({ overrideResultRecord: mockOverrideResultRecord }));
 
 import { getPool } from '../db/client.js';
-import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertFixtureReadyToStart, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant, markFixtureReacceptanceRequired } from './fixtures.js';
+import { listFixtureInvitations, listIncomingFixtureInvitations, listGuestFixtures, assertFixtureReadyToStart, assertHostWorkspace, listHostedFixtureRosters, listHostedFixtureResults, listHostedFixtureEntries, overrideHostFixtureResult, updateGuestFixtureParticipant, markFixtureReacceptanceRequired, createFixtureInvitation } from './fixtures.js';
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const HOST_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
@@ -42,6 +42,19 @@ describe('fixtures', () => {
     await expect(listFixtureInvitations(WORKSPACE_ID, EVENT_ID)).resolves.toEqual([]);
 
     expect(query).toHaveBeenCalledWith(expect.any(String), [EVENT_ID, WORKSPACE_ID]);
+  });
+
+  it('rejects fixture invitations while the event is archived', async () => {
+    query.mockResolvedValue({
+      rows: [{ type: 'competition', discipline: '100m', status: 'scheduled', fixture_revision: 1, archived_at: new Date() }],
+    });
+
+    await expect(
+      createFixtureInvitation(WORKSPACE_ID, ACTOR_ID, EVENT_ID, { targetClubId: '66666666-6666-4666-8666-666666666666' } as never),
+    ).rejects.toMatchObject({ status: 409, code: 'EVENT_ARCHIVED' });
+
+    const lockSql = query.mock.calls[1][0] as string;
+    expect(lockSql).toContain('archived_at');
   });
 
   it('includes the latest responder identity and workspace for the host', async () => {

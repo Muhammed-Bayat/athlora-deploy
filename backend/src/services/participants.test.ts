@@ -154,9 +154,36 @@ describe('event participant service', () => {
     expect(query).not.toHaveBeenCalled();
 
     query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] });
     await expect(removeEventParticipant(USER_ID, EVENT_ID, ATHLETE_ID)).rejects.toMatchObject({
       status: 404,
       code: 'NOT_FOUND',
     });
+  });
+
+  it('rejects participant mutations while the event is archived', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ archived_at: null, already_assigned: false, event_archived_at: new Date() }],
+    });
+    await expect(addEventParticipant(USER_ID, EVENT_ID, { athleteId: ATHLETE_ID })).rejects.toMatchObject({
+      status: 409,
+      code: 'EVENT_ARCHIVED',
+    });
+
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ archived_at: new Date() }] });
+    await expect(
+      replaceEventParticipant(USER_ID, EVENT_ID, ATHLETE_ID, { rsvpStatus: 'yes' }),
+    ).rejects.toMatchObject({ status: 409, code: 'EVENT_ARCHIVED' });
+
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ archived_at: new Date() }] });
+    await expect(removeEventParticipant(USER_ID, EVENT_ID, ATHLETE_ID)).rejects.toMatchObject({
+      status: 409,
+      code: 'EVENT_ARCHIVED',
+    });
+    expect(query).toHaveBeenCalledTimes(5);
   });
 });

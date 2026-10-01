@@ -5,7 +5,7 @@ import { ApiError } from '../../api/client';
 import type { AthleticsEvent } from '../../types';
 import { EventDetailPage } from './EventDetailPage';
 
-const eventApi = vi.hoisted(() => ({ getEvent: vi.fn(), updateEvent: vi.fn(), cancelEvent: vi.fn() }));
+const eventApi = vi.hoisted(() => ({ getEvent: vi.fn(), updateEvent: vi.fn(), cancelEvent: vi.fn(), archiveEvent: vi.fn(), unarchiveEvent: vi.fn() }));
 const fixtureApi = vi.hoisted(() => ({ getGuestFixture: vi.fn() }));
 const workspace = vi.hoisted(() => ({ role: 'coach', id: 'host-workspace' }));
 
@@ -36,7 +36,7 @@ vi.mock('./EventsPage', () => ({
 const event: AthleticsEvent = {
   id: 'event-1', workspaceId: 'host-workspace', createdBy: 'coach-1', type: 'competition', discipline: '100m', title: 'City Sprint Meet',
   date: '2026-09-01', time: '09:30:00', locationName: 'Central Stadium', latitude: null, longitude: null,
-  status: 'scheduled', createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+  status: 'scheduled', archivedAt: null, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
 };
 
 beforeEach(() => {
@@ -87,6 +87,39 @@ describe('EventDetailPage', () => {
     await waitFor(() => expect(eventApi.updateEvent).toHaveBeenLastCalledWith(event.id, expect.objectContaining({ status: 'in_progress' })));
     expect(await screen.findByText('Updated meet is now live.')).toBeInTheDocument();
     expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'in_progress' }));
+  });
+
+  it('archives an event in one click without a confirmation dialog', async () => {
+    eventApi.archiveEvent.mockResolvedValue({ ...event, archivedAt: '2026-10-01T09:00:00.000Z' });
+    const onEventUpdated = vi.fn();
+    const user = userEvent.setup();
+    render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} onEventUpdated={onEventUpdated} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Archive event' }));
+
+    await waitFor(() => expect(eventApi.archiveEvent).toHaveBeenCalledWith(event.id));
+    expect(screen.queryByRole('dialog', { name: 'Are you sure?' })).not.toBeInTheDocument();
+    expect(await screen.findByText('City Sprint Meet archived. Find it under the Archived filter.')).toBeInTheDocument();
+    expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ archivedAt: '2026-10-01T09:00:00.000Z' }));
+  });
+
+  it('replaces lifecycle controls with Unarchive for an archived event', async () => {
+    eventApi.unarchiveEvent.mockResolvedValue({ ...event, archivedAt: null });
+    const user = userEvent.setup();
+    const archivedEvent: AthleticsEvent = { ...event, status: 'completed', archivedAt: '2026-10-01T09:00:00.000Z' };
+    render(<EventDetailPage eventId={event.id} initialEvent={archivedEvent} onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Archived')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit event' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark completed' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel event' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Archive event' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Unarchive' }));
+
+    await waitFor(() => expect(eventApi.unarchiveEvent).toHaveBeenCalledWith(event.id));
+    expect(screen.queryByRole('dialog', { name: 'Are you sure?' })).not.toBeInTheDocument();
+    expect(await screen.findByText('City Sprint Meet is back on the active schedule.')).toBeInTheDocument();
   });
 
   it('shows the guest roster and hides host-only controls from a guest workspace on a shared fixture', async () => {

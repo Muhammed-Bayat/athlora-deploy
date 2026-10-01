@@ -40,6 +40,20 @@ export async function cancelEvent(id: string): Promise<AthleticsEvent> {
   return response.data;
 }
 
+export async function archiveEvent(id: string): Promise<AthleticsEvent> {
+  const response = await request<{ data: AthleticsEvent }>(`/api/v1/events/${id}/archive`, {
+    method: 'POST',
+  });
+  return response.data;
+}
+
+export async function unarchiveEvent(id: string): Promise<AthleticsEvent> {
+  const response = await request<{ data: AthleticsEvent }>(`/api/v1/events/${id}/unarchive`, {
+    method: 'POST',
+  });
+  return response.data;
+}
+
 export async function getEventWeather(id: string, signal?: AbortSignal): Promise<EventWeatherForecast> {
   const response = await request<{ data: EventWeatherForecast }>(`/api/v1/events/${id}/weather`, { signal });
   return response.data;

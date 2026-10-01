@@ -15,7 +15,7 @@ import type {
 } from '../validation/payloads.js';
 
 const EVENT_COLUMNS =
-  'id, workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status, created_at, updated_at';
+  'id, workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status, created_at, updated_at, archived_at';
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -24,6 +24,17 @@ function notFound(): ApiError {
 function requireScopedId(workspaceId: string, eventId: unknown): asserts eventId is string {
   if (!isCanonicalUuid(workspaceId) || !isCanonicalUuid(eventId)) {
     throw notFound();
+  }
+}
+
+function assertEventNotArchived(event: AthleticsEvent): void {
+  if (event.archivedAt !== null) {
+    throw new ApiError(
+      409,
+      'EVENT_ARCHIVED',
+      'This event is archived. Unarchive it before making changes.',
+      { status: event.status },
+    );
   }
 }
 
@@ -71,9 +82,14 @@ export async function listEvents(
     parameters.push(query.type);
     conditions.push(`type = $${parameters.length}`);
   }
-  if (query.status !== undefined) {
-    parameters.push(query.status);
-    conditions.push(`status = $${parameters.length}`);
+  if (query.status !== undefined && query.status === 'archived') {
+    conditions.push('archived_at IS NOT NULL');
+  } else {
+    conditions.push('archived_at IS NULL');
+    if (query.status !== undefined) {
+      parameters.push(query.status);
+      conditions.push(`status = $${parameters.length}`);
+    }
   }
   if (query.dateFrom !== undefined) {
     parameters.push(query.dateFrom);
@@ -172,6 +188,7 @@ export async function replaceEvent(
     if (!currentRow) throw notFound();
 
     const currentEvent = mapEventRow(currentRow);
+    assertEventNotArchived(currentEvent);
     assertValidTransition(currentEvent.status, payload.status);
     const materialChange = currentEvent.date !== payload.date ||
       currentEvent.time !== payload.time ||
@@ -289,15 +306,8 @@ export async function cancelEvent(
     const currentRow = current.rows[0];
     if (!currentRow) throw notFound();
     const currentEvent = mapEventRow(currentRow);
-    const hasGuests = await client.query<{ workspace_id: string }>(
-      `SELECT workspace_id FROM event_fixture_workspaces
-       WHERE event_id = $1 AND role = 'guest' AND status <> 'withdrawn'
-       LIMIT 1`,
-      [eventId as string],
-    );
-    if (hasGuests.rows.length > 0) {
-      await assertHostWorkspace(client, eventId as string, workspaceId);
-    }
+    assertEventNotArchived(currentEvent);
+    await assertHostFixtureWorkspace(client, eventId as string, workspaceId);
     const result = await client.query<EventRow>(
       `UPDATE events
        SET status = 'cancelled',
@@ -317,6 +327,102 @@ export async function cancelEvent(
       await recomputeEventResults(client, eventId, cancelled.type);
     }
     return cancelled;
+  });
+}
+
+async function assertHostFixtureWorkspace(client: DbExecutor, eventId: string, workspaceId: string): Promise<void> {
+  const hasGuests = await client.query<{ workspace_id: string }>(
+    `SELECT workspace_id FROM event_fixture_workspaces
+     WHERE event_id = $1 AND role = 'guest' AND status <> 'withdrawn'
+     LIMIT 1`,
+    [eventId],
+  );
+  if (hasGuests.rows.length > 0) {
+    await assertHostWorkspace(client, eventId, workspaceId);
+  }
+}
+
+export async function archiveEvent(
+  workspaceId: string,
+  eventId: unknown,
+  runTransaction: TransactionRunner = withTransaction,
+): Promise<AthleticsEvent> {
+  requireScopedId(workspaceId, eventId);
+  return runTransaction(async (client) => {
+    const current = await client.query<EventRow>(
+      `SELECT ${EVENT_COLUMNS}
+       FROM events
+        WHERE id = $1 AND workspace_id = $2
+       FOR UPDATE`,
+      [eventId, workspaceId],
+    );
+    const currentRow = current.rows[0];
+    if (!currentRow) throw notFound();
+    const currentEvent = mapEventRow(currentRow);
+    if (currentEvent.archivedAt !== null) {
+      throw new ApiError(
+        409,
+        'EVENT_ALREADY_ARCHIVED',
+        'This event is already archived.',
+        { status: currentEvent.status },
+      );
+    }
+    if (currentEvent.status === 'in_progress') {
+      throw new ApiError(
+        409,
+        'EVENT_IN_PROGRESS',
+        'Finish or cancel the event before archiving it.',
+        { status: currentEvent.status },
+      );
+    }
+    await assertHostFixtureWorkspace(client, eventId as string, workspaceId);
+    const result = await client.query<EventRow>(
+      `UPDATE events
+       SET archived_at = now(),
+           updated_at = now()
+        WHERE id = $1 AND workspace_id = $2
+       RETURNING ${EVENT_COLUMNS}`,
+      [eventId, workspaceId],
+    );
+    return mapEventRow(result.rows[0]);
+  });
+}
+
+export async function unarchiveEvent(
+  workspaceId: string,
+  eventId: unknown,
+  runTransaction: TransactionRunner = withTransaction,
+): Promise<AthleticsEvent> {
+  requireScopedId(workspaceId, eventId);
+  return runTransaction(async (client) => {
+    const current = await client.query<EventRow>(
+      `SELECT ${EVENT_COLUMNS}
+       FROM events
+        WHERE id = $1 AND workspace_id = $2
+       FOR UPDATE`,
+      [eventId, workspaceId],
+    );
+    const currentRow = current.rows[0];
+    if (!currentRow) throw notFound();
+    const currentEvent = mapEventRow(currentRow);
+    if (currentEvent.archivedAt === null) {
+      throw new ApiError(
+        409,
+        'EVENT_NOT_ARCHIVED',
+        'This event is not archived.',
+        { status: currentEvent.status },
+      );
+    }
+    await assertHostFixtureWorkspace(client, eventId as string, workspaceId);
+    const result = await client.query<EventRow>(
+      `UPDATE events
+       SET archived_at = NULL,
+           updated_at = now()
+        WHERE id = $1 AND workspace_id = $2
+       RETURNING ${EVENT_COLUMNS}`,
+      [eventId, workspaceId],
+    );
+    return mapEventRow(result.rows[0]);
   });
 }
 

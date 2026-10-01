@@ -134,9 +134,9 @@ async function lockHostedFixture(
   client: DbExecutor,
   workspaceId: string,
   eventId: string,
-): Promise<{ type: string; discipline: string | null; status: string; fixture_revision: number }> {
-  const result = await client.query<{ type: string; discipline: string | null; status: string; fixture_revision: number }>(
-    `SELECT type, discipline, status, fixture_revision
+): Promise<{ type: string; discipline: string | null; status: string; fixture_revision: number; archived_at: Date | string | null }> {
+  const result = await client.query<{ type: string; discipline: string | null; status: string; fixture_revision: number; archived_at: Date | string | null }>(
+    `SELECT type, discipline, status, fixture_revision, archived_at
      FROM events
      WHERE id = $1 AND workspace_id = $2
      FOR UPDATE`,
@@ -147,7 +147,10 @@ async function lockHostedFixture(
   return event;
 }
 
-function assertFixtureCanBeScheduled(event: { type: string; discipline: string | null; status: string }): void {
+function assertFixtureCanBeScheduled(event: { type: string; discipline: string | null; status: string; archived_at: Date | string | null }): void {
+  if (event.archived_at !== null && event.archived_at !== undefined) {
+    throw new ApiError(409, 'EVENT_ARCHIVED', 'This event is archived. Unarchive it before changing fixture teams.');
+  }
   if (event.status !== 'scheduled') {
     throw new ApiError(409, 'FIXTURE_EVENT_LOCKED', 'Fixture teams can only change before the event starts');
   }
@@ -380,11 +383,11 @@ async function respondToFixtureInvitationWhere(
     const result = await client.query<{
       id: string; event_id: string; email: string | null; revision: number; status: FixtureInvitationStatus;
       expires_at: Date | string; created_at: Date | string; target_workspace_id: string | null; target_workspace_name: string | null;
-      type: string; discipline: string | null; event_status: string; fixture_revision: number; user_email: string; workspace_name: string;
+      type: string; discipline: string | null; event_status: string; event_archived_at: Date | string | null; fixture_revision: number; user_email: string; workspace_name: string;
     }>(
       `SELECT i.id, i.event_id, i.email, i.revision, i.status, i.expires_at, i.created_at, i.target_workspace_id,
                 target.name AS target_workspace_name,
-                e.type, e.discipline, e.status AS event_status, e.fixture_revision, u.email AS user_email, w.name AS workspace_name
+                e.type, e.discipline, e.status AS event_status, e.archived_at AS event_archived_at, e.fixture_revision, u.email AS user_email, w.name AS workspace_name
         FROM fixture_invitations i
         JOIN events e ON e.id = i.event_id
         JOIN workspace_members wm ON wm.workspace_id = $3 AND wm.user_id = $2 AND wm.role = 'coach'
@@ -401,7 +404,7 @@ async function respondToFixtureInvitationWhere(
     if (current.target_workspace_id !== null && current.target_workspace_id !== workspaceId) throw notFound();
 
     if (payload.response === 'accepted') {
-      assertFixtureCanBeScheduled({ type: current.type, discipline: current.discipline, status: current.event_status });
+      assertFixtureCanBeScheduled({ type: current.type, discipline: current.discipline, status: current.event_status, archived_at: current.event_archived_at });
       const host = await client.query('SELECT 1 FROM event_fixture_workspaces WHERE event_id = $1 AND workspace_id = $2 AND role = $3', [current.event_id, workspaceId, 'host']);
       if (host.rows.length > 0) throw new ApiError(409, 'FIXTURE_HOST_CANNOT_ACCEPT', 'The hosting workspace cannot accept its own invitation');
       const team = await client.query<{ status: FixtureWorkspaceStatus }>(

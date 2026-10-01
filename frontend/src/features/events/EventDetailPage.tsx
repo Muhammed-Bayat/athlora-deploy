@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cancelEvent, getEvent, updateEvent } from '../../api/events';
+import { archiveEvent, cancelEvent, getEvent, unarchiveEvent, updateEvent } from '../../api/events';
 import { getGuestFixture } from '../../api/fixtures';
 import { ApiError } from '../../api/client';
 import { Button, Modal, Toast } from '../../components';
@@ -43,6 +43,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const correctionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [isGuest, setIsGuest] = useState(false);
@@ -118,6 +119,36 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       setLifecycleBusy(false);
     }
   };
+  const runArchive = async () => {
+    if (!event) return;
+    setLifecycleBusy(true);
+    setMutationError(null);
+    try {
+      const updated = await archiveEvent(event.id);
+      setEvent(updated);
+      onEventUpdated?.(updated);
+      setNotice(`${updated.title} archived. Find it under the Archived filter.`);
+    } catch (error) {
+      setErrorNotice(errorMessage(error));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+  const runUnarchive = async () => {
+    if (!event) return;
+    setLifecycleBusy(true);
+    setMutationError(null);
+    try {
+      const updated = await unarchiveEvent(event.id);
+      setEvent(updated);
+      onEventUpdated?.(updated);
+      setNotice(`${updated.title} is back on the active schedule.`);
+    } catch (error) {
+      setErrorNotice(errorMessage(error));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
   const finishCorrection = (message: string) => {
     setCorrectionTarget(null);
     setResultReloadKey((key) => key + 1);
@@ -130,21 +161,25 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   if (!event) return null;
 
   const isHost = event.workspaceId === activeWorkspace.id;
+  const archived = event.archivedAt !== null;
   const canManageLifecycle = canOperate && isHost;
-  const canEditRoster = event.status !== 'completed' && event.status !== 'cancelled';
-  const canEditEvent = event.status === 'scheduled' || event.status === 'in_progress';
+  const canEditRoster = !archived && event.status !== 'completed' && event.status !== 'cancelled';
+  const canEditEvent = !archived && (event.status === 'scheduled' || event.status === 'in_progress');
 
   const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
     <header className={styles.viewHeader}><div><p className={styles.eyebrow}>{event.discipline === null ? 'Multi-discipline meet' : 'Season calendar'}</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
     {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
+    {errorNotice && <Toast variant="error" onDismiss={() => setErrorNotice(null)}>{errorNotice}</Toast>}
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
-      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.status}>{formattedStatus(event.status)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>
+      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.archivedAt !== null ? 'archived' : event.status}>{event.archivedAt !== null ? 'Archived' : formattedStatus(event.status)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Format</dt><dd>{event.discipline === null ? 'Catalogue sessions' : '100m'}</dd></div></dl>
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />
-        {event.discipline === null ? <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} usesSessionRosters />}<MeetRosterPanel event={event} canOperate={canOperate} isCoach={isCoach} activeWorkspaceId={activeWorkspace.id} isGuest={isGuest} /><EventFinalResults event={event} reloadKey={resultReloadKey} /></> : <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
-       {canManageLifecycle && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}
+        {event.discipline === null ? <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} usesSessionRosters />}<MeetRosterPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} activeWorkspaceId={activeWorkspace.id} isGuest={isGuest} /><EventFinalResults event={event} reloadKey={resultReloadKey} /></> : <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} />}<Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={!archived && event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
+       {canManageLifecycle && <div className={styles.detailActionsGroup}>{!archived && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}{archived
+         ? <Button variant="danger" className={styles.archiveEventButton} onClick={() => void runUnarchive()} disabled={lifecycleBusy}>{lifecycleBusy ? 'Saving...' : 'Unarchive'}</Button>
+         : <Button variant="danger" className={styles.archiveEventButton} onClick={() => void runArchive()} disabled={lifecycleBusy || participantBusy || correctionBusy}>Archive event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>
     <Modal open={editor} title="Edit event" onClose={() => { if (!editorBusy) setEditor(false); }} closeDisabled={editorBusy}><EventForm event={event} onSave={saveEditor} onCancel={() => setEditor(false)} onSubmittingChange={setEditorBusy} /></Modal>

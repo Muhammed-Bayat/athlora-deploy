@@ -242,6 +242,11 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export const EVENT_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
+// List-query filter only: archived is a reversible archive state carried on
+// events.archived_at, never a value written to events.status.
+export const EVENT_LIST_STATUSES = [...EVENT_STATUSES, 'archived'] as const;
+export type EventListStatus = (typeof EVENT_LIST_STATUSES)[number];
+
 export interface AthleticsEvent {
   id: string;
   workspaceId: string;
@@ -255,6 +260,7 @@ export interface AthleticsEvent {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

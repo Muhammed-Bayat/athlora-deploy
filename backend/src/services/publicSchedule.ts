@@ -138,9 +138,10 @@ export async function getPublicClubSchedule(
   const eventsResult = await executor.query<PublicScheduleEventRow>(
     `SELECT id, title, date::text AS date, time::text AS time, type, discipline, location_name, status
      FROM events
-     WHERE workspace_id = $1
-       AND date >= $2::date
-       AND status IN ('scheduled', 'in_progress')
+    WHERE workspace_id = $1
+      AND date >= $2::date
+      AND archived_at IS NULL
+      AND status IN ('scheduled', 'in_progress')
      ORDER BY date ASC, time ASC NULLS LAST, created_at ASC, id ASC`,
     [club.workspace_id, nowDate],
   );

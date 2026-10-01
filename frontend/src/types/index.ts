@@ -325,6 +325,7 @@ export interface AthleteListFilters {
 
 export type EventType = 'competition' | 'training';
 export type EventStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type EventListStatus = EventStatus | 'archived';
 
 export interface AthleticsEvent {
   id: string;
@@ -339,6 +340,7 @@ export interface AthleticsEvent {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -384,7 +386,7 @@ export interface EventMutationPayload {
 
 export interface EventListFilters {
   type?: EventType;
-  status?: EventStatus;
+  status?: EventListStatus;
   dateFrom?: string;
   dateTo?: string;
   year?: string;
