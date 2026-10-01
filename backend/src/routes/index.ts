@@ -77,6 +77,8 @@ eventsRouter.put(
   events.updateEvent,
 );
 eventsRouter.delete('/:id', requireOperationalAccess(), requireEventHostOwnership(), events.deleteEvent);
+eventsRouter.post('/:id/archive', requireOperationalAccess(), requireEventHostOwnership(), events.archiveEvent);
+eventsRouter.post('/:id/unarchive', requireOperationalAccess(), requireEventHostOwnership(), events.unarchiveEvent);
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 router.use('/auth', authRouter);

@@ -1,11 +1,13 @@
 import type { RequestHandler } from 'express';
 import { getApplicationUserContext } from '../middleware/auth.js';
 import {
+  archiveEvent as archiveEventRecord,
   cancelEvent as cancelEventRecord,
   createEvent as createEventRecord,
   getEvent as getEventRecord,
   listEvents as listEventsRecords,
   replaceEvent,
+  unarchiveEvent as unarchiveEventRecord,
 } from '../services/events.js';
 import { parseEventListQuery } from '../validation/payloads.js';
 import { getEventWeatherForecast } from '../services/weather.js';
@@ -59,6 +61,28 @@ export const deleteEvent: RequestHandler = async (req, res, next) => {
     const { workspaceId } = getApplicationUserContext(req);
     const event = await cancelEventRecord(workspaceId, req.params.id);
     notifyEventInvalidated(event.id, 'event', 'results');
+    res.json({ data: event });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const archiveEvent: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await archiveEventRecord(workspaceId, req.params.id);
+    notifyEventInvalidated(event.id, 'event');
+    res.json({ data: event });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unarchiveEvent: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const event = await unarchiveEventRecord(workspaceId, req.params.id);
+    notifyEventInvalidated(event.id, 'event');
     res.json({ data: event });
   } catch (error) {
     next(error);

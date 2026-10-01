@@ -46,7 +46,7 @@ export async function reconcileEventReminders(now = new Date(), executor: DbExec
               e.date::timestamp + e.time AS local_start
        FROM events e
        JOIN workspace_members wm ON wm.workspace_id = e.workspace_id
-       WHERE e.status = 'scheduled' AND e.time IS NOT NULL AND wm.role IN ('coach', 'assistant')
+       WHERE e.status = 'scheduled' AND e.archived_at IS NULL AND e.time IS NOT NULL AND wm.role IN ('coach', 'assistant')
      ), due AS (
        SELECT user_id, workspace_id, event_id, event_version, 'seven_days'::text AS threshold, local_start - interval '7 days' AS scheduled_for FROM eligible
        UNION ALL

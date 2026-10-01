@@ -110,6 +110,7 @@ function eventBody(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
     latitude: null,
     longitude: null,
     status: 'scheduled',
+    archivedAt: null,
     createdAt: '2026-08-14T10:00:00.000Z',
     updatedAt: '2026-08-14T10:00:00.000Z',
     ...overrides,
@@ -557,6 +558,123 @@ describe('DELETE /api/v1/events/:id', () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual(resourceNotFound);
+  });
+});
+
+describe('POST /api/v1/events/:id/archive', () => {
+  it('archives an owned event with a soft timestamp, never a delete', async () => {
+    configureAuth();
+    const archivedAt = new Date('2026-10-01T09:00:00.000Z');
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed' })] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed', archived_at: archivedAt })] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/archive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.archivedAt).toBe('2026-10-01T09:00:00.000Z');
+    expect(response.body.data.status).toBe('completed');
+    const [sql, parameters] = query.mock.calls[4] as [string, unknown[]];
+    expect(sql).toContain('SET archived_at = now()');
+    expect(sql).not.toContain('archived_at = NULL');
+    expect(parameters).toEqual([EVENT_ID, USER_ID]);
+  });
+
+  it('rejects archiving an in-progress event with 409', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress' })] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/archive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: {
+        code: 'EVENT_IN_PROGRESS',
+        message: 'Finish or cancel the event before archiving it.',
+        details: { status: 'in_progress' },
+      },
+    });
+  });
+
+  it('rejects archiving an already archived event with 409', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ archived_at: new Date('2026-10-01T09:00:00.000Z') })] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/archive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('EVENT_ALREADY_ARCHIVED');
+  });
+
+  it('hides a foreign event from archiving', async () => {
+    configureAuth();
+    query.mockResolvedValueOnce(synchronizedUser()).mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/archive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual(resourceNotFound);
+  });
+});
+
+describe('POST /api/v1/events/:id/unarchive', () => {
+  it('clears the archived timestamp and keeps the lifecycle status', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled', archived_at: new Date('2026-10-01T09:00:00.000Z') })] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'cancelled' })] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/unarchive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.archivedAt).toBeNull();
+    expect(response.body.data.status).toBe('cancelled');
+    const [sql, parameters] = query.mock.calls[4] as [string, unknown[]];
+    expect(sql).toContain('SET archived_at = NULL');
+    expect(parameters).toEqual([EVENT_ID, USER_ID]);
+  });
+
+  it('rejects unarchiving an event that is not archived with 409', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ owned: 1 }] })
+      .mockResolvedValueOnce({ rows: [eventRow()] });
+
+    const response = await request(app)
+      .post(`/api/v1/events/${EVENT_ID}/unarchive`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: {
+        code: 'EVENT_NOT_ARCHIVED',
+        message: 'This event is not archived.',
+        details: { status: 'scheduled' },
+      },
+    });
   });
 });
 

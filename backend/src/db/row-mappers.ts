@@ -123,6 +123,7 @@ export interface EventRow {
   status: string;
   created_at: TimestampValue;
   updated_at: TimestampValue;
+  archived_at?: TimestampValue | null;
 }
 
 export interface EventParticipantRow {
@@ -638,6 +639,9 @@ export function mapEventRow(row: EventRow): AthleticsEvent {
     status: enumValue(row.status, EVENT_STATUSES, 'events.status'),
     createdAt: timestamp(row.created_at, 'events.created_at'),
     updatedAt: timestamp(row.updated_at, 'events.updated_at'),
+    archivedAt: row.archived_at === undefined || row.archived_at === null
+      ? null
+      : timestamp(row.archived_at, 'events.archived_at'),
   };
 }
 

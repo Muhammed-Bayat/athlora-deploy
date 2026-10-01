@@ -6,6 +6,7 @@ import {
   DISCIPLINE_100M,
   ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
+  EVENT_LIST_STATUSES,
   EVENT_STATUSES,
   EVENT_TYPES,
   INCIDENT_TYPES,
@@ -18,6 +19,7 @@ import {
   type Discipline,
   type AthleteLifecycleStatus,
   type EntryType,
+  type EventListStatus,
   type EventStatus,
   type EventType,
   type IncidentType,
@@ -122,7 +124,7 @@ export interface EventReplacementPayload {
 
 export interface EventListQuery {
   type?: EventType;
-  status?: EventStatus;
+  status?: EventListStatus;
   dateFrom?: string;
   dateTo?: string;
   year?: string;
@@ -936,7 +938,7 @@ export function parseEventListQuery(input: Record<string, unknown>): EventListQu
   rejectUnknownFields(input, EVENT_LIST_QUERY_FIELDS, issues);
 
   const type = optionalQueryEnum(input, 'type', EVENT_TYPES, issues);
-  const status = optionalQueryEnum(input, 'status', EVENT_STATUSES, issues);
+  const status = optionalQueryEnum(input, 'status', EVENT_LIST_STATUSES, issues);
   const dateFrom = optionalQueryDate(input, 'dateFrom', issues);
   const dateTo = optionalQueryDate(input, 'dateTo', issues);
   const year = optionalQueryString(input, 'year', issues);

@@ -88,6 +88,7 @@ function eventBody(overrides: Partial<AthleticsEvent> = {}): AthleticsEvent {
     latitude: null,
     longitude: null,
     status: 'scheduled',
+    archivedAt: null,
     createdAt: '2026-08-14T10:00:00.000Z',
     updatedAt: '2026-08-14T10:00:00.000Z',
     ...overrides,
@@ -147,6 +148,21 @@ describe('listEvents', () => {
     const [sql] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("fw.workspace_id = $1 AND fw.role = 'guest'");
     expect(sql).toContain("fw.status = 'accepted' AND fw.accepted_revision = events.fixture_revision");
+    expect(sql).toContain('archived_at IS NULL');
+  });
+
+  it('returns only archived events for the archived pseudo-status', async () => {
+    query.mockResolvedValue({ rows: [eventRow({ archived_at: new Date('2026-10-01T09:00:00.000Z') })] });
+
+    const events = await listEvents(USER_ID, { status: 'archived' });
+
+    expect(events).toEqual([
+      eventBody({ archivedAt: '2026-10-01T09:00:00.000Z' }),
+    ]);
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('archived_at IS NOT NULL');
+    expect(sql).not.toContain('status = $');
+    expect(parameters).toEqual([USER_ID, expect.anything(), expect.anything()]);
   });
 
   it('filters by the inclusive date range', async () => {

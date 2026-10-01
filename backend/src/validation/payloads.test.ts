@@ -322,6 +322,7 @@ describe('event list queries', () => {
       parseEventListQuery({ type: 'competition', status: 'completed', dateFrom: ' 2026-01-01 ' }),
     ).toEqual({ type: 'competition', status: 'completed', dateFrom: '2026-01-01' });
     expect(parseEventListQuery({ dateTo: '2026-12-31' })).toEqual({ dateTo: '2026-12-31' });
+    expect(parseEventListQuery({ status: 'archived' })).toEqual({ status: 'archived' });
   });
 
   it('rejects unknown, invalid-enum, blank, and malformed-date values', () => {
@@ -338,7 +339,7 @@ describe('event list queries', () => {
         { path: 'dateFrom', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
         { path: 'dateTo', code: 'invalid_format', message: 'Expected a real date in YYYY-MM-DD format' },
         { path: 'page', code: 'unknown_field', message: 'Field is not allowed' },
-        { path: 'status', code: 'invalid_value', message: 'Expected one of: scheduled, in_progress, completed, cancelled' },
+        { path: 'status', code: 'invalid_value', message: 'Expected one of: scheduled, in_progress, completed, cancelled, archived' },
         { path: 'type', code: 'invalid_value', message: 'Expected one of: competition, training' },
       ],
     );

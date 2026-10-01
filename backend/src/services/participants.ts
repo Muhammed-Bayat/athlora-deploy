@@ -38,6 +38,22 @@ function scopedIds(workspaceId: string, ...ids: unknown[]): string[] {
   return ids as string[];
 }
 
+async function participantMutationFailure(
+  executor: DbExecutor,
+  eventId: string,
+  workspaceId: string,
+): Promise<ApiError> {
+  const state = await executor.query<{ archived_at: Date | string | null }>(
+    'SELECT archived_at FROM events WHERE id = $1 AND workspace_id = $2',
+    [eventId, workspaceId],
+  );
+  const row = state.rows[0];
+  if (row && row.archived_at !== null) {
+    return new ApiError(409, 'EVENT_ARCHIVED', 'This event is archived. Unarchive it before changing participants.');
+  }
+  return notFound();
+}
+
 async function getParticipant(
    workspaceId: string,
   eventId: string,
@@ -99,9 +115,11 @@ export async function addEventParticipant(
     const athlete = await client.query<{
       archived_at: Date | string | null;
       lifecycle_status: 'active' | 'inactive' | 'archived';
+      event_archived_at: Date | string | null;
       already_assigned: boolean;
     }>(
        `SELECT a.archived_at, a.lifecycle_status,
+              e.archived_at AS event_archived_at,
               EXISTS (
                 SELECT 1
                 FROM event_participants ep
@@ -117,6 +135,9 @@ export async function addEventParticipant(
     );
     const ownedAthlete = athlete.rows[0];
     if (!ownedAthlete) throw notFound();
+    if (ownedAthlete.event_archived_at ?? null) {
+      throw new ApiError(409, 'EVENT_ARCHIVED', 'This event is archived. Unarchive it before changing participants.');
+    }
     if (ownedAthlete.already_assigned) {
       throw new ApiError(
         409,
@@ -177,11 +198,12 @@ export async function replaceEventParticipant(
         AND w.id = ep.participant_workspace_id
          AND e.workspace_id = $4
          AND a.workspace_id = $4
+         AND e.archived_at IS NULL
       RETURNING ${PARTICIPANT_COLUMNS}`,
     [payload.rsvpStatus, ownedEventId, ownedAthleteId, workspaceId, actorId],
   );
   const row = result.rows[0];
-  if (!row) throw notFound();
+  if (!row) throw await participantMutationFailure(executor, ownedEventId, workspaceId);
   if (payload.rsvpStatus === 'no') {
     const event = await executor.query<{ type: 'training' | 'competition' }>(
       `SELECT type FROM events WHERE id = $1`,
@@ -217,10 +239,11 @@ export async function removeEventParticipant(
        AND a.id = ep.athlete_id
         AND e.workspace_id = $3
         AND a.workspace_id = $3
+        AND e.archived_at IS NULL
      RETURNING ep.event_id`,
     [ownedEventId, ownedAthleteId, workspaceId],
   );
-  if (result.rows.length === 0) throw notFound();
+  if (result.rows.length === 0) throw await participantMutationFailure(executor, ownedEventId, workspaceId);
 }
 
 export async function acknowledgeParticipantStatusReview(
