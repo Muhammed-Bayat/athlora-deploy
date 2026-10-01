@@ -97,19 +97,19 @@ describe('MeetRosterPanel', () => {
 
   it('only offers athletes whose selected discipline matches the active session tab', async () => {
     const user = userEvent.setup();
-    api.listDisciplines.mockResolvedValue({ data: [{ id: 'hammer', kind: 'field', presentation: { label: 'Hammer throw' }, defaultRules: { entrantType: 'individual' } }] });
-    api.listSessions.mockResolvedValue({ data: [{ id: 'hammer-session', disciplineDefinitionId: 'hammer', label: 'Hammer throw', status: 'scheduled', version: 1 }] });
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'javelin', kind: 'field', presentation: { label: 'Javelin throw' }, defaultRules: { entrantType: 'individual' } }] });
+    api.listSessions.mockResolvedValue({ data: [{ id: 'javelin-session', disciplineDefinitionId: 'javelin', label: 'Javelin throw', status: 'scheduled', version: 1 }] });
     api.listEntrants.mockResolvedValue({ data: [] });
     api.listRegistrations.mockResolvedValue({ data: [] });
     athletes.listAthletes.mockResolvedValue({ data: [
-      { id: 'hammer-athlete', name: 'Hana Hammer', status: 'active', preferredDisciplineIds: ['hammer'] },
+      { id: 'javelin-athlete', name: 'Hana Thrower', status: 'active', preferredDisciplineIds: ['javelin'] },
       { id: 'sprinter', name: 'Sami Sprinter', status: 'active', preferredDisciplineIds: ['track'] },
     ] });
 
     render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
 
     await user.click(await screen.findByRole('button', { name: 'Add athletes' }));
-    expect(screen.getByText('Hana Hammer')).toBeInTheDocument();
+    expect(screen.getByText('Hana Thrower')).toBeInTheDocument();
     expect(screen.queryByText('Sami Sprinter')).not.toBeInTheDocument();
   });
 

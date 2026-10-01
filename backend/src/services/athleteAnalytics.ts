@@ -4,6 +4,7 @@ import type { AthleteLifecycleStatus, EventType } from '../types/domain.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
+import { isSupportedDiscipline } from './disciplineCatalog.js';
 
 const RECENT_RESULT_LIMIT = 5;
 
@@ -301,7 +302,7 @@ async function requireAthlete(workspaceId: string, athleteId: unknown, executor:
 }
 
 async function requireDiscipline(code: unknown, executor: DbExecutor): Promise<ResolvedDiscipline> {
-  if (typeof code !== 'string' || !/^[a-z0-9][a-z0-9_]*$/.test(code)) throw notFound();
+  if (typeof code !== 'string' || !/^[a-z0-9][a-z0-9_]*$/.test(code) || !isSupportedDiscipline(code)) throw notFound();
   const result = await executor.query<ResolvedDisciplineRow>(
     `SELECT id, code, presentation->>'label' AS label, unit, precision, direction
      FROM discipline_definitions

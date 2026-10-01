@@ -23,8 +23,6 @@ export interface DisciplineDefinition {
     distance?: number;
     hurdleHeight?: number;
     hurdleCount?: number;
-    steeplechase?: boolean;
-    raceWalk?: boolean;
     attempts?: number;
     failureLimit?: number;
     heightIncrement?: number;

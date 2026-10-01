@@ -315,7 +315,7 @@ export function PublicMeetLogger({
 
       <section aria-label="Session live logging" aria-busy={busy}>
         <h2>Session live logger</h2>
-        <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results, jumps, and throws use a coach-selected official attempt. High jump and pole vault progress by height with countback rankings and are made official as a complete result set. Offline attempts queue and sync when reconnecting.</p>
+        <p>Each discipline shows only its own roster — athletes registered for that session across all teams who are marked as attending. Timed results, jumps, and throws use a coach-selected official attempt. High jump progresses by height with countback rankings and is made official as a complete result set. Offline attempts queue and sync when reconnecting.</p>
         {timedSessions.length === 0 && <p>No timed discipline sessions have been added to this event yet.</p>}
         {timedSessions.length > 0 && (
           <div className={styles.sessionTabs} role="tablist" aria-label="Discipline sessions">

@@ -6,31 +6,49 @@ import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
 import { listSessionResults, recomputeSessionResult } from './sessionPerformances.js';
+import { SUPPORTED_DISCIPLINE_CODES } from './disciplineCatalog.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
 
 export async function listDisciplines(db: DbExecutor = getPool()): Promise<DisciplineDefinition[]> {
-  const result = await db.query('SELECT * FROM discipline_definitions ORDER BY code, version');
+  const result = await db.query(
+    'SELECT * FROM discipline_definitions WHERE code = ANY($1::text[]) ORDER BY code, version',
+    [SUPPORTED_DISCIPLINE_CODES],
+  );
   return result.rows.map((row) => mapMeetRow<DisciplineDefinition>(row));
 }
 
 export async function getSession(db: DbExecutor, eventId: string, sessionId: string): Promise<DisciplineSession> {
   meetIds(eventId, sessionId);
-  const result = await db.query('SELECT * FROM discipline_sessions WHERE id = $1 AND event_id = $2', [sessionId, eventId]);
+  const result = await db.query(
+    `SELECT s.* FROM discipline_sessions s
+     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+     WHERE s.id = $1 AND s.event_id = $2 AND d.code = ANY($3::text[])`,
+    [sessionId, eventId, SUPPORTED_DISCIPLINE_CODES],
+  );
   if (!result.rows[0]) meetNotFound();
   return mapMeetRow<DisciplineSession>(result.rows[0]);
 }
 
 export async function getDefinition(db: DbExecutor, id: string): Promise<DisciplineDefinition> {
   meetIds(id);
-  const result = await db.query('SELECT * FROM discipline_definitions WHERE id = $1', [id]);
+  const result = await db.query(
+    'SELECT * FROM discipline_definitions WHERE id = $1 AND code = ANY($2::text[])',
+    [id, SUPPORTED_DISCIPLINE_CODES],
+  );
   if (!result.rows[0]) meetNotFound();
   return mapMeetRow<DisciplineDefinition>(result.rows[0]);
 }
 
 export async function listSessions(actor: MeetActor, eventId: string, db: DbExecutor = getPool()): Promise<DisciplineSession[]> {
   await meetAccess(db, actor, eventId);
-  const result = await db.query('SELECT * FROM discipline_sessions WHERE event_id = $1 ORDER BY created_at, id', [eventId]);
+  const result = await db.query(
+    `SELECT s.* FROM discipline_sessions s
+     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+     WHERE s.event_id = $1 AND d.code = ANY($2::text[])
+     ORDER BY s.created_at, s.id`,
+    [eventId, SUPPORTED_DISCIPLINE_CODES],
+  );
   return result.rows.map((row) => mapMeetRow<DisciplineSession>(row));
 }
 

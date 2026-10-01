@@ -129,7 +129,7 @@ describe('getPublicClubSchedule', () => {
     expect(disciplinesSql).toContain('FROM discipline_sessions');
     expect(disciplinesSql).toContain(`s.status <> 'cancelled'`);
     expect(disciplinesSql).not.toMatch(/event_participants|athletes|results|timeline_entries/);
-    expect(disciplinesParams).toEqual([[EVENT_ID]]);
+    expect(disciplinesParams).toEqual([[EVENT_ID], ['100m', '200m', '400m', '800m', '1500m', '100mh', '400mh', 'long_jump', 'high_jump', 'triple_jump', 'javelin', 'discus', 'shot_put', '4x100m']]);
   });
 
   it('falls back to the legacy discipline scalar when an event has no sessions', async () => {

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Tech Stack
 
-Athlora is a non-monolithic athletics coaching application: a browser SPA, a REST API, and PostgreSQL are separate services. The shipped implementation covers the multi-discipline catalogue — timed track races including hurdles and race walks, measured jumps and throws, vertical events, and relays — alongside the original legacy 100m contract, plus shared cross-club fixtures, public statistics/schedules/reports, offline logging, club branding, and the console assistant. Multi-events and automated season scheduling remain future work.
+Athlora is a non-monolithic athletics coaching application: a browser SPA, a REST API, and PostgreSQL are separate services. The shipped implementation covers a focused catalogue of timed track races, hurdles, measured jumps and throws, high jump, and 4 x 100m relay alongside the original legacy 100m contract, plus shared cross-club fixtures, public statistics/schedules/reports, offline logging, club branding, and the console assistant. Multi-events and automated season scheduling remain future work.
 
 ## Implemented Stack
 | Layer | Tool | Why |
@@ -86,11 +86,11 @@ The complete direct-dependency register, including versions, licenses, sources, 
 
 ## Deliberate Constraints
 
-- The shipped catalogue covers timed track disciplines (including hurdles and race walks), measured jumps and throws, vertical events, and relays, alongside the legacy 100m contract. Multi-events and automated season scheduling remain out of scope until their contracts are agreed; each added capability requires coordinated validation, UI, schema, derivation, placing, PB/SB, and test changes.
+- The shipped catalogue contains 100m, 200m, 400m, 800m, 1500m, 100m hurdles, 400m hurdles, long jump, high jump, triple jump, javelin, discus, shot put, and 4 x 100m relay. Multi-events and automated season scheduling remain out of scope until their contracts are agreed; each added capability requires coordinated validation, UI, schema, derivation, placing, PB/SB, and test changes.
 - The frontend and backend remain separate services. A fused framework is intentionally not used.
 - Derived results remain server-authoritative. A manual override is audited rather than replacing the original timeline record.
 - No third-party service receives the Auth0 Management API secret except the backend; it is never exposed through the frontend build.
 
 ## AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The multi-discipline catalogue status update was edited with Qoder.
+This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The multi-discipline catalogue status update was edited with Qoder. The supported-discipline catalogue was updated with OpenCode[gpt-5.6-terra].

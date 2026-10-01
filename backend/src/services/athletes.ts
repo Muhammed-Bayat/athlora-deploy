@@ -1,6 +1,7 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapAthleteRow, type AthleteRow } from '../db/row-mappers.js';
 import { ApiError } from '../middleware/errors.js';
+import { SUPPORTED_DISCIPLINE_CODES, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 import type { Athlete, AthleteLifecycleStatus } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { withTransaction } from '../db/transaction.js';
@@ -11,8 +12,8 @@ import type {
 } from '../validation/payloads.js';
 
 const ATHLETE_COLUMNS = `a.id, a.coach_id, a.name, a.dob, a.gender, a.notes, a.archived_at, a.lifecycle_status, a.status_changed_at, a.status_changed_by, a.created_at, a.updated_at,
-  COALESCE((SELECT json_agg(apd.discipline_definition_id ORDER BY apd.discipline_definition_id) FROM athlete_preferred_disciplines apd WHERE apd.athlete_id = a.id), '[]'::json) AS preferred_discipline_ids,
-  COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g WHERE g.athlete_id = a.id), '[]'::json) AS season_goals`;
+  COALESCE((SELECT json_agg(apd.discipline_definition_id ORDER BY apd.discipline_definition_id) FROM athlete_preferred_disciplines apd JOIN discipline_definitions d ON d.id = apd.discipline_definition_id WHERE apd.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS preferred_discipline_ids,
+  COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g JOIN discipline_definitions d ON d.id = g.discipline_definition_id WHERE g.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS season_goals`;
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -134,7 +135,10 @@ export async function replaceAthlete(
 async function verifyDisciplineProfile(payload: AthleteCreatePayload, executor: DbExecutor): Promise<void> {
   const ids = [...new Set([...(payload.preferredDisciplineIds ?? []), ...(payload.seasonGoals ?? []).map((goal) => goal.disciplineDefinitionId)])];
   if (ids.length === 0) return;
-  const result = await executor.query<{ id: string; unit: string; precision: number }>('SELECT id, unit, precision FROM discipline_definitions WHERE id = ANY($1::uuid[])', [ids]);
+  const result = await executor.query<{ id: string; unit: string; precision: number }>(
+    'SELECT id, unit, precision FROM discipline_definitions WHERE id = ANY($1::uuid[]) AND code = ANY($2::text[])',
+    [ids, SUPPORTED_DISCIPLINE_CODES],
+  );
   if (result.rows.length !== ids.length) throw new ApiError(400, 'INVALID_DISCIPLINE_IDS', 'All disciplines must exist in the shared catalogue');
   const definitions = new Map(result.rows.map((definition) => [definition.id, definition]));
   for (const goal of payload.seasonGoals ?? []) {

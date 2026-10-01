@@ -301,7 +301,7 @@ export function PublicStatsPage() {
   const clubDisciplines = club1?.availableDisciplines ?? [];
   const selectedClubDiscipline = clubDisciplines.find((discipline) => discipline.discipline === clubDisciplineCode) ?? clubDisciplines[0];
   const comparedClubs = comparisonClubIds.map((id) => details[`${id}:${season}`]).filter((club): club is PublicClubStatistics => Boolean(club));
-  const comparisonDisciplines = [...new Map(comparedClubs.flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()].sort((left, right) => left.label.localeCompare(right.label));
+  const comparisonDisciplines = [...new Map(comparedClubs.flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()];
   const comparedAthletes = comparedClubs.flatMap((club) => club.athletes).filter((athlete) => comparisonAthleteIds.includes(athlete.athlete.id));
   const selectedAthleteClubIds = comparedClubs.filter((club) => club.athletes.some((athlete) => comparisonAthleteIds.includes(athlete.athlete.id))).map((club) => club.club.id);
   const loadingStatistics = loadingIds.length > 0;

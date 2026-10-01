@@ -16,7 +16,7 @@ import { getClubStatistics } from './clubs.js';
 import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
-import { listAvailableDisciplines } from './disciplineCatalog.js';
+import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
 interface PublicClubRow {
   id: string;
@@ -143,7 +143,8 @@ async function preferredDisciplinesByAthlete(workspaceId: string, executor: DbEx
       FROM athlete_preferred_disciplines preferences
       JOIN athletes athletes ON athletes.id = preferences.athlete_id
       JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
-      WHERE athletes.workspace_id = $1 AND athletes.lifecycle_status <> 'archived'`, [workspaceId]);
+      WHERE athletes.workspace_id = $1 AND athletes.lifecycle_status <> 'archived'
+        AND definitions.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`, [workspaceId]);
   const byAthlete = new Map<string, PublicAthleteDisciplineStatistics[]>();
   for (const row of result.rows) {
     const disciplines = byAthlete.get(row.athlete_id) ?? [];

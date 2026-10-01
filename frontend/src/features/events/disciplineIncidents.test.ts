@@ -29,13 +29,8 @@ describe('incidentButtons', () => {
       .toEqual(['dq', 'dnf', 'dns']);
   });
 
-  it('drops the false start for race walks', () => {
-    expect(incidentButtons(definition({ code: '5000mw', defaultRules: { aggregation: 'timed', entrantType: 'individual', distance: 5000, raceWalk: true } })).map((button) => button.value))
-      .toEqual(['dq', 'dnf', 'dns']);
-  });
-
   it('keeps the full set for relays', () => {
-    expect(incidentButtons(definition({ code: '4x400m', kind: 'relay', defaultRules: { aggregation: 'timed', entrantType: 'relay', teamSize: 4 } })).map((button) => button.value))
+    expect(incidentButtons(definition({ code: '4x100m', kind: 'relay', defaultRules: { aggregation: 'timed', entrantType: 'relay', teamSize: 4 } })).map((button) => button.value))
       .toEqual(['false_start', 'lane_infringement', 'dq', 'dnf', 'dns']);
   });
 });

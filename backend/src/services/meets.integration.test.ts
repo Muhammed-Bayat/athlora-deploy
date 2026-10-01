@@ -90,7 +90,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await open(s.id);
     return target;
   }
-  it.each(['high_jump', 'pole_vault'])('logs, audits, finalizes and countbacks %s', async code => {
+  it.each(['high_jump'])('logs, audits, finalizes and countbacks %s', async code => {
     await migrate();
     const s = await createSession(host, eventId, { disciplineDefinitionId: (await definition(code)).id, label: code, verticalConfig: { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' } }, transaction);
     const entrants = [await guest('First'), await guest('Tied'), await guest('Third')];
@@ -165,7 +165,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   it('installs the complete schema on an empty database with UUID keys and catalogue seeds', async () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     await migrate();
-    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['10000m', '100m', '100mh', '110mh', '1500m', '200m', '3000msc', '400m', '400mh', '4x100m', '4x400m', '5000m', '5000mw', '800m', 'discus', 'hammer', 'high_jump', 'javelin', 'long_jump', 'pole_vault', 'shot_put', 'triple_jump']);
+    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['100m', '100mh', '1500m', '200m', '400m', '400mh', '4x100m', '800m', 'discus', 'high_jump', 'javelin', 'long_jump', 'shot_put', 'triple_jump']);
     const columns = await pool.query("SELECT table_name, data_type FROM information_schema.columns WHERE column_name = 'id' AND table_name IN ('discipline_definitions','discipline_sessions','meet_entrants','relay_members','session_entrants','session_timeline_entries','session_results','meet_domain_audit')");
     expect(columns.rows).toHaveLength(8);
     expect(columns.rows.every((row) => row.data_type === 'uuid')).toBe(true);
@@ -207,17 +207,17 @@ describeDB('multi-discipline migration and domain integration', () => {
 
   it('requires athletes to select the discipline before registering for its session', async () => {
     await migrate();
-    const hammer = await definition('hammer');
-    const hammerSession = await createSession(host, eventId, { disciplineDefinitionId: hammer.id, label: 'Hammer throw' }, transaction);
+    const javelin = await definition('javelin');
+    const javelinSession = await createSession(host, eventId, { disciplineDefinitionId: javelin.id, label: 'Javelin throw' }, transaction);
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     await pool.query('DELETE FROM athlete_preferred_disciplines WHERE athlete_id = $1', [athleteId]);
 
-    await expect(registerEntrant(host, eventId, { disciplineSessionId: hammerSession.id, entrantId: athlete.id }, transaction)).rejects.toMatchObject({
+    await expect(registerEntrant(host, eventId, { disciplineSessionId: javelinSession.id, entrantId: athlete.id }, transaction)).rejects.toMatchObject({
       code: 'ATHLETE_DISCIPLINE_MISMATCH',
     });
 
-    await pool.query('INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) VALUES ($1,$2)', [athleteId, hammer.id]);
-    await expect(registerEntrant(host, eventId, { disciplineSessionId: hammerSession.id, entrantId: athlete.id }, transaction)).resolves.toMatchObject({
+    await pool.query('INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) VALUES ($1,$2)', [athleteId, javelin.id]);
+    await expect(registerEntrant(host, eventId, { disciplineSessionId: javelinSession.id, entrantId: athlete.id }, transaction)).resolves.toMatchObject({
       entrantId: athlete.id,
     });
   });
@@ -267,30 +267,30 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect((await pool.query('SELECT * FROM timeline_entries')).rows).toEqual([]);
   });
 
-  it('supports coach-selected official relay entries, roster edits, 4x400m size checks, and keeps individual stats isolated', async () => {
+  it('supports coach-selected official relay entries, roster edits, and keeps individual stats isolated', async () => {
     await migrate();
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
     const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Team', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
-    const session400 = await session('4x400m', '4x400 Final');
-    const target = { disciplineSessionId: session400.id, entrantId: relay.id };
+    const session100 = await session('4x100m', '4x100 Final');
+    const target = { disciplineSessionId: session100.id, entrantId: relay.id };
     await registerEntrant(host, eventId, target, transaction);
-    await open(session400.id);
+    await open(session100.id);
     const first = await createSessionEntry(host, eventId, target, { ...timed, value: 62.1 }, transaction);
     const second = await createSessionEntry(host, eventId, target, { ...timed, value: 61.4 }, transaction);
-    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: null, selectedEntryId: null });
+    expect((await listSessionResults(host, eventId, session100.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: null, selectedEntryId: null });
     const selected = await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 2 }, transaction);
     expect(selected).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id, placing: 1 });
     await expect(selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 99 }, transaction)).rejects.toMatchObject({ code: 'RESULT_VERSION_CONFLICT' });
     await expect(selectSessionResultEntry({ ...host, role: 'assistant' as const }, eventId, target, { entryId: first.id, expectedVersion: 3 }, transaction)).rejects.toMatchObject({ status: 403 });
     await mutateSessionEntry(host, eventId, target, second.id, { expectedVersion: 1 }, true, transaction);
-    expect((await listSessionResults(host, eventId, session400.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id });
+    expect((await listSessionResults(host, eventId, session100.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id });
     expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
     const history = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(history.pb).toBeNull();
     const { athleteRelayHistory } = await import('./relayHistory.js');
     expect(await athleteRelayHistory(host.workspaceId, athleteId, pool)).toEqual([]);
-    await changeSessionState(host, eventId, session400.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    await changeSessionState(host, eventId, session100.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
@@ -324,7 +324,7 @@ describeDB('multi-discipline migration and domain integration', () => {
 
   it('restores a withdrawn registration while the session roster is open', async () => {
     await migrate();
-    const s = await session('hammer');
+    const s = await session('javelin');
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const target = { disciplineSessionId: s.id, entrantId: athlete.id };
     const registered = await registerEntrant(host, eventId, target, transaction);
@@ -544,7 +544,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(published[0].sessions[0]).toMatchObject({ resultState: 'final', results: [{ name: 'Guest', placing: 1 }, { name: 'Host athlete', placing: null, outcome: 'dq' }] });
   });
 
-  it.each(['100m', '200m', 'long_jump', 'triple_jump', 'shot_put', 'discus', 'javelin', 'hammer', 'high_jump', 'pole_vault'])('final individual statistics respect %s policy', async code => {
+  it.each(['100m', '200m', 'long_jump', 'triple_jump', 'shot_put', 'discus', 'javelin', 'high_jump'])('final individual statistics respect %s policy', async code => {
     await migrate();
     const d = await definition(code);
     const s = await createSession(host, eventId, { disciplineDefinitionId: d.id, label: code, ...(d.kind === 'vertical' ? { verticalConfig: { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' as const } } : {}) }, transaction);

@@ -92,10 +92,10 @@ describe('SessionLivePanel', () => {
       return {};
     });
     api.listDisciplines.mockResolvedValue({ data: [{
-      id: 'relay-400',
-      code: '4x400m',
+      id: 'relay-100',
+      code: '4x100m',
       kind: 'relay',
-      presentation: { label: '4x400m relay' },
+      presentation: { label: '4x100m relay' },
       unit: 'seconds',
       precision: 2,
       defaultRules: { entrantType: 'relay', teamSize: 4, aggregation: 'timed' },
@@ -104,8 +104,8 @@ describe('SessionLivePanel', () => {
       id: 'session-1',
       workspaceId: 'ws-1',
       resultState,
-      disciplineDefinitionId: 'relay-400',
-      label: '4x400m Heat 1',
+      disciplineDefinitionId: 'relay-100',
+      label: '4x100m Heat 1',
       status: sessionStatus,
       version: sessionVersion,
     }] }));
@@ -175,7 +175,7 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     await waitFor(() => expect(api.changeSessionState).toHaveBeenCalledWith('event-1', 'session-1', 'in_progress', 1));
 
@@ -208,7 +208,7 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     await user.type(within(teamRow).getByLabelText('Time (s) for Speed Demons'), '59.9');
@@ -284,13 +284,14 @@ describe('SessionLivePanel', () => {
     expect(container).toBeEmptyDOMElement();
   });
   it('lets coaches select an official measured mark', async () => {
-    api.listDisciplines.mockResolvedValue({ data: [{ id: 'relay-400', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'long-jump', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });
+    api.listSessions.mockImplementation(async () => ({ data: [{ id: 'session-1', workspaceId: 'ws-1', resultState, disciplineDefinitionId: 'long-jump', label: 'Long Jump Final', status: sessionStatus, version: sessionVersion }] }));
     api.listRegistrations.mockResolvedValue({ data: [{ id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' }], meta: { count: 1 } });
     api.listSessionEntries.mockResolvedValue({ data: [{ id: 'entry-field', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', entryType: 'attempt', value: 6.2, unit: 'metres', isFoul: false, incidentType: null, noteText: null, recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null }] });
     api.listSessionResults.mockResolvedValue({ data: [{ eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', outcome: 'no_result', finalResult: null, effectiveOutcome: 'no_result', effectiveResult: null, placing: null, isPb: false, isSb: false, manualOverride: null, overrideReason: null, overriddenBy: null, overriddenAt: null, selectedEntryId: null, version: 1, updatedAt: '2026-09-20T10:00:00.000Z' }] });
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     const row = await screen.findByRole('group', { name: 'Ari Runner' });
     await user.click(await within(row).findByRole('button', { name: 'Make official' }));
@@ -316,7 +317,7 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     const attempts = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
     expect(within(attempts).getAllByRole('button', { name: 'Make official' })).toHaveLength(2);
@@ -336,7 +337,7 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     const entriesList = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
     const items = within(entriesList).getAllByRole('listitem');
@@ -390,7 +391,7 @@ describe('SessionLivePanel', () => {
     sessionStatus = 'in_progress';
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach={false} />);
-    await user.click(await screen.findByRole('tab', { name: /4x400m Heat 1/ }));
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     expect(screen.queryByRole('button', { name: 'Finalize session' })).not.toBeInTheDocument();
   });
 

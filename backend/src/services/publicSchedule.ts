@@ -13,6 +13,7 @@ import {
 } from '../types/domain.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { publicMediaPath } from './mediaStorage.js';
+import { SUPPORTED_DISCIPLINE_CODES } from './disciplineCatalog.js';
 
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
@@ -73,11 +74,12 @@ async function loadEventDisciplines(
   const result = await executor.query<EventDisciplineRow>(
     `SELECT s.event_id, d.code, d.presentation->>'label' AS label
      FROM discipline_sessions s
-     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
-     WHERE s.event_id = ANY($1::uuid[])
-       AND s.status <> 'cancelled'
-     ORDER BY s.event_id, d.code, s.created_at, s.id`,
-    [eventIds],
+      JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+      WHERE s.event_id = ANY($1::uuid[])
+        AND s.status <> 'cancelled'
+        AND d.code = ANY($2::text[])
+      ORDER BY s.event_id, d.code, s.created_at, s.id`,
+    [eventIds, SUPPORTED_DISCIPLINE_CODES],
   );
   const byEvent = new Map<string, PublicScheduleDiscipline[]>();
   for (const row of result.rows) {

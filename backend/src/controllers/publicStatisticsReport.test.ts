@@ -6,7 +6,10 @@ import * as reportService from '../services/publicStatisticsReport.js';
 import * as disciplineCatalog from '../services/disciplineCatalog.js';
 
 vi.mock('../services/publicStatisticsReport.js', () => ({ getPublicStatisticsReport: vi.fn() }));
-vi.mock('../services/disciplineCatalog.js', () => ({ listAvailableDisciplines: vi.fn() }));
+vi.mock('../services/disciplineCatalog.js', () => ({
+  listAvailableDisciplines: vi.fn(),
+  SUPPORTED_DISCIPLINE_SQL_LIST: "'100m'",
+}));
 vi.mock('../db/client.js', () => ({ getPool: vi.fn() }));
 
 describe('public statistics report route', () => {

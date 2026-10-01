@@ -2,6 +2,7 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { parseSeasonYear } from './seasons.js';
+import { isSupportedDiscipline, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
 export interface LeaderboardQuery {
   discipline?: string;
@@ -43,6 +44,9 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
   const clubId = query.club?.trim() || null;
   const gender = query.gender?.trim() || null;
   const age = parseExactAge(query.age);
+  if (discipline && !isSupportedDiscipline(discipline)) {
+    throw new ApiError(422, 'LEADERBOARD_FILTER_INVALID', 'Discipline filter is invalid');
+  }
 
   const legacyConditions = [
     "e.status = 'completed'",
@@ -50,6 +54,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
     "COALESCE(r.manual_override, r.final_result) > 0",
     "a.lifecycle_status <> 'archived'",
     "c.public_results_enabled = true",
+    `r.discipline IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`,
     "(e.workspace_id = a.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id WHERE fw.event_id = e.id AND fw.workspace_id = a.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
   const sessionConditions = [
@@ -63,6 +68,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
     "r.final_result IS NOT NULL",
     "a.lifecycle_status <> 'archived'",
     "c.public_results_enabled = true",
+    `d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`,
     "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
   const params: unknown[] = [];

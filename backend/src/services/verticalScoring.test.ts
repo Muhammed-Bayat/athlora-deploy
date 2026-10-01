@@ -8,8 +8,9 @@ import type { DisciplineDefinition, SessionEntryInput, VerticalConfig } from '..
 const config: VerticalConfig = { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' };
 const attempt = (value: number, verticalState: SessionEntryInput['verticalState'] = 'clearance'): SessionEntryInput => ({ entryType: 'attempt', value, verticalState, unit: 'metres', isFoul: false, incidentType: null, noteText: null, deviceId: null });
 const score = (entries: SessionEntryInput[], rules = config) => deriveVertical(entries, rules);
-describe.each(['high_jump', 'pole_vault'])('%s vertical rules', code => {
-  const definition: DisciplineDefinition = { id: 'test', code, version: 1, kind: 'vertical', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'vertical', entrantType: 'individual', failureLimit: 3, heightIncrement: code === 'high_jump' ? 0.02 : 0.05, round: 'final' }, precision: 2, presentation: { label: code, unitLabel: 'm' }, createdAt: '', source: 'test' };
+describe('high jump vertical rules', () => {
+  const code = 'high_jump';
+  const definition: DisciplineDefinition = { id: 'test', code, version: 1, kind: 'vertical', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'vertical', entrantType: 'individual', failureLimit: 3, heightIncrement: 0.02, round: 'final' }, precision: 2, presentation: { label: code, unitLabel: 'm' }, createdAt: '', source: 'test' };
   it('validates the definition and seeds its senior defaults', () => {
     expect(() => validateVerticalDefinition(definition)).not.toThrow();
     const sql = readFileSync(new URL('../db/migrations/0031_vertical_events_catalogue.sql', import.meta.url), 'utf8');
