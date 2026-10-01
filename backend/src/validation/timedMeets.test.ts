@@ -11,7 +11,6 @@ const sprint: DisciplineDefinition = {
 describe('timed discipline hurdle configuration', () => {
   // Rule values from the 0029 timed discipline catalogue.
   it.each([
-    { code: '110mh', distance: 110, hurdleHeight: 1.067 },
     { code: '100mh', distance: 100, hurdleHeight: 0.838 },
     { code: '400mh', distance: 400, hurdleHeight: 0.914 },
   ])('accepts the catalogue hurdle count and rejects mismatches for $code', ({ code, distance, hurdleHeight }) => {

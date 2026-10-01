@@ -468,7 +468,7 @@ export function ComparisonPage() {
     ? comparison?.availableDisciplines ?? []
     : mode === 'club-statistics'
       ? clubStatistics?.availableDisciplines ?? []
-      : [...new Map((clubComparison?.clubs ?? []).flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()].sort((left, right) => left.label.localeCompare(right.label));
+      : [...new Map((clubComparison?.clubs ?? []).flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()];
   const selectedDiscipline = availableDisciplines.find((discipline) => discipline.discipline === disciplineCode)
     ?? (athleteMode || !disciplineCleared ? availableDisciplines[0] : undefined);
   useEffect(() => {

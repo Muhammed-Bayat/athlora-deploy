@@ -23,8 +23,8 @@ test('Relay session setup, team logging, official selection, and standings', asy
 
   const roster = page.getByRole('region', { name: 'Multi-discipline meet roster' });
   await expect(roster).toBeVisible();
-  await roster.getByLabel('Discipline').selectOption({ label: '4 × 400m relay' });
-  await roster.getByLabel('Session label').fill('4x400m Heat 1');
+  await roster.getByLabel('Discipline').selectOption({ label: '4 × 100m relay' });
+  await roster.getByLabel('Session label').fill('4x100m Heat 1');
   await roster.getByRole('button', { name: 'Add session' }).click();
   await roster.getByLabel('Session').selectOption({ index: 1 });
 

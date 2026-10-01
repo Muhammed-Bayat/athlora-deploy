@@ -3,6 +3,7 @@ import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear } from './seasons.js';
+import { SUPPORTED_DISCIPLINE_CODES, isSupportedDiscipline } from './disciplineCatalog.js';
 
 export interface PublicStatisticsReportQuery {
   discipline?: string;
@@ -48,6 +49,9 @@ function validateQuery(query: PublicStatisticsReportQuery): void {
   if (query.discipline !== undefined && query.discipline.trim().length > 64) {
     throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Discipline filter is invalid');
   }
+  if (query.discipline?.trim() && !isSupportedDiscipline(query.discipline.trim())) {
+    throw new ApiError(422, 'REPORT_FILTER_INVALID', 'Discipline filter is invalid');
+  }
 }
 
 export async function getPublicStatisticsReport(
@@ -75,9 +79,10 @@ export async function getPublicStatisticsReport(
     'r.final_result IS NOT NULL',
     "a.lifecycle_status <> 'archived'",
     'c.public_results_enabled = true',
+    `d.code = ANY($1::text[])`,
     "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
-  const params: unknown[] = [];
+  const params: unknown[] = [SUPPORTED_DISCIPLINE_CODES];
   const add = (value: unknown) => { params.push(value); return `$${params.length}`; };
 
   if (season.selected !== 'all') {

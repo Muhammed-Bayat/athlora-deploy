@@ -34,6 +34,16 @@ describe('public leaderboard service', () => {
     expect(mockQuery.mock.calls[0]?.[1]).toContain(20);
   });
 
+  it('uses valid supported-discipline filters without requiring a discipline query parameter', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+
+    await expect(getPublicLeaderboard({ season: 'all' }, { query } as never)).resolves.toEqual([]);
+
+    const sql = query.mock.calls[0]?.[0] as string;
+    expect(sql).toContain("r.discipline IN ('100m', '200m', '400m'");
+    expect(sql).toContain("d.code IN ('100m', '200m', '400m'");
+  });
+
   it.each(['under-20', '20.5', '4', '101', 'not-an-age'])('rejects invalid exact age %s before querying', async (age) => {
     const query = vi.fn();
     await expect(getPublicLeaderboard({ age }, { query } as never)).rejects.toMatchObject({ code: 'LEADERBOARD_FILTER_INVALID' });

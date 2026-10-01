@@ -1,5 +1,6 @@
 import type { DbExecutor } from '../db/client.js';
 import type { DisciplineDefinition } from '../types/meets.js';
+import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
 /** A live relation, not an eventually consistent cache: finalization/reopen changes
  * all statistics visibility in the same commit as results and places. */
@@ -14,6 +15,7 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.*, en.athlete_id, a.name 
   JOIN events e ON e.id = r.event_id
   WHERE s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+    AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
     AND se.withdrawn_at IS NULL AND r.outcome = 'valid' AND r.final_result IS NOT NULL
     AND a.lifecycle_status <> 'archived'
     AND (e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
