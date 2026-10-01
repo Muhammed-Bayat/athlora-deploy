@@ -21,7 +21,7 @@ import { MeetRosterPanel } from './MeetRosterPanel';
 import { createSession, listDisciplines, listSessions } from '../../api/meets';
 import { EventFinalResults } from './EventFinalResults';
 
-type LifecycleAction = 'start' | 'complete' | 'cancel' | 'archive';
+type LifecycleAction = 'start' | 'complete' | 'cancel';
 
 export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated, onBusyChange }: { eventId: string; onBack: () => void; initialEvent?: AthleticsEvent; onEventUpdated?: (event: AthleticsEvent) => void; onBusyChange?: (busy: boolean) => void }) {
   const currentUser = useCurrentUser();
@@ -108,15 +108,28 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
       const nextStatus: EventStatus = confirmation === 'start' ? 'in_progress' : 'completed';
       const updated = confirmation === 'cancel'
         ? await cancelEvent(event.id)
-        : confirmation === 'archive'
-          ? await archiveEvent(event.id)
-          : await updateEvent(event.id, replacement(event, nextStatus));
+        : await updateEvent(event.id, replacement(event, nextStatus));
       setEvent(updated);
       onEventUpdated?.(updated);
       setConfirmation(null);
-      setNotice(confirmation === 'cancel' ? `${updated.title} cancelled. Its history is preserved.` : confirmation === 'archive' ? `${updated.title} archived. Find it under the Archived filter.` : confirmation === 'start' ? `${updated.title} is now live.` : `${updated.title} marked completed.`);
+      setNotice(confirmation === 'cancel' ? `${updated.title} cancelled. Its history is preserved.` : confirmation === 'start' ? `${updated.title} is now live.` : `${updated.title} marked completed.`);
     } catch (error) {
       setMutationError(errorMessage(error));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+  const runArchive = async () => {
+    if (!event) return;
+    setLifecycleBusy(true);
+    setMutationError(null);
+    try {
+      const updated = await archiveEvent(event.id);
+      setEvent(updated);
+      onEventUpdated?.(updated);
+      setNotice(`${updated.title} archived. Find it under the Archived filter.`);
+    } catch (error) {
+      setErrorNotice(errorMessage(error));
     } finally {
       setLifecycleBusy(false);
     }
@@ -153,7 +166,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
   const canEditRoster = !archived && event.status !== 'completed' && event.status !== 'cancelled';
   const canEditEvent = !archived && (event.status === 'scheduled' || event.status === 'in_progress');
 
-  const confirmationTitle = confirmation === 'archive' ? 'Are you sure?' : confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
+  const confirmationTitle = confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Complete event';
   return <section aria-labelledby="event-detail-heading">
     <header className={styles.viewHeader}><div><p className={styles.eyebrow}>{event.discipline === null ? 'Multi-discipline meet' : 'Season calendar'}</p><h1 id="event-detail-heading">{event.title}</h1></div><Button variant="secondary" onClick={onBack}>Back to events</Button></header>
     {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
@@ -166,10 +179,10 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
         {event.discipline === null ? <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} usesSessionRosters />}<MeetRosterPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} activeWorkspaceId={activeWorkspace.id} isGuest={isGuest} /><EventFinalResults event={event} reloadKey={resultReloadKey} /></> : <>{isHost && <FixtureHostPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} />}<Button variant="secondary" onClick={() => setShowVertical(value => !value)}>High Jump / Pole Vault sessions</Button>{showVertical && <VerticalEventsPanel event={event} canOperate={canOperate && !archived} isCoach={isCoach} />}<EventResultsSection event={event} reloadKey={resultReloadKey} onCorrect={isCoach ? (target, trigger) => { correctionTriggerRef.current = trigger; setCorrectionTarget(target); } : undefined} />{isGuest ? <GuestRosterPanel key={`guest-participants:${participantReloadKey}`} eventId={event.id} scheduled={!archived && event.status === 'scheduled'} onChanged={() => setResultReloadKey((key) => key + 1)} /> : <ParticipantManager key={`participants:${participantReloadKey}`} eventId={event.id} canEditRoster={canEditRoster} onBusyChange={setParticipantBusy} onChanged={() => setResultReloadKey((key) => key + 1)} />}</>}
        {canManageLifecycle && <div className={styles.detailActionsGroup}>{!archived && <div className={styles.detailActions}>{canEditEvent && <Button variant="secondary" onClick={() => setEditor(true)} disabled={participantBusy || correctionBusy}>Edit event</Button>}{event.status === 'scheduled' && <Button onClick={() => setConfirmation('start')} disabled={participantBusy || correctionBusy}>Start event</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button onClick={() => setConfirmation('complete')} disabled={participantBusy || correctionBusy}>Mark completed</Button>}{(event.status === 'scheduled' || event.status === 'in_progress') && <Button variant="danger" onClick={() => setConfirmation('cancel')} disabled={participantBusy || correctionBusy}>Cancel event</Button>}</div>}{archived
          ? <Button variant="danger" className={styles.archiveEventButton} onClick={() => void runUnarchive()} disabled={lifecycleBusy}>{lifecycleBusy ? 'Saving...' : 'Unarchive'}</Button>
-         : <Button variant="danger" className={styles.archiveEventButton} onClick={() => setConfirmation('archive')} disabled={participantBusy || correctionBusy}>Archive event</Button>}</div>}
+         : <Button variant="danger" className={styles.archiveEventButton} onClick={() => void runArchive()} disabled={lifecycleBusy || participantBusy || correctionBusy}>Archive event</Button>}</div>}
     </div>
     <Modal open={correctionTarget !== null} title={correctionTarget ? `Correct ${correctionTarget.athleteName}` : 'Correct result'} onClose={() => { if (!correctionBusy) { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); } }} closeDisabled={correctionBusy}>{correctionTarget && <ResultCorrectionForm target={correctionTarget} currentUser={currentUser} onBack={() => { setCorrectionTarget(null); window.requestAnimationFrame(() => correctionTriggerRef.current?.focus()); }} onSaved={finishCorrection} onBusyChange={setCorrectionBusy} />}</Modal>
     <Modal open={editor} title="Edit event" onClose={() => { if (!editorBusy) setEditor(false); }} closeDisabled={editorBusy}><EventForm event={event} onSave={saveEditor} onCancel={() => setEditor(false)} onSubmittingChange={setEditorBusy} /></Modal>
-    <Modal open={confirmation !== null} title={confirmationTitle} onClose={() => { if (!lifecycleBusy) { setConfirmation(null); setMutationError(null); } }} closeDisabled={lifecycleBusy}><div className={styles.confirmation}><p>{confirmation === 'cancel' ? <>Cancel <strong>{event.title}</strong>? The event remains in history. Participant assignments, timeline entries, and results are preserved, but cancelled-event results do not contribute to statistics.</> : confirmation === 'archive' ? <>Archive <strong>{event.title}</strong>? It moves out of the active schedule into the Archived filter. Results are kept and you can unarchive it at any time.</> : confirmation === 'start' ? <>Start <strong>{event.title}</strong>? Live result logging will open for this event.</> : <>Mark <strong>{event.title}</strong> completed? Live result logging will close.</>}</p>{mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}<div className={styles.formActions}><Button variant="secondary" onClick={() => setConfirmation(null)} disabled={lifecycleBusy}>Back</Button><Button variant={confirmation === 'cancel' || confirmation === 'archive' ? 'danger' : 'primary'} onClick={() => void runLifecycle()} disabled={lifecycleBusy}>{lifecycleBusy ? 'Saving...' : confirmation === 'cancel' ? 'Cancel event' : confirmation === 'archive' ? 'Archive event' : confirmation === 'start' ? 'Start event' : 'Mark completed'}</Button></div></div></Modal>
+    <Modal open={confirmation !== null} title={confirmationTitle} onClose={() => { if (!lifecycleBusy) { setConfirmation(null); setMutationError(null); } }} closeDisabled={lifecycleBusy}><div className={styles.confirmation}><p>{confirmation === 'cancel' ? <>Cancel <strong>{event.title}</strong>? The event remains in history. Participant assignments, timeline entries, and results are preserved, but cancelled-event results do not contribute to statistics.</> : confirmation === 'start' ? <>Start <strong>{event.title}</strong>? Live result logging will open for this event.</> : <>Mark <strong>{event.title}</strong> completed? Live result logging will close.</>}</p>{mutationError && <p className={styles.formError} role="alert">{mutationError}</p>}<div className={styles.formActions}><Button variant="secondary" onClick={() => setConfirmation(null)} disabled={lifecycleBusy}>Back</Button><Button variant={confirmation === 'cancel' ? 'danger' : 'primary'} onClick={() => void runLifecycle()} disabled={lifecycleBusy}>{lifecycleBusy ? 'Saving...' : confirmation === 'cancel' ? 'Cancel event' : confirmation === 'start' ? 'Start event' : 'Mark completed'}</Button></div></div></Modal>
   </section>;
 }

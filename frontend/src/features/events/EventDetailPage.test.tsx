@@ -89,18 +89,16 @@ describe('EventDetailPage', () => {
     expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'in_progress' }));
   });
 
-  it('archives an event behind an "Are you sure?" confirmation', async () => {
+  it('archives an event in one click without a confirmation dialog', async () => {
     eventApi.archiveEvent.mockResolvedValue({ ...event, archivedAt: '2026-10-01T09:00:00.000Z' });
     const onEventUpdated = vi.fn();
     const user = userEvent.setup();
     render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} onEventUpdated={onEventUpdated} />);
 
     await user.click(await screen.findByRole('button', { name: 'Archive event' }));
-    const dialog = screen.getByRole('dialog', { name: 'Are you sure?' });
-    expect(dialog).toHaveTextContent('Archive');
-    await user.click(within(dialog).getByRole('button', { name: 'Archive event' }));
 
     await waitFor(() => expect(eventApi.archiveEvent).toHaveBeenCalledWith(event.id));
+    expect(screen.queryByRole('dialog', { name: 'Are you sure?' })).not.toBeInTheDocument();
     expect(await screen.findByText('City Sprint Meet archived. Find it under the Archived filter.')).toBeInTheDocument();
     expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ archivedAt: '2026-10-01T09:00:00.000Z' }));
   });
