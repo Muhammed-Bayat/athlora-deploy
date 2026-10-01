@@ -7,7 +7,6 @@ import {
   createFixtureInvitation,
   listFixtureInvitations,
   listFixtureRosters,
-  listHostedFixtureResults,
 } from '../../api/fixtures';
 import type { AthleticsEvent } from '../../types';
 import { FixtureHostPanel } from './FixtureHostPanel';
@@ -16,11 +15,9 @@ vi.mock('../../api/fixtures', () => ({
   createFixtureInvitation: vi.fn(),
   listFixtureInvitations: vi.fn(),
   listFixtureRosters: vi.fn(),
-  listHostedFixtureResults: vi.fn(),
   recordFixtureWithdrawal: vi.fn(),
   resendFixtureInvitation: vi.fn(),
   revokeFixtureInvitation: vi.fn(),
-  overrideHostFixtureResult: vi.fn(),
 }));
 vi.mock('../../api/clubs', () => ({ listClubs: vi.fn() }));
 vi.mock('../auth/WorkspaceContext', () => ({ useWorkspace: () => ({ activeWorkspace: { id: 'host-workspace' } }) }));
@@ -38,6 +35,7 @@ const event: AthleticsEvent = {
   latitude: null,
   longitude: null,
   status: 'scheduled',
+  archivedAt: null,
   createdAt: '2026-08-16T10:00:00.000Z',
   updatedAt: '2026-08-16T10:00:00.000Z',
 };
@@ -46,7 +44,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listFixtureInvitations).mockResolvedValue({ data: [], meta: { count: 0 } });
   vi.mocked(listFixtureRosters).mockResolvedValue({ data: [], meta: { count: 0 } });
-  vi.mocked(listHostedFixtureResults).mockResolvedValue({ data: [], meta: { count: 0 } });
   vi.mocked(listClubs).mockResolvedValue({ data: [], meta: { count: 0 } });
 });
 
@@ -67,26 +64,7 @@ describe('FixtureHostPanel', () => {
     );
   });
 
-  it('shows shared results section when results exist', async () => {
-    vi.mocked(listHostedFixtureResults).mockResolvedValue({
-      data: [{
-        eventId: event.id,
-        athleteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        discipline: '100m',
-        outcome: 'valid',
-        finalResult: 11.2,
-        unit: 'seconds',
-        placing: 1,
-        isPb: true,
-        isSb: false,
-        manualOverride: null,
-        overrideReason: null,
-        overriddenBy: null,
-        overrideAt: null,
-        updatedAt: '2026-08-16T10:00:00.000Z',
-      }],
-      meta: { count: 1 },
-    });
+  it('omits shared results from the participating clubs panel', async () => {
     vi.mocked(listFixtureRosters).mockResolvedValue({
       data: [{
         team: { workspaceId: '22222222-2222-4222-8222-222222222222', workspaceName: 'Guest Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null },
@@ -95,15 +73,15 @@ describe('FixtureHostPanel', () => {
       meta: { count: 1 },
     });
 
-    render(<FixtureHostPanel event={event} canOperate isCoach />);
+    render(<FixtureHostPanel event={{ ...event, status: 'in_progress' }} canOperate isCoach />);
 
-    expect(await screen.findByText('Shared results')).toBeInTheDocument();
-    expect(screen.getAllByText('Ari Sprint').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('11.2s')).toBeInTheDocument();
-    expect(screen.getAllByText('PB').length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findByRole('heading', { name: 'Accepted' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Shared results' })).not.toBeInTheDocument();
+    expect(screen.queryByText('11.2s')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument();
   });
 
-  it('directs its own multi-discipline fixture roster to the session roster tabs', async () => {
+  it('shows only the club name for a session-roster fixture', async () => {
     vi.mocked(listFixtureRosters).mockResolvedValue({
       data: [{
         team: { workspaceId: 'host-workspace', workspaceName: 'Host Team', status: 'accepted', acceptedRevision: 1, withdrawnAt: null },
@@ -114,7 +92,8 @@ describe('FixtureHostPanel', () => {
 
     render(<FixtureHostPanel event={{ ...event, discipline: null }} canOperate isCoach usesSessionRosters />);
 
-    expect(await screen.findByText('Your discipline entries appear in the event roster tabs.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Host Team/ })).toBeInTheDocument();
+    expect(screen.queryByText('Your discipline entries appear in the event roster tabs.')).not.toBeInTheDocument();
   });
 
   it('does not render invited team athletes in the host roster', async () => {
@@ -168,19 +147,10 @@ describe('FixtureHostPanel', () => {
       ],
       meta: { count: 2 },
     });
-    vi.mocked(listHostedFixtureResults).mockResolvedValue({
-      data: [{
-        eventId: event.id, athleteId: 'assistant-athlete', discipline: '100m', outcome: 'valid',
-        finalResult: 11.2, unit: 'seconds', placing: 1, isPb: false, isSb: false,
-        manualOverride: null, overrideReason: null, overriddenBy: null, overrideAt: null,
-        updatedAt: '2026-08-16T10:00:00.000Z',
-      }],
-      meta: { count: 1 },
-    });
 
     render(<FixtureHostPanel event={{ ...event, status: 'in_progress' }} canOperate isCoach={false} />);
 
-    expect(await screen.findByRole('button', { name: 'Correct' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Accepted' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Record withdrawal' })).not.toBeInTheDocument();
   });
 
