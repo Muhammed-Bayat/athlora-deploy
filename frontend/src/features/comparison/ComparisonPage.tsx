@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getMultiAthleteComparison, getTwoAthleteComparison } from '../../api/comparison';
 import {
@@ -152,32 +152,23 @@ function ClubComparisonTable({ comparison, season, discipline }: { comparison: C
   );
 }
 
-function athleteSearchMessage(search: string, loading: boolean): string {
-  if (loading) return 'Searching athletes...';
-  if (search.trim().length < 2) return 'Type at least two characters to search';
-  return 'No athletes match this search';
-}
-
 function CrossClubAthleteAdder({ clubs, selectedAthleteIds, onAthleteChange }: { clubs: Club[]; selectedAthleteIds: string[]; onAthleteChange: (athlete: ClubAthleteLookup & { clubId: string; clubName: string }) => void }) {
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
   const [athletes, setAthletes] = useState<Array<ClubAthleteLookup & { clubId: string; clubName: string }>>([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
-    if (deferredSearch.trim().length < 2) { setAthletes([]); return; }
     const controller = new AbortController();
     setLoading(true);
-    void Promise.all(clubs.map((club) => listClubComparisonAthletes(club.id, deferredSearch, controller.signal)
+    void Promise.all(clubs.map((club) => listClubComparisonAthletes(club.id, '', controller.signal)
       .then((result) => result.data.map((athlete) => ({ ...athlete, clubId: club.id, clubName: club.name })))))
       .then((result) => { if (!controller.signal.aborted) setAthletes(result.flat()); })
       .catch(() => { if (!controller.signal.aborted) setAthletes([]); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [clubs.map((club) => club.id).join(','), deferredSearch]);
+  }, [clubs.map((club) => club.id).join(',')]);
   const athleteLabel = 'Search athletes from selected clubs';
   return <div className={styles.selector}>
     <label htmlFor="cross-athlete-add-select">Add athletes from selected clubs (up to 5)</label>
-    <Select id="cross-athlete-add-select" value="" onChange={(event) => { const athlete = athletes.find((candidate) => candidate.id === event.target.value); if (athlete) { setSearch(''); onAthleteChange(athlete); } }} searchable searchPlaceholder={athleteLabel} emptyMessage={athleteSearchMessage(search, loading)} aria-label={athleteLabel} placeholder="Search selected club rosters..." options={athletes.filter((athlete) => !selectedAthleteIds.includes(athlete.id)).map((athlete) => ({ value: athlete.id, label: `${athlete.name} - ${athlete.clubName}` }))} onSearchChange={setSearch} />
+    <Select id="cross-athlete-add-select" value="" onChange={(event) => { const athlete = athletes.find((candidate) => candidate.id === event.target.value); if (athlete) onAthleteChange(athlete); }} disabled={loading} searchable searchPlaceholder={athleteLabel} emptyMessage={loading ? 'Loading athletes...' : 'No athletes available from selected clubs'} aria-label={athleteLabel} placeholder="Add an athlete..." options={athletes.filter((athlete) => !selectedAthleteIds.includes(athlete.id)).map((athlete) => ({ value: athlete.id, label: `${athlete.name} - ${athlete.clubName}` }))} />
   </div>;
 }
 
@@ -226,12 +217,8 @@ export function ComparisonPage() {
       .then((result) => {
         if (current) setAthletes(result.data);
       })
-      .catch(() => {
-        if (current) setAthletes([]);
-      })
-      .finally(() => {
-        if (current) setAthletesLoading(false);
-      });
+      .catch(() => { if (current) setAthletes([]); })
+      .finally(() => { if (current) setAthletesLoading(false); });
     return () => { current = false; };
   }, [season]);
 
@@ -264,6 +251,17 @@ export function ComparisonPage() {
       .finally(() => setPublicationUpdating(false));
   }, [activeWorkspace.role, publication]);
 
+  useEffect(() => {
+    let current = true;
+    setClubsLoading(true);
+    setClubsError(null);
+    void listClubs()
+      .then((result) => { if (current) setClubs(result.data); })
+      .catch((error: unknown) => { if (current) { setClubs([]); setClubsError(error instanceof Error ? error.message : 'Could not load clubs'); } })
+      .finally(() => { if (current) setClubsLoading(false); });
+    return () => { current = false; };
+  }, [activeWorkspace.id, clubRefreshKey]);
+
   const toggleSchedulePublication = useCallback(() => {
     if (!publication || activeWorkspace.role !== 'coach') return;
     setPublicationUpdating(true);
@@ -275,26 +273,6 @@ export function ComparisonPage() {
       })
       .finally(() => setPublicationUpdating(false));
   }, [activeWorkspace.role, publication]);
-
-  useEffect(() => {
-    let current = true;
-    setClubsLoading(true);
-    setClubsError(null);
-    void listClubs()
-      .then((result) => {
-        if (current) setClubs(result.data);
-      })
-      .catch((error: unknown) => {
-        if (current) {
-          setClubs([]);
-          setClubsError(error instanceof Error ? error.message : 'Could not load clubs');
-        }
-      })
-      .finally(() => {
-        if (current) setClubsLoading(false);
-      });
-    return () => { current = false; };
-  }, [activeWorkspace.id, clubRefreshKey]);
 
   const selectedCrossAthleteClubIds = athleteIds.map((athleteId) => crossAthletes[athleteId]?.clubId).filter(Boolean);
   const athleteSelectionValid = athleteIds.length >= 2
@@ -457,10 +435,6 @@ export function ComparisonPage() {
   const club1Options = clubs
     .filter((club) => club.id !== club2Id || club.id === club1Id)
     .map((club) => ({ value: club.id, label: club.name }));
-  const club2Options = clubs
-    .filter((club) => club.id !== club1Id || club.id === club2Id)
-    .map((club) => ({ value: club.id, label: club.name }));
-  void club2Options;
 
   const athleteMode = mode === 'athlete-club' || mode === 'athlete-cross-club';
   const selectedCrossClubs = clubs.filter((club) => clubIds.includes(club.id));
@@ -567,10 +541,7 @@ export function ComparisonPage() {
       {mode === 'athlete-club' && (
         <Card>
           <div className={styles.selectionEditor}>
-            <div className={styles.selector}>
-              <label htmlFor="athlete-add-select">Add athletes (up to 5)</label>
-              <Select id="athlete-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('athlete', [...athleteIds, event.target.value]); }} disabled={athletesLoading || athleteIds.length === MAX_COMPARISON_ITEMS} aria-label="Add athlete to comparison" placeholder="Add an athlete..." options={[{ value: '', label: athleteIds.length === MAX_COMPARISON_ITEMS ? 'Maximum athletes selected' : 'Add an athlete...' }, ...athletes.filter((athlete) => !athleteIds.includes(athlete.id)).map((athlete) => ({ value: athlete.id, label: athlete.name }))]} />
-            </div>
+            <div className={styles.selector}><label htmlFor="athlete-add-select">Add athletes (up to 5)</label><Select id="athlete-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('athlete', [...athleteIds, event.target.value]); }} disabled={athletesLoading || athleteIds.length === MAX_COMPARISON_ITEMS} searchable searchPlaceholder="Search athletes in your club" aria-label="Add athlete to comparison" placeholder="Add an athlete..." options={athletes.filter((athlete) => !athleteIds.includes(athlete.id)).map((athlete) => ({ value: athlete.id, label: athlete.name }))} /></div>
             {athleteIds.length > 0 && <ul className={styles.selectionChips} aria-label="Selected athletes">{athleteIds.map((athleteId, index) => { const athlete = athletes.find((candidate) => candidate.id === athleteId); return <li key={`${athleteId}-${index}`}><span className={styles.selectionName}><strong>{athlete?.name ?? 'Selected athlete'}</strong><small>{activeWorkspace.name}</small></span><button type="button" aria-label={`Remove ${athlete?.name ?? 'athlete'}`} onClick={() => updateSelection('athlete', athleteIds.filter((id) => id !== athleteId))}>×</button></li>; })}</ul>}
           </div>
         </Card>
@@ -579,12 +550,9 @@ export function ComparisonPage() {
       {mode === 'athlete-cross-club' && (
         <Card>
           <div className={styles.selectionEditor}>
-            <div className={styles.selector}>
-              <label htmlFor="cross-club-add-select">Add clubs (up to 5)</label>
-              <Select id="cross-club-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('club', [...clubIds, event.target.value]); }} disabled={clubsLoading || clubIds.length === MAX_COMPARISON_ITEMS} aria-label="Add club for athlete comparison" placeholder="Add a club..." options={[{ value: '', label: clubIds.length === MAX_COMPARISON_ITEMS ? 'Maximum clubs selected' : 'Add a club...' }, ...clubs.filter((club) => !clubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} />
-            </div>
+            <div className={styles.selector}><label htmlFor="cross-club-add-select">Add clubs (up to 5)</label><Select id="cross-club-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('club', [...clubIds, event.target.value]); }} disabled={clubsLoading || clubIds.length === MAX_COMPARISON_ITEMS} searchable searchPlaceholder="Search clubs" aria-label="Add club for athlete comparison" placeholder="Add a club..." options={clubs.filter((club) => !clubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))} /></div>
             {clubIds.length > 0 && <ul className={styles.selectionChips} aria-label="Selected comparison clubs">{clubIds.map((clubId, index) => { const club = clubs.find((candidate) => candidate.id === clubId); return <li key={`${clubId}-${index}`}>{club?.name ?? 'Selected club'}<button type="button" aria-label={`Remove ${club?.name ?? 'club'}`} onClick={() => removeCrossClub(clubId)}>×</button></li>; })}</ul>}
-            {selectedCrossClubs.length > 0 && athleteIds.length < MAX_COMPARISON_ITEMS && <CrossClubAthleteAdder key={athleteIds.join(',')} clubs={selectedCrossClubs} selectedAthleteIds={athleteIds} onAthleteChange={(athlete) => { setCrossAthletes((current) => ({ ...current, [athlete.id]: { name: athlete.name, clubId: athlete.clubId, clubName: athlete.clubName } })); updateSelection('athlete', [...athleteIds, athlete.id]); }} />}
+            {selectedCrossClubs.length > 0 && athleteIds.length < MAX_COMPARISON_ITEMS && <CrossClubAthleteAdder clubs={selectedCrossClubs} selectedAthleteIds={athleteIds} onAthleteChange={(athlete) => { setCrossAthletes((current) => ({ ...current, [athlete.id]: { name: athlete.name, clubId: athlete.clubId, clubName: athlete.clubName } })); updateSelection('athlete', [...athleteIds, athlete.id]); }} />}
             {athleteIds.length > 0 && <ul className={styles.selectionChips} aria-label="Selected comparison athletes">{athleteIds.map((athleteId, index) => { const selectedAthlete = crossAthletes[athleteId]; const athleteName = comparison?.athletes.find((athlete) => athlete.athlete.id === athleteId)?.athlete.name ?? selectedAthlete?.name ?? 'Selected athlete'; return <li key={`${athleteId}-${index}`}><span className={styles.selectionName}><strong>{athleteName}</strong><small>{selectedAthlete?.clubName ?? 'Selected club'}</small></span><button type="button" aria-label={`Remove ${athleteName}`} onClick={() => removeCrossAthlete(athleteId)}>×</button></li>; })}</ul>}
           </div>
         </Card>
@@ -592,28 +560,14 @@ export function ComparisonPage() {
 
       {mode === 'club-statistics' && (
         <Card>
-          <div className={styles.singleSelector}>
-            <label htmlFor="statistics-club-select">Club</label>
-            <Select
-              id="statistics-club-select"
-              value={club1Id}
-              onChange={(event) => updateClub('club1Id', event.target.value)}
-              disabled={clubsLoading}
-              aria-label="Select club for statistics"
-              placeholder="Select club..."
-              options={[{ value: '', label: 'Select club...' }, ...club1Options]}
-            />
-          </div>
+          <div className={styles.singleSelector}><label htmlFor="statistics-club-select">Club</label><Select id="statistics-club-select" value={club1Id} onChange={(event) => updateClub('club1Id', event.target.value)} disabled={clubsLoading} searchable searchPlaceholder="Search clubs" aria-label="Select club for statistics" placeholder="Select club..." options={[{ value: '', label: 'Select club...' }, ...club1Options]} /></div>
         </Card>
       )}
 
       {mode === 'club-comparison' && (
         <Card>
           <div className={styles.selectionEditor}>
-            <div className={styles.selector}>
-              <label htmlFor="club-add-select">Add clubs (up to 5)</label>
-              <Select id="club-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('club', [...clubIds, event.target.value]); }} disabled={clubsLoading || clubIds.length === MAX_COMPARISON_ITEMS} aria-label="Add club to comparison" placeholder="Add a club..." options={[{ value: '', label: clubIds.length === MAX_COMPARISON_ITEMS ? 'Maximum clubs selected' : 'Add a club...' }, ...clubs.filter((club) => !clubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))]} />
-            </div>
+            <div className={styles.selector}><label htmlFor="club-add-select">Add clubs (up to 5)</label><Select id="club-add-select" value="" onChange={(event) => { if (event.target.value) updateSelection('club', [...clubIds, event.target.value]); }} disabled={clubsLoading || clubIds.length === MAX_COMPARISON_ITEMS} searchable searchPlaceholder="Search clubs" aria-label="Add club to comparison" placeholder="Add a club..." options={clubs.filter((club) => !clubIds.includes(club.id)).map((club) => ({ value: club.id, label: club.name }))} /></div>
             {clubIds.length > 0 && <ul className={styles.selectionChips} aria-label="Selected clubs">{clubIds.map((clubId, index) => { const club = clubs.find((candidate) => candidate.id === clubId); return <li key={`${clubId}-${index}`}>{club?.name ?? 'Selected club'}<button type="button" aria-label={`Remove ${club?.name ?? 'club'}`} onClick={() => updateSelection('club', clubIds.filter((id) => id !== clubId))}>×</button></li>; })}</ul>}
           </div>
         </Card>

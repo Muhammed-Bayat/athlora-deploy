@@ -31,8 +31,9 @@ async function waitForView(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { name: title, level: 1 }).first()).toBeVisible();
 }
 
-async function chooseComparisonOption(page: Page, label: string, option: string): Promise<void> {
+async function searchComparisonOption(page: Page, label: string, searchLabel: string, query: string, option: string): Promise<void> {
   await page.getByRole('button', { name: label }).click();
+  await page.getByRole('searchbox', { name: searchLabel }).fill(query);
   await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
 }
 
@@ -106,13 +107,13 @@ test.describe('two-athlete comparison', () => {
     await addAthlete(page, bravo);
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    const emptyState = page.getByText(/Select exactly two different athletes/);
+    const emptyState = page.getByText(/Select two to five different athletes from your club/);
     await expect(emptyState).toBeVisible();
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', alpha.slice(0, 2), alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', bravo.slice(0, 2), bravo);
 
     const metrics = page.getByRole('list', { name: 'Comparison metrics summary' });
     await expect(metrics.getByText(`${alpha} PB`, { exact: true })).toBeVisible();
@@ -138,12 +139,11 @@ test.describe('two-athlete comparison', () => {
     await addAthlete(page, alpha);
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', alpha.slice(0, 2), alpha);
 
-    await expect(page.getByText(/Select exactly two different athletes/)).toBeVisible();
+    await expect(page.getByText(/Select two to five different athletes from your club/)).toBeVisible();
   });
 
   test('preserves comparison state in URL query parameters', async ({ page }) => {
@@ -159,10 +159,10 @@ test.describe('two-athlete comparison', () => {
     await addAthlete(page, bravo);
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', alpha.slice(0, 2), alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', bravo.slice(0, 2), bravo);
 
     await expect(
       page.getByRole('list', { name: 'Comparison metrics summary' }),
@@ -192,10 +192,10 @@ test.describe('two-athlete comparison', () => {
     ]);
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', alpha.slice(0, 2), alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', 'Search athletes in your club', bravo.slice(0, 2), bravo);
 
     await expect(page.getByRole('img', { name: /progression chart/i })).toBeVisible();
   });

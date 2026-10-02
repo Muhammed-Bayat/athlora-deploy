@@ -113,6 +113,7 @@ export function Select({
       select.value = nextValue;
       select.dispatchEvent(new Event('change', { bubbles: true }));
     }
+    setSearch('');
     setOpen(false);
     triggerRef.current?.focus();
   };

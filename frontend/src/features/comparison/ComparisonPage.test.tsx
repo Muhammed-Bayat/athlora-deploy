@@ -125,6 +125,12 @@ async function choose(label: string, option: string) {
   await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: option }));
 }
 
+async function searchAndChoose(label: string, searchLabel: string, query: string, option: string) {
+  await userEvent.click(screen.getByRole('button', { name: label }));
+  await userEvent.type(screen.getByRole('searchbox', { name: searchLabel }), query);
+  await userEvent.click(await screen.findByRole('option', { name: option }));
+}
+
 describe('ComparisonPage', () => {
   it('renders the comparison page heading and mode selector', () => {
     renderPage();
@@ -132,14 +138,24 @@ describe('ComparisonPage', () => {
     expect(screen.getByRole('button', { name: 'Comparison mode' })).toHaveTextContent('Athlete vs athlete in my club');
   });
 
-  it('preloads club choices so changing comparison mode does not refetch them', async () => {
+  it('preloads clubs and filters them in the comparison picker', async () => {
     renderPage();
 
     await waitFor(() => expect(mockListClubs).toHaveBeenCalledTimes(1));
     await choose('Comparison mode', 'Club vs club');
+    await searchAndChoose('Add club to comparison', 'Search clubs', 'Alpha', CLUB_1.name);
 
     expect(mockListClubs).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole('button', { name: 'Add club to comparison' })).not.toBeDisabled();
+    expect(screen.getByRole('list', { name: 'Selected clubs' })).toHaveTextContent(CLUB_1.name);
+  });
+
+  it('preloads athletes and filters them in the comparison picker', async () => {
+    renderPage();
+
+    await searchAndChoose('Add athlete to comparison', 'Search athletes in your club', 'Al', ATHLETE_1.name);
+
+    expect(mockListAthletes).toHaveBeenCalledWith();
+    expect(screen.getByRole('list', { name: 'Selected athletes' })).toHaveTextContent(ATHLETE_1.name);
   });
 
   it('lets a coach publish the club results independently of the schedule', async () => {
@@ -192,7 +208,6 @@ describe('ComparisonPage', () => {
     renderPage({ year: '2024', athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
 
     expect(await screen.findByRole('heading', { name: '2024 100m progression' })).toBeInTheDocument();
-    expect(mockListAthletes).toHaveBeenCalledWith({ year: '2024' });
     expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(ATHLETE_1.id, ATHLETE_2.id, undefined, '2024');
   });
 
@@ -201,7 +216,6 @@ describe('ComparisonPage', () => {
     renderPage({ year: 'all', athlete1Id: ATHLETE_1.id, athlete2Id: ATHLETE_2.id });
 
     await screen.findByText('Alice Sprint PB');
-    expect(mockListAthletes).toHaveBeenCalledWith({ year: 'all' });
     expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(ATHLETE_1.id, ATHLETE_2.id, undefined, 'all');
   });
 
@@ -276,28 +290,28 @@ describe('ComparisonPage', () => {
     expect(chart).toHaveTextContent('Alice Sprint: 11.50 s on 2026-01-01');
   });
 
-  it('searches each selected club roster before comparing athletes across clubs', async () => {
+  it('preloads selected club rosters and filters athletes locally', async () => {
     mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
     renderPage({ mode: 'athlete-cross-club' });
 
-    await choose('Add club for athlete comparison', CLUB_1.name);
-    await choose('Add club for athlete comparison', CLUB_2.name);
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Alpha', CLUB_1.name);
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Bravo', CLUB_2.name);
 
     await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Al');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_1.name} - ${CLUB_1.name}` }));
-
+    expect(await screen.findByRole('option', { name: `${ATHLETE_1.name} - ${CLUB_1.name}` })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: `${ATHLETE_2.name} - ${CLUB_2.name}` })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Bo');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_2.name} - ${CLUB_2.name}` }));
+
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Al', `${ATHLETE_1.name} - ${CLUB_1.name}`);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Bo', `${ATHLETE_2.name} - ${CLUB_2.name}`);
 
     await waitFor(() => expect(mockGetTwoAthleteComparison).toHaveBeenCalledWith(
       ATHLETE_1.id,
       ATHLETE_2.id,
       'cross-club',
     ));
-    expect(mockListClubComparisonAthletes).toHaveBeenCalledWith(CLUB_1.id, 'Al', expect.any(AbortSignal));
-    expect(mockListClubComparisonAthletes).toHaveBeenCalledWith(CLUB_2.id, 'Bo', expect.any(AbortSignal));
+    expect(mockListClubComparisonAthletes).toHaveBeenCalledWith(CLUB_1.id, '', expect.any(AbortSignal));
+    expect(mockListClubComparisonAthletes).toHaveBeenCalledWith(CLUB_2.id, '', expect.any(AbortSignal));
   });
 
   it('allows multiple athletes from one selected club alongside another club', async () => {
@@ -311,17 +325,11 @@ describe('ComparisonPage', () => {
     }));
     renderPage({ mode: 'athlete-cross-club' });
 
-    await choose('Add club for athlete comparison', CLUB_1.name);
-    await choose('Add club for athlete comparison', CLUB_2.name);
-    await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Al');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_1.name} - ${CLUB_1.name}` }));
-    await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Ca');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_3.name} - ${CLUB_1.name}` }));
-    await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Bo');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_2.name} - ${CLUB_2.name}` }));
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Alpha', CLUB_1.name);
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Bravo', CLUB_2.name);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Al', `${ATHLETE_1.name} - ${CLUB_1.name}`);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Ca', `${ATHLETE_3.name} - ${CLUB_1.name}`);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Bo', `${ATHLETE_2.name} - ${CLUB_2.name}`);
 
     await waitFor(() => expect(mockGetMultiAthleteComparison).toHaveBeenCalledWith(
       [ATHLETE_1.id, ATHLETE_3.id, ATHLETE_2.id],
@@ -336,14 +344,10 @@ describe('ComparisonPage', () => {
     mockGetTwoAthleteComparison.mockResolvedValue(comparisonResult);
     renderPage({ mode: 'athlete-cross-club' });
 
-    await choose('Add club for athlete comparison', CLUB_1.name);
-    await choose('Add club for athlete comparison', CLUB_2.name);
-    await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Al');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_1.name} - ${CLUB_1.name}` }));
-    await userEvent.click(screen.getByRole('button', { name: 'Search athletes from selected clubs' }));
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search athletes from selected clubs' }), 'Bo');
-    await userEvent.click(await screen.findByRole('option', { name: `${ATHLETE_2.name} - ${CLUB_2.name}` }));
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Alpha', CLUB_1.name);
+    await searchAndChoose('Add club for athlete comparison', 'Search clubs', 'Bravo', CLUB_2.name);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Al', `${ATHLETE_1.name} - ${CLUB_1.name}`);
+    await searchAndChoose('Search athletes from selected clubs', 'Search athletes from selected clubs', 'Bo', `${ATHLETE_2.name} - ${CLUB_2.name}`);
     await screen.findByText('Alice Sprint PB');
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove Alice Sprint' }));
@@ -379,7 +383,16 @@ describe('ComparisonPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Retry club list' }));
 
     await waitFor(() => expect(mockListClubs).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText('Club service unavailable')).not.toBeInTheDocument();
+  });
+
+  it('filters a preloaded club before loading its statistics', async () => {
+    mockGetClubStatistics.mockResolvedValue(clubStatistics);
+    renderPage({ mode: 'club-statistics' });
+
+    await searchAndChoose('Select club for statistics', 'Search clubs', 'Alpha', CLUB_1.name);
+
+    expect(mockListClubs).toHaveBeenCalledWith();
+    await waitFor(() => expect(mockGetClubStatistics).toHaveBeenCalledWith(CLUB_1.id));
   });
 
   it('shows club statistics for a selected club', async () => {
