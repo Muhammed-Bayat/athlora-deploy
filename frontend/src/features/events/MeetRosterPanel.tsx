@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import * as meets from '../../api/meets';
 import { listAthletes } from '../../api/athletes';
 import { addEventParticipant, listEventParticipants, updateEventParticipant } from '../../api/participants';
@@ -17,7 +17,7 @@ const RSVP_OPTIONS: Array<{ value: RsvpStatus; label: string }> = [
 
 function entrantDescription(entrant: MeetEntrant, entrants: MeetEntrant[]): string {
   if (entrant.kind === 'relay') {
-    const legs = entrant.memberIds.map((id) => entrants.find((item) => item.id === id)?.name ?? 'Member').join(' -> ');
+    const legs = entrant.memberIds.map((id, index) => `${index + 1}. ${entrants.find((item) => item.id === id)?.name ?? 'Member'}`).join(' -> ');
     return legs ? `Relay team: ${legs}` : 'Relay team';
   }
   if (entrant.kind === 'guest') return entrant.clubName ? `External entrant - ${entrant.clubName}` : 'External entrant';
@@ -129,6 +129,37 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   const athleteEntrants = entrants.filter((entrant) => entrant.kind === 'athlete' && ownsEntrant(entrant) && athleteMatchesSession(athletes.find((athlete) => athlete.id === entrant.athleteId)));
   const relaySize = definition?.defaultRules.teamSize ?? 2;
   const canManageEntrant = (entrant: MeetEntrant) => isCoach && canUpdateRsvp && ownsEntrant(entrant);
+  const relayReadiness = (ids: string[]) => {
+    const members = ids.map((id) => athleteEntrants.find((item) => item.id === id)).filter((item): item is MeetEntrant => Boolean(item));
+    const declined = members.filter((item) => rsvpFor(item) === 'no').map((item) => item.name);
+    const allAttending = members.length === relaySize && members.every((item) => rsvpFor(item) === 'yes');
+    const message = declined.length > 0
+      ? `${declined[0]} is not attending. A relay needs ${relaySize} attending athletes — remove them and select a new athlete.`
+      : members.length > 0 && members.length < relaySize
+        ? `You need ${relaySize} athletes for a relay — select ${relaySize - members.length} more.`
+        : members.length === relaySize && !allAttending
+          ? `Set all ${relaySize} athletes to Attending to name the team.`
+          : '';
+    return { allAttending, needsReplacement: declined.length > 0, message };
+  };
+  const readiness = relayReadiness(memberIds);
+  const poolCounts = athleteEntrants.reduce<Record<RsvpStatus, number>>((counts, entrant) => {
+    const status = rsvpFor(entrant);
+    return status ? { ...counts, [status]: counts[status] + 1 } : counts;
+  }, { pending: 0, yes: 0, no: 0, maybe: 0 });
+  const renderMemberChoices = (ids: string[], setIds: Dispatch<SetStateAction<string[]>>) => athleteEntrants.map((entrant) => {
+    const leg = ids.indexOf(entrant.id);
+    const checked = leg >= 0;
+    const atCapacity = ids.length >= relaySize && !checked;
+    return <div className={styles.memberChoice} key={entrant.id}>
+      <label className={styles.memberPick}>
+        <input type="checkbox" checked={checked} disabled={atCapacity} onChange={(input) => setIds((current) => input.target.checked ? [...current, entrant.id] : current.filter((id) => id !== entrant.id))} />
+        {checked && <span className={styles.legNumber} aria-hidden="true">{leg + 1}</span>}
+        <span>{entrant.name}<small>Athlete</small></span>
+      </label>
+      {canManageEntrant(entrant) && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
+    </div>;
+  });
 
   const addSelectedAthletes = () => run(async () => {
     for (const athleteId of selectedAthleteIds) {
@@ -217,10 +248,11 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
 
       {relaySession && canAddToRoster && <fieldset className={styles.relayBuilder} disabled={busy}>
         <legend>Relay team <small>Legs follow selection order</small></legend>
-        <label>Team name<input value={relayName} onChange={(input) => setRelayName(input.target.value)} /></label>
+        <label>Team name<input value={relayName} onChange={(input) => setRelayName(input.target.value)} disabled={!readiness.allAttending} /></label>
         {athleteEntrants.length === 0 && <p className={styles.empty}>Add relay athletes before selecting the team.</p>}
-        {athleteEntrants.length > 0 && <div className={styles.memberChoices}>{athleteEntrants.map((entrant) => <label className={styles.memberChoice} key={entrant.id}><input type="checkbox" checked={memberIds.includes(entrant.id)} onChange={(input) => setMemberIds((current) => input.target.checked ? [...current, entrant.id] : current.filter((id) => id !== entrant.id))} /><span>{entrant.name}<small>Athlete</small></span></label>)}</div>}
-        <Button onClick={() => void addRelay()} disabled={busy || !relayName.trim() || memberIds.length !== relaySize}>Add relay</Button>
+        {athleteEntrants.length > 0 && <div className={styles.memberChoices}>{renderMemberChoices(memberIds, setMemberIds)}</div>}
+        {readiness.message && <p className={readiness.needsReplacement ? styles.error : styles.empty}>{readiness.message}</p>}
+        <Button onClick={() => void addRelay()} disabled={busy || !relayName.trim() || !readiness.allAttending}>Add relay</Button>
       </fieldset>}
 
       {activeRegistrations.length === 0 && <p className={styles.empty}>No {relaySession ? 'teams' : 'athletes'} are assigned to this session yet.</p>}
@@ -239,11 +271,19 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       {activeRegistrations.length > 0 && visibleRegistrations.length === 0 && <p className={styles.empty}>No {relaySession ? 'teams' : 'athletes'} match this RSVP filter.</p>}
 
       {!relaySession && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {rsvpCounts.pending} · Yes {rsvpCounts.yes} · No {rsvpCounts.no} · Maybe {rsvpCounts.maybe}</span></div>}
+      {relaySession && athleteEntrants.length > 0 && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {poolCounts.pending} · Yes {poolCounts.yes} · No {poolCounts.no} · Maybe {poolCounts.maybe}</span></div>}
 
       {relaySession && editingRelayId && (() => {
         const relay = entrants.find((item) => item.id === editingRelayId);
         if (!relay) return null;
-        return <fieldset className={styles.relayBuilder} disabled={busy}><legend>Edit relay team</legend><label>Team name<input value={editRelayName} onChange={(input) => setEditRelayName(input.target.value)} /></label><div className={styles.memberChoices}>{athleteEntrants.map((entrant) => <label className={styles.memberChoice} key={entrant.id}><input type="checkbox" checked={editMemberIds.includes(entrant.id)} onChange={(input) => setEditMemberIds((current) => input.target.checked ? [...current, entrant.id] : current.filter((id) => id !== entrant.id))} /><span>{entrant.name}<small>Athlete</small></span></label>)}</div><div className={styles.pickerActions}><Button onClick={() => void saveRelayEdit()} disabled={busy || !editRelayName.trim() || editMemberIds.length !== relaySize}>Save team</Button><Button variant="secondary" onClick={() => setEditingRelayId('')} disabled={busy}>Cancel</Button></div></fieldset>;
+        const editReadiness = relayReadiness(editMemberIds);
+        return <fieldset className={styles.relayBuilder} disabled={busy}>
+          <legend>Edit relay team <small>Legs follow selection order</small></legend>
+          <label>Team name<input value={editRelayName} onChange={(input) => setEditRelayName(input.target.value)} disabled={!editReadiness.allAttending} /></label>
+          <div className={styles.memberChoices}>{renderMemberChoices(editMemberIds, setEditMemberIds)}</div>
+          {editReadiness.message && <p className={editReadiness.needsReplacement ? styles.error : styles.empty}>{editReadiness.message}</p>}
+          <div className={styles.pickerActions}><Button onClick={() => void saveRelayEdit()} disabled={busy || !editRelayName.trim() || !editReadiness.allAttending}>Save team</Button><Button variant="secondary" onClick={() => setEditingRelayId('')} disabled={busy}>Cancel</Button></div>
+        </fieldset>;
       })()}
     </div>}
   </section>;
