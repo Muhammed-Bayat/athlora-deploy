@@ -89,6 +89,22 @@ describe('EventDetailPage', () => {
     expect(onEventUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'in_progress' }));
   });
 
+  it('keeps the start dialog open and explains pending RSVPs when the meet cannot start', async () => {
+    eventApi.updateEvent.mockRejectedValue(new ApiError(409, 'FIXTURE_PARTICIPANT_RSVPS_PENDING', 'Athletes in Speed Demons still have pending or maybe RSVPs'));
+    const onEventUpdated = vi.fn();
+    const user = userEvent.setup();
+    render(<EventDetailPage eventId={event.id} initialEvent={event} onBack={vi.fn()} onEventUpdated={onEventUpdated} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Start event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Start event' });
+    await user.click(within(dialog).getByRole('button', { name: 'Start event' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Athletes in Speed Demons still have pending or maybe RSVPs');
+    expect(screen.queryByText(/is now live/)).not.toBeInTheDocument();
+    expect(onEventUpdated).not.toHaveBeenCalled();
+    expect(eventApi.updateEvent).toHaveBeenCalledWith(event.id, expect.objectContaining({ status: 'in_progress' }));
+  });
+
   it('archives an event in one click without a confirmation dialog', async () => {
     eventApi.archiveEvent.mockResolvedValue({ ...event, archivedAt: '2026-10-01T09:00:00.000Z' });
     const onEventUpdated = vi.fn();

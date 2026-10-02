@@ -1075,39 +1075,20 @@
 
 .form .disciplineChoice input {
   appearance: none;
-  display: grid;
   flex: none;
   width: 1.125rem;
   height: 1.125rem;
   margin: 0;
-  place-content: center;
   border: 1px solid var(--console-control-border);
   border-radius: 0.25rem;
   background: var(--console-row-surface);
   cursor: pointer;
 }
 
-.form .disciplineChoice input::after {
-  content: '';
-  display: block;
-  transform: scale(0);
-  transition: transform 120ms ease;
-}
-
-.form .disciplineChoice input::after {
-  width: 0.5rem;
-  height: 0.28rem;
-  border: solid var(--console-primary-text);
-  border-width: 0 0.125rem 0.125rem 0;
-  transform: rotate(45deg) scale(0);
-}
-
 .form .disciplineChoice input:checked {
   border-color: var(--console-teal);
   background: var(--console-teal);
 }
-
-.form .disciplineChoice input:checked::after { transform: rotate(45deg) scale(1); }
 
 .disciplineChoice span { display: grid; gap: 0.15rem; min-width: 0; }
 .disciplineChoice strong { overflow-wrap: anywhere; font-size: var(--font-size-sm); }

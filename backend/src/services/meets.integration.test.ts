@@ -720,4 +720,32 @@ describeDB('multi-discipline migration and domain integration', () => {
     const started = await replaceEvent(host.workspaceId, eventId, start, transaction);
     expect(started.status).toBe('in_progress');
   });
+
+  it('starts a relay meet only once every relay pool athlete has RSVPed attending', async () => {
+    await migrate();
+    const { replaceEvent } = await import('./events.js');
+    await pool.query('UPDATE events SET discipline = NULL WHERE id = $1', [eventId]);
+    const start = { type: 'competition' as const, discipline: null, title: 'Meet', date: '2026-09-01', time: null, locationName: null, latitude: null, longitude: null, status: 'in_progress' as const };
+    const relayDefinition = await definition('4x100m');
+    const relaySession = await createSession(host, eventId, { disciplineDefinitionId: relayDefinition.id, label: '4 x 100m' }, transaction);
+    const poolEntrantIds: string[] = [];
+    for (const name of ['Relay One', 'Relay Two', 'Relay Three', 'Relay Four']) {
+      const athlete = await pool.query('INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1,$2,$3) RETURNING id', [host.workspaceId, host.userId, name]);
+      const poolAthleteId = athlete.rows[0].id as string;
+      await pool.query('INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) VALUES ($1,$2)', [poolAthleteId, relayDefinition.id]);
+      const entrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId: poolAthleteId }, transaction);
+      poolEntrantIds.push(entrant.id);
+      await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'pending')", [eventId, poolAthleteId, host.workspaceId]);
+    }
+
+    await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });
+
+    await pool.query("UPDATE event_participants SET rsvp_status = 'yes' WHERE event_id = $1", [eventId]);
+    const team = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: poolEntrantIds }, transaction);
+    await registerEntrant(host, eventId, { disciplineSessionId: relaySession.id, entrantId: team.id }, transaction);
+    const started = await replaceEvent(host.workspaceId, eventId, start, transaction);
+    expect(started.status).toBe('in_progress');
+    const legs = await pool.query('SELECT member_id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [team.id]);
+    expect(legs.rows.map((row) => row.member_id)).toEqual(poolEntrantIds);
+  });
 });

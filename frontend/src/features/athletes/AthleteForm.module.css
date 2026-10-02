@@ -27,29 +27,16 @@
 .disciplineChoiceSelected { border-color: var(--console-teal); background: color-mix(in srgb, var(--console-teal) 10%, var(--console-control-surface)); }
 .disciplineChoice input {
   appearance: none;
-  display: grid;
   flex: none;
   width: 1.125rem;
   height: 1.125rem;
   margin: 0;
-  place-content: center;
   border: 1px solid var(--console-control-border);
   border-radius: 0.25rem;
   background: var(--console-row-surface);
   cursor: pointer;
 }
-.disciplineChoice input::after {
-  content: '';
-  display: block;
-  width: 0.5rem;
-  height: 0.28rem;
-  border: solid var(--console-primary-text);
-  border-width: 0 0.125rem 0.125rem 0;
-  transform: rotate(45deg) scale(0);
-  transition: transform 120ms ease;
-}
 .disciplineChoice input:checked { border-color: var(--console-teal); background: var(--console-teal); }
-.disciplineChoice input:checked::after { transform: rotate(45deg) scale(1); }
 .disciplinePanel:disabled .disciplineChoice { cursor: not-allowed; opacity: 0.58; }
 .disciplinePanel:disabled .disciplineChoice:hover { border-color: var(--console-control-border); transform: none; }
 .disciplineChoice span { display: grid; gap: 0.15rem; min-width: 0; }
