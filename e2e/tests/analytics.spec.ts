@@ -3,8 +3,9 @@ import { openView, waitForView, addAthlete, addEvent } from './helpers';
 
 const token = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-async function chooseComparisonOption(page: Page, label: string, option: string): Promise<void> {
+async function searchComparisonOption(page: Page, label: string, query: string, option: string): Promise<void> {
   await page.getByRole('button', { name: label }).click();
+  await page.getByRole('searchbox', { name: 'Search athletes in your club' }).fill(query);
   await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
 }
 
@@ -54,9 +55,9 @@ test.describe('analytics and comparison', () => {
   test('comparison page shows empty state without athletes', async ({ page }) => {
     await page.goto('/console');
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await expect(page.getByText(/Select exactly two different athletes/)).toBeVisible();
+    await expect(page.getByText(/Select two to five different athletes from your club/)).toBeVisible();
   });
 
   test('comparison page allows selecting athletes and viewing metrics', async ({ page }) => {
@@ -71,10 +72,10 @@ test.describe('analytics and comparison', () => {
     await addAthlete(page, bravo, 'E2E');
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
+    await searchComparisonOption(page, 'Add athlete to comparison', alpha.slice(0, 2), alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', bravo.slice(0, 2), bravo);
 
     const metrics = page.getByRole('list', { name: 'Comparison metrics summary' });
     await expect(metrics.getByText(`${alpha} PB`, { exact: true })).toBeVisible();
@@ -93,10 +94,10 @@ test.describe('analytics and comparison', () => {
     await addAthlete(page, bravo, 'E2E');
 
     await openView(page, 'Compare', 'Compare');
-    await waitForView(page, 'Compare 100m Performance');
+    await waitForView(page, 'Compare Performance');
 
-    await chooseComparisonOption(page, 'Select first athlete for comparison', alpha);
-    await chooseComparisonOption(page, 'Select second athlete for comparison', bravo);
+    await searchComparisonOption(page, 'Add athlete to comparison', alpha.slice(0, 2), alpha);
+    await searchComparisonOption(page, 'Add athlete to comparison', bravo.slice(0, 2), bravo);
 
     await expect(page.getByRole('list', { name: 'Comparison metrics summary' })).toBeVisible();
 
