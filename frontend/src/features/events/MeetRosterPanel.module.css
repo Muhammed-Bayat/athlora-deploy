@@ -227,35 +227,19 @@
 .athleteChoice input,
 .memberChoice input {
   appearance: none;
-  display: grid;
   flex: none;
   width: 1.125rem;
   height: 1.125rem;
   min-height: 0;
   margin: 0;
   padding: 0;
-  place-content: center;
   border: 1px solid var(--console-control-border);
   border-radius: 0.25rem;
   background: var(--console-row-surface);
 }
 
-.athleteChoice input::after,
-.memberChoice input::after {
-  content: '';
-  display: block;
-  width: 0.375rem;
-  height: 0.21rem;
-  border: solid var(--console-primary-text);
-  border-width: 0 0.1rem 0.1rem 0;
-  transform: rotate(45deg) scale(0);
-  transition: transform 120ms ease;
-}
-
 .athleteChoice input:checked,
 .memberChoice input:checked { border-color: var(--console-teal); background: var(--console-teal); }
-.athleteChoice input:checked::after,
-.memberChoice input:checked::after { transform: rotate(45deg) scale(1); }
 .athleteChoice span,
 .memberPick span { display: grid; gap: 0.1rem; min-width: 0; }
 .athleteChoice small,
