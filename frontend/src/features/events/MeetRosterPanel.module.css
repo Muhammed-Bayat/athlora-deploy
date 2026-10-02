@@ -244,10 +244,10 @@
 .memberChoice input::after {
   content: '';
   display: block;
-  width: 0.5rem;
-  height: 0.28rem;
+  width: 0.375rem;
+  height: 0.21rem;
   border: solid var(--console-primary-text);
-  border-width: 0 0.125rem 0.125rem 0;
+  border-width: 0 0.1rem 0.1rem 0;
   transform: rotate(45deg) scale(0);
   transition: transform 120ms ease;
 }
