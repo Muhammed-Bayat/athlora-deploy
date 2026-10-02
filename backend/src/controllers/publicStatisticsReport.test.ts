@@ -28,11 +28,11 @@ describe('public statistics report route', () => {
 
   it('returns all configured disciplines without authentication', async () => {
     vi.mocked(dbClient.getPool).mockReturnValue({} as never);
-    vi.mocked(disciplineCatalog.listAvailableDisciplines).mockResolvedValue([{ discipline: '100m', label: '100 metres', unit: 'seconds', precision: 2, direction: 'lower' }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, direction: 'higher' }]);
+    vi.mocked(disciplineCatalog.listAvailableDisciplines).mockResolvedValue([{ discipline: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' }, { discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, direction: 'higher' }]);
 
     const response = await request(createApp()).get('/api/v1/public/statistics/report/disciplines');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ data: [{ code: '100m', label: '100 metres' }, { code: 'long_jump', label: 'Long jump' }], meta: { count: 2 } });
+    expect(response.body).toEqual({ data: [{ code: '100m', label: '100m' }, { code: 'long_jump', label: 'Long jump' }], meta: { count: 2 } });
   });
 });

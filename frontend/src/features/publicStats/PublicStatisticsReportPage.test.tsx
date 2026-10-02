@@ -24,7 +24,7 @@ describe('PublicStatisticsReportPage', () => {
     getReport.mockResolvedValue({ data: [], meta: { count: 0, generatedAt: '2026-09-25T00:00:00.000Z' } });
     listClubs.mockResolvedValue({ data: [{ id: 'club', name: 'Open Track' }] });
     listSeasons.mockResolvedValue([2026, 2025]);
-    listDisciplines.mockResolvedValue([{ code: '100m', label: '100 metres' }, { code: 'long-jump', label: 'Long jump' }]);
+    listDisciplines.mockResolvedValue([{ code: '100m', label: '100m' }, { code: 'long-jump', label: 'Long jump' }]);
   });
 
   it('loads URL filters without authentication and updates the shareable query', async () => {
@@ -32,7 +32,7 @@ describe('PublicStatisticsReportPage', () => {
     render(<MemoryRouter initialEntries={['/stats/report?discipline=100m&season=2026']}><PublicStatisticsReportPage /></MemoryRouter>);
 
     await waitFor(() => expect(getReport).toHaveBeenCalledWith(expect.objectContaining({ discipline: '100m', season: '2026' }), expect.anything()));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Discipline' })).toHaveTextContent('100 metres'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Discipline' })).toHaveTextContent('100m'));
     expect(screen.getByRole('button', { name: 'Download CSV' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Gender' }));

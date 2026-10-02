@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from './formatting';
+import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome, formatResultUnit } from './formatting';
 
 describe('shared formatting', () => {
   it('formats 100m seconds to hundredths', () => {
     expect(format100mSeconds(11.2)).toBe('11.20s');
+  });
+
+  it.each([['seconds', 's'], ['metres', 'm'], ['cm', 'cm']])('abbreviates %s result units as %s', (unit, expected) => {
+    expect(formatResultUnit(unit)).toBe(expected);
   });
 
   it.each([

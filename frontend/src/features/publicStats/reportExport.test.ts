@@ -4,7 +4,7 @@ import { formatReportDate, wrapReportText } from '../reports/pdfDocument';
 import { reportCsv, reportPdf } from './reportExport';
 
 const entry = {
-  athleteId: 'athlete', athleteName: '=Formula, Runner', clubId: 'club', clubName: 'Track "Club"', discipline: '100m', label: '100 metres', unit: 'seconds' as const,
+  athleteId: 'athlete', athleteName: '=Formula, Runner', clubId: 'club', clubName: 'Track "Club"', discipline: '100m', label: '100m', unit: 'seconds' as const,
   precision: 2, direction: 'lower' as const, performance: 10.91, place: 1, eventTitle: 'City Final', eventDate: '2026-09-25',
 };
 
@@ -14,6 +14,10 @@ describe('public report exports', () => {
     expect(csv).toContain('"\'=Formula, Runner"');
     expect(csv).toContain('"Track ""Club"""');
     expect(csv).toContain('"10.91 s"');
+  });
+
+  it('abbreviates field-result units in exports', () => {
+    expect(reportCsv([{ ...entry, discipline: 'long_jump', label: 'Long jump', unit: 'metres', performance: 6.45 }])).toContain('"6.45 m"');
   });
 
   it('creates a branded PDF document', async () => {
