@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getPublicClubSessionResults, type PublicClubSessionResults } from '../../api/publicStatistics';
+import { formatResultUnit } from '../../utils/formatting';
 import styles from './PublicStatsPage.module.css';
 
 function formatValue(value: number | null, precision: number, unit: string): string {
   if (value === null) return '—';
-  const suffix = unit === 'seconds' ? 's' : unit;
-  return `${value.toFixed(precision)} ${suffix}`;
+  return `${value.toFixed(precision)} ${formatResultUnit(unit)}`;
 }
 
 export function PublicSessionResults({ clubId, disciplineCode }: { clubId: string; disciplineCode: string }) {

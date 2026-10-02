@@ -19,6 +19,10 @@ export function format100mSeconds(seconds: number): string {
   return `${seconds.toFixed(2)}s`;
 }
 
+export function formatResultUnit(unit: string): string {
+  return unit === 'seconds' ? 's' : unit === 'metres' ? 'm' : unit;
+}
+
 export function formatOutcome(outcome: ResultOutcome): string {
   return OUTCOME_LABELS[outcome];
 }

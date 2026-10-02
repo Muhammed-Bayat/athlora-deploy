@@ -12,7 +12,7 @@ describe('public leaderboard service', () => {
           club_id: 'club-1',
           club_name: 'Speed Club',
           code: '100m',
-          label: '100 metres',
+          label: '100m',
           discipline_unit: 'seconds',
           precision: '2',
           direction: 'lower',
@@ -26,7 +26,7 @@ describe('public leaderboard service', () => {
     const db = { query: mockQuery } as never;
     const entries = await getPublicLeaderboard(query, db);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual(expect.objectContaining({ athleteName: 'Fast Runner', performance: 10.5, place: 1, discipline: '100m' }));
+    expect(entries[0]).toEqual(expect.objectContaining({ athleteName: 'Fast Runner', label: '100m', performance: 10.5, place: 1, discipline: '100m' }));
     expect(mockQuery).toHaveBeenCalledOnce();
     expect(mockQuery.mock.calls[0]?.[0]).toContain('FROM results r');
     expect(mockQuery.mock.calls[0]?.[0]).toContain("s.result_state = 'final'");

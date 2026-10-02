@@ -66,11 +66,11 @@ describe('publicStatistics API', () => {
 
   it('gets reportable published disciplines', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      response({ data: [{ code: '100m', label: '100 metres' }] }),
+      response({ data: [{ code: '100m', label: '100m' }] }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(publicStatistics.listPublicStatisticsReportDisciplines()).resolves.toEqual([{ code: '100m', label: '100 metres' }]);
+    await expect(publicStatistics.listPublicStatisticsReportDisciplines()).resolves.toEqual([{ code: '100m', label: '100m' }]);
     expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/public/statistics/report/disciplines');
   });
 

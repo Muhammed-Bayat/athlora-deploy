@@ -12,11 +12,12 @@ import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry
 import { incidentButtons } from './disciplineIncidents';
 import { memberSummary, standingsMembers, standingsTeam } from './standingsDisplay';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
+import { formatResultUnit } from '../../utils/formatting';
 import styles from './SessionLivePanel.module.css';
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
-  return `${value.toFixed(definition?.precision ?? 2)} ${definition?.unit === 'metres' || definition?.unit === 'cm' ? definition.unit : 's'}`;
+  return `${value.toFixed(definition?.precision ?? 2)} ${formatResultUnit(definition?.unit ?? 'seconds')}`;
 }
 
 export function SessionLivePanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {

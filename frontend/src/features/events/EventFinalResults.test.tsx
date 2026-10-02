@@ -28,14 +28,17 @@ describe('EventFinalResults', () => {
   it('renders cross-club final results, relay members, and exports the displayed rows', async () => {
     meets.listEventFinalResults.mockResolvedValue({ data: [
       { entrantId: 'athlete-1', name: 'Ari Runner', clubName: 'Harbour AC', discipline: '100m', disciplineLabel: '100m', finalResult: 10.8, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: [] },
+      { entrantId: 'athlete-2', name: 'Bea Jumper', clubName: 'Harbour AC', discipline: 'long_jump', disciplineLabel: 'Long jump', finalResult: 6.45, outcome: 'valid', unit: 'metres', precision: 2, placing: 1, relayMembers: [] },
       { entrantId: 'relay-1', name: 'Harbour Relay', clubName: 'Harbour AC', discipline: '4x100m', disciplineLabel: '4 x 100m relay', finalResult: 44.2, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: ['Ari Runner', 'Bea Dash', 'Casey Lane', 'Drew Pace'] },
     ] });
     const user = userEvent.setup();
     render(<EventFinalResults event={{ ...event, status: 'completed' }} reloadKey={0} />);
 
     expect(await screen.findByRole('table', { name: 'Final event results' })).toHaveTextContent('Ari RunnerHarbour AC100m10.80 s');
+    expect(screen.getByRole('table', { name: 'Final event results' })).toHaveTextContent('Bea JumperHarbour ACLong jump6.45 m');
     expect(screen.getByRole('rowheader', { name: /Harbour Relay/ })).toHaveTextContent('Ari Runner, Bea Dash, Casey Lane, Drew Pace');
     await user.click(screen.getByRole('button', { name: 'Export final results CSV' }));
     expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Harbour Relay","Ari Runner; Bea Dash; Casey Lane; Drew Pace"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Bea Jumper","","Harbour AC","Long jump","6.45 m"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
   });
 });

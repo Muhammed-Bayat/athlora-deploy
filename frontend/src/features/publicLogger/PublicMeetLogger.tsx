@@ -7,6 +7,7 @@ import {
 import { ApiError } from '../../api/client';
 import { Button, Input, OfflineRecoverySurface } from '../../components';
 import { parseDecimalInput } from '../../utils/decimalInput';
+import { formatResultUnit } from '../../utils/formatting';
 import type { PublicOfflineSyncResult } from '../../hooks/usePublicOfflineSync';
 import { cachePublicSession, getCachedPublicSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
@@ -27,7 +28,7 @@ const DEFAULT_SESSION_CACHE_KEY = 'public-meet';
 
 function formatValue(value: number | null, definition?: DisciplineDefinition): string {
   if (value === null) return '—';
-  return `${value.toFixed(definition?.precision ?? 2)} ${definition?.unit === 'metres' || definition?.unit === 'cm' ? definition.unit : 's'}`;
+  return `${value.toFixed(definition?.precision ?? 2)} ${formatResultUnit(definition?.unit ?? 'seconds')}`;
 }
 
 function memberSummary(entrant: PublicMeetEntrant | undefined): string {

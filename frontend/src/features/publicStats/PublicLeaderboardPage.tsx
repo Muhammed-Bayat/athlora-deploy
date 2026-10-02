@@ -4,6 +4,7 @@ import { getPublicLeaderboard, listPublicClubs, listPublicSeasons, listPublicSta
 import { PublicNavigation } from '../../components/PublicNavigation';
 import { Input, Select } from '../../components';
 import type { PublicClub } from '../../types';
+import { formatResultUnit } from '../../utils/formatting';
 import styles from './PublicStatsPage.module.css';
 
 const exactAge = /^(?:[5-9]|[1-9]\d|100)$/;
@@ -139,7 +140,7 @@ export function PublicLeaderboardPage() {
                     <td>{entry.athleteName}</td>
                     <td>{entry.clubName}</td>
                     <td>{entry.label}</td>
-                    <td>{entry.performance.toFixed(entry.precision)} {entry.unit === 'seconds' ? 's' : entry.unit}</td>
+                    <td>{entry.performance.toFixed(entry.precision)} {formatResultUnit(entry.unit)}</td>
                   </tr>
                 ))}
               </tbody>

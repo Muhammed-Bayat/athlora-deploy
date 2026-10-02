@@ -4,10 +4,11 @@ import { Button } from '../../components';
 import type { AthleticsEvent } from '../../types';
 import type { EventFinalResult } from '../../types/meets';
 import { downloadFile } from '../../utils/downloadFile';
+import { formatResultUnit } from '../../utils/formatting';
 import styles from './EventFinalResults.module.css';
 
 function performance(result: EventFinalResult): string {
-  if (result.finalResult !== null) return `${result.finalResult.toFixed(result.precision)} ${result.unit === 'seconds' ? 's' : result.unit}`;
+  if (result.finalResult !== null) return `${result.finalResult.toFixed(result.precision)} ${formatResultUnit(result.unit)}`;
   return result.outcome === 'no_result' ? 'No result' : result.outcome.toUpperCase();
 }
 

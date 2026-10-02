@@ -120,7 +120,7 @@ export async function getPublicStatisticsReport(
   }>(`
     WITH published_performances AS (
       SELECT COALESCE(r.manual_override, r.final_result) AS final_result, r.athlete_id, a.name AS athlete_name, c.id AS club_id, c.name AS club_name,
-             r.discipline AS code, CASE WHEN r.discipline = '100m' THEN '100 metres' ELSE r.discipline END AS label,
+              r.discipline AS code, r.discipline AS label,
              'seconds'::text AS discipline_unit, 2::integer AS precision, 'lower'::text AS direction,
              e.title AS event_title, e.date AS event_date
       FROM results r

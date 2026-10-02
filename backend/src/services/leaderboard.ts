@@ -105,7 +105,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
               concat(r.event_id::text, ':', r.athlete_id::text, ':', r.discipline) AS result_id,
               r.athlete_id, a.name AS athlete_name, a.dob, a.gender,
               c.id AS club_id, c.name AS club_name, r.discipline AS code,
-              CASE WHEN r.discipline = '100m' THEN '100 metres' ELSE r.discipline END AS label,
+               r.discipline AS label,
               'seconds'::text AS discipline_unit, 2::integer AS precision, 'lower'::text AS direction, e.date AS event_date
        FROM results r
        JOIN athletes a ON a.id = r.athlete_id

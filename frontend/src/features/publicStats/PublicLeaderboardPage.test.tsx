@@ -31,6 +31,13 @@ describe('PublicLeaderboardPage', () => {
     expect(screen.getByRole('button', { name: 'Club' })).toBeInTheDocument();
   });
 
+  it('renders canonical discipline labels and abbreviated field performances', async () => {
+    getLeaderboard.mockResolvedValueOnce([{ athleteId: 'athlete-1', athleteName: 'Ari Jumper', clubId: 'club', clubName: 'Open Track', discipline: 'long_jump', label: 'Long jump', unit: 'metres', precision: 2, performance: 6.45, place: 1 }]);
+    render(<MemoryRouter initialEntries={['/stats/leaderboard']}><PublicLeaderboardPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('table', { name: 'Athlete performance leaderboard' })).toHaveTextContent('Ari JumperOpen TrackLong jump6.45 m');
+  });
+
   it('applies a whole-number exact age only after it is valid', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/stats/leaderboard']}><PublicLeaderboardPage /></MemoryRouter>);

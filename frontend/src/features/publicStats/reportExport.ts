@@ -1,4 +1,5 @@
 import type { PublicStatisticsReportEntry } from '../../api/publicStatistics';
+import { formatResultUnit } from '../../utils/formatting';
 import { createReportDocument, drawReportSection, drawReportStatCards, drawReportTable, formatReportDate, saveReportDocument } from '../reports/pdfDocument';
 
 export { downloadFile } from '../../utils/downloadFile';
@@ -10,7 +11,7 @@ function spreadsheetCell(value: string | number): string {
 }
 
 function performance(entry: PublicStatisticsReportEntry): string {
-  return `${entry.performance.toFixed(entry.precision)} ${entry.unit === 'seconds' ? 's' : entry.unit}`;
+  return `${entry.performance.toFixed(entry.precision)} ${formatResultUnit(entry.unit)}`;
 }
 
 export function reportCsv(entries: PublicStatisticsReportEntry[]): string {
