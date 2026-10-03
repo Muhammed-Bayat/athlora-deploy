@@ -73,8 +73,8 @@ describe('PublicMeetLogger', () => {
     expect(screen.getByText('Legs: Ari Runner → Bea Guest')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'False Start' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lane Inf.' })).toBeInTheDocument();
-    expect(screen.getByRole('table')).toHaveTextContent('North Stars');
-    expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Guest');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Export results CSV' })).not.toBeInTheDocument();
 
     const splitInput = screen.getByLabelText('Relay splits for Ari Runner (leg 1)');
     expect(splitInput).toHaveAttribute('type', 'text');
@@ -89,8 +89,7 @@ describe('PublicMeetLogger', () => {
     expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /Long Jump Final/ }));
-    expect(screen.getAllByText('Independent Athletics')).toHaveLength(2);
-    expect(screen.getByRole('table')).toHaveTextContent('Casey Guest');
+    expect(screen.getAllByText('Independent Athletics')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'False Start' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lane Inf.' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'DQ' })).toBeInTheDocument();
@@ -182,7 +181,7 @@ describe('PublicMeetLogger', () => {
 
     await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
     expect(screen.queryByText('Absent Athlete')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Casey Guest')).toHaveLength(2);
+    expect(screen.getAllByText('Casey Guest')).toHaveLength(1);
   });
 
   it('shows an own incident entry and lets the official undo it', async () => {

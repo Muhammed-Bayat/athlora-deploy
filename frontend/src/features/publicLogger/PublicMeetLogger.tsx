@@ -21,7 +21,7 @@ import type {
 } from '../../types/meets';
 import styles from '../events/SessionLivePanel.module.css';
 import { incidentButtons } from '../events/disciplineIncidents';
-import { relayLegCell, relayLegLine, relayMembersOf, standingsClub, standingsTeam } from '../events/standingsDisplay';
+import { relayMembersOf } from '../events/standingsDisplay';
 import pageStyles from './PublicLoggerPage.module.css';
 
 const DEFAULT_SESSION_CACHE_KEY = 'public-meet';
@@ -43,12 +43,6 @@ function teamLine(entrant: PublicMeetEntrant): string {
   if (entrant.kind === 'relay') return `Legs: ${memberSummary(entrant) || 'Members not listed'}`;
   if (entrant.kind === 'guest') return entrant.clubName ?? 'Guest';
   return entrant.workspaceName ?? 'Athlete';
-}
-
-function standingsMembers(entrant: PublicMeetEntrant | undefined): string {
-  if (!entrant) return '';
-  if (entrant.kind === 'relay') return memberSummary(entrant);
-  return entrant.name;
 }
 
 export function PublicMeetLogger({
@@ -233,65 +227,6 @@ export function PublicMeetLogger({
     if (!offlineSync.isOnline) await offlineSync.enqueue({ target, actionType: 'undo_entry', payload, entryId: entry.id, expectedVersion: entry.version });
     else await removePublicMeetLoggerEntry(sessionToken, event.id, target, entry.id, payload);
   });
-
-  function exportResults() {
-    const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
-    const rows = vertical
-      ? [
-        ['Place', 'Team / club', 'Members', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
-        ...results.map((row) => {
-          const entrant = entrants.find((item) => item.id === row.entrantId);
-          return [
-            row.placing ?? '',
-            standingsTeam(entrant),
-            standingsMembers(entrant),
-            row.value === null ? 'NH' : row.value.toFixed(definition?.precision ?? 2),
-            row.vertical?.failuresAtBest ?? '',
-            row.vertical?.totalFailuresToBest ?? '',
-            row.vertical?.eliminated ? 'Eliminated' : row.outcome,
-          ];
-        }),
-      ]
-      : relay
-        ? [
-          ['Place', 'Club', 'Relay team', 'Athletes', 'Legs', 'Result', 'Status'],
-          ...results.map((row) => {
-            const entrant = entrants.find((item) => item.id === row.entrantId);
-            const final = session?.resultState === 'final';
-            return [
-              final ? (row.placing ?? '') : '',
-              standingsClub(entrant),
-              entrant?.name ?? '',
-              memberSummary(entrant),
-              relayLegCell(row.relayLegs ?? null, definition),
-              final
-                ? (row.value === null ? row.outcome.toUpperCase() : row.value.toFixed(definition?.precision ?? 2))
-                : 'Awaiting selection',
-              row.outcome,
-            ];
-          }),
-        ]
-        : [
-        ['Place', 'Team / club', 'Members', 'Result', 'Outcome', 'Official entry'],
-        ...results.map((row) => {
-          const entrant = entrants.find((item) => item.id === row.entrantId);
-          return [
-            row.placing ?? '',
-            standingsTeam(entrant),
-            standingsMembers(entrant),
-            row.value === null ? '' : row.value.toFixed(definition?.precision ?? 2),
-            row.outcome,
-            row.selectedEntryId ? 'selected' : '',
-          ];
-        }),
-      ];
-    const url = URL.createObjectURL(new Blob([rows.map((row) => row.map(quote).join(',')).join('\n')], { type: 'text/csv' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${session?.label ?? 'session'}-results.csv`.replaceAll(/\s+/g, '-').toLowerCase();
-    link.click();
-    URL.revokeObjectURL(url);
-  }
 
   if (!snapshot) {
     return <main className={pageStyles.page}><section className={pageStyles.join} aria-busy="true"><p>Loading meet sessions...</p>{error && <p role="alert">{error}</p>}</section></main>;
@@ -572,71 +507,6 @@ export function PublicMeetLogger({
                 })}
               </div>
             )}
-            <h3>Standings ({session.resultState === 'final' ? 'final' : session.resultState === 'reopened' ? 'reopened — provisional' : 'provisional'})</h3>
-            <div className={styles.standingsScroll}>
-              <table className={styles.standingsTable}>
-                <thead>
-                  {relay ? (
-                    <tr>
-                      <th scope="col" className={styles.numeric}>Place</th>
-                      <th scope="col">Club</th>
-                      <th scope="col">Relay team</th>
-                      <th scope="col">Athletes</th>
-                      <th scope="col">Legs</th>
-                      <th scope="col" className={styles.numeric}>Result</th>
-                      <th scope="col">Status</th>
-                    </tr>
-                  ) : (
-                    <tr>
-                      <th scope="col" className={styles.numeric}>Place</th>
-                      <th scope="col">Team / club</th>
-                      <th scope="col">Members</th>
-                      <th scope="col" className={styles.numeric}>Result</th>
-                      {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
-                      <th scope="col">Status</th>
-                      {!vertical && <th scope="col">Official entry</th>}
-                    </tr>
-                  )}
-                </thead>
-                <tbody>
-                  {[...results]
-                    .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
-                    .map((row) => {
-                      const entrant = entrants.find((item) => item.id === row.entrantId);
-                      if (relay) {
-                        const final = session.resultState === 'final';
-                        return (
-                          <tr key={row.entrantId}>
-                            <td className={styles.numeric}>{final ? (row.placing ?? '—') : '—'}</td>
-                            <td>{standingsClub(entrant)}</td>
-                            <td>{standingsTeam(entrant)}</td>
-                            <td>{standingsMembers(entrant)}</td>
-                            <td>{relayLegLine(row.relayLegs ?? null, definition)}</td>
-                            <td className={styles.numeric}>
-                              {final
-                                ? (row.value === null ? row.outcome.toUpperCase() : formatValue(row.value, definition))
-                                : 'Awaiting selection'}
-                            </td>
-                            <td>{row.outcome}</td>
-                          </tr>
-                        );
-                      }
-                      return (
-                        <tr key={row.entrantId}>
-                          <td className={styles.numeric}>{row.placing ?? '—'}</td>
-                          <td>{standingsTeam(entrant)}</td>
-                          <td>{standingsMembers(entrant)}</td>
-                          <td className={styles.numeric}>{vertical && row.value === null ? 'NH' : formatValue(row.value, definition)}</td>
-                          {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
-                          <td>{row.vertical?.eliminated ? 'Eliminated' : row.outcome}</td>
-                          {!vertical && <td>{row.selectedEntryId ? 'Selected' : 'Awaiting selection'}</td>}
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-            <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
           </div>
         )}
       </section>
