@@ -1,9 +1,11 @@
 import type { DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
-import type { DisciplineDefinition, SafeRelayMember, SessionEntry, VerticalConfig } from '../types/meets.js';
+import type { DisciplineDefinition, RelayLegResult, SafeRelayMember, SessionEntry, VerticalConfig } from '../types/meets.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
+import { deriveRelayResult, relayLegResults } from './relayDerivation.js';
+import { loadRelayMembers, loadRelaySelections } from './sessionPerformances.js';
 import { withReadTransaction } from '../db/transaction.js';
 
 export interface PublicSessionResultRow {
@@ -15,6 +17,7 @@ export interface PublicSessionResultRow {
   outcome: string;
   placing: number | null;
   isSelected: boolean;
+  relayLegs?: RelayLegResult[];
 }
 
 export interface PublicSessionResults {
@@ -80,22 +83,32 @@ export async function publicClubSessionResults(clubId: unknown, db?: DbExecutor)
       );
       const definition = mapMeetRow<DisciplineDefinition>(session.definition);
       const entries = (await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 ORDER BY created_at, id', [session.id])).rows.map(r => mapMeetRow<SessionEntry>(r));
+      const relay = definition.defaultRules.entrantType === 'relay';
+      const relayEntrantIds = relay ? results.rows.map(r => r.entrant_id) : [];
+      const legMembers = await loadRelayMembers(db, relayEntrantIds);
+      const selections = relay ? await loadRelaySelections(db, session.id) : new Map();
       const candidates = results.rows.map(r => {
         const history = entries.filter(e => e.entrantId === r.entrant_id);
-        return { entrantId: r.entrant_id, score: authoritativeResult(definition, history, r.selected_entry_id, session.vertical_config), entries: history, eligible: true };
+        const legs = selections.get(r.entrant_id) ?? new Map<string, string>();
+        return { entrantId: r.entrant_id,
+          score: relay ? deriveRelayResult(definition, legMembers.get(r.entrant_id) ?? [], history, legs) : authoritativeResult(definition, history, r.selected_entry_id, session.vertical_config),
+          entries: history, eligible: true };
       });
       const placingByEntrant = sessionPlaces(definition, candidates);
       const renderedResults: PublicSessionResultRow[] = [];
       for (const row of results.rows) {
         const members: SafeRelayMember[] = row.kind === 'relay'
-          ? (await db.query<{ leg: number; name: string; member_kind: string }>(
-              `SELECT rm.leg, me.name, rm.member_kind
+          ? (await db.query<{ relay_member_id: string; leg: number; name: string; member_kind: string }>(
+              `SELECT rm.id AS relay_member_id, rm.leg, me.name, rm.member_kind
                FROM relay_members rm
                JOIN meet_entrants me ON me.id = rm.member_id AND me.event_id = rm.event_id
                WHERE rm.relay_id = $1 ORDER BY rm.leg`,
-              [row.entrant_id],
-            )).rows.map((member) => ({ leg: Number(member.leg), name: member.name, isGuest: member.member_kind === 'guest' }))
+               [row.entrant_id],
+            )).rows.map((member) => ({ relayMemberId: member.relay_member_id, leg: Number(member.leg), name: member.name, isGuest: member.member_kind === 'guest' }))
           : [];
+        const legs = relay
+          ? relayLegResults(legMembers.get(row.entrant_id) ?? [], entries.filter(e => e.entrantId === row.entrant_id), selections.get(row.entrant_id) ?? new Map<string, string>(), definition.precision)
+          : undefined;
         renderedResults.push({
           entrantId: row.entrant_id,
           name: row.name,
@@ -105,6 +118,7 @@ export async function publicClubSessionResults(clubId: unknown, db?: DbExecutor)
           outcome: candidates.find(c => c.entrantId === row.entrant_id)!.score.outcome,
           placing: session.result_state === 'final' ? row.placing : placingByEntrant.get(row.entrant_id) ?? null,
           isSelected: Boolean(row.selected_entry_id),
+          ...(legs ? { relayLegs: legs } : {}),
         });
       }
       renderedResults.sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999) || a.name.localeCompare(b.name));

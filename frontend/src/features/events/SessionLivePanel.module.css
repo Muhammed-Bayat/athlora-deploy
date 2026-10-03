@@ -113,6 +113,22 @@
   white-space: nowrap;
 }
 
+.relayLegList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--console-line);
+}
+
+.relayLegList label {
+  color: var(--console-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .incidentButtonGroup {
   display: flex;
   gap: var(--space-2);

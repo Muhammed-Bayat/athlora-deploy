@@ -18,10 +18,17 @@ function csvCell(value: string | number): string {
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
+function legLine(result: EventFinalResult): string {
+  if (!result.relayLegs || result.relayLegs.length === 0) return '';
+  return result.relayLegs
+    .map((leg) => `${leg.name} ${leg.value === null ? 'awaiting selection' : `${leg.value.toFixed(result.precision)} ${formatResultUnit(result.unit)}`}`)
+    .join(' · ');
+}
+
 function exportCsv(results: EventFinalResult[], event: AthleticsEvent): void {
   const rows: Array<Array<string | number>> = [
-    ['Name', 'Relay members', 'Club', 'Discipline', 'Official result'],
-    ...results.map((result) => [result.name, result.relayMembers.join('; '), result.clubName, result.disciplineLabel, performance(result)]),
+    ['Name', 'Relay members', 'Club', 'Discipline', 'Official result', 'Leg results'],
+    ...results.map((result) => [result.name, result.relayMembers.join('; '), result.clubName, result.disciplineLabel, performance(result), legLine(result)]),
   ];
   downloadFile(rows.map((row) => row.map(csvCell).join(',')).join('\r\n'), `${event.title.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(^-|-$)/g, '') || 'event'}-final-results.csv`, 'text/csv;charset=utf-8');
 }
@@ -57,6 +64,6 @@ export function EventFinalResults({ event, reloadKey }: { event: AthleticsEvent;
     {loading && <p role="status">Loading final results...</p>}
     {error && <p role="alert">{error}</p>}
     {!loading && !error && results.length === 0 && <p>No final results yet</p>}
-    {!loading && !error && results.length > 0 && <div className={styles.scroll}><table aria-label="Final event results"><thead><tr><th scope="col">Name</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Official result</th></tr></thead><tbody>{results.map((result) => <tr key={`${result.discipline}-${result.entrantId}`}><th scope="row">{result.name}{result.relayMembers.length > 0 && <small>{result.relayMembers.join(', ')}</small>}</th><td>{result.clubName}</td><td>{result.disciplineLabel}</td><td className={styles.numeric}>{performance(result)}</td></tr>)}</tbody></table></div>}
+    {!loading && !error && results.length > 0 && <div className={styles.scroll}><table aria-label="Final event results"><thead><tr><th scope="col">Name</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Official result</th></tr></thead><tbody>{results.map((result) => <tr key={`${result.discipline}-${result.entrantId}`}><th scope="row">{result.name}{result.relayMembers.length > 0 && <small>{legLine(result) || result.relayMembers.join(', ')}</small>}</th><td>{result.clubName}</td><td>{result.disciplineLabel}</td><td className={styles.numeric}>{performance(result)}</td></tr>)}</tbody></table></div>}
   </section>;
 }

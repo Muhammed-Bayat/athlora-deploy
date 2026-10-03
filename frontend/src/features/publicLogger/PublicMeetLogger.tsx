@@ -21,7 +21,7 @@ import type {
 } from '../../types/meets';
 import styles from '../events/SessionLivePanel.module.css';
 import { incidentButtons } from '../events/disciplineIncidents';
-import { standingsTeam } from '../events/standingsDisplay';
+import { relayLegCell, relayLegLine, relayMembersOf, standingsClub, standingsTeam } from '../events/standingsDisplay';
 import pageStyles from './PublicLoggerPage.module.css';
 
 const DEFAULT_SESSION_CACHE_KEY = 'public-meet';
@@ -117,6 +117,7 @@ export function PublicMeetLogger({
   const live = event.status === 'in_progress' && session?.status === 'in_progress' && session.resultState !== 'final';
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
+  const relay = definition?.defaultRules.entrantType === 'relay';
   const entries = session?.entries ?? [];
   const results = session?.results ?? [];
   const registeredEntrantIds = new Set(session?.entrantIds ?? []);
@@ -183,9 +184,11 @@ export function PublicMeetLogger({
     else await createPublicMeetLoggerEntry(sessionToken, event.id, target, payload);
   };
 
-  const logAttempt = (entrantId: string) => run(async () => {
+  const splitKey = (entrantId: string, relayMemberId?: string | null) => (relayMemberId ? `${entrantId}:${relayMemberId}` : entrantId);
+
+  const logAttempt = (entrantId: string, relayMemberId: string | null = null) => run(async () => {
     if (!sessionId || !entrantId || !definition) return;
-    const raw = values[entrantId] ?? '';
+    const raw = values[splitKey(entrantId, relayMemberId)] ?? '';
     const numeric = parseDecimalInput(raw);
     if (numeric === null || numeric <= 0) {
       setError(`Enter a valid ${definition.unit === 'seconds' ? 'time' : 'measurement'} before recording.`);
@@ -193,11 +196,12 @@ export function PublicMeetLogger({
     }
     await submitEntry(targetFor(entrantId), {
       entryType: 'attempt', value: numeric, unit: definition.unit,
-      isFoul: fouls[entrantId] ?? false,
+      isFoul: relay ? false : (fouls[entrantId] ?? false),
       incidentType: null, noteText: null, deviceId: null,
+      ...(relayMemberId ? { relayMemberId } : {}),
     });
-    setValues((prev) => ({ ...prev, [entrantId]: '' }));
-    setFouls((prev) => ({ ...prev, [entrantId]: false }));
+    setValues((prev) => ({ ...prev, [splitKey(entrantId, relayMemberId)]: '' }));
+    if (!relay) setFouls((prev) => ({ ...prev, [entrantId]: false }));
   });
 
   const logIncident = (entrantId: string, incidentType: IncidentType) => run(async () => {
@@ -248,7 +252,26 @@ export function PublicMeetLogger({
           ];
         }),
       ]
-      : [
+      : relay
+        ? [
+          ['Place', 'Club', 'Relay team', 'Athletes', 'Legs', 'Result', 'Status'],
+          ...results.map((row) => {
+            const entrant = entrants.find((item) => item.id === row.entrantId);
+            const final = session?.resultState === 'final';
+            return [
+              final ? (row.placing ?? '') : '',
+              standingsClub(entrant),
+              entrant?.name ?? '',
+              memberSummary(entrant),
+              relayLegCell(row.relayLegs ?? null, definition),
+              final
+                ? (row.value === null ? row.outcome.toUpperCase() : row.value.toFixed(definition?.precision ?? 2))
+                : 'Awaiting selection',
+              row.outcome,
+            ];
+          }),
+        ]
+        : [
         ['Place', 'Team / club', 'Members', 'Result', 'Outcome', 'Official entry'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
@@ -362,11 +385,17 @@ export function PublicMeetLogger({
                   const eliminated = Boolean(result?.vertical?.eliminated);
                   const controlsDisabled = busy || !live || (vertical && eliminated);
                   const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty'));
+                  const relayMembers = relay ? relayMembersOf(entrant, result?.relayLegs ?? null) : [];
+                  const teamEntries = relay ? entrantEntries.filter((entry) => !entry.relayMemberId) : entrantEntries;
                   const currentRecord = !result
                     ? '—'
                     : vertical
                       ? result.vertical?.eliminated ? 'Eliminated' : result.value === null ? 'NH' : formatValue(result.value, definition)
-                      : `${formatValue(result.value, definition)}${result.outcome !== 'valid' ? ` ${result.outcome.toUpperCase()}` : ''}`;
+                      : relay
+                        ? result.value !== null
+                          ? formatValue(result.value, definition)
+                          : result.outcome !== 'valid' ? result.outcome.toUpperCase() : 'Awaiting selection'
+                        : `${formatValue(result.value, definition)}${result.outcome !== 'valid' ? ` ${result.outcome.toUpperCase()}` : ''}`;
                   const height = heights[entrant.id] ?? String(session.verticalConfig?.startingHeight ?? '');
                   return (
                     <div key={entrant.id} className={styles.athleteRow} role="group" aria-label={entrant.name}>
@@ -395,6 +424,10 @@ export function PublicMeetLogger({
                             >
                               Next height
                             </Button>
+                            <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
+                          </div>
+                        ) : relay ? (
+                          <div className={styles.finishInputGroup}>
                             <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
                           </div>
                         ) : (
@@ -462,9 +495,60 @@ export function PublicMeetLogger({
                         )}
                         {vertical && eliminated && <p>{entrant.name} is eliminated.</p>}
                       </div>
-                      {entrantEntries.length > 0 && (
+                      {relay && (
+                        <div className={styles.relayLegList}>
+                          {relayMembers.map((member) => {
+                            const key = splitKey(entrant.id, member.relayMemberId);
+                            const leg = result?.relayLegs?.find((item) => item.relayMemberId === member.relayMemberId);
+                            const splits = entrantEntries.filter((entry) => entry.relayMemberId === member.relayMemberId);
+                            return (
+                              <div key={member.relayMemberId} className={styles.finishInputGroup}>
+                                <label htmlFor={`relay-split-${entrant.id}-${member.relayMemberId}`}>Relay splits</label>
+                                <Input
+                                  id={`relay-split-${entrant.id}-${member.relayMemberId}`}
+                                  aria-label={`Relay splits for ${member.name} (leg ${member.leg})`}
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="13.42"
+                                  value={values[key] ?? ''}
+                                  onChange={(input) => setValues((prev) => ({ ...prev, [key]: input.target.value }))}
+                                  disabled={controlsDisabled}
+                                />
+                                <Button
+                                  disabled={controlsDisabled || !(values[key] ?? '').trim()}
+                                  onClick={() => void logAttempt(entrant.id, member.relayMemberId)}
+                                  style={{ minHeight: '44px', minWidth: '44px' }}
+                                >
+                                  Record
+                                </Button>
+                                <span className={styles.currentRecord} aria-label={`Official split for ${member.name}`}>
+                                  {leg && leg.value !== null ? formatValue(leg.value, definition) : 'Awaiting selection'}
+                                </span>
+                                {splits.length > 0 && (
+                                  <ol className={styles.attemptsList} aria-label={`Relay splits for ${member.name}`}>
+                                    {splits.map((entry, index) => (
+                                      <li key={entry.id}>
+                                        #{index + 1} {formatValue(entry.value, definition)}
+                                        {entry.recorderName && ` · by ${entry.recorderName}`}
+                                        {leg?.selectedEntryId === entry.id && ' · official'}
+                                        {live && entry.canUndo && (
+                                          <>
+                                            {' '}
+                                            <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
+                                          </>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {teamEntries.length > 0 && (
                         <ol className={styles.attemptsList} aria-label={`Attempts for ${entrant.name}`}>
-                          {entrantEntries.map((entry, index) => (
+                          {teamEntries.map((entry, index) => (
                             <li key={entry.id}>
                               {entry.entryType === 'penalty'
                                 ? `${entry.incidentType?.toUpperCase() ?? 'Penalty'}`
@@ -492,21 +576,51 @@ export function PublicMeetLogger({
             <div className={styles.standingsScroll}>
               <table className={styles.standingsTable}>
                 <thead>
-                  <tr>
-                    <th scope="col" className={styles.numeric}>Place</th>
-                    <th scope="col">Team / club</th>
-                    <th scope="col">Members</th>
-                    <th scope="col" className={styles.numeric}>Result</th>
-                    {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
-                    <th scope="col">Status</th>
-                    {!vertical && <th scope="col">Official entry</th>}
-                  </tr>
+                  {relay ? (
+                    <tr>
+                      <th scope="col" className={styles.numeric}>Place</th>
+                      <th scope="col">Club</th>
+                      <th scope="col">Relay team</th>
+                      <th scope="col">Athletes</th>
+                      <th scope="col">Legs</th>
+                      <th scope="col" className={styles.numeric}>Result</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th scope="col" className={styles.numeric}>Place</th>
+                      <th scope="col">Team / club</th>
+                      <th scope="col">Members</th>
+                      <th scope="col" className={styles.numeric}>Result</th>
+                      {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
+                      <th scope="col">Status</th>
+                      {!vertical && <th scope="col">Official entry</th>}
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {[...results]
                     .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
                     .map((row) => {
                       const entrant = entrants.find((item) => item.id === row.entrantId);
+                      if (relay) {
+                        const final = session.resultState === 'final';
+                        return (
+                          <tr key={row.entrantId}>
+                            <td className={styles.numeric}>{final ? (row.placing ?? '—') : '—'}</td>
+                            <td>{standingsClub(entrant)}</td>
+                            <td>{standingsTeam(entrant)}</td>
+                            <td>{standingsMembers(entrant)}</td>
+                            <td>{relayLegLine(row.relayLegs ?? null, definition)}</td>
+                            <td className={styles.numeric}>
+                              {final
+                                ? (row.value === null ? row.outcome.toUpperCase() : formatValue(row.value, definition))
+                                : 'Awaiting selection'}
+                            </td>
+                            <td>{row.outcome}</td>
+                          </tr>
+                        );
+                      }
                       return (
                         <tr key={row.entrantId}>
                           <td className={styles.numeric}>{row.placing ?? '—'}</td>

@@ -17,6 +17,8 @@ const RELAY_SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const FIELD_SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const RELAY_ID = '44444444-4444-4444-8444-444444444444';
 const GUEST_ID = '55555555-5555-4555-8555-555555555555';
+const RM_A = '66666666-6666-4666-8666-666666666661';
+const RM_B = '66666666-6666-4666-8666-666666666662';
 
 const snapshot: PublicMeetLoggerSnapshot = {
   disciplines: [
@@ -30,11 +32,11 @@ const snapshot: PublicMeetLoggerSnapshot = {
     },
   ],
   entrants: [
-    { id: RELAY_ID, name: 'North Stars', kind: 'relay', workspaceName: null, clubName: null, attending: true, members: [{ leg: 1, name: 'Ari Runner', isGuest: false }, { leg: 2, name: 'Bea Guest', isGuest: true }] },
+    { id: RELAY_ID, name: 'North Stars', kind: 'relay', workspaceName: null, clubName: null, attending: true, members: [{ relayMemberId: RM_A, leg: 1, name: 'Ari Runner', isGuest: false }, { relayMemberId: RM_B, leg: 2, name: 'Bea Guest', isGuest: true }] },
     { id: GUEST_ID, name: 'Casey Guest', kind: 'guest', workspaceName: null, clubName: 'Independent Athletics', attending: true, members: [] },
   ],
   sessions: [
-    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [{ entrantId: RELAY_ID, outcome: 'valid', placing: 1, selectedEntryId: null, value: 48.21 }] },
+    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [{ entrantId: RELAY_ID, outcome: 'valid', placing: null, selectedEntryId: null, value: null, relayLegs: [{ relayMemberId: RM_A, leg: 1, name: 'Ari Runner', value: 12.1, outcome: 'valid', selectedEntryId: null }, { relayMemberId: RM_B, leg: 2, name: 'Bea Guest', value: null, outcome: 'valid', selectedEntryId: null }] }] },
     { id: FIELD_SESSION_ID, label: 'Long Jump Final', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [{ entrantId: GUEST_ID, outcome: 'valid', placing: 1, selectedEntryId: null, value: 6.45 }] },
     { id: '88888888-8888-4888-8888-888888888888', label: 'Closed Session', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'scheduled', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [] },
   ],
@@ -74,14 +76,16 @@ describe('PublicMeetLogger', () => {
     expect(screen.getByRole('table')).toHaveTextContent('North Stars');
     expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Guest');
 
-    const timeInput = screen.getByLabelText('Time (s) for North Stars');
-    expect(timeInput).toHaveAttribute('type', 'text');
-    await user.type(timeInput, '48,21');
-    await user.click(screen.getByRole('button', { name: 'Record' }));
+    const splitInput = screen.getByLabelText('Relay splits for Ari Runner (leg 1)');
+    expect(splitInput).toHaveAttribute('type', 'text');
+    expect(screen.getAllByText('Relay splits', { selector: 'label' })).toHaveLength(2);
+    await user.type(splitInput, '12,10');
+    await user.click(screen.getAllByRole('button', { name: 'Record' })[0]);
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
       'public-session', EVENT_ID, { disciplineSessionId: RELAY_SESSION_ID, entrantId: RELAY_ID },
-      expect.objectContaining({ entryType: 'attempt', value: 48.21, unit: 'seconds' }),
+      expect.objectContaining({ entryType: 'attempt', value: 12.1, unit: 'seconds', relayMemberId: RM_A }),
     ));
+    expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /Long Jump Final/ }));
     expect(screen.getAllByText('Independent Athletics')).toHaveLength(2);

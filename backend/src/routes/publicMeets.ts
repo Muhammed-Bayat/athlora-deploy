@@ -11,7 +11,7 @@ import { meetIds } from '../services/meetAccess.js';
 function publicEntry(entry: SessionEntry, canEdit: boolean, canUndo: boolean) {
   return { id: entry.id, eventId: entry.eventId, disciplineSessionId: entry.disciplineSessionId,
     verticalState: entry.verticalState, attemptOrder: entry.attemptOrder,
-    entrantId: entry.entrantId, entryType: entry.entryType, value: entry.value, unit: entry.unit,
+    entrantId: entry.entrantId, relayMemberId: entry.relayMemberId ?? null, entryType: entry.entryType, value: entry.value, unit: entry.unit,
     isFoul: entry.isFoul, incidentType: entry.incidentType, version: entry.version, createdAt: entry.createdAt,
     recorderName: entry.recorderName ?? null,
     canEdit, canUndo };
@@ -36,7 +36,7 @@ const snapshot: RequestHandler = async (req, res, next) => {
       entrants: safeEntrants,
       sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, resultState, version, verticalConfig }) => ({
         id, label, disciplineDefinitionId, status, resultState, version, verticalConfig,
-        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical, selectedEntryId: r.selectedEntryId })),
+        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical, selectedEntryId: r.selectedEntryId, relayLegs: r.relayLegs ?? null })),
         entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
         entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, entry.canEdit === true, entry.canUndo === true)),
       }))),

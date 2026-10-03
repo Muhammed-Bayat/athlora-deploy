@@ -3,11 +3,14 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withReadTransaction, withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets.js';
+import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget, VerticalSummary } from '../types/meets.js';
 import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
 import { sameLoggerIdentity } from './loggerIdentity.js';
 import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
+import type { Derivation } from './resultDerivation.js';
+import type { VerticalDerivation } from './verticalScoring.js';
+import { deriveRelayResult, relayLegResults, type RelayMemberRow, type RelaySelections } from './relayDerivation.js';
 import { FINAL_INDIVIDUAL_PERFORMANCES } from './disciplineStatistics.js';
 
 async function registration(db: DbExecutor, actor: MeetActor, access: MeetAccess, eventId: string, target: SessionTarget, write: boolean) {
@@ -39,6 +42,58 @@ function validateDisciplineEntry(input: SessionEntryInput, definition: Disciplin
   }
 }
 
+/** Relay numbers are per-athlete splits; team-wide values and mis-scoped members are rejected. */
+async function assertRelayEntryTarget(db: DbExecutor, eventId: string, entrantId: string, definition: DisciplineDefinition, input: SessionEntryInput): Promise<void> {
+  const relay = definition.defaultRules.entrantType === 'relay';
+  if (!relay) {
+    if (input.relayMemberId) throw new ApiError(400, 'VALIDATION_ERROR', 'Relay member requires a relay discipline');
+    return;
+  }
+  if (input.relayMemberId) {
+    if (input.entryType !== 'attempt' || input.value === null || input.incidentType !== null || input.noteText !== null) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'A relay split must be a timed attempt for one athlete');
+    }
+    const member = await db.query('SELECT 1 FROM relay_members WHERE id = $1 AND relay_id = $2 AND event_id = $3', [input.relayMemberId, entrantId, eventId]);
+    if (!member.rows[0]) meetNotFound();
+    return;
+  }
+  if (input.entryType === 'attempt' && input.value !== null) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Relay results must be recorded as a split for each athlete');
+  }
+}
+
+export async function loadRelayMembers(db: DbExecutor, entrantIds: readonly string[]): Promise<Map<string, RelayMemberRow[]>> {
+  const members = new Map<string, RelayMemberRow[]>();
+  if (entrantIds.length === 0) return members;
+  const result = await db.query<{ relay_id: string; id: string; leg: number; name: string }>(
+    `SELECT rm.relay_id, rm.id, rm.leg, member.name
+     FROM relay_members rm
+     JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
+     WHERE rm.relay_id = ANY($1::uuid[]) ORDER BY rm.relay_id, rm.leg`,
+    [[...entrantIds]],
+  );
+  for (const row of result.rows) {
+    const list = members.get(row.relay_id) ?? [];
+    list.push({ relayMemberId: row.id, leg: Number(row.leg), name: row.name });
+    members.set(row.relay_id, list);
+  }
+  return members;
+}
+
+export async function loadRelaySelections(db: DbExecutor, sessionId: string): Promise<Map<string, RelaySelections>> {
+  const byEntrant = new Map<string, Map<string, string>>();
+  const result = await db.query<{ entrant_id: string; relay_member_id: string; entry_id: string }>(
+    'SELECT entrant_id, relay_member_id, entry_id FROM session_relay_selections WHERE session_id = $1',
+    [sessionId],
+  );
+  for (const row of result.rows) {
+    const map = byEntrant.get(row.entrant_id) ?? new Map<string, string>();
+    map.set(row.relay_member_id, row.entry_id);
+    byEntrant.set(row.entrant_id, map);
+  }
+  return byEntrant;
+}
+
 /** Public officials log performance observations, never private notes. */
 export function assertPublicSessionEntryContent(input: SessionEntryInput): void {
   if (input.entryType === 'note' || input.noteText !== null) {
@@ -53,7 +108,10 @@ export async function recomputeSessionResult(db: DbExecutor, actor: MeetActor, e
   const prior = (await db.query<{ selected_entry_id: string | null }>('SELECT selected_entry_id FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId])).rows[0];
   const selectedEntryId = prior?.selected_entry_id ?? null;
   const stillSelected = selectedEntryId && entries.some((entry) => entry.id === selectedEntryId && !entry.deletedAt && entry.entryType === 'attempt' && !entry.isFoul && entry.incidentType === null && entry.value !== null && entry.value > 0) ? selectedEntryId : null;
-  const derived = authoritativeResult(definition, entries, stillSelected, session?.verticalConfig);
+  const derived = definition.defaultRules.entrantType === 'relay'
+    ? deriveRelayResult(definition, (await loadRelayMembers(db, [target.entrantId])).get(target.entrantId) ?? [], entries,
+      (await loadRelaySelections(db, target.disciplineSessionId)).get(target.entrantId) ?? new Map<string, string>())
+    : authoritativeResult(definition, entries, stillSelected, session?.verticalConfig);
   const before = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
   const after = await db.query(
     `INSERT INTO session_results (event_id, session_id, entrant_id, workspace_id, outcome, final_result, unit, selected_entry_id)
@@ -61,7 +119,8 @@ export async function recomputeSessionResult(db: DbExecutor, actor: MeetActor, e
        SET outcome = EXCLUDED.outcome, final_result = EXCLUDED.final_result, unit = EXCLUDED.unit,
            selected_entry_id = EXCLUDED.selected_entry_id,
            version = session_results.version + 1, updated_at = now() RETURNING *`,
-    [eventId, target.disciplineSessionId, target.entrantId, workspaceId, derived.outcome, derived.value, definition.unit, stillSelected],
+    [eventId, target.disciplineSessionId, target.entrantId, workspaceId, derived.outcome, derived.value, definition.unit,
+      definition.defaultRules.entrantType === 'relay' ? null : stillSelected],
   );
   await meetAudit(db, actor, eventId, workspaceId, 'result', after.rows[0].id, before.rows[0] ? 'recomputed' : 'created', before.rows[0], after.rows[0]);
 }
@@ -123,15 +182,16 @@ export async function createSessionEntry(actor: MeetActor, eventId: string, targ
   return transaction(async (db) => {
     const { entrant, definition } = await loggingTarget(db, actor, eventId, target);
     validateDisciplineEntry(input, definition);
+    await assertRelayEntryTarget(db, eventId, target.entrantId, definition, input);
     const order = definition.kind === 'vertical' ? await db.query<{ next: number }>('SELECT COALESCE(MAX(attempt_order), 0) + 1 AS next FROM session_timeline_entries WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]) : null;
     const result = await db.query(
       `INSERT INTO session_timeline_entries
-         (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id, recorded_workspace_id, vertical_state, attempt_order)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+         (id, event_id, session_id, entrant_id, workspace_id, entry_type, value, unit, is_foul, incident_type, note_text, device_id, recorded_by, public_logger_session_id, recorded_workspace_id, vertical_state, attempt_order, relay_member_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [entryId, eventId, target.disciplineSessionId, target.entrantId, entrant.workspace_id, input.entryType, input.value,
         input.unit, input.isFoul, input.incidentType, input.noteText, input.deviceId,
          'userId' in actor ? actor.userId : null, 'publicLoggerSessionId' in actor ? actor.publicLoggerSessionId : null,
-         'userId' in actor ? actor.workspaceId : null, input.verticalState ?? null, order?.rows[0].next ?? null],
+         'userId' in actor ? actor.workspaceId : null, input.verticalState ?? null, order?.rows[0].next ?? null, input.relayMemberId ?? null],
     );
     const entry = mapMeetRow<SessionEntry>(result.rows[0]);
     await meetAudit(db, actor, eventId, entrant.workspace_id, 'entry', entry.id, 'created', null, entry);
@@ -176,6 +236,10 @@ export async function mutateSessionEntry(
     } else {
       if (!('entryType' in input)) throw new Error('Missing replacement entry');
       validateDisciplineEntry(input, definition);
+      if (input.relayMemberId && before.relayMemberId && input.relayMemberId !== before.relayMemberId) throw new ApiError(400, 'VALIDATION_ERROR', 'A relay split cannot move between athletes');
+      if (input.relayMemberId && !before.relayMemberId) throw new ApiError(400, 'VALIDATION_ERROR', 'Relay member requires a relay discipline');
+      const relayMemberId = input.relayMemberId ?? before.relayMemberId ?? null;
+      await assertRelayEntryTarget(db, eventId, target.entrantId, definition, { ...input, relayMemberId });
       const result = await db.query(
         `UPDATE session_timeline_entries SET entry_type = $1, value = $2, unit = $3, is_foul = $4,
           incident_type = $5, note_text = $6, device_id = $7, vertical_state = $9, version = version + 1, updated_at = now() WHERE id = $8 RETURNING *`,
@@ -187,6 +251,8 @@ export async function mutateSessionEntry(
     // A correction requires coach review again, even if the selected source ID survives.
     const invalidated = await db.query('UPDATE session_results SET selected_entry_id = NULL WHERE session_id = $1 AND entrant_id = $2 AND selected_entry_id = $3 RETURNING id', [target.disciplineSessionId, target.entrantId, entryId]);
     if (invalidated.rows[0]) await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', invalidated.rows[0].id, 'selection_invalidated', { selectedEntryId: entryId }, { selectedEntryId: null });
+    const legSelection = await db.query<{ relay_member_id: string }>('DELETE FROM session_relay_selections WHERE session_id = $1 AND entrant_id = $2 AND entry_id = $3 RETURNING relay_member_id', [target.disciplineSessionId, target.entrantId, entryId]);
+    if (legSelection.rows[0]) await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', entryId, 'selection_invalidated', { relayMemberId: legSelection.rows[0].relay_member_id }, { relayMemberId: null });
     await recomputeSessionResult(db, actor, eventId, target, entrant.workspace_id, definition);
     return after;
   });
@@ -198,7 +264,7 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   const session = await getSession(db, eventId, sessionId);
   const definition = await getDefinition(db, session.disciplineDefinitionId);
   const entries = (await db.query('SELECT * FROM session_timeline_entries WHERE session_id = $1 ORDER BY created_at, id', [sessionId])).rows.map(row => mapMeetRow<SessionEntry>(row));
-  const result = await db.query<{ withdrawn_at: Date | null; entrant_kind: string; athlete_rsvp: string | null }>(
+  const result = await db.query<{ entrant_id: string; withdrawn_at: Date | null; entrant_kind: string; athlete_id: string | null; athlete_rsvp: string | null }>(
     `SELECT r.*, se.withdrawn_at, en.kind AS entrant_kind, en.athlete_id,
             ep.rsvp_status AS athlete_rsvp
      FROM session_results r JOIN session_entrants se
@@ -207,14 +273,23 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
      LEFT JOIN event_participants ep ON ep.event_id = r.event_id AND ep.athlete_id = en.athlete_id AND ep.participant_workspace_id = en.workspace_id
      WHERE r.session_id = $1 ORDER BY r.entrant_id`, [sessionId],
   );
+  const relay = definition.defaultRules.entrantType === 'relay';
+  const relayMembers = relay ? await loadRelayMembers(db, result.rows.map(row => row.entrant_id)) : new Map();
+  const relaySelections = relay ? await loadRelaySelections(db, sessionId) : new Map();
   // Rank the whole session, then filter visibility; guest ranks must not change with the viewer.
   const rows = result.rows.map((row) => {
     const mapped = mapMeetRow<SessionResult>(row);
-    const effective = authoritativeResult(definition, entries.filter(entry => entry.entrantId === mapped.entrantId), mapped.selectedEntryId, session.verticalConfig);
-    const vertical = 'failuresAtBest' in effective ? effective : undefined;
+    const entrantEntries = entries.filter(entry => entry.entrantId === mapped.entrantId);
+    const legs = relay
+      ? relayLegResults(relayMembers.get(mapped.entrantId) ?? [], entrantEntries, relaySelections.get(mapped.entrantId) ?? new Map<string, string>(), definition.precision)
+      : undefined;
+    const effective: Derivation | VerticalDerivation = relay
+      ? deriveRelayResult(definition, relayMembers.get(mapped.entrantId) ?? [], entrantEntries, relaySelections.get(mapped.entrantId) ?? new Map<string, string>())
+      : authoritativeResult(definition, entrantEntries, mapped.selectedEntryId, session.verticalConfig);
+    const vertical = 'failuresAtBest' in effective ? (effective as unknown as VerticalSummary) : undefined;
     const attending = row.entrant_kind !== 'athlete' || row.athlete_rsvp !== 'no';
     const eligible = attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.withdrawn_at === null;
-    return { ...mapped, ...(vertical ? { vertical } : {}), effectiveResult: effective.value, effectiveOutcome: effective.outcome,
+    return { ...mapped, ...(vertical ? { vertical } : {}), ...(legs ? { relayLegs: legs } : {}), effectiveResult: effective.value, effectiveOutcome: effective.outcome,
       countsTowardsStatistics: eligible && effective.outcome === 'valid' && session.resultState === 'final' && row.entrant_kind === 'athlete' && definition.defaultRules.entrantType === 'individual', placing: null as number | null, attending };
   });
   const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entries.filter(e => e.entrantId === row.entrantId), eligible: row.attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
@@ -278,23 +353,49 @@ export async function selectSessionResultEntry(actor: MeetActor, eventId: string
     const before = found.rows[0];
     if (!before) meetNotFound();
     if (before.version !== input.expectedVersion) meetConflict('RESULT_VERSION_CONFLICT', 'Result has been modified');
+    const relayMemberId = input.relayMemberId ?? null;
+    if (definition.defaultRules.entrantType === 'relay' && !relayMemberId) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'A relay official result is selected per athlete');
+    }
+    if (definition.defaultRules.entrantType !== 'relay' && relayMemberId) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'Relay member requires a relay discipline');
+    }
+    if (relayMemberId) {
+      const member = await db.query('SELECT 1 FROM relay_members WHERE id = $1 AND relay_id = $2 AND event_id = $3', [relayMemberId, target.entrantId, eventId]);
+      if (!member.rows[0]) meetNotFound();
+    }
     if (input.entryId) {
       meetIds(input.entryId);
       const entry = await db.query(
         `SELECT 1 FROM session_timeline_entries
           WHERE id = $1 AND session_id = $2 AND entrant_id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-            AND entry_type = 'attempt' AND value > 0 AND NOT is_foul AND incident_type IS NULL`,
-        [input.entryId, target.disciplineSessionId, target.entrantId, entrant.workspace_id],
+            AND entry_type = 'attempt' AND value > 0 AND NOT is_foul AND incident_type IS NULL
+            AND relay_member_id IS NOT DISTINCT FROM $5::uuid`,
+        [input.entryId, target.disciplineSessionId, target.entrantId, entrant.workspace_id, relayMemberId],
       );
       if (!entry.rows[0]) meetNotFound();
     }
-    await db.query(
-      `UPDATE session_results SET selected_entry_id = $1, updated_at = now() WHERE id = $2`,
-      [input.entryId, before.id],
-    );
+    if (relayMemberId) {
+      if (input.entryId) {
+        await db.query(
+          `INSERT INTO session_relay_selections (event_id, session_id, entrant_id, relay_member_id, workspace_id, entry_id)
+           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (session_id, relay_member_id)
+           DO UPDATE SET entry_id = EXCLUDED.entry_id, updated_at = now()`,
+          [eventId, target.disciplineSessionId, target.entrantId, relayMemberId, entrant.workspace_id, input.entryId],
+        );
+      } else {
+        await db.query('DELETE FROM session_relay_selections WHERE session_id = $1 AND entrant_id = $2 AND relay_member_id = $3', [target.disciplineSessionId, target.entrantId, relayMemberId]);
+      }
+    } else {
+      await db.query(
+        `UPDATE session_results SET selected_entry_id = $1, updated_at = now() WHERE id = $2`,
+        [input.entryId, before.id],
+      );
+    }
     await recomputeSessionResult(db, actor, eventId, target, entrant.workspace_id, definition);
     const after = (await db.query('SELECT * FROM session_results WHERE id = $1', [before.id])).rows[0];
-    await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', before.id, input.entryId ? 'entry_selected' : 'entry_selection_cleared', before, after);
+    await meetAudit(db, actor, eventId, entrant.workspace_id, 'result', before.id, input.entryId ? 'entry_selected' : 'entry_selection_cleared',
+      before, { ...after, relayMemberId, selectedEntryId: input.entryId });
     const board = await listSessionResults(actor, eventId, target.disciplineSessionId, db);
     return board.find((row) => row.entrantId === target.entrantId)!;
   });

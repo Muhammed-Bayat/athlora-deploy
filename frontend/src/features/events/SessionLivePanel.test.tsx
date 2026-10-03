@@ -113,13 +113,14 @@ describe('SessionLivePanel', () => {
     api.listEntrants.mockResolvedValue({ data: [
       { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
       { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
-      { id: 'team-1', eventId: 'event-1', workspaceId: 'ws-1', kind: 'relay', athleteId: null, name: 'Speed Demons', clubName: null, details: null, memberIds: ['athlete-a', 'athlete-b'], workspaceName: 'Team A', rsvpStatus: null, createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'team-1', eventId: 'event-1', workspaceId: 'ws-1', kind: 'relay', athleteId: null, name: 'Speed Demons', clubName: null, details: null, memberIds: ['athlete-a', 'athlete-b'], members: [{ relayMemberId: 'rm-a', leg: 1, name: 'Ari Runner', isGuest: false }, { relayMemberId: 'rm-b', leg: 2, name: 'Bea Dash', isGuest: false }], workspaceName: 'Team A', rsvpStatus: null, createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
     ] });
     api.listSessionEntries.mockResolvedValue({ data: [{
       id: 'entry-1',
       eventId: 'event-1',
       disciplineSessionId: 'session-1',
       entrantId: 'team-1',
+      relayMemberId: 'rm-a',
       entryType: 'attempt',
       value: 62.4,
       unit: 'seconds',
@@ -136,6 +137,7 @@ describe('SessionLivePanel', () => {
       eventId: 'event-1',
       disciplineSessionId: 'session-1',
       entrantId: 'team-1',
+      relayMemberId: 'rm-b',
       entryType: 'attempt',
       value: 61.1,
       unit: 'seconds',
@@ -164,6 +166,10 @@ describe('SessionLivePanel', () => {
       overriddenBy: null,
       overriddenAt: null,
       selectedEntryId: null,
+      relayLegs: [
+        { relayMemberId: 'rm-a', leg: 1, name: 'Ari Runner', value: null, outcome: 'valid', selectedEntryId: null },
+        { relayMemberId: 'rm-b', leg: 2, name: 'Bea Dash', value: null, outcome: 'valid', selectedEntryId: null },
+      ],
       version: 1,
       updatedAt: '2026-09-20T10:01:00.000Z',
     }] });
@@ -183,16 +189,17 @@ describe('SessionLivePanel', () => {
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     expect(within(teamRow).getByLabelText('Team members')).toHaveTextContent('Legs: Ari Runner → Bea Dash');
 
-    await user.type(within(teamRow).getByLabelText('Time (s) for Speed Demons'), '60.5');
-    await user.click(within(teamRow).getByRole('button', { name: 'Record' }));
-    await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-1', entrantId: 'team-1' }, expect.objectContaining({ entryType: 'attempt', value: 60.5 })));
+    expect(within(teamRow).getAllByText('Relay splits', { selector: 'label' })).toHaveLength(2);
+    await user.type(within(teamRow).getByLabelText('Relay splits for Ari Runner (leg 1)'), '60.5');
+    await user.click(within(teamRow).getAllByRole('button', { name: 'Record' })[0]);
+    await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-1', entrantId: 'team-1' }, expect.objectContaining({ entryType: 'attempt', value: 60.5, relayMemberId: 'rm-a' })));
 
     const officialButtons = await within(teamRow).findAllByRole('button', { name: 'Make official' });
     await user.click(officialButtons[0]);
     await waitFor(() => expect(api.selectSessionResultEntry).toHaveBeenCalledWith(
       'event-1',
       { disciplineSessionId: 'session-1', entrantId: 'team-1' },
-      { entryId: 'entry-1', expectedVersion: 1 },
+      { entryId: 'entry-1', expectedVersion: 1, relayMemberId: 'rm-a' },
     ));
     expect(screen.getByRole('table')).toHaveTextContent('Speed Demons');
     expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Dash');
@@ -201,6 +208,51 @@ describe('SessionLivePanel', () => {
     expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reopen session' }));
     expect(await screen.findByRole('heading', { name: 'Standings (reopened — provisional)' })).toBeInTheDocument();
+  });
+
+  it('lists relay legs in standings and defers the team total until results are final', async () => {
+    sessionStatus = 'in_progress';
+    api.listSessionResults.mockResolvedValue({ data: [{
+      eventId: 'event-1',
+      disciplineSessionId: 'session-1',
+      entrantId: 'team-1',
+      outcome: 'valid',
+      finalResult: 62.4,
+      effectiveOutcome: 'valid',
+      effectiveResult: 62.4,
+      placing: 1,
+      isPb: false,
+      isSb: false,
+      manualOverride: null,
+      overrideReason: null,
+      overriddenBy: null,
+      overriddenAt: null,
+      selectedEntryId: null,
+      relayLegs: [
+        { relayMemberId: 'rm-a', leg: 1, name: 'Ari Runner', value: 62.4, outcome: 'valid', selectedEntryId: 'entry-1' },
+        { relayMemberId: 'rm-b', leg: 2, name: 'Bea Dash', value: null, outcome: 'valid', selectedEntryId: null },
+      ],
+      version: 1,
+      updatedAt: '2026-09-20T10:01:00.000Z',
+    }] });
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
+    expect(await screen.findByRole('heading', { name: 'Standings (provisional)' })).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Club' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Relay team' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Legs' })).toBeInTheDocument();
+    expect(table).toHaveTextContent('Ari Runner 62.40 · Bea Dash awaiting selection');
+    expect(table).toHaveTextContent('Awaiting selection');
+    expect(table).toHaveTextContent('—');
+
+    await user.click(screen.getByRole('button', { name: 'Finalize session' }));
+    expect(await screen.findByRole('heading', { name: 'Standings (final)' })).toBeInTheDocument();
+    const finalTable = screen.getByRole('table');
+    expect(finalTable).toHaveTextContent('62.40 s');
+    expect(finalTable).toHaveTextContent('Ari Runner 62.40 · Bea Dash awaiting selection');
   });
 
   it('queues an offline attempt instead of calling the API', async () => {
@@ -212,14 +264,14 @@ describe('SessionLivePanel', () => {
     await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     await user.click(await screen.findByRole('button', { name: 'Start session' }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
-    await user.type(within(teamRow).getByLabelText('Time (s) for Speed Demons'), '59.9');
-    await user.click(within(teamRow).getByRole('button', { name: 'Record' }));
+    await user.type(within(teamRow).getByLabelText('Relay splits for Ari Runner (leg 1)'), '59.9');
+    await user.click(within(teamRow).getAllByRole('button', { name: 'Record' })[0]);
 
     await waitFor(() => expect(offline.enqueueCreateEntry).toHaveBeenCalledWith(
       'event-1',
       'ws-1',
       { disciplineSessionId: 'session-1', entrantId: 'team-1' },
-      expect.objectContaining({ entryType: 'attempt', value: 59.9 }),
+      expect.objectContaining({ entryType: 'attempt', value: 59.9, relayMemberId: 'rm-a' }),
     ));
     expect(api.createSessionEntry).not.toHaveBeenCalled();
   });
@@ -306,12 +358,12 @@ describe('SessionLivePanel', () => {
   it('keeps official selection while hiding Undo for entries the club cannot correct', async () => {
     sessionStatus = 'in_progress';
     api.listSessionEntries.mockResolvedValue({ data: [{
-      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1', relayMemberId: 'rm-a',
       entryType: 'attempt', value: 62.4, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
       recordedBy: 'other-coach', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null,
       canEdit: false, canUndo: false,
     }, {
-      id: 'entry-2', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      id: 'entry-2', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1', relayMemberId: 'rm-b',
       entryType: 'attempt', value: 61.1, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
       recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:01:00.000Z', updatedAt: '2026-09-20T10:01:00.000Z', deletedAt: null,
     }] });
@@ -320,14 +372,14 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
-    const attempts = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
-    expect(within(attempts).getAllByRole('button', { name: 'Make official' })).toHaveLength(2);
-    expect(within(attempts).getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+    expect(within(teamRow).getAllByRole('list', { name: 'Relay splits for Ari Runner' })).toHaveLength(1);
+    expect(within(teamRow).getAllByRole('button', { name: 'Make official' })).toHaveLength(2);
+    expect(within(teamRow).getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
   });
   it('lists incident entries with Undo so a DQ can be reversed', async () => {
     sessionStatus = 'in_progress';
     api.listSessionEntries.mockResolvedValue({ data: [{
-      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1',
+      id: 'entry-1', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'team-1', relayMemberId: 'rm-a',
       entryType: 'attempt', value: 61.1, unit: 'seconds', isFoul: false, incidentType: null, noteText: null,
       recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null,
     }, {
@@ -342,10 +394,10 @@ describe('SessionLivePanel', () => {
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     const entriesList = await within(teamRow).findByRole('list', { name: 'Entries for Speed Demons' });
     const items = within(entriesList).getAllByRole('listitem');
-    expect(items).toHaveLength(2);
-    expect(items[1]).toHaveTextContent('Disqualified');
-    expect(within(items[1]).getByRole('button', { name: 'Make official' })).toBeDisabled();
-    await user.click(within(items[1]).getByRole('button', { name: 'Undo' }));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent('Disqualified');
+    expect(within(items[0]).getByRole('button', { name: 'Make official' })).toBeDisabled();
+    await user.click(within(items[0]).getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(api.undoSessionEntry).toHaveBeenCalledWith(
       'event-1',
       { disciplineSessionId: 'session-1', entrantId: 'team-1' },

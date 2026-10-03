@@ -1,11 +1,12 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withTransaction } from '../db/transaction.js';
-import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
+import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetActor, MeetEntrant, SafeRelayMember, SessionCreateInput, SessionEntry, SessionRegistration, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { assertValidTransition } from './events.js';
 import { parseVerticalConfig, validateVerticalDefinition } from '../validation/verticalMeets.js';
 import { meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
-import { listSessionResults, recomputeSessionResult } from './sessionPerformances.js';
+import { listSessionResults, loadRelayMembers, recomputeSessionResult } from './sessionPerformances.js';
+import { relayLegResults } from './relayDerivation.js';
 import { SUPPORTED_DISCIPLINE_CODES } from './disciplineCatalog.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
@@ -95,7 +96,26 @@ export async function changeSessionState(actor: MeetActor, eventId: string, sess
         await recomputeSessionResult(db, actor, eventId, { disciplineSessionId: sessionId, entrantId: entrant.entrant_id }, entrant.workspace_id, definition);
       }
       const board = await listSessionResults(actor, eventId, sessionId, db);
-      if (definition.defaultRules.aggregation === 'timed' || definition.defaultRules.aggregation === 'best') {
+      if (definition.defaultRules.entrantType === 'relay') {
+        // A relay team is complete only when every athlete's split has an official result.
+        const pending = await db.query(
+          `SELECT 1 FROM session_entrants se
+           WHERE se.session_id = $1 AND se.withdrawn_at IS NULL
+             AND EXISTS (SELECT 1 FROM session_timeline_entries t
+               WHERE t.session_id = se.session_id AND t.entrant_id = se.entrant_id AND t.deleted_at IS NULL
+                 AND t.relay_member_id IS NOT NULL AND t.entry_type = 'attempt' AND t.value > 0 AND NOT t.is_foul)
+             AND NOT EXISTS (SELECT 1 FROM session_timeline_entries t2
+               WHERE t2.session_id = se.session_id AND t2.entrant_id = se.entrant_id AND t2.deleted_at IS NULL
+                 AND t2.relay_member_id IS NULL AND t2.incident_type IN ('dq', 'dnf', 'dns'))
+             AND (SELECT COUNT(*) FROM session_relay_selections sr
+               JOIN session_timeline_entries e ON e.id = sr.entry_id AND e.deleted_at IS NULL
+                 AND e.entry_type = 'attempt' AND e.value > 0 AND NOT e.is_foul AND e.incident_type IS NULL
+               WHERE sr.session_id = se.session_id AND sr.entrant_id = se.entrant_id) < $2
+           LIMIT 1`,
+          [sessionId, definition.defaultRules.teamSize ?? 4],
+        );
+        if (pending.rows.length) meetConflict('RELAY_RESULTS_INCOMPLETE', 'Record an official result for every athlete on each relay team before finalizing');
+      } else if (definition.defaultRules.aggregation === 'timed' || definition.defaultRules.aggregation === 'best') {
         const pending = await db.query(`SELECT 1 FROM session_results r JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
           WHERE r.session_id = $1 AND se.withdrawn_at IS NULL AND r.selected_entry_id IS NULL AND r.outcome = 'no_result'
           AND EXISTS (SELECT 1 FROM session_timeline_entries t WHERE t.session_id = r.session_id AND t.entrant_id = r.entrant_id AND t.deleted_at IS NULL AND t.entry_type = 'attempt' AND t.value > 0 AND NOT t.is_foul) LIMIT 1`, [sessionId]);
@@ -121,6 +141,10 @@ export async function listEntrants(actor: MeetActor, eventId: string, db: DbExec
   await meetAccess(db, actor, eventId);
   const result = await db.query(
     `SELECT en.*, COALESCE((SELECT json_agg(rm.member_id ORDER BY rm.leg) FROM relay_members rm WHERE rm.relay_id = en.id), '[]') AS member_ids,
+       COALESCE((SELECT json_agg(json_build_object('relayMemberId', rm.id, 'leg', rm.leg, 'name', member.name, 'isGuest', rm.member_kind = 'guest') ORDER BY rm.leg)
+         FROM relay_members rm
+         JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
+         WHERE rm.relay_id = en.id), '[]') AS members,
        (SELECT w.name FROM workspaces w WHERE w.id = en.workspace_id) AS workspace_name,
        (SELECT ep.rsvp_status FROM event_participants ep
          WHERE ep.event_id = en.event_id AND ep.athlete_id = en.athlete_id AND ep.participant_workspace_id = en.workspace_id) AS rsvp_status
@@ -137,11 +161,11 @@ export async function listEventFinalResults(actor: MeetActor, eventId: string, d
   const result = await db.query<{
     entrant_id: string; name: string; club_name: string; code: string; discipline_label: string;
     final_result: string | null; outcome: EventFinalResult['outcome']; unit: EventFinalResult['unit'];
-    precision: string | number; final_place: string | null; relay_members: string[];
+    precision: string | number; final_place: string | null; relay_members: string[]; entrant_type: string;
   }>(
     `SELECT en.id AS entrant_id, en.name, COALESCE(en.club_name, c.name, w.name) AS club_name,
             d.code, d.presentation->>'label' AS discipline_label, r.final_result, r.outcome,
-            d.unit, d.precision, r.final_place,
+            d.unit, d.precision, r.final_place, d.default_rules->>'entrantType' AS entrant_type,
             COALESCE((SELECT json_agg(member.name ORDER BY rm.leg)
               FROM relay_members rm
               JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
@@ -158,6 +182,22 @@ export async function listEventFinalResults(actor: MeetActor, eventId: string, d
      ORDER BY array_position($2::text[], d.code), r.final_place NULLS LAST, lower(en.name), en.id`,
     [eventId, SUPPORTED_DISCIPLINE_CODES],
   );
+  const relayIds = result.rows.filter((row) => row.entrant_type === 'relay').map((row) => row.entrant_id);
+  const members = await loadRelayMembers(db, relayIds);
+  const relayEntries = relayIds.length === 0 ? [] : (await db.query(
+    'SELECT * FROM session_timeline_entries WHERE event_id = $1 AND entrant_id = ANY($2::uuid[]) AND deleted_at IS NULL ORDER BY created_at, id',
+    [eventId, relayIds],
+  )).rows.map((row) => mapMeetRow<SessionEntry>(row));
+  const selectionRows = relayIds.length === 0 ? [] : (await db.query<{ entrant_id: string; relay_member_id: string; entry_id: string }>(
+    'SELECT entrant_id, relay_member_id, entry_id FROM session_relay_selections WHERE event_id = $1',
+    [eventId],
+  )).rows;
+  const selections = new Map<string, Map<string, string>>();
+  for (const row of selectionRows) {
+    const map = selections.get(row.entrant_id) ?? new Map<string, string>();
+    map.set(row.relay_member_id, row.entry_id);
+    selections.set(row.entrant_id, map);
+  }
   return result.rows.map((row) => ({
     entrantId: row.entrant_id,
     name: row.name,
@@ -170,6 +210,9 @@ export async function listEventFinalResults(actor: MeetActor, eventId: string, d
     precision: Number(row.precision),
     placing: row.final_place === null ? null : Number(row.final_place),
     relayMembers: row.relay_members,
+    ...(row.entrant_type === 'relay'
+      ? { relayLegs: relayLegResults(members.get(row.entrant_id) ?? [], relayEntries.filter((entry) => entry.entrantId === row.entrant_id), selections.get(row.entrant_id) ?? new Map<string, string>(), Number(row.precision)) }
+      : {}),
   }));
 }
 
@@ -272,15 +315,15 @@ export async function updateEntrant(actor: MeetActor, eventId: string, entrantId
 }
 
 export async function listSafeRelayMembers(eventId: string, relayId: string, db: DbExecutor = getPool()): Promise<SafeRelayMember[]> {
-  const result = await db.query<{ leg: number; name: string; member_kind: string }>(
-    `SELECT rm.leg, en.name, rm.member_kind
+  const result = await db.query<{ relay_member_id: string; leg: number; name: string; member_kind: string }>(
+    `SELECT rm.id AS relay_member_id, rm.leg, en.name, rm.member_kind
      FROM relay_members rm
      JOIN meet_entrants en ON en.id = rm.member_id AND en.event_id = rm.event_id
      WHERE rm.relay_id = $1 AND rm.event_id = $2
      ORDER BY rm.leg`,
     [relayId, eventId],
   );
-  return result.rows.map((row) => ({ leg: Number(row.leg), name: row.name, isGuest: row.member_kind === 'guest' }));
+  return result.rows.map((row) => ({ relayMemberId: row.relay_member_id, leg: Number(row.leg), name: row.name, isGuest: row.member_kind === 'guest' }));
 }
 
 export async function listRegistrations(actor: MeetActor, eventId: string, sessionId: string, db: DbExecutor = getPool()): Promise<SessionRegistration[]> {
