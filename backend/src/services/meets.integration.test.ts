@@ -3,7 +3,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { applyMigrations, loadMigrations } from '../db/migrate.js';
 import type { MeetActor, SessionEntryInput, SessionTarget } from '../types/meets.js';
-import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listSessions, registerEntrant, updateEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
+import { createEntrant, createSession, changeSessionState, listDisciplines, listEntrants, listEventFinalResults, listSessions, registerEntrant, updateEntrant, withdrawEntrant, type MeetTransaction } from './meets.js';
 import { createSessionEntry, listSessionEntries, listSessionResults, mutateSessionEntry, overrideSessionResult, selectSessionResultEntry, sessionStatistics } from './sessionPerformances.js';
 import { recomputeEventResults, listTimelineEntries, removeTimelineEntry } from './timeline.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
@@ -267,39 +267,108 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect((await pool.query('SELECT * FROM timeline_entries')).rows).toEqual([]);
   });
 
-  it('supports coach-selected official relay entries, roster edits, and keeps individual stats isolated', async () => {
+  it('supports coach-selected official relay splits, roster edits, and keeps individual stats isolated', async () => {
     await migrate();
     const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
     const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Team', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
+    const memberIds = (await pool.query<{ id: string }>('SELECT id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [relay.id])).rows.map((row) => row.id);
     const session100 = await session('4x100m', '4x100 Final');
     const target = { disciplineSessionId: session100.id, entrantId: relay.id };
     await registerEntrant(host, eventId, target, transaction);
     await open(session100.id);
-    const first = await createSessionEntry(host, eventId, target, { ...timed, value: 62.1 }, transaction);
-    const second = await createSessionEntry(host, eventId, target, { ...timed, value: 61.4 }, transaction);
-    expect((await listSessionResults(host, eventId, session100.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: null, selectedEntryId: null });
-    const selected = await selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 2 }, transaction);
-    expect(selected).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id, placing: 1 });
-    await expect(selectSessionResultEntry(host, eventId, target, { entryId: first.id, expectedVersion: 99 }, transaction)).rejects.toMatchObject({ code: 'RESULT_VERSION_CONFLICT' });
-    await expect(selectSessionResultEntry({ ...host, role: 'assistant' as const }, eventId, target, { entryId: first.id, expectedVersion: 3 }, transaction)).rejects.toMatchObject({ status: 403 });
-    await mutateSessionEntry(host, eventId, target, second.id, { expectedVersion: 1 }, true, transaction);
-    expect((await listSessionResults(host, eventId, session100.id, pool)).find((r) => r.entrantId === relay.id)).toMatchObject({ finalResult: 62.1, selectedEntryId: first.id });
+    await expect(createSessionEntry(host, eventId, target, { ...timed, value: 62.1 }, transaction)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(createSessionEntry(host, eventId, target, { ...timed, value: null, incidentType: 'dq', relayMemberId: memberIds[0] }, transaction)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(createSessionEntry(host, eventId, target, { ...timed, value: 13, relayMemberId: randomUUID() }, transaction)).rejects.toMatchObject({ status: 404 });
+    const splits = [13.42, 13.98, 14.11, 13.75];
+    const entries = [];
+    for (const [index, relayMemberId] of memberIds.entries()) {
+      entries.push(await createSessionEntry(host, eventId, target, { ...timed, value: splits[index], relayMemberId }, transaction));
+    }
+    const resultVersion = async () => (await listSessionResults(host, eventId, session100.id, pool)).find((row) => row.entrantId === relay.id)!.version;
+    const first = await selectSessionResultEntry(host, eventId, target, { entryId: entries[0].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[0] }, transaction);
+    expect(first).toMatchObject({ finalResult: null, selectedEntryId: null, effectiveResult: null, effectiveOutcome: 'no_result' });
+    expect(first.relayLegs?.map((leg) => leg.value)).toEqual([13.42, null, null, null]);
+    await expect(selectSessionResultEntry(host, eventId, target, { entryId: entries[1].id, expectedVersion: 99, relayMemberId: memberIds[1] }, transaction)).rejects.toMatchObject({ code: 'RESULT_VERSION_CONFLICT' });
+    await expect(selectSessionResultEntry({ ...host, role: 'assistant' as const }, eventId, target, { entryId: entries[1].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[1] }, transaction)).rejects.toMatchObject({ status: 403 });
+    let selected = first;
+    for (const [index, relayMemberId] of memberIds.slice(1).entries()) {
+      selected = await selectSessionResultEntry(host, eventId, target, { entryId: entries[index + 1].id, expectedVersion: await resultVersion(), relayMemberId }, transaction);
+    }
+    expect(selected).toMatchObject({ finalResult: 55.26, effectiveResult: 55.26, placing: 1, selectedEntryId: null, effectiveOutcome: 'valid' });
+    expect(selected.relayLegs?.map((leg) => leg.value)).toEqual(splits);
     expect((await pool.query('SELECT * FROM results')).rows).toEqual([]);
     const history = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(history.pb).toBeNull();
     const { athleteRelayHistory } = await import('./relayHistory.js');
     expect(await athleteRelayHistory(host.workspaceId, athleteId, pool)).toEqual([]);
+    await mutateSessionEntry(host, eventId, target, entries[1].id, { expectedVersion: 1, entryType: 'attempt', value: 13.9, unit: 'seconds', isFoul: false, incidentType: null, noteText: null, deviceId: 'test-device' }, false, transaction);
+    const corrected = (await listSessionResults(host, eventId, session100.id, pool)).find((row) => row.entrantId === relay.id)!;
+    expect(corrected.relayLegs?.map((leg) => leg.value)).toEqual([13.42, null, 14.11, 13.75]);
+    expect(corrected.effectiveResult).toBeNull();
+    await selectSessionResultEntry(host, eventId, target, { entryId: entries[1].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[1] }, transaction);
     await changeSessionState(host, eventId, session100.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
+    await pool.query('DELETE FROM session_relay_selections');
     await pool.query('DELETE FROM session_results');
     await pool.query('DELETE FROM session_timeline_entries');
     const updated = await updateEntrant(host, eventId, relay.id, { name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction);
     expect(updated).toMatchObject({ name: 'Renamed', memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] });
     const relayHistory = await athleteRelayHistory(host.workspaceId, athleteId, pool);
     expect(relayHistory.some((row) => row.teamName === 'Renamed' && row.countsAsIndividualResult === false)).toBe(true);
+  });
+
+  it('finalizes a relay only once every split is official and exposes the summed team result', async () => {
+    await migrate();
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
+    const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
+    const memberIds = (await pool.query<{ id: string }>('SELECT id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [relay.id])).rows.map((row) => row.id);
+    const s = await session('4x100m', '4x100 Final');
+    const target = { disciplineSessionId: s.id, entrantId: relay.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    const splits = [13.42, 13.98, 14.11, 13.75];
+    const entries = [];
+    for (const [index, relayMemberId] of memberIds.entries()) {
+      entries.push(await createSessionEntry(host, eventId, target, { ...timed, value: splits[index], relayMemberId }, transaction));
+    }
+    const resultVersion = async () => (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!.version;
+    for (const [index, relayMemberId] of memberIds.slice(0, 3).entries()) {
+      await selectSessionResultEntry(host, eventId, target, { entryId: entries[index].id, expectedVersion: await resultVersion(), relayMemberId }, transaction);
+    }
+    await expect(changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction)).rejects.toMatchObject({ code: 'RELAY_RESULTS_INCOMPLETE' });
+    await selectSessionResultEntry(host, eventId, target, { entryId: entries[3].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[3] }, transaction);
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    const finalized = (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!;
+    expect(finalized).toMatchObject({ finalResult: 55.26, outcome: 'valid', placing: 1, selectedEntryId: null });
+    expect(finalized.relayLegs?.map((leg) => [leg.leg, leg.value])).toEqual([[1, 13.42], [2, 13.98], [3, 14.11], [4, 13.75]]);
+    await pool.query("UPDATE events SET status = 'completed' WHERE id = $1", [eventId]);
+    const finals = await listEventFinalResults(host, eventId, pool);
+    expect(finals.find((row) => row.entrantId === relay.id)).toMatchObject({ finalResult: 55.26, placing: 1, relayMembers: ['Host athlete', 'A', 'B', 'C'] });
+    expect(finals.find((row) => row.entrantId === relay.id)?.relayLegs?.map((leg) => leg.value)).toEqual(splits);
+    const club = await pool.query("INSERT INTO clubs (workspace_id, name, public_results_enabled) VALUES ($1,'Published',true) RETURNING id", [host.workspaceId]);
+    const published = (await publicClubSessionResults(club.rows[0].id, pool)).find((meet) => meet.eventId === eventId);
+    const publicRelay = published?.sessions.find((row) => row.id === s.id)?.results.find((row) => row.entrantId === relay.id);
+    expect(publicRelay).toMatchObject({ value: 55.26, outcome: 'valid', placing: 1 });
+    expect(publicRelay?.relayLegs?.map((leg) => leg.value)).toEqual(splits);
+  });
+
+  it('finalizes a relay team incident without any split selections', async () => {
+    await migrate();
+    const athleteEntrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'DNF Team', memberIds: [athleteEntrant.id, ...(await Promise.all(['A', 'B', 'C'].map((name) => guest(name)))).map((g) => g.id)] }, transaction);
+    const s = await session('4x100m', '4x100 DQ');
+    const target = { disciplineSessionId: s.id, entrantId: relay.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    await createSessionEntry(host, eventId, target, { ...timed, value: null, unit: null, incidentType: 'dq' }, transaction);
+    const result = (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!;
+    expect(result).toMatchObject({ effectiveOutcome: 'dq', effectiveResult: null });
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    expect((await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)).toMatchObject({ outcome: 'dq', finalResult: null });
   });
 
   it('uses measured direction, ignores fouls, and excludes cancelled/withdrawn registrations from statistics', async () => {

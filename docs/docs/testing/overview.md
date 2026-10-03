@@ -294,7 +294,7 @@ The E2E suite has **23 spec files** covering:
 
 Before any tests run, `global-setup.ts`:
 1. Runs `npm run db:migrate` against the E2E database
-2. Truncates its 30-entry `APP_TABLES` list with `CASCADE` for a clean slate (the live schema has 43 tables; catalogue and session tables are migration-seeded and left in place)
+2. Truncates its 30-entry `APP_TABLES` list with `CASCADE` for a clean slate (the live schema has 44 tables; catalogue and session tables are migration-seeded and left in place)
 
 ### Auth setup
 
@@ -545,4 +545,4 @@ The submitted response evidence and form links are retained in [Stakeholder Feed
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra]. The live-schema table-count update for per-athlete relay split results was documented with the assistance of opencode[mimo-v2.6-flash-free].

@@ -10,7 +10,7 @@ import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
 import { incidentButtons } from './disciplineIncidents';
-import { memberSummary, standingsMembers, standingsTeam } from './standingsDisplay';
+import { memberSummary, relayLegCell, relayLegLine, relayMembersOf, standingsClub, standingsMembers, standingsTeam } from './standingsDisplay';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
 import { formatResultUnit } from '../../utils/formatting';
 import styles from './SessionLivePanel.module.css';
@@ -49,6 +49,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
+  const relay = definition?.defaultRules.entrantType === 'relay';
   const selectable = definition?.defaultRules.aggregation === 'timed' || definition?.defaultRules.aggregation === 'best';
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
   const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
@@ -167,23 +168,26 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     }
   };
 
-  const logAttempt = (entrantId: string) => run(async () => {
+  const splitKey = (entrantId: string, relayMemberId?: string | null) => (relayMemberId ? `${entrantId}:${relayMemberId}` : entrantId);
+
+  const logAttempt = (entrantId: string, relayMemberId: string | null = null) => run(async () => {
     if (!sessionId || !entrantId || !definition) return;
-    const raw = values[entrantId] ?? '';
+    const raw = values[splitKey(entrantId, relayMemberId)] ?? '';
     const payload = {
       entryType: 'attempt' as const,
       value: raw === '' ? null : Number(raw),
       unit: raw === '' ? null : definition.unit,
-      isFoul: fouls[entrantId] ?? false,
+      isFoul: relay ? false : (fouls[entrantId] ?? false),
       incidentType: null,
       noteText: null,
       deviceId: null,
+      ...(relayMemberId ? { relayMemberId } : {}),
     };
     const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueCreateEntry(event.id, activeWorkspace.id, target, payload);
     if (!queued) await meets.createSessionEntry(event.id, target, payload);
-    setValues((prev) => ({ ...prev, [entrantId]: '' }));
-    setFouls((prev) => ({ ...prev, [entrantId]: false }));
+    setValues((prev) => ({ ...prev, [splitKey(entrantId, relayMemberId)]: '' }));
+    if (!relay) setFouls((prev) => ({ ...prev, [entrantId]: false }));
   });
 
   const logIncident = (entrantId: string, incidentType: IncidentType) => run(async () => {
@@ -202,10 +206,11 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     if (!queued) await meets.createSessionEntry(event.id, target, payload);
   });
 
-  const selectOfficial = (entrantId: string, entryId: string | null) => run(async () => {
+  const selectOfficial = (entrantId: string, entryId: string | null, relayMemberId: string | null = null) => run(async () => {
     const result = results.find((row) => row.entrantId === entrantId);
     if (!sessionId || !result) return;
-    await meets.selectSessionResultEntry(event.id, { disciplineSessionId: sessionId, entrantId }, { entryId, expectedVersion: result.version });
+    await meets.selectSessionResultEntry(event.id, { disciplineSessionId: sessionId, entrantId },
+      { entryId, expectedVersion: result.version, ...(relayMemberId ? { relayMemberId } : {}) });
   });
 
   const undoEntry = (entrantId: string, entry: SessionEntry) => run(async () => {
@@ -306,7 +311,26 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           ];
         }),
       ]
-      : [
+      : relay
+        ? [
+          ['Place', 'Club', 'Relay team', 'Athletes', 'Legs', 'Result', 'Status'],
+          ...results.map((row) => {
+            const entrant = entrants.find((item) => item.id === row.entrantId);
+            const final = session?.resultState === 'final';
+            return [
+              final ? (row.placing ?? '') : '',
+              standingsClub(entrant),
+              entrant?.name ?? '',
+              memberSummary(entrant, entrants),
+              relayLegCell(row.relayLegs, definition),
+              final
+                ? (row.effectiveResult === null ? row.effectiveOutcome.toUpperCase() : row.effectiveResult.toFixed(definition?.precision ?? 2))
+                : 'Awaiting selection',
+              row.effectiveOutcome,
+            ];
+          }),
+        ]
+        : [
         ['Place', 'Team / club', 'Members', 'Result', 'Outcome', 'Official entry'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
@@ -406,11 +430,17 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                 const eliminated = Boolean(result?.vertical?.eliminated);
                 const controlsDisabled = busy || !live || (vertical && eliminated);
                 const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty') && !entry.deletedAt);
+                const relayMembers = relay ? relayMembersOf(entrant, result?.relayLegs) : [];
+                const teamEntries = relay ? entrantEntries.filter((entry) => !entry.relayMemberId) : entrantEntries;
                 const currentRecord = !result
                   ? '—'
                   : vertical
                     ? result.vertical?.eliminated ? 'Eliminated' : result.effectiveResult === null ? 'NH' : formatResult(result.effectiveResult, definition)
-                    : `${formatResult(result.effectiveResult, definition)}${result.isPb ? ' PB' : ''}${result.isSb ? ' SB' : ''}${result.effectiveOutcome !== 'valid' ? ` ${result.effectiveOutcome.toUpperCase()}` : ''}`;
+                    : relay
+                      ? result.effectiveResult !== null
+                        ? formatResult(result.effectiveResult, definition)
+                        : result.effectiveOutcome !== 'valid' ? result.effectiveOutcome.toUpperCase() : 'Awaiting selection'
+                      : `${formatResult(result.effectiveResult, definition)}${result.isPb ? ' PB' : ''}${result.isSb ? ' SB' : ''}${result.effectiveOutcome !== 'valid' ? ` ${result.effectiveOutcome.toUpperCase()}` : ''}`;
                 const height = heights[entrant.id] ?? String(session.verticalConfig?.startingHeight ?? '');
                 return (
                   <div key={entrant.id} className={styles.athleteRow} role="group" aria-label={entrant.name}>
@@ -438,6 +468,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                           >
                             Next height
                           </Button>
+                          <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
+                        </div>
+                      ) : relay ? (
+                        <div className={styles.finishInputGroup}>
                           <span className={styles.currentRecord} aria-label={`Current result for ${entrant.name}`}>{currentRecord}</span>
                         </div>
                       ) : (
@@ -507,9 +541,71 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                       )}
                       {vertical && eliminated && <p>{entrant.name} is eliminated.</p>}
                     </div>
-                    {entrantEntries.length > 0 && (
+                    {relay && (
+                      <div className={styles.relayLegList}>
+                        {relayMembers.map((member) => {
+                          const key = splitKey(entrant.id, member.relayMemberId);
+                          const leg = result?.relayLegs?.find((item) => item.relayMemberId === member.relayMemberId);
+                          const splits = entrantEntries.filter((entry) => entry.relayMemberId === member.relayMemberId);
+                          return (
+                            <div key={member.relayMemberId} className={styles.finishInputGroup}>
+                              <label htmlFor={`relay-split-${entrant.id}-${member.relayMemberId}`}>Relay splits - {member.name}</label>
+                              <Input
+                                id={`relay-split-${entrant.id}-${member.relayMemberId}`}
+                                aria-label={`Relay splits for ${member.name} (leg ${member.leg})`}
+                                type="number"
+                                inputMode="decimal"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="13.42"
+                                value={values[key] ?? ''}
+                                onChange={(input) => setValues((prev) => ({ ...prev, [key]: input.target.value }))}
+                                disabled={controlsDisabled}
+                              />
+                              <Button
+                                disabled={controlsDisabled || !(values[key] ?? '').trim()}
+                                onClick={() => void logAttempt(entrant.id, member.relayMemberId)}
+                                style={{ minHeight: '44px', minWidth: '44px' }}
+                              >
+                                Record
+                              </Button>
+                              <span className={styles.currentRecord} aria-label={`Official split for ${member.name}`}>
+                                {leg && leg.value !== null ? formatResult(leg.value, definition) : 'Awaiting selection'}
+                              </span>
+                              {splits.length > 0 && (
+                                <ol className={styles.attemptsList} aria-label={`Relay splits for ${member.name}`}>
+                                  {splits.map((entry, index) => (
+                                    <li key={entry.id}>
+                                      #{index + 1} {formatResult(entry.value, definition)}
+                                      {entry.recorderName && ` · by ${entry.recorderName}`}
+                                      {leg?.selectedEntryId === entry.id && ' · official'}
+                                      {isCoach && live && (
+                                        <>
+                                          {' '}
+                                          <Button
+                                            variant="secondary"
+                                            disabled={busy || !offline.isOnline || leg?.selectedEntryId === entry.id || entry.value === null || entry.isFoul}
+                                            onClick={() => void selectOfficial(entrant.id, entry.id, member.relayMemberId)}
+                                          >
+                                            Make official
+                                          </Button>
+                                          {entry.canUndo !== false && (
+                                            <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
+                                          )}
+                                        </>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ol>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {teamEntries.length > 0 && (
                       <ol className={styles.attemptsList} aria-label={`Entries for ${entrant.name}`}>
-                        {entrantEntries.map((entry, index) => (
+                        {teamEntries.map((entry, index) => (
                           <li key={entry.id}>
                             #{entry.attemptOrder ?? index + 1} {vertical
                               ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? (entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : '')}`
@@ -540,7 +636,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         ))}
                       </ol>
                     )}
-                    {isCoach && live && selectable && result?.selectedEntryId && entrantEntries.length > 0 && (
+                    {isCoach && live && selectable && !relay && result?.selectedEntryId && teamEntries.length > 0 && (
                       <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(entrant.id, null)}>Clear official selection</Button>
                     )}
                   </div>
@@ -552,21 +648,51 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           <div className={styles.standingsScroll}>
             <table className={styles.standingsTable}>
               <thead>
-                <tr>
-                  <th scope="col" className={styles.numeric}>Place</th>
-                  <th scope="col">Team / club</th>
-                  <th scope="col">Members</th>
-                  <th scope="col" className={styles.numeric}>Result</th>
-                  {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
-                  <th scope="col">Status</th>
-                  {!vertical && <th scope="col">Official entry</th>}
-                </tr>
+                {relay ? (
+                  <tr>
+                    <th scope="col" className={styles.numeric}>Place</th>
+                    <th scope="col">Club</th>
+                    <th scope="col">Relay team</th>
+                    <th scope="col">Athletes</th>
+                    <th scope="col">Legs</th>
+                    <th scope="col" className={styles.numeric}>Result</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th scope="col" className={styles.numeric}>Place</th>
+                    <th scope="col">Team / club</th>
+                    <th scope="col">Members</th>
+                    <th scope="col" className={styles.numeric}>Result</th>
+                    {vertical && <th scope="col" className={styles.numeric}>Countback</th>}
+                    <th scope="col">Status</th>
+                    {!vertical && <th scope="col">Official entry</th>}
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {[...results]
                   .sort((a, b) => (a.placing ?? 999) - (b.placing ?? 999))
                   .map((row) => {
                     const entrant = entrants.find((item) => item.id === row.entrantId);
+                    if (relay) {
+                      const final = session.resultState === 'final';
+                      return (
+                        <tr key={row.entrantId}>
+                          <td className={styles.numeric}>{final ? (row.placing ?? '—') : '—'}</td>
+                          <td>{standingsClub(entrant)}</td>
+                          <td>{standingsTeam(entrant)}</td>
+                          <td>{memberSummary(entrant, entrants)}</td>
+                          <td>{relayLegLine(row.relayLegs, definition)}</td>
+                          <td className={styles.numeric}>
+                            {final
+                              ? (row.effectiveResult === null ? row.effectiveOutcome.toUpperCase() : formatResult(row.effectiveResult, definition))
+                              : 'Awaiting selection'}
+                          </td>
+                          <td>{row.effectiveOutcome}</td>
+                        </tr>
+                      );
+                    }
                     return (
                       <tr key={row.entrantId}>
                         <td className={styles.numeric}>{row.placing ?? '—'}</td>

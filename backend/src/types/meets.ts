@@ -60,6 +60,7 @@ export interface MeetEntrant {
   clubName: string | null;
   details: string | null;
   memberIds: string[];
+  members?: SafeRelayMember[];
   workspaceName: string;
   rsvpStatus: RsvpStatus | null;
   createdBy: string;
@@ -79,6 +80,7 @@ export interface SessionRegistration extends SessionTarget {
 export interface SessionEntry extends SessionTarget {
   verticalState?: VerticalState | null;
   attemptOrder?: number | null;
+  relayMemberId?: string | null;
   id: string;
   eventId: string;
   workspaceId: string;
@@ -101,9 +103,20 @@ export interface SessionEntry extends SessionTarget {
   deletedAt: string | null;
 }
 
+/** One relay athlete's official leg inside a team result. */
+export interface RelayLegResult {
+  relayMemberId: string;
+  leg: number;
+  name: string;
+  value: number | null;
+  outcome: ResultOutcome;
+  selectedEntryId: string | null;
+}
+
 export interface SessionResult extends SessionTarget {
   finalPlace?: number | null;
   vertical?: VerticalSummary;
+  relayLegs?: RelayLegResult[];
   isPb?: boolean;
   isSb?: boolean;
   id: string;
@@ -138,6 +151,7 @@ export interface EventFinalResult {
   precision: number;
   placing: number | null;
   relayMembers: string[];
+  relayLegs?: RelayLegResult[];
 }
 
 export interface SessionStatistics {
@@ -161,10 +175,11 @@ export type EntrantCreateInput =
   | { kind: 'guest'; name: string; clubName: string | null; details: string | null }
   | { kind: 'relay'; name: string; memberIds: string[] };
 export interface EntrantUpdateInput { name?: string; memberIds?: string[] }
-export interface SessionSelectionInput { entryId: string | null; expectedVersion: number }
-export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
+export interface SessionSelectionInput { entryId: string | null; expectedVersion: number; relayMemberId?: string | null }
+export interface SafeRelayMember { relayMemberId: string; leg: number; name: string; isGuest: boolean }
 export interface SessionEntryInput {
   verticalState?: VerticalState | null;
+  relayMemberId?: string | null;
   entryType: EntryType;
   value: number | null;
   unit: DisciplineDefinition['unit'] | null;

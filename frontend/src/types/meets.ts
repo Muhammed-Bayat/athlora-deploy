@@ -27,6 +27,7 @@ export interface DisciplineSession {
 export interface MeetEntrant {
   id: string; eventId: string; workspaceId: string; kind: 'athlete' | 'guest' | 'relay';
   athleteId: string | null; name: string; clubName: string | null; details: string | null; memberIds: string[]; createdBy: string; createdAt: string;
+  members?: SafeRelayMember[];
   workspaceName: string; rsvpStatus: RsvpStatus | null;
 }
 export interface SessionRegistration extends SessionTarget {
@@ -37,6 +38,7 @@ export interface SessionRegistration extends SessionTarget {
 // queue's Record<string, unknown> payload boundary.
 export type SessionEntryInput = {
   verticalState?: 'clearance' | 'failure' | 'pass' | 'void' | null;
+  relayMemberId?: string | null;
   entryType: EntryType; value: number | null; unit: DisciplineDefinition['unit'] | null;
   isFoul: boolean; incidentType: IncidentType | null; noteText: string | null; deviceId: string | null;
 }
@@ -50,7 +52,12 @@ export interface SessionEntry extends SessionEntryInput, SessionTarget {
   canUndo?: boolean;
   version: number; createdAt: string; updatedAt: string; deletedAt: string | null;
 }
+export interface RelayLegResult {
+  relayMemberId: string; leg: number; name: string;
+  value: number | null; outcome: ResultOutcome; selectedEntryId: string | null;
+}
 export interface SessionResult extends SessionTarget {
+  relayLegs?: RelayLegResult[];
   finalPlace?: number | null;
   vertical?: { failuresAtBest: number; totalFailuresToBest: number; consecutiveFailures: number; eliminated: boolean };
   isPb?: boolean; isSb?: boolean;
@@ -65,6 +72,7 @@ export interface EventFinalResult {
   entrantId: string; name: string; clubName: string; discipline: string; disciplineLabel: string;
   finalResult: number | null; outcome: ResultOutcome; unit: DisciplineDefinition['unit']; precision: number;
   placing: number | null; relayMembers: string[];
+  relayLegs?: RelayLegResult[];
 }
 export interface SessionStatistics {
   disciplineSessionId: string; entrantId: string | null; disciplineDefinitionId: string;
@@ -74,8 +82,8 @@ export interface SessionStatistics {
 export type EntrantCreateInput = { kind: 'athlete'; athleteId: string }
   | { kind: 'guest'; name: string; clubName?: string | null; details?: string | null } | { kind: 'relay'; name: string; memberIds: string[] };
 export interface EntrantUpdateInput { name?: string; memberIds?: string[] }
-export interface SessionSelectionInput { entryId: string | null; expectedVersion: number }
-export interface SafeRelayMember { leg: number; name: string; isGuest: boolean }
+export interface SessionSelectionInput { entryId: string | null; expectedVersion: number; relayMemberId?: string | null }
+export interface SafeRelayMember { relayMemberId: string; leg: number; name: string; isGuest: boolean }
 export interface SessionOverrideInput { manualOverride: number | null; overrideReason: string | null; expectedVersion: number }
 export interface OfflineResolutionConflict {
   id: string;
@@ -110,7 +118,7 @@ export interface PublicMeetEntrant {
 }
 
 export type PublicSessionEntry = Pick<SessionEntry,
-  'id' | 'eventId' | 'disciplineSessionId' | 'entrantId' | 'verticalState' | 'attemptOrder'
+  'id' | 'eventId' | 'disciplineSessionId' | 'entrantId' | 'verticalState' | 'attemptOrder' | 'relayMemberId'
   | 'entryType' | 'value' | 'unit' | 'isFoul' | 'incidentType' | 'version' | 'createdAt' | 'recorderName'
 > & { canEdit: boolean; canUndo: boolean };
 
@@ -124,7 +132,8 @@ export interface PublicMeetSession {
   verticalConfig?: VerticalConfig | null;
   entrantIds: string[];
   entries: PublicSessionEntry[];
-  results: Array<Pick<SessionResult, 'entrantId' | 'outcome' | 'placing' | 'vertical' | 'selectedEntryId'> & { value: number | null }>;
+  results: Array<Pick<SessionResult, 'entrantId' | 'outcome' | 'placing' | 'vertical' | 'selectedEntryId'>
+    & { value: number | null; relayLegs?: RelayLegResult[] | null }>;
 }
 
 export interface PublicMeetLoggerSnapshot {

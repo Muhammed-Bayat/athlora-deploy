@@ -23,7 +23,8 @@
 
 table {
   width: 100%;
-  min-width: 620px;
+  min-width: 840px;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
@@ -32,7 +33,7 @@ th,
 td {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--console-line);
-  text-align: left;
+  text-align: center;
   vertical-align: top;
 }
 
@@ -54,7 +55,7 @@ tbody th small {
 }
 
 .numeric {
-  text-align: right;
+  text-align: center;
   font-family: var(--font-family-mono);
   white-space: nowrap;
 }

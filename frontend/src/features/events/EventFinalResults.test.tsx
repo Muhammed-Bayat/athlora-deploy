@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../../types';
@@ -25,20 +25,35 @@ describe('EventFinalResults', () => {
     expect(screen.getByText('Event has not yet been completed')).toBeInTheDocument();
   });
 
-  it('renders cross-club final results, relay members, and exports the displayed rows', async () => {
+  it('renders cross-club final results with per-discipline places, relay members, and exports the displayed rows', async () => {
     meets.listEventFinalResults.mockResolvedValue({ data: [
       { entrantId: 'athlete-1', name: 'Ari Runner', clubName: 'Harbour AC', discipline: '100m', disciplineLabel: '100m', finalResult: 10.8, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: [] },
+      { entrantId: 'athlete-4', name: 'Cara Sprint', clubName: 'Coast AC', discipline: '100m', disciplineLabel: '100m', finalResult: 10.95, outcome: 'valid', unit: 'seconds', precision: 2, placing: 2, relayMembers: [] },
+      { entrantId: 'athlete-5', name: 'Drew DNS', clubName: 'Coast AC', discipline: '100m', disciplineLabel: '100m', finalResult: null, outcome: 'no_result', unit: 'seconds', precision: 2, placing: null, relayMembers: [] },
       { entrantId: 'athlete-2', name: 'Bea Jumper', clubName: 'Harbour AC', discipline: 'long_jump', disciplineLabel: 'Long jump', finalResult: 6.45, outcome: 'valid', unit: 'metres', precision: 2, placing: 1, relayMembers: [] },
-      { entrantId: 'relay-1', name: 'Harbour Relay', clubName: 'Harbour AC', discipline: '4x100m', disciplineLabel: '4 x 100m relay', finalResult: 44.2, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: ['Ari Runner', 'Bea Dash', 'Casey Lane', 'Drew Pace'] },
+      { entrantId: 'relay-1', name: 'Harbour Relay', clubName: 'Harbour AC', discipline: '4x100m', disciplineLabel: '4 x 100m relay', finalResult: 44.2, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: ['Ari Runner', 'Bea Dash', 'Casey Lane', 'Drew Pace'],
+        relayLegs: [
+          { relayMemberId: 'rm-1', leg: 1, name: 'Ari Runner', value: 11.2, outcome: 'valid', selectedEntryId: 'entry-1' },
+          { relayMemberId: 'rm-2', leg: 2, name: 'Bea Dash', value: 11, outcome: 'valid', selectedEntryId: 'entry-2' },
+          { relayMemberId: 'rm-3', leg: 3, name: 'Casey Lane', value: 11, outcome: 'valid', selectedEntryId: 'entry-3' },
+          { relayMemberId: 'rm-4', leg: 4, name: 'Drew Pace', value: 11, outcome: 'valid', selectedEntryId: 'entry-4' },
+        ] },
     ] });
     const user = userEvent.setup();
     render(<EventFinalResults event={{ ...event, status: 'completed' }} reloadKey={0} />);
 
-    expect(await screen.findByRole('table', { name: 'Final event results' })).toHaveTextContent('Ari RunnerHarbour AC100m10.80 s');
-    expect(screen.getByRole('table', { name: 'Final event results' })).toHaveTextContent('Bea JumperHarbour ACLong jump6.45 m');
-    expect(screen.getByRole('rowheader', { name: /Harbour Relay/ })).toHaveTextContent('Ari Runner, Bea Dash, Casey Lane, Drew Pace');
+    const table = await screen.findByRole('table', { name: 'Final event results' });
+    expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Place', 'Name', 'Club', 'Discipline', 'Official result']);
+    expect(table).toHaveTextContent('1Ari RunnerHarbour AC100m10.80 s');
+    expect(table).toHaveTextContent('2Cara SprintCoast AC100m10.95 s');
+    expect(table).toHaveTextContent('—Drew DNSCoast AC100mNo result');
+    expect(table).toHaveTextContent('1Bea JumperHarbour ACLong jump6.45 m');
+    expect(screen.getByRole('rowheader', { name: /Harbour Relay/ })).toHaveTextContent('Ari Runner 11.20 s · Bea Dash 11.00 s · Casey Lane 11.00 s · Drew Pace 11.00 s');
     await user.click(screen.getByRole('button', { name: 'Export final results CSV' }));
-    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Harbour Relay","Ari Runner; Bea Dash; Casey Lane; Drew Pace"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
-    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Bea Jumper","","Harbour AC","Long jump","6.45 m"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Place","Name","Relay members","Club","Discipline","Official result","Leg results"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"1","Harbour Relay","Ari Runner; Bea Dash; Casey Lane; Drew Pace","Harbour AC","4 x 100m relay","44.20 s","Ari Runner 11.20 s · Bea Dash 11.00 s · Casey Lane 11.00 s · Drew Pace 11.00 s"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"2","Cara Sprint","","Coast AC","100m","10.95 s",""'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"","Drew DNS","","Coast AC","100m","No result",""'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
+    expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"1","Bea Jumper","","Harbour AC","Long jump","6.45 m",""'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
   });
 });

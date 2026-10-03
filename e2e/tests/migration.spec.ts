@@ -22,7 +22,7 @@ test.describe('migration verification', () => {
 
   test('all migrations are tracked in schema_migrations', async () => {
     const result = await pool.query('SELECT name FROM schema_migrations ORDER BY name');
-    expect(result.rows).toHaveLength(36);
+    expect(result.rows).toHaveLength(45);
     expect(result.rows).toContainEqual({ name: '0034_relay_catalogue_and_official_entry.sql' });
   });
 
@@ -43,6 +43,7 @@ test.describe('migration verification', () => {
       'session_entrants',
       'session_timeline_entries',
       'session_results',
+      'session_relay_selections',
       'meet_domain_audit',
       'athlete_status_transitions',
       'fixture_invitations',

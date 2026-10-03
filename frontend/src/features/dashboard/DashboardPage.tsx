@@ -194,20 +194,8 @@ function StatRow({ summary, season }: { summary: DashboardSummary; season: strin
   );
 }
 
-function StatusAttention({ inactiveAthletesCount, statusReviewCount }: Pick<DashboardSummary, 'inactiveAthletesCount' | 'statusReviewCount'>) {
-  if (inactiveAthletesCount === 0 && statusReviewCount === 0) return null;
-  return (
-    <section className={styles.statusAttention} aria-label="Roster status attention">
-      {inactiveAthletesCount > 0 && <p><strong>{inactiveAthletesCount}</strong> inactive athlete{inactiveAthletesCount === 1 ? '' : 's'}</p>}
-      {statusReviewCount > 0 && <p><strong>{statusReviewCount}</strong> participant status review{statusReviewCount === 1 ? '' : 's'} pending</p>}
-    </section>
-  );
-}
-
-function LiveDashboard({ activeEvent, inactiveAthletesCount, statusReviewCount, onResumeLogging }: {
+function LiveDashboard({ activeEvent, onResumeLogging }: {
   activeEvent: DashboardActiveEvent;
-  inactiveAthletesCount: number;
-  statusReviewCount: number;
   onResumeLogging: (eventId: string) => void;
 }) {
   const { event, progress, latestEntries } = activeEvent;
@@ -244,8 +232,6 @@ function LiveDashboard({ activeEvent, inactiveAthletesCount, statusReviewCount, 
           </div>
         </div>
       </section>
-
-      <StatusAttention inactiveAthletesCount={inactiveAthletesCount} statusReviewCount={statusReviewCount} />
 
       <section className={styles.metricGrid} aria-label="Live event progress">
         <article><strong>{progress.participantCount}</strong><span>Participants</span></article>
@@ -288,6 +274,31 @@ function SummaryDashboard({
   onOpenEvent: (eventId: string) => void;
   onApplySeason: (value: SeasonValue) => void;
 }) {
+  const rosterRef = useRef<HTMLDivElement>(null);
+  const [rosterScrollable, setRosterScrollable] = useState(false);
+  const [rosterAtEnd, setRosterAtEnd] = useState(false);
+
+  useEffect(() => {
+    const wrap = rosterRef.current;
+    if (!wrap) return;
+    const table = wrap.firstElementChild;
+    const measure = () => {
+      const scrollable = wrap.scrollHeight > wrap.clientHeight + 2;
+      setRosterScrollable(scrollable);
+      setRosterAtEnd(!scrollable || wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined' || !table) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [summary.rosterSnapshot]);
+
+  const handleRosterScroll = () => {
+    const wrap = rosterRef.current;
+    if (wrap) setRosterAtEnd(wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2);
+  };
+
   return (
     <>
       <section className={styles.summaryHero} aria-labelledby="dashboard-summary-title">
@@ -310,7 +321,6 @@ function SummaryDashboard({
         </section>
       )}
       <div className={styles.dashboardToolbar}><SeasonSelector value={season} onChange={onApplySeason} /></div>
-      <StatusAttention inactiveAthletesCount={summary.inactiveAthletesCount} statusReviewCount={summary.statusReviewCount} />
       <StatRow summary={summary} season={season} />
       <section className={styles.panel} aria-labelledby="upcoming-events-title">
         <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Calendar</p><h3 id="upcoming-events-title">Upcoming events</h3></div><button type="button" className={styles.panelLink} onClick={onOpenEvents}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
@@ -319,7 +329,7 @@ function SummaryDashboard({
       <section className={styles.panel} aria-labelledby="roster-snapshot-title">
         <header className={styles.panelHead}><div><p className={styles.panelEyebrow}>Roster</p><h3 id="roster-snapshot-title">Athlete roster</h3></div><button type="button" className={styles.panelLink} onClick={onOpenRoster}>View all<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button></header>
         {summary.rosterSnapshot.length === 0 ? <p className={styles.emptyCopy}>No active athletes to show.</p> : (
-          <div className={styles.rosterTableWrap}>
+          <div ref={rosterRef} onScroll={handleRosterScroll} className={`${styles.rosterTableWrap}${rosterScrollable && !rosterAtEnd ? ` ${styles.rosterFade}` : ''}`}>
             <table className={styles.rosterTable}>
               <thead><tr><th scope="col">Athlete</th><th scope="col">Discipline</th><th scope="col">PB</th></tr></thead>
               <tbody>{summary.rosterSnapshot.flatMap((athlete) => {
@@ -383,7 +393,7 @@ export function DashboardPage(props: DashboardPageProps) {
       {isLive ? (
         <>
           <div className={styles.dashboardToolbar}><SeasonSelector value={season} onChange={setSeason} /></div>
-          <LiveDashboard activeEvent={summary!.activeEvent!} inactiveAthletesCount={summary!.inactiveAthletesCount} statusReviewCount={summary!.statusReviewCount} onResumeLogging={props.onResumeLogging} />
+          <LiveDashboard activeEvent={summary!.activeEvent!} onResumeLogging={props.onResumeLogging} />
         </>
       ) : (
         <SummaryDashboard

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0042_event_archive.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0043_relay_leg_results.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -383,7 +383,7 @@ relay_members
   leg INTEGER NOT NULL CHECK (> 0)
   created_by UUID FK -> users.id
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  UQ (relay_id, leg); UQ (relay_id, member_id)
+  UQ (relay_id, leg); UQ (relay_id, member_id); UQ (id, relay_id)
   FK (relay_id, event_id, workspace_id, relay_kind) -> meet_entrants(id, event_id, workspace_id, kind) ON DELETE RESTRICT
   FK (member_id, event_id, workspace_id, member_kind) -> meet_entrants(id, event_id, workspace_id, kind) ON DELETE RESTRICT
 
@@ -404,6 +404,7 @@ session_timeline_entries
   recorded_by UUID FK -> users.id NULL
   recorded_workspace_id UUID FK -> workspaces.id NULL
   public_logger_session_id UUID NULL
+  relay_member_id UUID NULL FK -> relay_members.id ON DELETE RESTRICT  -- member-scoped relay split
   version INTEGER NOT NULL DEFAULT 1 CHECK (> 0)
   device_id TEXT NULL
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -417,6 +418,7 @@ session_timeline_entries
   CHECK: value is present exactly when unit is present
   CHECK: an 'attempt' entry carries a value, a foul, or an incident
   CHECK: vertical_state implies a metre 'attempt' with attempt_order, no foul, no incident
+  CHECK (app-enforced): a relay split carries relay_member_id and never an incident or foul; a team-level value attempt never carries relay_member_id
   index: (session_id, entrant_id, created_at, id)
 
 session_results
@@ -443,6 +445,21 @@ session_results
   CHECK: outcome 'valid' is present exactly when final_result is present
   CHECK: override fields are present all-or-none (reason, actor, timestamp with value)
   index: (workspace_id, entrant_id, session_id)
+
+session_relay_selections
+  event_id UUID NOT NULL
+  session_id UUID NOT NULL
+  entrant_id UUID NOT NULL                          -- the relay team (meet_entrants row)
+  relay_member_id UUID NOT NULL
+  workspace_id UUID NOT NULL
+  entry_id UUID NOT NULL                            -- the coach-selected split for this athlete
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  PK (session_id, relay_member_id)                  -- one official leg per athlete per session
+  FK (relay_member_id, entrant_id) -> relay_members(id, relay_id) ON DELETE RESTRICT
+  FK (entry_id, event_id, session_id, entrant_id, workspace_id) -> session_timeline_entries(id, event_id, session_id, entrant_id, workspace_id) ON DELETE RESTRICT
+  FK (event_id, session_id, entrant_id, workspace_id) -> session_entrants(event_id, session_id, entrant_id, workspace_id) ON DELETE RESTRICT
+  index: (event_id, session_id, entrant_id)
 
 meet_domain_audit
   id UUID PK DEFAULT gen_random_uuid()
@@ -735,6 +752,7 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0040_remove_club_accent_color.sql` | Removes the obsolete club accent colour column |
 | `0041_remove_squads.sql` | Removes retired athlete-group data and related tables |
 | `0042_event_archive.sql` | Adds `events.archived_at` for reversible soft-archived events plus a partial index over archived workspace events |
+| `0043_relay_leg_results.sql` | Per-athlete relay splits: `session_timeline_entries.relay_member_id`, `relay_members (id, relay_id)` uniqueness, and the `session_relay_selections` official-selection table |
 
 ## Schema maintenance
 
@@ -742,4 +760,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra]. Migration `0042_event_archive.sql` (event soft-archive column and partial index) was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra]. Migration `0042_event_archive.sql` (event soft-archive column and partial index) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0043_relay_leg_results.sql` (member-scoped relay split entries and the per-leg official selection table) was documented with the assistance of opencode[mimo-v2.6-flash-free].

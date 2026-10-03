@@ -42,6 +42,19 @@ describe('additive meet API', () => {
     expect((await request(app).patch(base).send({ status: 'in_progress', expectedVersion: 2 })).status).toBe(403);
     expect((await request(app).put(`${base}/results/${entrantId}/selection`).send({ entryId: userId, expectedVersion: 2 })).status).toBe(403);
   });
+  it('forwards relay split identity for per-athlete logging and selection', async () => {
+    const relayMemberId = '66666666-6666-4666-8666-666666666666';
+    const base = `/events/${eventId}/sessions/${sessionId}`;
+    vi.mocked(performances.createSessionEntry).mockResolvedValue({ id: entrantId } as never);
+    expect((await request(app).post(`${base}/entrants/${entrantId}/entries`).send({ entryType: 'attempt', value: 13.4, unit: 'seconds', relayMemberId })).status).toBe(201);
+    expect(performances.createSessionEntry).toHaveBeenLastCalledWith({ userId, workspaceId, role: 'coach' }, eventId,
+      { disciplineSessionId: sessionId, entrantId }, expect.objectContaining({ relayMemberId, value: 13.4 }));
+    expect((await request(app).post(`${base}/entrants/${entrantId}/entries`).send({ entryType: 'attempt', value: 13.4, unit: 'seconds', relayMemberId: 'bad' })).status).toBe(400);
+    vi.mocked(performances.selectSessionResultEntry).mockResolvedValue({ selectedEntryId: userId, placing: 1 } as never);
+    expect((await request(app).put(`${base}/results/${entrantId}/selection`).send({ entryId: userId, expectedVersion: 2, relayMemberId })).status).toBe(200);
+    expect(performances.selectSessionResultEntry).toHaveBeenLastCalledWith({ userId, workspaceId, role: 'coach' }, eventId,
+      { disciplineSessionId: sessionId, entrantId }, expect.objectContaining({ entryId: userId, relayMemberId }));
+  });
   it('accepts vertical configuration and explicit height states while rejecting invalid configuration', async () => {
     vi.mocked(meets.createSession).mockResolvedValue({ id: sessionId } as never);
     const verticalConfig = { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' };

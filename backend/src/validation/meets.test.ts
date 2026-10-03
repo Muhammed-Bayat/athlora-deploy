@@ -30,6 +30,12 @@ describe('multi-discipline contracts', () => {
     expect(parseSessionSelection({ entryId: id, expectedVersion: 1 })).toEqual({ entryId: id, expectedVersion: 1 });
     expect(parseSessionSelection({ entryId: null, expectedVersion: 1 })).toEqual({ entryId: null, expectedVersion: 1 });
     expect(() => parseSessionSelection({ entryId: id })).toThrow();
+    const relayMemberId = '22222222-2222-4222-8222-222222222222';
+    expect(parseSessionEntry({ entryType: 'attempt', value: 13.4, unit: 'seconds', relayMemberId })).toMatchObject({ relayMemberId, value: 13.4 });
+    expect(() => parseSessionEntry({ entryType: 'attempt', value: 13.4, unit: 'seconds', relayMemberId: 'not-a-uuid' })).toThrow();
+    expect(parseSessionSelection({ entryId: id, expectedVersion: 1, relayMemberId })).toEqual({ entryId: id, expectedVersion: 1, relayMemberId });
+    expect(() => parseSessionSelection({ entryId: id, expectedVersion: 1, relayMemberId: 'not-a-uuid' })).toThrow();
+    expect(parseSessionEntryReplacement({ entryType: 'attempt', value: 13.4, unit: 'seconds', relayMemberId, expectedVersion: 1 })).toMatchObject({ relayMemberId, expectedVersion: 1 });
     expect(parseEntrantUpdate({ name: ' Renamed ' })).toEqual({ name: 'Renamed' });
     expect(parseEntrantUpdate({ memberIds: [id, '22222222-2222-4222-8222-222222222222'] })).toEqual({ memberIds: [id, '22222222-2222-4222-8222-222222222222'] });
     expect(() => parseEntrantUpdate({})).toThrow();

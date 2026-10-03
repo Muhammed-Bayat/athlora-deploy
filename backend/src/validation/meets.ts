@@ -71,7 +71,7 @@ export function parseEntrantCreate(value: unknown): EntrantCreateInput {
   return { kind: 'relay', name: text(body.name, 'name'), memberIds };
 }
 
-const ENTRY_FIELDS = ['entryType', 'value', 'unit', 'isFoul', 'incidentType', 'noteText', 'deviceId', 'verticalState'] as const;
+const ENTRY_FIELDS = ['entryType', 'value', 'unit', 'isFoul', 'incidentType', 'noteText', 'deviceId', 'verticalState', 'relayMemberId'] as const;
 export function parseSessionEntry(value: unknown): SessionEntryInput {
   const body = object(value, ENTRY_FIELDS);
   if (body.verticalState != null && !['clearance', 'failure', 'pass', 'void'].includes(body.verticalState as string)) invalid('verticalState');
@@ -88,8 +88,10 @@ export function parseSessionEntry(value: unknown): SessionEntryInput {
   if (body.entryType === 'attempt' && amount === null && !isFoul && incident === null) invalid('value');
   const note = body.noteText == null ? null : text(body.noteText, 'noteText', 2000);
   if (body.entryType === 'note' && !note) invalid('noteText');
+  const relayMemberId = body.relayMemberId == null ? null : uuid(body.relayMemberId, 'relayMemberId');
   return {
     ...(body.verticalState == null ? {} : { verticalState: body.verticalState as SessionEntryInput['verticalState'] }),
+    ...(relayMemberId == null ? {} : { relayMemberId }),
     entryType: body.entryType as SessionEntryInput['entryType'], value: amount as number | null,
     unit: unit as SessionEntryInput['unit'], isFoul, incidentType: incident as SessionEntryInput['incidentType'],
     noteText: note, deviceId: body.deviceId == null ? null : text(body.deviceId, 'deviceId', 200),
@@ -111,9 +113,10 @@ export function parseSessionOverride(value: unknown): SessionOverrideInput {
 }
 
 export function parseSessionSelection(value: unknown): SessionSelectionInput {
-  const body = object(value, ['entryId', 'expectedVersion']);
+  const body = object(value, ['entryId', 'expectedVersion', 'relayMemberId']);
   const entryId = body.entryId === null ? null : uuid(body.entryId, 'entryId');
-  return { entryId, expectedVersion: parseVersion(body.expectedVersion) };
+  const relayMemberId = body.relayMemberId == null ? null : uuid(body.relayMemberId, 'relayMemberId');
+  return { entryId, expectedVersion: parseVersion(body.expectedVersion), ...(relayMemberId == null ? {} : { relayMemberId }) };
 }
 
 export function parseEntrantUpdate(value: unknown): EntrantUpdateInput {
