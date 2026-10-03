@@ -189,7 +189,8 @@ describe('SessionLivePanel', () => {
     const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
     expect(within(teamRow).getByLabelText('Team members')).toHaveTextContent('Legs: Ari Runner → Bea Dash');
 
-    expect(within(teamRow).getAllByText('Relay splits', { selector: 'label' })).toHaveLength(2);
+    expect(within(teamRow).getAllByText(/^Relay splits - /, { selector: 'label' })).toHaveLength(2);
+    expect(within(teamRow).getByText('Relay splits - Ari Runner', { selector: 'label' })).toBeInTheDocument();
     await user.type(within(teamRow).getByLabelText('Relay splits for Ari Runner (leg 1)'), '60.5');
     await user.click(within(teamRow).getAllByRole('button', { name: 'Record' })[0]);
     await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event-1', { disciplineSessionId: 'session-1', entrantId: 'team-1' }, expect.objectContaining({ entryType: 'attempt', value: 60.5, relayMemberId: 'rm-a' })));

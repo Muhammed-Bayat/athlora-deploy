@@ -549,7 +549,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                           const splits = entrantEntries.filter((entry) => entry.relayMemberId === member.relayMemberId);
                           return (
                             <div key={member.relayMemberId} className={styles.finishInputGroup}>
-                              <label htmlFor={`relay-split-${entrant.id}-${member.relayMemberId}`}>Relay splits</label>
+                              <label htmlFor={`relay-split-${entrant.id}-${member.relayMemberId}`}>Relay splits - {member.name}</label>
                               <Input
                                 id={`relay-split-${entrant.id}-${member.relayMemberId}`}
                                 aria-label={`Relay splits for ${member.name} (leg ${member.leg})`}

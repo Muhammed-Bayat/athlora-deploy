@@ -52,7 +52,8 @@ test('Relay session setup, per-athlete split logging, official leg selections, a
 
   const teamRow = live.getByRole('group', { name: 'Speed Demons' });
   await expect(teamRow.getByLabelText('Team members')).toContainText('Relay Leg One → Relay Leg Two');
-  await expect(teamRow.getByText('Relay splits', { exact: true })).toHaveCount(4);
+  await expect(teamRow.getByText(/^Relay splits - /)).toHaveCount(4);
+  await expect(teamRow.getByText('Relay splits - Relay Leg One')).toHaveCount(1);
 
   const legs: Array<[string, string]> = [
     ['Relay Leg One', '11.10'],

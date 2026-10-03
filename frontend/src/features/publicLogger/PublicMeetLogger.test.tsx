@@ -78,7 +78,8 @@ describe('PublicMeetLogger', () => {
 
     const splitInput = screen.getByLabelText('Relay splits for Ari Runner (leg 1)');
     expect(splitInput).toHaveAttribute('type', 'text');
-    expect(screen.getAllByText('Relay splits', { selector: 'label' })).toHaveLength(2);
+    expect(screen.getAllByText(/^Relay splits - /, { selector: 'label' })).toHaveLength(2);
+    expect(screen.getByText('Relay splits - Ari Runner', { selector: 'label' })).toBeInTheDocument();
     await user.type(splitInput, '12,10');
     await user.click(screen.getAllByRole('button', { name: 'Record' })[0]);
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
