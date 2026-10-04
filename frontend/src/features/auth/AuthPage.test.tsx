@@ -9,8 +9,6 @@ import { AuthPage } from './AuthPage';
 
 const workspaceApi = vi.hoisted(() => ({
   listWorkspaceMembers: vi.fn(),
-  listWorkspaceInvitations: vi.fn(),
-  resendWorkspaceInvitation: vi.fn(),
   updateWorkspaceMemberRole: vi.fn(),
   leaveCurrentWorkspace: vi.fn(),
 }));
@@ -60,7 +58,6 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   workspaceApi.listWorkspaceMembers.mockResolvedValue({ data: [], meta: { count: 0 } });
-  workspaceApi.listWorkspaceInvitations.mockResolvedValue({ data: [], meta: { count: 0 } });
   clubApi.listClubs.mockResolvedValue({ data: [], meta: { count: 0 } });
   clubApi.listClubJoinRequests.mockResolvedValue({ data: [], meta: { count: 0 } });
   brandingApi.getClubBranding.mockResolvedValue({
@@ -186,8 +183,15 @@ describe('AuthPage', () => {
   });
 
   it('shows workspace management to coaches', async () => {
+    workspaceApi.listWorkspaceMembers.mockResolvedValue({
+      data: [{ userId: 'user-2', name: 'Assistant Sam', email: 'sam@example.com', role: 'assistant' }],
+      meta: { count: 1 },
+    });
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Members and invitations' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Club members' })).toBeInTheDocument();
+    expect(screen.getByText('Assistant Sam')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create invitation' })).not.toBeInTheDocument();
     expect(workspaceApi.listWorkspaceMembers).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000');
   });
 
@@ -207,20 +211,5 @@ describe('AuthPage', () => {
     await user.click(within(roleMenu!).getByRole('option', { name: 'Coach' }));
 
     await waitFor(() => expect(workspaceApi.updateWorkspaceMemberRole).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000', 'user-2', 'coach'));
-  });
-
-  it('replaces a pending invitation link when the coach resends it', async () => {
-    workspaceApi.listWorkspaceInvitations.mockResolvedValue({
-      data: [{ id: 'invite', email: 'assistant@example.test', role: 'assistant', expiresAt: '2026-09-01T00:00:00.000Z', createdAt: '2026-08-26T00:00:00.000Z' }],
-      meta: { count: 1 },
-    });
-    workspaceApi.resendWorkspaceInvitation.mockResolvedValue({ id: 'replacement', email: 'assistant@example.test', role: 'assistant', expiresAt: '2026-09-02T00:00:00.000Z', createdAt: '2026-08-26T00:00:00.000Z', token: 'replacement-token' });
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.click(await screen.findByRole('button', { name: 'Resend' }));
-
-    expect(workspaceApi.resendWorkspaceInvitation).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000', 'invite');
-    expect(await screen.findByRole('link', { name: 'Open invitation link' })).toHaveAttribute('href', `${window.location.origin}/invitations/replacement-token`);
   });
 });
