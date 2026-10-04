@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getPublicStatisticsReport } from './publicStatisticsReport.js';
 
 describe('public statistics report service', () => {
-  it('queries only final published individual performances and maps safe report rows', async () => {
+  it('queries final published individual and relay team performances and maps safe report rows', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{
       athlete_id: 'athlete', athlete_name: 'Ari Runner', club_id: '33333333-3333-4333-8333-333333333333', club_name: 'Open Track',
       code: '100m', label: '100m', discipline_unit: 'seconds', precision: '2', direction: 'lower', final_result: '10.91', place: '1', event_title: 'City Final', event_date: '2026-09-25',
@@ -15,6 +15,8 @@ describe('public statistics report service', () => {
     expect(sql).toContain('c.public_results_enabled = true');
     expect(sql).toContain("a.lifecycle_status <> 'archived'");
     expect(sql).toContain("en.kind = 'athlete'");
+    expect(sql).toContain("en.kind = 'relay'");
+    expect(sql).toContain("d.default_rules->>'entrantType' = 'relay'");
     expect(sql).toContain("r.outcome = 'valid'");
     expect(sql).toContain('FROM results r');
     expect(sql).toContain('UNION ALL');

@@ -71,32 +71,50 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
     `d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`,
     "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
+  const relayConditions = [
+    "s.result_state = 'final'",
+    "s.status = 'completed'",
+    "e.status = 'completed'",
+    "en.kind = 'relay'",
+    "d.default_rules->>'entrantType' = 'relay'",
+    "se.withdrawn_at IS NULL",
+    "r.outcome = 'valid'",
+    "r.final_result IS NOT NULL",
+    "c.public_results_enabled = true",
+    `d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`,
+    "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.role = 'guest' AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
+  ];
   const params: unknown[] = [];
 
   if (season.selected !== 'all') {
     params.push(season.startDate, season.endDate);
     legacyConditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
     sessionConditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
+    relayConditions.push(`e.date >= $${params.length - 1}::date AND e.date < $${params.length}::date`);
   }
   if (discipline) {
     params.push(discipline);
       legacyConditions.push(`r.discipline = $${params.length}`);
       sessionConditions.push(`(d.code = $${params.length} OR d.id::text = $${params.length})`);
+      relayConditions.push(`(d.code = $${params.length} OR d.id::text = $${params.length})`);
   }
   if (clubId) {
     params.push(clubId);
       legacyConditions.push(`c.id = $${params.length}`);
       sessionConditions.push(`c.id = $${params.length}`);
+      relayConditions.push(`c.id = $${params.length}`);
   }
   if (gender) {
     params.push(gender);
       legacyConditions.push(`a.gender ILIKE $${params.length}`);
       sessionConditions.push(`a.gender ILIKE $${params.length}`);
+      relayConditions.push('FALSE');
   }
   if (age) {
     params.push(age);
     legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
     sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = $${params.length}::integer`);
+    relayConditions.push('FALSE');
   }
 
   const sql = `
@@ -125,6 +143,19 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
       JOIN clubs c ON c.workspace_id = r.workspace_id
       JOIN events e ON e.id = r.event_id
        WHERE ${sessionConditions.join(' AND ')}
+       UNION ALL
+       SELECT r.final_result, r.id::text AS result_id, en.id AS athlete_id, en.name AS athlete_name,
+              NULL::date AS dob, NULL::text AS gender,
+              c.id AS club_id, c.name AS club_name, d.code, d.presentation->>'label' AS label,
+              d.unit AS discipline_unit, d.precision, d.direction, e.date AS event_date
+      FROM session_results r
+      JOIN discipline_sessions s ON s.id = r.session_id
+      JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+      JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+      JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+      JOIN clubs c ON c.workspace_id = r.workspace_id
+      JOIN events e ON e.id = r.event_id
+       WHERE ${relayConditions.join(' AND ')}
     ), best_per_athlete AS (
       SELECT athlete_id,
              (ARRAY_AGG(athlete_name ORDER BY CASE WHEN direction = 'lower' THEN final_result ELSE -final_result END ASC, event_date DESC, result_id DESC))[1] AS athlete_name,

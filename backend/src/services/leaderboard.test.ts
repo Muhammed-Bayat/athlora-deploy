@@ -30,6 +30,8 @@ describe('public leaderboard service', () => {
     expect(mockQuery).toHaveBeenCalledOnce();
     expect(mockQuery.mock.calls[0]?.[0]).toContain('FROM results r');
     expect(mockQuery.mock.calls[0]?.[0]).toContain("s.result_state = 'final'");
+    expect(mockQuery.mock.calls[0]?.[0]).toContain("en.kind = 'relay'");
+    expect(mockQuery.mock.calls[0]?.[0]).toContain("d.default_rules->>'entrantType' = 'relay'");
     expect(mockQuery.mock.calls[0]?.[0]).toContain('EXTRACT(YEAR FROM age(e.date, a.dob))::integer =');
     expect(mockQuery.mock.calls[0]?.[1]).toContain(20);
   });
@@ -42,6 +44,7 @@ describe('public leaderboard service', () => {
     const sql = query.mock.calls[0]?.[0] as string;
     expect(sql).toContain("r.discipline IN ('100m', '200m', '400m'");
     expect(sql).toContain("d.code IN ('100m', '200m', '400m'");
+    expect(sql).toContain("en.kind = 'relay'");
   });
 
   it.each(['under-20', '20.5', '4', '101', 'not-an-age'])('rejects invalid exact age %s before querying', async (age) => {

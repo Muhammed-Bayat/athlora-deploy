@@ -2,6 +2,7 @@ import type { DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { SeasonScope } from './seasons.js';
+import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 export interface DisciplineProgressionDetail {
   entries: Array<{ eventId: string; eventDate: string; eventTitle: string; value: number; isNewPb: boolean }>;
@@ -23,6 +24,9 @@ export async function getDisciplineProgression(
   const seasonCondition = season.selected === 'all'
     ? ''
     : `AND e.date >= $${params.push(season.startDate!)}::date AND e.date < $${params.push(season.endDate!)}::date`;
+  const relaySeasonCondition = season.selected === 'all'
+    ? ''
+    : `AND legs.event_date >= $${params.push(season.startDate!)}::date AND legs.event_date < $${params.push(season.endDate!)}::date`;
   const result = await db.query<{
     event_id: string; event_date: string; event_title: string; value: string; is_new_pb: boolean; personal_best: string | null; result_count: string;
   }>(`WITH performances AS (
@@ -53,6 +57,11 @@ export async function getDisciplineProgression(
       AND (e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
         AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))
       ${seasonCondition}
+    UNION ALL
+    SELECT legs.event_id, legs.event_date, legs.event_title, legs.final_result AS value, legs.direction
+    FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
+    WHERE legs.workspace_id = $1 AND legs.athlete_id = $2 AND legs.discipline_definition_id = $3
+      ${relaySeasonCondition}
   ), ranked AS (
     SELECT *, CASE WHEN direction = 'lower' THEN MIN(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
       ELSE MAX(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) END AS prior_pb

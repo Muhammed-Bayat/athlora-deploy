@@ -96,4 +96,17 @@ describe('PublicStatisticsReportPage', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Some report filters could not be loaded'));
   });
 
+  it('lists relay team rows with the team name, club, and result in both tables', async () => {
+    getReport.mockResolvedValue({ data: [{
+      athleteId: 'entrant-1', athleteName: 'Speed Demons', clubId: 'club', clubName: 'Open Track',
+      discipline: '4x100m', label: '4 × 100m relay', unit: 'seconds', precision: 2, direction: 'lower',
+      performance: 55.26, place: 1, eventTitle: 'City Relays', eventDate: '2026-09-01',
+    }], meta: { count: 1, generatedAt: '2026-09-25T00:00:00.000Z' } });
+    render(<MemoryRouter initialEntries={['/stats/report']}><PublicStatisticsReportPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('table', { name: 'Detailed public statistics report' })).toHaveTextContent('1Speed DemonsOpen Track4 × 100m relay55.26 sCity Relays2026-09-01');
+    expect(screen.getByRole('table', { name: 'Athlete report metrics' })).toHaveTextContent('Speed DemonsOpen Track4 × 100m relay55.26 s1');
+    expect(screen.getAllByRole('columnheader', { name: 'Athlete / Team' })).toHaveLength(2);
+  });
+
 });

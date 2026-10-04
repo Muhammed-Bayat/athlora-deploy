@@ -97,9 +97,12 @@ describe('PublicStatsPage', () => {
   });
 
   it('compares selected clubs by discipline', async () => {
-    const otherClubDetail = { ...clubDetail, club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' } };
+    const relayAvailable = { discipline: '4x100m', label: '4 x 100m', unit: 'seconds', precision: 2, direction: 'lower' };
+    const relayDisciplineRow = { ...relayAvailable, rosterAthleteCount: 4, activeAthleteCount: 4, inactiveAthleteCount: 0, archivedAthleteCount: 0, distinctAthletesWithValidResults: 3, totalResultCount: 3, validResultCount: 3, fastestValidResult: 55.26, latestValidResult: 56.4, averageValidResult: 55.9, medianValidResult: 55.9, populationStandardDeviation: null };
+    const clubWithRelay = { ...clubDetail, availableDisciplines: [...clubDetail.availableDisciplines, relayAvailable], disciplines: [relayDisciplineRow] };
+    const otherClubDetail = { ...clubDetail, club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' }, availableDisciplines: [...clubDetail.availableDisciplines, relayAvailable], disciplines: [relayDisciplineRow] };
     mockListPublicClubs.mockResolvedValue({ data: [clubDetail.club, otherClubDetail.club], meta: { count: 2 } });
-    mockGetPublicClubStatistics.mockImplementation((clubId: string) => Promise.resolve(clubId === CLUB_ID ? clubDetail : otherClubDetail));
+    mockGetPublicClubStatistics.mockImplementation((clubId: string) => Promise.resolve(clubId === CLUB_ID ? clubWithRelay : otherClubDetail));
     render(<PublicStatsPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Public statistics view' }));
@@ -111,5 +114,67 @@ describe('PublicStatsPage', () => {
 
     expect(await screen.findByRole('tab', { name: 'Long jump' })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: '100m public club comparison' })).toHaveTextContent('Open Track Club');
+    await userEvent.click(screen.getByRole('tab', { name: '4 x 100m' }));
+    expect(screen.getByRole('table', { name: '4 x 100m public club comparison' })).toHaveTextContent('Open Track Club355.26 s3');
+  });
+
+  it('restores published relay session results for the selected club discipline', async () => {
+    mockGetPublicClubStatistics.mockResolvedValue({
+      ...clubDetail,
+      availableDisciplines: [...clubDetail.availableDisciplines, { discipline: '4x100m', label: '4 x 100m', unit: 'seconds', precision: 2, direction: 'lower' }],
+      disciplines: [{ discipline: '4x100m', label: '4 x 100m', unit: 'seconds', precision: 2, direction: 'lower', rosterAthleteCount: 4, activeAthleteCount: 4, inactiveAthleteCount: 0, archivedAthleteCount: 0, distinctAthletesWithValidResults: 2, totalResultCount: 3, validResultCount: 3, fastestValidResult: 55.26, latestValidResult: 56.4, averageValidResult: 55.9, medianValidResult: 55.9, populationStandardDeviation: null }],
+      athletes: [{
+        ...clubDetail.athletes[0],
+        disciplines: [...clubDetail.athletes[0].disciplines, { discipline: '4x100m', label: '4 x 100m', unit: 'seconds', precision: 2, direction: 'lower', pb: 12.5, latestEffectiveResult: 12.5, validResultCount: 1, average: 12.5, consistency: null, improvement: null, progression: [{ date: '2026-09-01', result: 12.5 }] }],
+      }],
+    });
+    mockGetPublicClubSessionResults.mockResolvedValue([{
+      eventId: '77777777-7777-4777-8777-777777777777',
+      eventTitle: 'City Relays',
+      eventDate: '2026-09-01',
+      sessions: [{
+        id: '88888888-8888-4888-8888-888888888888',
+        label: '4 x 100m Final',
+        status: 'completed',
+        resultState: 'final',
+        disciplineCode: '4x100m',
+        disciplineLabel: '4 x 100m',
+        unit: 'seconds',
+        precision: 2,
+        results: [{
+          entrantId: '99999999-9999-4999-8999-999999999999',
+          name: 'Speed Demons',
+          kind: 'relay',
+          members: [
+            { leg: 1, name: 'Ari Runner', isGuest: false },
+            { leg: 2, name: 'Guest A', isGuest: true },
+          ],
+          value: 55.26,
+          outcome: 'valid',
+          placing: 1,
+          isSelected: true,
+          relayLegs: [{ relayMemberId: 'aaaaaaaa-1111-4111-8111-111111111111', leg: 1, name: 'Ari Runner', value: 12.5, outcome: 'valid', selectedEntryId: 'bbbbbbbb-2222-4222-8222-222222222222', isPb: true }],
+        }],
+      }],
+    }]);
+    render(<PublicStatsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Select first club' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Open Track Club' }));
+    await userEvent.click(await screen.findByRole('tab', { name: '4 x 100m' }));
+
+    expect(await screen.findByRole('table', { name: '4 x 100m Final standings' })).toHaveTextContent('Speed Demons');
+    const standings = screen.getByRole('table', { name: '4 x 100m Final standings' });
+    expect(standings).toHaveTextContent('Ari Runner → Guest A');
+    expect(standings).toHaveTextContent('55.26 s');
+    expect(standings).toHaveTextContent('valid');
+    expect(mockGetPublicClubSessionResults).toHaveBeenCalledWith(CLUB_ID, expect.any(AbortSignal));
+
+    const year = new Date().getUTCFullYear();
+    const clubMetrics = screen.getByLabelText(`Open Track Club ${year} published results`);
+    expect(within(clubMetrics).getByText('Athletes').parentElement).toHaveTextContent(/^Athletes2$/);
+    expect(within(clubMetrics).getByText('Best').parentElement).toHaveTextContent(/^Best55\.26 s$/);
+    expect(within(clubMetrics).getByText('Finalized results').parentElement).toHaveTextContent(/^Finalized results3$/);
+    expect(screen.getByLabelText(`Ari Runner ${year} discipline metrics`)).toHaveTextContent('12.50 s');
   });
 });

@@ -50,6 +50,10 @@ function formatMetric(value: number | null, discipline: Pick<PublicDiscipline, '
   return `${value.toFixed(discipline.precision)} ${discipline.unit === 'seconds' ? 's' : discipline.unit === 'metres' ? 'm' : 'cm'}`;
 }
 
+function axisTitle(unit: Pick<PublicDiscipline, 'unit'>['unit']): string {
+  return unit === 'seconds' ? 'Time (s)' : unit === 'metres' ? 'Result (m)' : 'Result (cm)';
+}
+
 function MetricCard({ label, value, discipline }: { label: string; value: number | null; discipline?: PublicDiscipline }) {
   return (
     <div className={styles.metricCard}>
@@ -91,10 +95,28 @@ function ComparisonChart({ comparison, discipline, season }: { comparison: Multi
   const dates = points.map((entry) => new Date(`${entry.date}T00:00:00Z`).getTime());
   const values = points.map((entry) => entry.result);
   const minDate = Math.min(...dates); const maxDate = Math.max(...dates); const minValue = Math.min(...values); const maxValue = Math.max(...values);
+  const valuePadding = Math.max((maxValue - minValue) * 0.12, discipline.unit === 'seconds' ? 0.08 : 0.2);
+  const valueRange = Math.max(maxValue - minValue + valuePadding * 2, 0.01);
+  const paddedMin = minValue - valuePadding;
   const series = chartSeriesById(comparison.athletes.map((athlete) => athlete.athlete.id));
-  const x = (date: string) => 52 + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * 628;
-  const y = (value: number) => { const ratio = (value - minValue) / Math.max(maxValue - minValue, 1); return discipline.direction === 'lower' ? 32 + ratio * 220 : 252 - ratio * 220; };
-  return <div className={styles.chartWrap}><h2 className={styles.chartHeading}>{`${seasonLabel(season)} ${discipline.label} progression`}</h2><svg className={styles.svg} viewBox="0 0 720 284" role="img" aria-label={`${discipline.label} progression chart`}><line x1="52" y1="252" x2="680" y2="252" /><line x1="52" y1="32" x2="52" y2="252" />{rows.map(({ athlete, metrics }) => { const color = series.get(athlete.athlete.id)!; const progression = metrics?.progression ?? []; return <g key={athlete.athlete.id}>{progression.length > 1 && <polyline data-series-color={color.color} points={progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} className={styles.seriesLine} style={{ stroke: color.color, strokeDasharray: color.dashArray }} />}{progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" className={styles.seriesPoint} style={{ fill: color.color }}><title>{`${athlete.athlete.name}: ${formatMetric(entry.result, discipline)} on ${entry.date}`}</title></circle>)}</g>; })}</svg><div className={styles.legend} role="list" aria-label="Chart legend">{rows.map(({ athlete }) => { const color = series.get(athlete.athlete.id)!; return <span key={athlete.athlete.id} className={styles.legendItem} role="listitem"><i style={{ backgroundColor: color.color }} />{athlete.athlete.name}</span>; })}</div></div>;
+  const left = 64; const right = 680; const top = 32; const bottom = 252; const middleY = (top + bottom) / 2;
+  const x = (date: string) => left + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * (right - left);
+  const y = (value: number) => { const ratio = (value - paddedMin) / valueRange; return discipline.direction === 'lower' ? top + ratio * (bottom - top) : bottom - ratio * (bottom - top); };
+  const ticks = Array.from({ length: 5 }, (_, index) => paddedMin + (index / 4) * valueRange);
+  return (
+    <div className={styles.chartWrap}>
+      <h2 className={styles.chartHeading}>{`${seasonLabel(season)} ${discipline.label} progression`}</h2>
+      <svg className={styles.svg} viewBox="0 0 720 284" role="img" aria-label={`${discipline.label} progression chart`}>
+        {ticks.map((tick, index) => <g key={`y-tick-${index}`}><line x1={left} x2={right} y1={y(tick)} y2={y(tick)} className={styles.grid} /><text x={left - 8} y={y(tick)} textAnchor="end" dominantBaseline="middle" className={styles.axisLabel}>{tick.toFixed(discipline.precision)}</text></g>)}
+        <line x1={left} y1={bottom} x2={right} y2={bottom} />
+        <line x1={left} y1={top} x2={left} y2={bottom} />
+        {rows.map(({ athlete, metrics }) => { const color = series.get(athlete.athlete.id)!; const progression = metrics?.progression ?? []; return <g key={athlete.athlete.id}>{progression.length > 1 && <polyline data-series-color={color.color} points={progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} className={styles.seriesLine} style={{ stroke: color.color, strokeDasharray: color.dashArray }} />}{progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" className={styles.seriesPoint} style={{ fill: color.color }}><title>{`${athlete.athlete.name}: ${formatMetric(entry.result, discipline)} on ${entry.date}`}</title></circle>)}</g>; })}
+        <text x={(left + right) / 2} y="278" textAnchor="middle" className={styles.axisTitle}>Date</text>
+        <text x="14" y={middleY} textAnchor="middle" transform={`rotate(-90 14 ${middleY})`} className={styles.axisTitle}>{axisTitle(discipline.unit)}</text>
+      </svg>
+      <div className={styles.legend} role="list" aria-label="Chart legend">{rows.map(({ athlete }) => { const color = series.get(athlete.athlete.id)!; return <span key={athlete.athlete.id} className={styles.legendItem} role="listitem"><i style={{ backgroundColor: color.color }} />{athlete.athlete.name}</span>; })}</div>
+    </div>
+  );
 }
 
 function clubDiscipline(statistics: ClubStatistics, discipline: PublicDiscipline): ClubDisciplineStatistics | undefined {

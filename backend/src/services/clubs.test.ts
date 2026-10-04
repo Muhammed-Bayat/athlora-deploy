@@ -262,8 +262,8 @@ describe('club comparison data', () => {
         fastest_valid_time: null, latest_valid_time: null, average_valid_time: null, median_valid_time: null, population_standard_deviation: null,
       }]))
       .mockResolvedValueOnce(poolRow([
-        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-01-10', event_time: null, event_created_at: '2026-01-10T10:00:00Z', event_id: 'event-1', effective_result: '6.40', effective_outcome: 'valid' },
-        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-02-10', event_time: null, event_created_at: '2026-02-10T10:00:00Z', event_id: 'event-2', effective_result: '6.55', effective_outcome: 'valid' },
+        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-01-10', event_time: null, event_created_at: '2026-01-10T10:00:00Z', event_id: 'event-1', effective_result: '6.40', effective_outcome: 'valid', result_key: 'session:event-1' },
+        { discipline: 'long_jump', athlete_id: ACTOR_ID, lifecycle_status: 'active', event_date: '2026-02-10', event_time: null, event_created_at: '2026-02-10T10:00:00Z', event_id: 'event-2', effective_result: '6.55', effective_outcome: 'valid', result_key: 'session:event-2' },
       ]))
       .mockResolvedValueOnce(poolRow([{ code: 'long_jump', label: 'Long jump', unit: 'metres', precision: '2', direction: 'higher' }]))
       .mockResolvedValueOnce(poolRow([{ athlete_id: 'unrecorded-athlete', lifecycle_status: 'active', discipline: 'long_jump' }]));

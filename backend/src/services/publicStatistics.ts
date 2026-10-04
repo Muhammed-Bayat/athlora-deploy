@@ -17,6 +17,7 @@ import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
+import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 interface PublicClubRow {
   id: string;
@@ -157,7 +158,7 @@ async function preferredDisciplinesByAthlete(workspaceId: string, executor: DbEx
   return byAthlete;
 }
 
-async function getPublicAthleteStatistics(
+export async function getPublicAthleteStatistics(
   workspaceId: string,
   clubId: string,
   executor: DbExecutor,
@@ -235,7 +236,34 @@ async function getPublicAthleteStatistics(
     [workspaceId, DISCIPLINE_100M, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   const publishedResults = await getPublicStatisticsReport({ season: season.selected === 'all' ? undefined : String(season.selected), club: clubId }, executor);
-  const disciplines = disciplineStatistics(publishedResults);
+  const relayLegs = await executor.query<{
+    athlete_id: string; athlete_name: string; code: string; label: string;
+    discipline_unit: PublicAthleteDisciplineStatistics['unit']; precision: string;
+    direction: PublicAthleteDisciplineStatistics['direction'];
+    final_result: string; event_date: string; event_title: string;
+  }>(
+    `SELECT athlete_id, athlete_name, code, label, discipline_unit, precision, direction, final_result,
+            to_char(event_date, 'YYYY-MM-DD') AS event_date, event_title
+     FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
+     WHERE legs.workspace_id = $1 AND legs.event_date >= $2::date AND legs.event_date < $3::date`,
+    [workspaceId, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
+  );
+  const relayLegEntries: PublicStatisticsReportEntry[] = relayLegs.rows.map((row) => ({
+    athleteId: row.athlete_id,
+    athleteName: row.athlete_name,
+    clubId,
+    clubName: clubId,
+    discipline: row.code,
+    label: row.label,
+    unit: row.discipline_unit,
+    precision: Number(row.precision),
+    direction: row.direction,
+    performance: Number(row.final_result),
+    place: 1,
+    eventTitle: row.event_title,
+    eventDate: row.event_date,
+  }));
+  const disciplines = disciplineStatistics([...publishedResults, ...relayLegEntries]);
   const preferences = await preferredDisciplinesByAthlete(workspaceId, executor);
   return result.rows.map((row) => {
     const published = disciplines.get(row.id) ?? [];

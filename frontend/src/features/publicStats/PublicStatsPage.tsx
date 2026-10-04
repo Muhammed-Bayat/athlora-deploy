@@ -7,6 +7,7 @@ import type { PublicAthleteComparison, PublicAthleteDisciplineStatistics, Public
 import styles from './PublicStatsPage.module.css';
 
 const StaticTrack = lazy(() => import('./StaticTrack').then((module) => ({ default: module.StaticTrack })));
+const PublicSessionResults = lazy(() => import('./PublicSessionResults').then((module) => ({ default: module.PublicSessionResults })));
 
 type StatsMode = 'club' | 'club-comparison' | 'athlete-comparison';
 
@@ -19,6 +20,10 @@ const modeOptions: Array<{ value: StatsMode; label: string }> = [
 function formatDisciplineMetric(value: number | null, discipline: Pick<PublicAthleteDisciplineStatistics, 'precision' | 'unit'>): string {
   if (value === null) return '-';
   return `${value.toFixed(discipline.precision)} ${discipline.unit === 'seconds' ? 's' : discipline.unit === 'metres' ? 'm' : 'cm'}`;
+}
+
+function axisTitle(unit: PublicDiscipline['unit']): string {
+  return unit === 'seconds' ? 'Time (s)' : unit === 'metres' ? 'Result (m)' : 'Result (cm)';
 }
 
 function setTilt(event: PointerEvent<HTMLElement>) {
@@ -77,18 +82,27 @@ function PublicAllDisciplineComparisonPanel({ comparison, season, disciplines }:
   const maxDate = Math.max(...dates);
   const minResult = Math.min(...results);
   const maxResult = Math.max(...results);
+  const valuePadding = Math.max((maxResult - minResult) * 0.12, selected.unit === 'seconds' ? 0.08 : 0.2);
+  const valueRange = Math.max(maxResult - minResult + valuePadding * 2, 0.01);
+  const paddedMin = minResult - valuePadding;
   const colors = ['#8ae9f2', '#ffb86b', '#b2f58a', '#c9a7ff', '#ff9cbd'];
-  const x = (date: string) => 52 + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * 628;
+  const left = 64;
+  const right = 680;
+  const top = 32;
+  const bottom = 252;
+  const middleY = (top + bottom) / 2;
+  const x = (date: string) => left + ((new Date(`${date}T00:00:00Z`).getTime() - minDate) / Math.max(maxDate - minDate, 1)) * (right - left);
   const y = (result: number) => {
-    const ratio = (result - minResult) / Math.max(maxResult - minResult, 1);
-    return selected.direction === 'lower' ? 32 + ratio * 220 : 252 - ratio * 220;
+    const ratio = (result - paddedMin) / valueRange;
+    return selected.direction === 'lower' ? top + ratio * (bottom - top) : bottom - ratio * (bottom - top);
   };
+  const ticks = Array.from({ length: 5 }, (_, index) => paddedMin + (index / 4) * valueRange);
   return <section className={styles.comparisonPanel} aria-label="Athlete comparison results">
     <div className={styles.comparisonToolbar}><h2>{seasonLabel(season)} discipline comparison <span>{selected.label}</span></h2><div><button type="button" onClick={() => setView('table')} aria-pressed={view === 'table'}>Table</button><button type="button" onClick={() => setView('graph')} aria-pressed={view === 'graph'}>Graph</button></div></div>
     <div className={styles.disciplineTabs} role="tablist" aria-label="Comparison discipline">
       {disciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selected.discipline} onClick={() => setSelectedCode(discipline.discipline)}>{discipline.label}</button>)}
     </div>
-    {view === 'table' ? <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label={`${selected.label} public athlete comparison`}><thead><tr><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">PB</th><th scope="col">Latest</th><th scope="col">Average</th><th scope="col">Results</th></tr></thead><tbody>{rows.map(({ athlete, discipline }) => <tr key={athlete.athlete.id}><th scope="row">{athlete.athlete.name}</th><td>{athlete.club.name}</td>{discipline ? <><td>{formatDisciplineMetric(discipline.pb, discipline)}</td><td>{formatDisciplineMetric(discipline.latestEffectiveResult, discipline)}</td><td>{formatDisciplineMetric(discipline.average, discipline)}</td><td>{discipline.validResultCount}</td></> : <td colSpan={4}>No published {selected.label} results</td>}</tr>)}</tbody></table></div> : points.length === 0 ? <p className={styles.emptyState}>No published {selected.label} results are available to graph.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 284" role="img" aria-label={`${selected.label} progression graph`}><line x1="52" y1="252" x2="680" y2="252" /><line x1="52" y1="32" x2="52" y2="252" />{rows.map(({ athlete, discipline }, athleteIndex) => { const progression = discipline?.progression ?? []; const color = colors[athleteIndex % colors.length]; return <g key={athlete.athlete.id}>{progression.length > 1 && <polyline points={progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: color }} />}{progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: color }}><title>{`${athlete.athlete.name}: ${formatDisciplineMetric(entry.result, selected)} on ${entry.date}`}</title></circle>)}</g>; })}</svg><div className={styles.chartLegend} role="list">{rows.map(({ athlete }, index) => <span key={athlete.athlete.id} role="listitem"><i style={{ backgroundColor: colors[index % colors.length] }} />{athlete.athlete.name}<small>{athlete.club.name}</small></span>)}</div></>}
+    {view === 'table' ? <div className={styles.tableScroll}><table className={styles.comparisonTable} aria-label={`${selected.label} public athlete comparison`}><thead><tr><th scope="col">Athlete</th><th scope="col">Club</th><th scope="col">PB</th><th scope="col">Latest</th><th scope="col">Average</th><th scope="col">Results</th></tr></thead><tbody>{rows.map(({ athlete, discipline }) => <tr key={athlete.athlete.id}><th scope="row">{athlete.athlete.name}</th><td>{athlete.club.name}</td>{discipline ? <><td>{formatDisciplineMetric(discipline.pb, discipline)}</td><td>{formatDisciplineMetric(discipline.latestEffectiveResult, discipline)}</td><td>{formatDisciplineMetric(discipline.average, discipline)}</td><td>{discipline.validResultCount}</td></> : <td colSpan={4}>No published {selected.label} results</td>}</tr>)}</tbody></table></div> : points.length === 0 ? <p className={styles.emptyState}>No published {selected.label} results are available to graph.</p> : <><svg className={styles.comparisonChart} viewBox="0 0 720 284" role="img" aria-label={`${selected.label} progression graph`}>{ticks.map((tick, index) => <g key={`y-tick-${index}`}><line x1={left} x2={right} y1={y(tick)} y2={y(tick)} className={styles.chartGrid} /><text x={left - 8} y={y(tick)} textAnchor="end" dominantBaseline="middle" className={styles.chartAxisLabel}>{tick.toFixed(selected.precision)}</text></g>)}<line x1={left} y1={bottom} x2={right} y2={bottom} /><line x1={left} y1={top} x2={left} y2={bottom} />{rows.map(({ athlete, discipline }, athleteIndex) => { const progression = discipline?.progression ?? []; const color = colors[athleteIndex % colors.length]; return <g key={athlete.athlete.id}>{progression.length > 1 && <polyline points={progression.map((entry) => `${x(entry.date)},${y(entry.result)}`).join(' ')} style={{ stroke: color }} />}{progression.map((entry) => <circle key={`${entry.date}-${entry.result}`} cx={x(entry.date)} cy={y(entry.result)} r="4" style={{ fill: color }}><title>{`${athlete.athlete.name}: ${formatDisciplineMetric(entry.result, selected)} on ${entry.date}`}</title></circle>)}</g>; })}<text x={(left + right) / 2} y="278" textAnchor="middle" className={styles.chartAxisTitle}>Date</text><text x="14" y={middleY} textAnchor="middle" transform={`rotate(-90 14 ${middleY})`} className={styles.chartAxisTitle}>{axisTitle(selected.unit)}</text></svg><div className={styles.chartLegend} role="list">{rows.map(({ athlete }, index) => <span key={athlete.athlete.id} role="listitem"><i style={{ backgroundColor: colors[index % colors.length] }} />{athlete.athlete.name}<small>{athlete.club.name}</small></span>)}</div></>}
   </section>;
 }
 
@@ -99,6 +113,8 @@ function PublicClubDisciplineComparisonPanel({ clubs, season, disciplines }: { c
   useEffect(() => { if (selected && selected.discipline !== selectedCode) setSelectedCode(selected.discipline); }, [selected, selectedCode]);
   if (!selected) return <p className={styles.emptyState}>The selected clubs have no published discipline results for {seasonLabel(season).toLowerCase()}.</p>;
   const rows = clubs.map((club) => {
+    const clubEntry = club.disciplines?.find((entry) => entry.discipline === selected.discipline);
+    if (clubEntry) return { club, resultCount: clubEntry.validResultCount, athletes: clubEntry.distinctAthletesWithValidResults, pb: clubEntry.fastestValidResult };
     const results = club.athletes.flatMap((athlete) => athlete.disciplines ?? []).filter((discipline) => discipline.discipline === selected.discipline);
     const resultCount = results.reduce((total, discipline) => total + discipline.validResultCount, 0);
     const pb = results.length === 0 ? null : selected.direction === 'lower' ? Math.min(...results.map((discipline) => discipline.pb ?? Infinity)) : Math.max(...results.map((discipline) => discipline.pb ?? -Infinity));
@@ -116,13 +132,15 @@ function PublicClubDisciplineComparisonPanel({ clubs, season, disciplines }: { c
 function ClubStatCard({ statistics, season, discipline }: { statistics: PublicClubStatistics; season: SeasonValue; discipline: PublicDiscipline }) {
   const branding = statistics.club.branding;
   const disciplineResults = statistics.athletes.flatMap((athlete) => athlete.disciplines ?? []).filter((entry) => entry.discipline === discipline.discipline);
-  const resultCount = disciplineResults.reduce((total, entry) => total + entry.validResultCount, 0);
-  const best = disciplineResults.length === 0 ? null : discipline.direction === 'lower'
+  const clubEntry = statistics.disciplines?.find((entry) => entry.discipline === discipline.discipline);
+  const resultCount = clubEntry ? clubEntry.validResultCount : disciplineResults.reduce((total, entry) => total + entry.validResultCount, 0);
+  const best = clubEntry ? clubEntry.fastestValidResult : disciplineResults.length === 0 ? null : discipline.direction === 'lower'
     ? Math.min(...disciplineResults.map((entry) => entry.pb ?? Infinity))
     : Math.max(...disciplineResults.map((entry) => entry.pb ?? -Infinity));
+  const athleteCount = clubEntry ? clubEntry.distinctAthletesWithValidResults : disciplineResults.length;
   const metrics = [
     ['Discipline', discipline.label],
-    ['Athletes', String(disciplineResults.length)],
+    ['Athletes', String(athleteCount)],
     ['Best', Number.isFinite(best) ? formatDisciplineMetric(best, discipline) : '-'],
     ['Finalized results', String(resultCount)],
   ];
@@ -366,7 +384,7 @@ export function PublicStatsPage() {
         {!clubsLoading && !clubsError && clubs.length === 0 && <p className={styles.emptyState}>No clubs have published results yet. Check back after the next time trial.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && !club1 && clubs.length > 0 && <p className={styles.emptyState}>Select a club to open its public performance gallery.</p>}
         {!loadingStatistics && !statisticsError && mode === 'club' && club1 && !selectedClubDiscipline && <p className={styles.emptyState}>This club has no published discipline results for {seasonLabel(season).toLowerCase()}.</p>}
-        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && selectedClubDiscipline && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} discipline={selectedClubDiscipline} /></section><AthleteGallery athletes={club1.athletes.filter((athlete) => (athlete.disciplines ?? []).some((discipline) => discipline.discipline === selectedClubDiscipline.discipline))} season={season} disciplineCode={selectedClubDiscipline.discipline} disciplineLabel={selectedClubDiscipline.label} /></>}
+        {!loadingStatistics && !statisticsError && mode === 'club' && club1 && selectedClubDiscipline && <><section className={styles.singleClub}><ClubStatCard statistics={club1} season={season} discipline={selectedClubDiscipline} /></section><AthleteGallery athletes={club1.athletes.filter((athlete) => (athlete.disciplines ?? []).some((discipline) => discipline.discipline === selectedClubDiscipline.discipline))} season={season} disciplineCode={selectedClubDiscipline.discipline} disciplineLabel={selectedClubDiscipline.label} /><Suspense fallback={<p className={styles.loading} role="status">Loading session results...</p>}><PublicSessionResults key={`${club1.club.id}:${selectedClubDiscipline.discipline}`} clubId={club1.club.id} disciplineCode={selectedClubDiscipline.discipline} /></Suspense></>}
         {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length < 2 && <p className={styles.emptyState}>Select at least two clubs to compare their {seasonLabel(season).toLowerCase()} performance.</p>}
         {!loadingStatistics && !statisticsError && clubComparison && comparedClubs.length >= 2 && <PublicClubDisciplineComparisonPanel clubs={comparedClubs} season={season} disciplines={comparisonDisciplines} />}
         {!loadingStatistics && !athleteComparisonLoading && !statisticsError && !athleteComparisonError && athleteComparisonMode && comparedAthletes.length < 2 && <p className={styles.emptyState}>Select at least two athletes from different published clubs to compare their progression.</p>}

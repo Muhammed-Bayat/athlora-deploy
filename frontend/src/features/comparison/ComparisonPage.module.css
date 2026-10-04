@@ -295,6 +295,16 @@
   text-transform: uppercase;
 }
 
+.svg line {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+}
+
+.svg .grid {
+  stroke: var(--chart-grid);
+  stroke-dasharray: 4 4;
+}
+
 .lineHitArea {
   fill: none;
   stroke: transparent;

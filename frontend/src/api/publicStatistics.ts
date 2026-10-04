@@ -2,6 +2,16 @@ import { requestPublic } from './client';
 import type { PublicAthleteComparison, PublicClub, PublicClubStatistics } from '../types';
 
 export interface PublicSafeRelayMember { leg: number; name: string; isGuest: boolean }
+export interface PublicRelayLegResult {
+  relayMemberId: string;
+  leg: number;
+  name: string;
+  value: number | null;
+  outcome: string;
+  selectedEntryId: string | null;
+  isPb?: boolean;
+  isSb?: boolean;
+}
 export interface PublicSessionResultRow {
   entrantId: string;
   name: string;
@@ -11,6 +21,7 @@ export interface PublicSessionResultRow {
   outcome: string;
   placing: number | null;
   isSelected: boolean;
+  relayLegs?: PublicRelayLegResult[];
 }
 export interface PublicClubSessionResults {
   eventId: string;
