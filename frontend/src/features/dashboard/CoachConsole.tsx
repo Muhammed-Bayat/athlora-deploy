@@ -19,7 +19,6 @@ import { CLUB_BRANDING_CHANGED_EVENT, getClubBranding } from '../../api/clubBran
 import { InstallButton } from '../../components/InstallButton';
 import { OfflineIndicator } from '../../components/OfflineIndicator';
 import { ClubBadge } from '../../components/ClubBadge';
-import { Select } from '../../components';
 import type { ClubBrandSummary } from '../../types';
 import { AthloraAssistantProvider } from '../assistant/AthloraAssistantProvider';
 import type { ConsoleView, WeatherPreset } from './consoleData';
@@ -321,7 +320,7 @@ async function resolveDeviceCoordinates(force?: boolean): Promise<Coordinates | 
 }
 
 export function CoachConsole() {
-  const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
+  const { activeWorkspace } = useWorkspace();
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [rosterCount, setRosterCount] = useState<number | null>(null);
@@ -375,14 +374,6 @@ export function CoachConsole() {
       setLocationPermission('granted');
       // The permission-state effect loads the cached device coordinates once.
     }
-  };
-
-  const changeWorkspace = (workspaceId: string) => {
-    if (workspaceId === activeWorkspace.id) return;
-    selectWorkspace(workspaceId);
-    routerNavigate('/console');
-    setRosterCount(null);
-    setEventUpcomingCount(null);
   };
 
   useEffect(() => {
@@ -527,9 +518,9 @@ export function CoachConsole() {
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
       <div className={styles.workspaceSwitcher}>
         <span>Club</span>
-        <div className={styles.workspaceSelectRow}>
+        <div className={styles.workspaceIdentity}>
           <ClubBadge name={activeWorkspace.name} branding={clubBranding} size="sm" decorative className={styles.switcherBadge} />
-          <Select className={styles.workspaceSelect} value={activeWorkspace.id} onChange={(event) => changeWorkspace(event.target.value)} aria-label="Active Club" options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))} />
+          <strong>{activeWorkspace.name}</strong>
         </div>
       </div>
        <nav aria-label="Coach console"><ul>{NAV.map((item) => <li key={item.id}><button type="button" aria-current={destination === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><i><ConsoleIcon name={item.icon} /></i><span>{item.label}</span>{item.id === 'athletes' && <small>{rosterCount ?? '—'}</small>}{item.id === 'events' && fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders > 0 && <small aria-label={`${fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders} unread notifications`}>{fixtureNotificationCounts.events + fixtureNotificationCounts.fixtures + fixtureNotificationCounts.reminders}</small>}</button></li>)}</ul></nav>
