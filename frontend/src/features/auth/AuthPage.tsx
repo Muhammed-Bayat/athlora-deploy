@@ -86,7 +86,6 @@ export function AuthPage() {
   };
 
   useEffect(() => {
-    if (!isCoach) return;
     let active = true;
     setMembersLoading(true);
     setMemberError(null);
@@ -201,11 +200,11 @@ export function AuthPage() {
         {clubJoinRequestsLoading ? <p role="status">Loading Club requests...</p> : clubJoinRequests.length === 0 ? <p className={styles.muted}>No pending Club requests.</p> : <ul className={styles.memberList}>{clubJoinRequests.map((request) => <li key={request.id}><span><strong>{request.userName ?? 'Applicant'}</strong><small>{request.userEmail ?? 'Email unavailable'}</small></span><div className={styles.actions}><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'approved', 'assistant')} disabled={clubRequestBusy !== null}>{clubRequestBusy === request.id ? 'Saving...' : 'Approve assistant'}</Button><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'approved', 'coach')} disabled={clubRequestBusy !== null}>Approve coach</Button><Button variant="ghost" onClick={() => void reviewClubRequest(request, 'rejected')} disabled={clubRequestBusy !== null}>Reject</Button></div></li>)}</ul>}
       </Card>}
 
-      {isCoach && <Card className={styles.members}>
+      <Card className={styles.members}>
         <div><p>Club access</p><h2>Club members</h2><span>Everyone with access to {activeWorkspace.name}.</span></div>
         {memberError && <p className={styles.error} role="alert">{memberError}</p>}
-        {membersLoading ? <p role="status">Loading Club members...</p> : <ul className={`${styles.memberList} ${styles.clubMemberList}`}>{members.map((member) => <li key={member.userId}><span><strong>{member.name}{member.userId === currentUser?.id ? ' (you)' : ''}</strong><small>{member.email} · {member.role}</small></span><Select className={styles.roleSelect} aria-label={`Role for ${member.name}`} value={member.role} onChange={(event) => void changeMemberRole(member, event.target.value as 'coach' | 'assistant')} disabled={memberBusy !== null} options={[{ value: 'coach', label: 'Coach' }, { value: 'assistant', label: 'Assistant' }]} /><Button variant="ghost" onClick={() => void removeMember(member)} disabled={memberBusy !== null}>{memberBusy === member.userId ? 'Removing...' : 'Remove'}</Button></li>)}</ul>}
-      </Card>}
+        {membersLoading ? <p role="status">Loading Club members...</p> : <ul className={`${styles.memberList} ${isCoach ? styles.clubMemberList : ''}`}>{members.map((member) => <li key={member.userId}><span><strong>{member.name}{member.userId === currentUser?.id ? ' (you)' : ''}</strong><small>{member.email} · {member.role}</small></span>{isCoach && <><Select className={styles.roleSelect} aria-label={`Role for ${member.name}`} value={member.role} onChange={(event) => void changeMemberRole(member, event.target.value as 'coach' | 'assistant')} disabled={memberBusy !== null} options={[{ value: 'coach', label: 'Coach' }, { value: 'assistant', label: 'Assistant' }]} /><Button variant="ghost" onClick={() => void removeMember(member)} disabled={memberBusy !== null}>{memberBusy === member.userId ? 'Removing...' : 'Remove'}</Button></>}</li>)}</ul>}
+      </Card>
 
       <Modal open={deleteOpen} title="Permanently delete account" onClose={() => { if (!deleteBusy) setDeleteOpen(false); }} closeDisabled={deleteBusy}>
         <div className={styles.confirmation}>
