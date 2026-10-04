@@ -100,7 +100,18 @@
 .clubCardDescription { margin: 0; color: var(--ui-muted); font-size: 0.9rem; line-height: 1.5; }
 .clubCardCta { margin-top: auto; color: var(--cyan-200); font: 700 0.68rem var(--font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; }
 
-.identity { max-width: 720px; }
+.identity { width: 100%; }
+.identityCover {
+  display: block;
+  width: 100%;
+  height: clamp(180px, 28vw, 310px);
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  box-shadow: var(--inner-highlight), 0 22px 64px rgba(0, 0, 0, 0.3);
+}
+.identityContent { max-width: 720px; }
 .backLink { display: inline-block; margin-bottom: var(--space-4); color: var(--cyan-200); font: 700 0.7rem var(--font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .backLink:hover, .backLink:focus-visible { text-decoration: underline; }
 .identityHeading { display: flex; align-items: center; gap: 16px; margin: 0; color: var(--ui-white); font: 700 clamp(1.7rem, 4vw, 2.6rem) var(--font-display); letter-spacing: -0.055em; }

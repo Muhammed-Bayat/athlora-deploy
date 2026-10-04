@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import {
   clearClubCover,
   clearClubLogo,
+  CLUB_BRANDING_CHANGED_EVENT,
   getClubBranding,
   updateClubBranding,
   uploadClubCover,
   uploadClubLogo,
 } from '../../api/clubBranding';
-import { ApiError } from '../../api/client';
+import { ApiError, resolveApiUrl } from '../../api/client';
 import { Button, Card, ClubBadge } from '../../components';
 import { hasAccessibleForeground, isHexColor, pickForeground } from '../../utils/colorContrast';
 import type { ClubBranding } from '../../types';
@@ -62,6 +63,11 @@ export function ClubBrandingCard() {
   const primaryIssue = colorIssue(primaryColor);
   const canSave = Boolean(branding) && !primaryIssue && !busy;
 
+  const applySavedBranding = (next: ClubBranding) => {
+    applyBranding(next);
+    window.dispatchEvent(new Event(CLUB_BRANDING_CHANGED_EVENT));
+  };
+
   const saveDetails = async (event: FormEvent) => {
     event.preventDefault();
     if (!canSave) return;
@@ -69,7 +75,7 @@ export function ClubBrandingCard() {
     setError(null);
     setStatus(null);
     try {
-      applyBranding(await updateClubBranding({
+      applySavedBranding(await updateClubBranding({
         description: description.trim() || null,
         primaryColor: primaryColor ? primaryColor.toUpperCase() : null,
       }));
@@ -100,7 +106,7 @@ export function ClubBrandingCard() {
     setError(null);
     setStatus(null);
     try {
-      applyBranding(kind === 'logo' ? await uploadClubLogo(file) : await uploadClubCover(file));
+      applySavedBranding(kind === 'logo' ? await uploadClubLogo(file) : await uploadClubCover(file));
       setStatus(kind === 'logo' ? 'Logo updated.' : 'Cover image updated.');
     } catch (requestError) {
       setError(message(requestError));
@@ -114,7 +120,7 @@ export function ClubBrandingCard() {
     setError(null);
     setStatus(null);
     try {
-      applyBranding(kind === 'logo' ? await clearClubLogo() : await clearClubCover());
+      applySavedBranding(kind === 'logo' ? await clearClubLogo() : await clearClubCover());
       setStatus(kind === 'logo' ? 'Logo removed.' : 'Cover image removed.');
     } catch (requestError) {
       setError(message(requestError));
@@ -156,7 +162,7 @@ export function ClubBrandingCard() {
                 <span style={primaryColor && isHexColor(primaryColor) ? { background: primaryColor, color: pickForeground(primaryColor) } : undefined}>Primary</span>
               </div>
             </div>
-            {branding.coverUrl && <img className={styles.coverPreview} src={branding.coverUrl} alt="" />}
+            {branding.coverUrl && <img className={styles.coverPreview} src={resolveApiUrl(branding.coverUrl)} alt="" />}
           </div>
 
           {isCoach && (

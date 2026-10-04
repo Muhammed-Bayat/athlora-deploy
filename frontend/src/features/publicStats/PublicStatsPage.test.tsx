@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicStatsPage } from './PublicStatsPage';
+import { resolveApiUrl } from '../../api/client';
 
 const mockListPublicClubs = vi.fn();
 const mockListPublicSeasons = vi.fn();
@@ -21,7 +22,7 @@ const CLUB_ID = '33333333-3333-4333-8333-333333333333';
 const OTHER_CLUB_ID = '55555555-5555-4555-8555-555555555555';
 const OTHER_ATHLETE_ID = '66666666-6666-4666-8666-666666666666';
 const clubDetail = {
-  club: { id: CLUB_ID, name: 'Open Track Club' },
+  club: { id: CLUB_ID, name: 'Open Track Club', branding: { description: 'Sprint-focused club.', primaryColor: null, logoUrl: null, coverUrl: '/api/v1/media/clubs/club/cover.png' } },
   roster: { active: 1, inactive: 0, archived: 0, total: 1 },
   distinctAthletesWithValidResults: 1,
   total100mResultCount: 3,
@@ -52,6 +53,7 @@ describe('PublicStatsPage', () => {
     await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Open Track Club' }));
 
     expect(await screen.findByRole('heading', { name: 'Open Track Club' })).toBeInTheDocument();
+    expect(screen.getByTestId('club-cover-image')).toHaveAttribute('src', resolveApiUrl(clubDetail.club.branding.coverUrl));
     expect(await screen.findByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
     expect(screen.getByLabelText(`Ari Runner ${new Date().getUTCFullYear()} discipline metrics`)).toHaveTextContent('100m');
     const longJump = screen.getByRole('tab', { name: 'Long jump' });

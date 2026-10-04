@@ -2,6 +2,7 @@ import { request } from './client';
 import type { ClubBranding } from '../types';
 
 const BRANDING_PATH = '/api/v1/clubs/branding';
+export const CLUB_BRANDING_CHANGED_EVENT = 'athlora-club-branding-changed';
 
 export async function getClubBranding(): Promise<ClubBranding> {
   const response = await request<{ data: ClubBranding }>(BRANDING_PATH);
