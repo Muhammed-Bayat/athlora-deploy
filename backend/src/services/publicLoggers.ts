@@ -8,6 +8,7 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
 import { recomputeEventResults } from './timeline.js';
 import { sameLoggerIdentity } from './loggerIdentity.js';
+import { eventParticipationSql } from './ownership.js';
 import type { MeetActor } from '../types/meets.js';
 
 const TIMELINE_COLUMNS = 'id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id, created_at, updated_at, deleted_at';
@@ -100,7 +101,7 @@ export async function createPublicLoggerLink(
     `INSERT INTO public_logger_links (event_id, token_hash, created_by)
      SELECT e.id, $3, $4
      FROM events e
-     WHERE e.id = $1 AND e.workspace_id = $2 AND e.status IN ('scheduled', 'in_progress')
+     WHERE e.id = $1 AND ${eventParticipationSql('$2')} AND e.status IN ('scheduled', 'in_progress')
      RETURNING id, event_id, status, created_at, revoked_at`,
     [eventId, workspaceId, hashPublicLoggerToken(token), createdBy],
   );
@@ -120,7 +121,7 @@ export async function listPublicLoggerLinks(
     `SELECT pl.id, pl.event_id, pl.status, pl.created_at, pl.revoked_at
      FROM public_logger_links pl
      JOIN events e ON e.id = pl.event_id
-     WHERE pl.event_id = $1 AND e.workspace_id = $2
+     WHERE pl.event_id = $1 AND ${eventParticipationSql('$2')}
      ORDER BY pl.created_at DESC, pl.id DESC`,
     [eventId, workspaceId],
   );
@@ -138,7 +139,7 @@ export async function revokePublicLoggerLink(
     `UPDATE public_logger_links pl
      SET status = 'revoked', revoked_at = now()
      FROM events e
-     WHERE pl.id = $1 AND pl.event_id = $2 AND e.id = pl.event_id AND e.workspace_id = $3 AND pl.status = 'active'
+     WHERE pl.id = $1 AND pl.event_id = $2 AND e.id = pl.event_id AND ${eventParticipationSql('$3')} AND pl.status = 'active'
      RETURNING pl.id`,
     [linkId, eventId, workspaceId],
   );

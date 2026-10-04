@@ -25,7 +25,10 @@ vi.mock('../../api/timeline');
 vi.mock('../../api/results');
 vi.mock('../../api/fixtures', () => ({ getGuestFixture: vi.fn() }));
 vi.mock('../../api/eventHelpers');
-vi.mock('../events/PublicLoggerPanel', () => ({ PublicLoggerPanel: () => null }));
+vi.mock('../events/PublicLoggerPanel', async () => {
+  const React = await import('react');
+  return { PublicLoggerPanel: () => React.createElement('section', { 'aria-label': 'Public logger links' }) };
+});
 vi.mock('../events/SessionLivePanel', () => ({ SessionLivePanel: sessionLivePanelStub }));
 
 describe('LiveLoggingPage', () => {
@@ -142,6 +145,19 @@ describe('LiveLoggingPage', () => {
     );
   }
 
+  function renderForeignCoachPage(initialEventId?: string) {
+    return render(
+      <WorkspaceContext.Provider value={{
+        activeWorkspace: { id: 'workspace-2', name: 'Visiting club', timezone: 'UTC', role: 'coach' },
+        workspaces: [], selectWorkspace: () => undefined, refreshWorkspaces: async () => undefined,
+      }}>
+        <CurrentUserProvider user={currentUser}>
+          <LiveLoggingPage initialEventId={initialEventId} />
+        </CurrentUserProvider>
+      </WorkspaceContext.Provider>,
+    );
+  }
+
   it('renders no-live state and allows starting an event', async () => {
     vi.mocked(eventsApi.listEvents).mockResolvedValueOnce({
       data: [mockEvent],
@@ -211,6 +227,41 @@ describe('LiveLoggingPage', () => {
 
     expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Complete Event' })).not.toBeInTheDocument());
+  });
+
+  it('offers public logging link management to the host workspace', async () => {
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+
+    renderAssistantPage(mockActiveEvent.id);
+
+    expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Public logger links' })).toBeInTheDocument();
+  });
+
+  it('hides public logging link management from an unrelated coach workspace', async () => {
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+
+    renderForeignCoachPage(mockActiveEvent.id);
+
+    expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Public logger links' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch Event' })).toBeInTheDocument();
+  });
+
+  it('offers public logging link management to an accepted guest fixture', async () => {
+    vi.mocked(participantsApi.listEventParticipants).mockResolvedValue({ data: [mockParticipant], meta: { count: 1 } });
+    vi.mocked(timelineApi.listTimelineEntries).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(resultsApi.listResults).mockResolvedValue({ data: [], meta: { count: 0 } });
+    vi.mocked(getGuestFixture).mockResolvedValue({} as never);
+
+    renderPage(mockActiveEvent.id);
+
+    expect(await screen.findByRole('heading', { name: mockActiveEvent.title })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Public logger links' })).toBeInTheDocument();
   });
 
   it('returns to event selection when a dashboard event is no longer live', async () => {

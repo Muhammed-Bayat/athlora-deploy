@@ -12,6 +12,8 @@ All paths are relative to `/api/v1`.
 
 Mounted at `/events/:eventId/public-loggers`.
 
+Owner access is scoped to event participation: coaches in the event-owning workspace and coaches in fixture-guest workspaces whose fixture acceptance is still `accepted` at the current revision may create, list, and revoke links. Any other workspace (including stale or retracted fixture guests) receives the generic `404 NOT_FOUND` at the ownership middleware before the service runs. Host-only event lifecycle controls (start/complete/cancel, finalization) remain restricted to the event-owning workspace.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/events/:eventId/public-loggers` | Create a new public logger link |
@@ -229,4 +231,4 @@ For a multi-discipline meet, every action carries a `target` with `disciplineSes
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. Public incident undo was documented with the assistance of OpenCode[gpt-5.6-terra]. Public per-athlete relay split capture (`relayMemberId` payloads, `relayLegs[]` results, and entrant `members[]`) and the removal of the public logger standings table and CSV export were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. Public incident undo was documented with the assistance of OpenCode[gpt-5.6-terra]. Public per-athlete relay split capture (`relayMemberId` payloads, `relayLegs[]` results, and entrant `members[]`) and the removal of the public logger standings table and CSV export were documented with the assistance of opencode[mimo-v2.6-flash-free]. Owner-endpoint participation scoping for link management (#313) was documented with the assistance of opencode[mimo-v2.6-flash-free].
