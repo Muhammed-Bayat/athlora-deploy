@@ -427,6 +427,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             <div className={styles.athleteList} tabIndex={0} aria-label={definition.defaultRules.entrantType === 'relay' ? 'Scrollable relay teams' : 'Scrollable athletes'}>
               {loggableEntrants.map((entrant) => {
                 const result = results.find((row) => row.entrantId === entrant.id);
+                const ownsEntrant = entrant.workspaceId === activeWorkspace.id;
                 const eliminated = Boolean(result?.vertical?.eliminated);
                 const controlsDisabled = busy || !live || (vertical && eliminated);
                 const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty') && !entry.deletedAt);
@@ -574,21 +575,23 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                               </span>
                               {splits.length > 0 && (
                                 <ol className={styles.attemptsList} aria-label={`Relay splits for ${member.name}`}>
-                                  {splits.map((entry, index) => (
-                                    <li key={entry.id}>
-                                      #{index + 1} {formatResult(entry.value, definition)}
-                                      {entry.recorderName && ` · by ${entry.recorderName}`}
-                                      {leg?.selectedEntryId === entry.id && ' · official'}
-                                      {isCoach && live && (
+                                      {splits.map((entry, index) => (
+                                        <li key={entry.id}>
+                                          #{index + 1} {formatResult(entry.value, definition)}
+                                          {entry.recorderName && ` · by ${entry.recorderName}`}
+                                          {leg?.selectedEntryId === entry.id && ' · official'}
+                                          {isCoach && live && (
                                         <>
                                           {' '}
-                                          <Button
-                                            variant="secondary"
-                                            disabled={busy || !offline.isOnline || leg?.selectedEntryId === entry.id || entry.value === null || entry.isFoul}
-                                            onClick={() => void selectOfficial(entrant.id, entry.id, member.relayMemberId)}
-                                          >
-                                            Make official
-                                          </Button>
+                                          {ownsEntrant && (
+                                            <Button
+                                              variant="secondary"
+                                              disabled={busy || !offline.isOnline || leg?.selectedEntryId === entry.id || entry.value === null || entry.isFoul}
+                                              onClick={() => void selectOfficial(entrant.id, entry.id, member.relayMemberId)}
+                                            >
+                                              Make official
+                                            </Button>
+                                          )}
                                           {entry.canUndo !== false && (
                                             <Button variant="secondary" disabled={busy} onClick={() => void undoEntry(entrant.id, entry)}>Undo</Button>
                                           )}
@@ -615,7 +618,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                             {isCoach && live && (
                               <>
                                 {' '}
-                                {selectable && (
+                                {selectable && ownsEntrant && (
                                   <Button
                                     variant="secondary"
                                     disabled={busy || !offline.isOnline || result?.selectedEntryId === entry.id || entry.value === null || !!entry.incidentType || entry.isFoul}
@@ -636,7 +639,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         ))}
                       </ol>
                     )}
-                    {isCoach && live && selectable && !relay && result?.selectedEntryId && teamEntries.length > 0 && (
+                    {isCoach && live && ownsEntrant && selectable && !relay && result?.selectedEntryId && teamEntries.length > 0 && (
                       <Button variant="secondary" disabled={busy} onClick={() => void selectOfficial(entrant.id, null)}>Clear official selection</Button>
                     )}
                   </div>

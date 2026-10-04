@@ -68,6 +68,11 @@ export function canWriteEntrant(actor: MeetActor, access: MeetAccess, workspaceI
   return access.helper || ('workspaceId' in actor && actor.workspaceId === workspaceId);
 }
 
+/** Officializing results is limited to the entrant's own club — the host gets no bypass. */
+export function canOfficializeEntrant(actor: MeetActor, workspaceId: string): boolean {
+  return 'workspaceId' in actor && actor.workspaceId === workspaceId;
+}
+
 export async function meetAudit(
   db: DbExecutor, actor: MeetActor, eventId: string, workspaceId: string,
   entityType: string, entityId: string, action: string, before: unknown, after: unknown,

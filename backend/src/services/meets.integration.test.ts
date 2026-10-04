@@ -613,6 +613,42 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(published[0].sessions[0]).toMatchObject({ resultState: 'final', results: [{ name: 'Guest', placing: 1 }, { name: 'Host athlete', placing: null, outcome: 'dq' }] });
   });
 
+  it('limits official selection to each entrant own club, including the host', async () => {
+    await migrate();
+    await pool.query("INSERT INTO event_fixture_workspaces (event_id,workspace_id,role,status,contact_email,joined_by) VALUES ($1,$2,'guest','accepted','guest@test.example',$3)", [eventId, other.workspaceId, other.userId]);
+    const outsiderUser = await pool.query("INSERT INTO users (auth0_id, name, email) VALUES ('auth|Outsider','Outsider','outsider@test.example') RETURNING id");
+    const outsiderWorkspace = await pool.query("INSERT INTO workspaces (name) VALUES ('Outsider') RETURNING id");
+    await pool.query("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1,$2,'coach')", [outsiderWorkspace.rows[0].id, outsiderUser.rows[0].id]);
+    const outsider: Extract<MeetActor, { userId: string }> = { userId: outsiderUser.rows[0].id, workspaceId: outsiderWorkspace.rows[0].id, role: 'coach' };
+
+    const s = await session();
+    const own = await guest();
+    const foreign = await createEntrant(other, eventId, { kind: 'athlete', athleteId: otherAthleteId }, transaction);
+    const ownTarget = { disciplineSessionId: s.id, entrantId: own.id };
+    const foreignTarget = { disciplineSessionId: s.id, entrantId: foreign.id };
+    await registerEntrant(host, eventId, ownTarget, transaction);
+    await registerEntrant(other, eventId, foreignTarget, transaction);
+    const opened = await open(s.id);
+    const ownEntry = await createSessionEntry(host, eventId, ownTarget, { ...timed, value: 10.9 }, transaction);
+    const foreignEntry = await createSessionEntry(other, eventId, foreignTarget, timed, transaction);
+
+    await expect(selectSessionResultEntry(other, eventId, ownTarget, { entryId: ownEntry.id, expectedVersion: 1 }, transaction))
+      .rejects.toMatchObject({ status: 403, code: 'WORKSPACE_CAPABILITY_DENIED' });
+    await expect(selectSessionResultEntry(host, eventId, foreignTarget, { entryId: foreignEntry.id, expectedVersion: 1 }, transaction))
+      .rejects.toMatchObject({ status: 403, code: 'WORKSPACE_CAPABILITY_DENIED' });
+    await expect(selectSessionResultEntry(outsider, eventId, ownTarget, { entryId: ownEntry.id, expectedVersion: 1 }, transaction))
+      .rejects.toMatchObject({ status: 404 });
+
+    await selectSessionResultEntry(other, eventId, foreignTarget, { entryId: foreignEntry.id, expectedVersion: 1 }, transaction);
+    await selectSessionResultEntry(host, eventId, ownTarget, { entryId: ownEntry.id, expectedVersion: 1 }, transaction);
+    const board = await listSessionResults(host, eventId, s.id, pool);
+    expect(board.find((row) => row.entrantId === own.id)?.selectedEntryId).toBe(ownEntry.id);
+    expect(board.find((row) => row.entrantId === foreign.id)?.selectedEntryId).toBe(foreignEntry.id);
+
+    const final = await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: opened.version }, transaction);
+    expect(final.resultState).toBe('final');
+  });
+
   it.each(['100m', '200m', 'long_jump', 'triple_jump', 'shot_put', 'discus', 'javelin', 'high_jump'])('final individual statistics respect %s policy', async code => {
     await migrate();
     const d = await definition(code);

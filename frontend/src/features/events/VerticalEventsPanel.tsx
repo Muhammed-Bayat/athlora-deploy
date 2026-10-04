@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import * as api from '../../api/meets';
 import { listAthletes } from '../../api/athletes';
 import { Button, Select } from '../../components';
+import { useWorkspace } from '../auth/WorkspaceContext';
 import type { AthleticsEvent, Athlete } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionResult } from '../../types/meets';
 import { standingsMembers, standingsTeam } from './standingsDisplay';
 import styles from './SessionLivePanel.module.css';
 
 export function VerticalEventsPanel({ event, canOperate, isCoach }: { event: AthleticsEvent; canOperate: boolean; isCoach: boolean }) {
+  const { activeWorkspace } = useWorkspace();
+  const isHost = event.workspaceId === activeWorkspace.id;
   const [definitions, setDefinitions] = useState<DisciplineDefinition[]>([]);
   const [sessions, setSessions] = useState<DisciplineSession[]>([]);
   const [entrants, setEntrants] = useState<MeetEntrant[]>([]);
@@ -78,8 +81,8 @@ export function VerticalEventsPanel({ event, canOperate, isCoach }: { event: Ath
       {canOperate && session.status === 'scheduled' && event.status === 'in_progress' && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'in_progress', session.version))}>Start vertical session</Button>}
       {live && <fieldset disabled={busy || !registered.includes(entrantId)}><legend>Log vertical attempt</legend><label>Target height (m)<input type="number" min={session.verticalConfig?.startingHeight} step={session.verticalConfig?.heightIncrement} value={height} onChange={e => setHeight(e.target.value)} /></label><Button onClick={() => setHeight((Number(height) + (session.verticalConfig?.heightIncrement ?? 0)).toFixed(2))}>Next height</Button>{(['clearance', 'failure', 'pass'] as const).map(state => <Button key={state} disabled={results.find(r => r.entrantId === entrantId)?.vertical?.eliminated} onClick={() => void run(() => api.createSessionEntry(event.id, target, { entryType: 'attempt', value: Number(height), unit: 'metres', verticalState: state, isFoul: false, incidentType: null, noteText: null, deviceId: null }))}>{state}</Button>)}</fieldset>}
       <h3>Attempt history</h3><ol>{entries.filter(e => !entrantId || e.entrantId === entrantId).map(e => <li key={e.id}>#{e.attemptOrder} {format(e.value)} — {e.verticalState ?? e.incidentType}{e.recorderName && ` · by ${e.recorderName}`} {live && isCoach && e.verticalState && e.verticalState !== 'void' && e.canEdit !== false && <Button disabled={busy} onClick={() => void run(() => api.replaceSessionEntry(event.id, { disciplineSessionId: selected, entrantId: e.entrantId }, e.id, { entryType: e.entryType, value: e.value, unit: e.unit, isFoul: false, incidentType: null, noteText: e.noteText, deviceId: null, verticalState: 'void', expectedVersion: e.version }))}>Void attempt {e.attemptOrder}</Button>}</li>)}</ol>
-      {live && isCoach && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'completed', session.version))}>Finalize vertical session</Button>}
-      {isCoach && canOperate && session.status === 'completed' && event.status !== 'cancelled' && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'in_progress', session.version))}>Reopen vertical session</Button>}
+      {live && isCoach && isHost && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'completed', session.version))}>Finalize vertical session</Button>}
+      {isCoach && canOperate && isHost && session.status === 'completed' && event.status !== 'cancelled' && <Button disabled={busy} onClick={() => void run(() => api.changeSessionState(event.id, selected, 'in_progress', session.version))}>Reopen vertical session</Button>}
       <h3>Highest clearances {session.status !== 'completed' && '(provisional)'}</h3><p>Countback: failures at best height, then total failures through best. Equal keys share places; no jump-off.</p>
       <div className={styles.standingsScroll}>
         <table className={styles.standingsTable}>
