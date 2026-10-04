@@ -4,7 +4,7 @@ import { mapMeetRow } from '../db/meet-row-mappers.js';
 import { withReadTransaction, withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition, MeetActor, SessionEntry, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget, VerticalSummary } from '../types/meets.js';
-import { canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
+import { canOfficializeEntrant, canReadEntrant, meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound, type MeetAccess } from './meetAccess.js';
 import { getDefinition, getSession, type MeetTransaction } from './meets.js';
 import { sameLoggerIdentity } from './loggerIdentity.js';
 import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
@@ -349,6 +349,9 @@ export async function selectSessionResultEntry(actor: MeetActor, eventId: string
     if (session.status !== 'in_progress' || session.resultState === 'final' || access.event.status === 'cancelled') meetConflict('SESSION_NOT_IN_PROGRESS', 'Reopen the session before selecting results');
     if (definition.defaultRules.aggregation === 'vertical') meetConflict('DERIVED_RESULT_ONLY', 'Vertical results are derived from the full attempt sequence');
     const entrant = await registration(db, actor, access, eventId, target, true);
+    if (!canOfficializeEntrant(actor, entrant.workspace_id)) {
+      throw new ApiError(403, 'WORKSPACE_CAPABILITY_DENIED', 'Official results can only be selected for your own club');
+    }
     const found = await db.query('SELECT * FROM session_results WHERE session_id = $1 AND entrant_id = $2', [target.disciplineSessionId, target.entrantId]);
     const before = found.rows[0];
     if (!before) meetNotFound();

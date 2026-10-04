@@ -185,7 +185,7 @@ Set `TEST_DATABASE_URL` to enable them. Use a **disposable database** because th
 
 ### What is tested
 
-The backend has **11 integration test files** covering:
+The backend has **12 integration test files** covering:
 
 | File | Coverage |
 |---|---|
@@ -198,8 +198,9 @@ The backend has **11 integration test files** covering:
 | `services/authorization.integration.test.ts` | Two-coach isolation for athletes, events, participants, timeline, statistics |
 | `services/injuries.integration.test.ts` | Injury CRUD persistence |
 | `services/accounts.integration.test.ts` | Account lifecycle and workspace persistence |
-| `services/meets.integration.test.ts` | Migration upgrades/schema install, catalogue sessions, entrant kinds and registrations, session results/corrections, relay official selection |
+| `services/meets.integration.test.ts` | Migration upgrades/schema install, catalogue sessions, entrant kinds and registrations, session results/corrections, own-club official selection, relay official selection |
 | `services/sync.integration.test.ts` | Offline batch sync: idempotent receipts, rejected-action retries, `EVENT_NOT_IN_PROGRESS` guard |
+| `services/publicLoggers.integration.test.ts` | Public logger link authorization: host and invited-coach management, unrelated-coach blocking, stale/retracted fixture acceptance |
 
 ### Setup
 
@@ -545,4 +546,4 @@ The submitted response evidence and form links are retained in [Stakeholder Feed
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra]. The live-schema table-count update for per-athlete relay split results was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra]. The live-schema table-count update for per-athlete relay split results was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public logger link authorization suite, own-club official selection cases, and the matching frontend permission-state tests (#313, #314) were documented with the assistance of opencode[mimo-v2.6-flash-free].

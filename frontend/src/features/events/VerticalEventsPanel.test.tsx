@@ -6,9 +6,13 @@ import type { AthleticsEvent } from '../../types';
 import { VerticalEventsPanel } from './VerticalEventsPanel';
 
 vi.mock('../../api/meets', () => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), listSessionEntries: vi.fn(), listSessionResults: vi.fn(), createSessionEntry: vi.fn(), changeSessionState: vi.fn() }));
+const workspace = vi.hoisted(() => ({ current: 'ws-1' }));
+vi.mock('../auth/WorkspaceContext', () => ({ useWorkspace: () => ({ activeWorkspace: { id: workspace.current } }) }));
 const config = { startingHeight: 1.5, heightIncrement: 0.05, failureLimit: 3, round: 'final' };
+const event = { id: 'event', workspaceId: 'ws-1', status: 'in_progress' } as AthleticsEvent;
 beforeEach(() => {
   vi.clearAllMocks();
+  workspace.current = 'ws-1';
   vi.mocked(api.listDisciplines).mockResolvedValue({ data: [{ id: 'd', kind: 'vertical', precision: 2, presentation: { label: 'High Jump' }, defaultRules: { aggregation: 'vertical', entrantType: 'individual' } }] } as never);
   vi.mocked(api.listSessions).mockResolvedValue({ data: [{ id: 's', disciplineDefinitionId: 'd', label: 'High Jump', status: 'in_progress', version: 2, verticalConfig: config }] } as never);
   vi.mocked(api.listEntrants).mockResolvedValue({ data: [{ id: 'en', name: 'Ari', kind: 'guest' }] } as never);
@@ -18,7 +22,7 @@ beforeEach(() => {
 });
 it('logs a height-specific clearance and displays the authoritative result without best selection', async () => {
   const user = userEvent.setup();
-  render(<VerticalEventsPanel event={{ id: 'event', status: 'in_progress' } as AthleticsEvent} canOperate isCoach />);
+  render(<VerticalEventsPanel event={event} canOperate isCoach />);
   await screen.findByRole('button', { name: 'Vertical session' });
   await user.click(screen.getByRole('button', { name: 'Vertical session' }));
   await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'High Jump — in_progress' }));
@@ -46,11 +50,42 @@ it('hides void controls for entries recorded by another club', async () => {
     id: 'foreign-entry', entrantId: 'en', entryType: 'attempt', value: 1.55, unit: 'metres', isFoul: false,
     incidentType: null, noteText: null, verticalState: 'failure', attemptOrder: 2, version: 1, canEdit: false,
   }] } as never);
-  render(<VerticalEventsPanel event={{ id: 'event', status: 'in_progress' } as AthleticsEvent} canOperate isCoach />);
+  render(<VerticalEventsPanel event={event} canOperate isCoach />);
   await user.click(await screen.findByRole('button', { name: 'Vertical session' }));
   await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'High Jump — in_progress' }));
   await user.click(screen.getByRole('button', { name: 'Vertical entrant' }));
   await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari' }));
   expect(screen.getByRole('button', { name: 'Void attempt 1' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Void attempt 2' })).not.toBeInTheDocument();
+});
+
+it('keeps vertical finalize and reopen controls on the host workspace only', async () => {
+  const user = userEvent.setup();
+  const openSession = async (status: string) => {
+    await user.click(await screen.findByRole('button', { name: 'Vertical session' }));
+    await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: `High Jump — ${status}` }));
+  };
+
+  const hostLive = render(<VerticalEventsPanel event={event} canOperate isCoach />);
+  await openSession('in_progress');
+  expect(screen.getByRole('button', { name: 'Finalize vertical session' })).toBeInTheDocument();
+  hostLive.unmount();
+
+  workspace.current = 'ws-2';
+  const guestLive = render(<VerticalEventsPanel event={event} canOperate isCoach />);
+  await openSession('in_progress');
+  expect(screen.queryByRole('button', { name: 'Finalize vertical session' })).not.toBeInTheDocument();
+  guestLive.unmount();
+
+  vi.mocked(api.listSessions).mockResolvedValue({ data: [{ id: 's', disciplineDefinitionId: 'd', label: 'High Jump', status: 'completed', version: 2, verticalConfig: config }] } as never);
+  const guestCompleted = render(<VerticalEventsPanel event={event} canOperate isCoach />);
+  await openSession('completed');
+  expect(screen.queryByRole('button', { name: 'Reopen vertical session' })).not.toBeInTheDocument();
+  guestCompleted.unmount();
+
+  workspace.current = 'ws-1';
+  const hostCompleted = render(<VerticalEventsPanel event={event} canOperate isCoach />);
+  await openSession('completed');
+  expect(screen.getByRole('button', { name: 'Reopen vertical session' })).toBeInTheDocument();
+  hostCompleted.unmount();
 });

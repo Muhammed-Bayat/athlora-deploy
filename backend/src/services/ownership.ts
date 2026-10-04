@@ -22,14 +22,18 @@ export async function assertAthleteOwnership(workspaceId: string, athleteId: unk
   await assertScoped(workspaceId, [athleteId], 'SELECT 1 FROM athletes WHERE id = $1 AND workspace_id = $2 LIMIT 1', [athleteId as string, workspaceId], executor);
 }
 
-export async function assertEventOwnership(workspaceId: string, eventId: unknown, executor: DbExecutor = getPool()): Promise<void> {
-  await assertScoped(workspaceId, [eventId], `SELECT 1 FROM events e WHERE e.id = $1 AND (
-    e.workspace_id = $2 OR EXISTS (
+/** Host event workspace or an accepted guest fixture workspace at the current fixture revision.
+ * `workspaceParam` is the placeholder ($2, $3, …) bound to the requesting workspace; the query must alias the event as `e`. */
+export function eventParticipationSql(workspaceParam: string): string {
+  return `(e.workspace_id = ${workspaceParam} OR EXISTS (
       SELECT 1 FROM event_fixture_workspaces fw
-      WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
+      WHERE fw.event_id = e.id AND fw.workspace_id = ${workspaceParam} AND fw.role = 'guest'
         AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-    )
-  ) LIMIT 1`, [eventId as string, workspaceId], executor);
+    ))`;
+}
+
+export async function assertEventOwnership(workspaceId: string, eventId: unknown, executor: DbExecutor = getPool()): Promise<void> {
+  await assertScoped(workspaceId, [eventId], `SELECT 1 FROM events e WHERE e.id = $1 AND ${eventParticipationSql('$2')} LIMIT 1`, [eventId as string, workspaceId], executor);
 }
 
 export async function assertEventHostOwnership(workspaceId: string, eventId: unknown, executor: DbExecutor = getPool()): Promise<void> {

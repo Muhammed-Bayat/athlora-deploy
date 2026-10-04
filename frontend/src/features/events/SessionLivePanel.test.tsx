@@ -332,6 +332,53 @@ describe('SessionLivePanel', () => {
     expect(within(screen.getByRole('group', { name: 'Bea Dash' })).getByText('Team B')).toBeInTheDocument();
   });
 
+  it('offers officialization only for the logger own club while the roster stays shared', async () => {
+    sessionStatus = 'in_progress';
+    const user = userEvent.setup();
+    api.listDisciplines.mockResolvedValue({ data: [{ id: 'track-200', code: '200m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '200m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } }] });
+    api.listSessions.mockImplementation(async () => ({ data: [{
+      id: 'session-1',
+      workspaceId: 'ws-1',
+      resultState,
+      disciplineDefinitionId: 'track-200',
+      label: '200m Heat 1',
+      status: sessionStatus,
+      version: sessionVersion,
+    }] }));
+    api.listEntrants.mockResolvedValue({ data: [
+      { id: 'athlete-a', eventId: 'event-1', workspaceId: 'ws-1', kind: 'athlete', athleteId: 'a', name: 'Ari Runner', clubName: null, details: null, memberIds: [], workspaceName: 'Team A', rsvpStatus: 'yes', createdBy: 'coach-1', createdAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'athlete-b', eventId: 'event-1', workspaceId: 'ws-2', kind: 'athlete', athleteId: 'b', name: 'Bea Dash', clubName: null, details: null, memberIds: [], workspaceName: 'Team B', rsvpStatus: 'yes', createdBy: 'coach-2', createdAt: '2026-09-01T00:00:00.000Z' },
+    ] });
+    api.listRegistrations.mockResolvedValue({ data: [
+      { id: 'reg-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', workspaceId: 'ws-1', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-1', createdAt: '2026-09-20T09:00:00.000Z' },
+      { id: 'reg-b', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-b', workspaceId: 'ws-2', withdrawnAt: null, withdrawnBy: null, createdBy: 'coach-2', createdAt: '2026-09-20T09:00:00.000Z' },
+    ], meta: { count: 2 } });
+    api.listSessionEntries.mockResolvedValue({ data: [
+      { id: 'entry-a', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', entryType: 'attempt', value: 11.2, unit: 'seconds', isFoul: false, incidentType: null, noteText: null, recordedBy: 'coach-1', version: 1, createdAt: '2026-09-20T10:00:00.000Z', updatedAt: '2026-09-20T10:00:00.000Z', deletedAt: null },
+      { id: 'entry-b', eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-b', entryType: 'attempt', value: 11.4, unit: 'seconds', isFoul: false, incidentType: null, noteText: null, recordedBy: 'coach-2', version: 1, createdAt: '2026-09-20T10:01:00.000Z', updatedAt: '2026-09-20T10:01:00.000Z', deletedAt: null },
+    ] });
+    api.listSessionResults.mockResolvedValue({ data: [
+      { eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a', outcome: 'valid', finalResult: 11.2, effectiveOutcome: 'valid', effectiveResult: 11.2, placing: 1, isPb: false, isSb: false, manualOverride: null, overrideReason: null, overriddenBy: null, overriddenAt: null, selectedEntryId: null, version: 1, updatedAt: '2026-09-20T10:00:00.000Z' },
+      { eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-b', outcome: 'valid', finalResult: 11.4, effectiveOutcome: 'valid', effectiveResult: 11.4, placing: 2, isPb: false, isSb: false, manualOverride: null, overrideReason: null, overriddenBy: null, overriddenAt: null, selectedEntryId: 'entry-b', version: 1, updatedAt: '2026-09-20T10:01:00.000Z' },
+    ] });
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    await user.click(await screen.findByRole('tab', { name: /200m Heat 1/ }));
+    const ownRow = await screen.findByRole('group', { name: 'Ari Runner' });
+    const foreignRow = await screen.findByRole('group', { name: 'Bea Dash' });
+    expect(within(foreignRow).getByText('Team B')).toBeInTheDocument();
+
+    await user.click(within(ownRow).getByRole('button', { name: 'Make official' }));
+    await waitFor(() => expect(api.selectSessionResultEntry).toHaveBeenCalledWith(
+      'event-1',
+      { disciplineSessionId: 'session-1', entrantId: 'athlete-a' },
+      { entryId: 'entry-a', expectedVersion: 1 },
+    ));
+    expect(within(foreignRow).getByLabelText('Time (s) for Bea Dash')).toBeInTheDocument();
+    expect(within(foreignRow).queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
+    expect(within(foreignRow).queryByRole('button', { name: 'Clear official selection' })).not.toBeInTheDocument();
+  });
+
   it('renders nothing for a legacy 100m event', () => {
     const legacy: AthleticsEvent = { ...event, discipline: '100m' };
     const { container } = render(<SessionLivePanel event={legacy} canOperate isCoach />);

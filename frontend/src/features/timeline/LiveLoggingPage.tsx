@@ -660,6 +660,8 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   const isMeetEvent = activeEvent.discipline === null;
   const isCoachWorkspace = activeWorkspace.role === 'coach';
   const canOperateLive = isCoachWorkspace || activeWorkspace.role === 'assistant';
+  // Public logger link management is limited to coaches/assistants of a participating workspace (host or accepted fixture guest).
+  const canManagePublicLinks = canOperateLive && (activeEvent.workspaceId === activeWorkspace.id || isGuestFixture);
   const recoveryActions = queueActions.map((action) => {
     const athleteId = typeof action.payload.athleteId === 'string' ? action.payload.athleteId : null;
     const athlete = athleteId ? participants.find((participant) => participant.athleteId === athleteId)?.athlete.name : null;
@@ -744,7 +746,9 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
           }}
         />
       )}
-      <div className={styles.publicLogger}><PublicLoggerPanel event={activeEvent} /></div>
+      {canManagePublicLinks && (
+        <div className={styles.publicLogger}><PublicLoggerPanel event={activeEvent} /></div>
+      )}
 
       {error && <div className={styles.errorAlert} role="alert">{error}</div>}
       {conflictNotice && <div className={styles.conflictAlert} role="alert">{conflictNotice}</div>}
