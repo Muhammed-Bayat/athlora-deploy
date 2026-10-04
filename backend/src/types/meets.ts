@@ -111,6 +111,8 @@ export interface RelayLegResult {
   value: number | null;
   outcome: ResultOutcome;
   selectedEntryId: string | null;
+  isPb?: boolean;
+  isSb?: boolean;
 }
 
 export interface SessionResult extends SessionTarget {

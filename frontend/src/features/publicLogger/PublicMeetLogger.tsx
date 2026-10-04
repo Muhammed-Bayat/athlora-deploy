@@ -457,7 +457,7 @@ export function PublicMeetLogger({
                                   Record
                                 </Button>
                                 <span className={styles.currentRecord} aria-label={`Official split for ${member.name}`}>
-                                  {leg && leg.value !== null ? formatValue(leg.value, definition) : 'Awaiting selection'}
+                                  {leg && leg.value !== null ? `${formatValue(leg.value, definition)}${leg.isPb ? ' PB' : ''}${leg.isSb ? ' SB' : ''}` : 'Awaiting selection'}
                                 </span>
                                 {splits.length > 0 && (
                                   <ol className={styles.attemptsList} aria-label={`Relay splits for ${member.name}`}>

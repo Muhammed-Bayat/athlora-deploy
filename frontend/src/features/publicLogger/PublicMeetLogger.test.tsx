@@ -36,7 +36,7 @@ const snapshot: PublicMeetLoggerSnapshot = {
     { id: GUEST_ID, name: 'Casey Guest', kind: 'guest', workspaceName: null, clubName: 'Independent Athletics', attending: true, members: [] },
   ],
   sessions: [
-    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [{ entrantId: RELAY_ID, outcome: 'valid', placing: null, selectedEntryId: null, value: null, relayLegs: [{ relayMemberId: RM_A, leg: 1, name: 'Ari Runner', value: 12.1, outcome: 'valid', selectedEntryId: null }, { relayMemberId: RM_B, leg: 2, name: 'Bea Guest', value: null, outcome: 'valid', selectedEntryId: null }] }] },
+    { id: RELAY_SESSION_ID, label: '4x100m Final', disciplineDefinitionId: '66666666-6666-4666-8666-666666666666', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [RELAY_ID], entries: [], results: [{ entrantId: RELAY_ID, outcome: 'valid', placing: null, selectedEntryId: null, value: null, relayLegs: [{ relayMemberId: RM_A, leg: 1, name: 'Ari Runner', value: 12.1, outcome: 'valid', selectedEntryId: null, isPb: true, isSb: true }, { relayMemberId: RM_B, leg: 2, name: 'Bea Guest', value: null, outcome: 'valid', selectedEntryId: null }] }] },
     { id: FIELD_SESSION_ID, label: 'Long Jump Final', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'in_progress', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [{ entrantId: GUEST_ID, outcome: 'valid', placing: 1, selectedEntryId: null, value: 6.45 }] },
     { id: '88888888-8888-4888-8888-888888888888', label: 'Closed Session', disciplineDefinitionId: '77777777-7777-4777-8777-777777777777', status: 'scheduled', resultState: 'provisional', version: 1, entrantIds: [GUEST_ID], entries: [], results: [] },
   ],
@@ -73,6 +73,7 @@ describe('PublicMeetLogger', () => {
     expect(screen.getByText('Legs: Ari Runner → Bea Guest')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'False Start' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lane Inf.' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Official split for Ari Runner')).toHaveTextContent('12.10 s PB SB');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Export results CSV' })).not.toBeInTheDocument();
 

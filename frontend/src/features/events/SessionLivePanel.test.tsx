@@ -230,7 +230,7 @@ describe('SessionLivePanel', () => {
       overriddenAt: null,
       selectedEntryId: null,
       relayLegs: [
-        { relayMemberId: 'rm-a', leg: 1, name: 'Ari Runner', value: 62.4, outcome: 'valid', selectedEntryId: 'entry-1' },
+        { relayMemberId: 'rm-a', leg: 1, name: 'Ari Runner', value: 62.4, outcome: 'valid', selectedEntryId: 'entry-1', isPb: true, isSb: true },
         { relayMemberId: 'rm-b', leg: 2, name: 'Bea Dash', value: null, outcome: 'valid', selectedEntryId: null },
       ],
       version: 1,
@@ -241,11 +241,13 @@ describe('SessionLivePanel', () => {
 
     await user.click(await screen.findByRole('tab', { name: /4x100m Heat 1/ }));
     expect(await screen.findByRole('heading', { name: 'Standings (provisional)' })).toBeInTheDocument();
+    const teamRow = await screen.findByRole('group', { name: 'Speed Demons' });
+    expect(within(teamRow).getByLabelText('Official split for Ari Runner')).toHaveTextContent('62.40 s PB SB');
     const table = screen.getByRole('table');
     expect(within(table).getByRole('columnheader', { name: 'Club' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Relay team' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Legs' })).toBeInTheDocument();
-    expect(table).toHaveTextContent('Ari Runner 62.40 · Bea Dash awaiting selection');
+    expect(table).toHaveTextContent('Ari Runner 62.40 PB SB · Bea Dash awaiting selection');
     expect(table).toHaveTextContent('Awaiting selection');
     expect(table).toHaveTextContent('—');
 
@@ -253,7 +255,7 @@ describe('SessionLivePanel', () => {
     expect(await screen.findByRole('heading', { name: 'Standings (final)' })).toBeInTheDocument();
     const finalTable = screen.getByRole('table');
     expect(finalTable).toHaveTextContent('62.40 s');
-    expect(finalTable).toHaveTextContent('Ari Runner 62.40 · Bea Dash awaiting selection');
+    expect(finalTable).toHaveTextContent('Ari Runner 62.40 PB SB · Bea Dash awaiting selection');
   });
 
   it('queues an offline attempt instead of calling the API', async () => {

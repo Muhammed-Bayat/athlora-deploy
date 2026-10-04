@@ -5,6 +5,7 @@ export interface RelayMemberRow {
   relayMemberId: string;
   leg: number;
   name: string;
+  athleteId?: string | null;
 }
 
 export type RelaySelections = ReadonlyMap<string, string>;

@@ -18,10 +18,10 @@ function csvCell(value: string | number): string {
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
-function legLine(result: EventFinalResult): string {
+function legLine(result: EventFinalResult, marks = false): string {
   if (!result.relayLegs || result.relayLegs.length === 0) return '';
   return result.relayLegs
-    .map((leg) => `${leg.name} ${leg.value === null ? 'awaiting selection' : `${leg.value.toFixed(result.precision)} ${formatResultUnit(result.unit)}`}`)
+    .map((leg) => `${leg.name} ${leg.value === null ? 'awaiting selection' : `${leg.value.toFixed(result.precision)} ${formatResultUnit(result.unit)}${marks ? `${leg.isPb ? ' PB' : ''}${leg.isSb ? ' SB' : ''}` : ''}`}`)
     .join(' · ');
 }
 
@@ -64,6 +64,6 @@ export function EventFinalResults({ event, reloadKey }: { event: AthleticsEvent;
     {loading && <p role="status">Loading final results...</p>}
     {error && <p role="alert">{error}</p>}
     {!loading && !error && results.length === 0 && <p>No final results yet</p>}
-    {!loading && !error && results.length > 0 && <div className={styles.scroll}><table aria-label="Final event results"><thead><tr><th scope="col" className={styles.numeric}>Place</th><th scope="col">Name</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Official result</th></tr></thead><tbody>{results.map((result) => <tr key={`${result.discipline}-${result.entrantId}`}><td className={styles.numeric}>{result.placing ?? '—'}</td><th scope="row">{result.name}{result.relayMembers.length > 0 && <small>{legLine(result) || result.relayMembers.join(', ')}</small>}</th><td>{result.clubName}</td><td>{result.disciplineLabel}</td><td className={styles.numeric}>{performance(result)}</td></tr>)}</tbody></table></div>}
+    {!loading && !error && results.length > 0 && <div className={styles.scroll}><table aria-label="Final event results"><thead><tr><th scope="col" className={styles.numeric}>Place</th><th scope="col">Name</th><th scope="col">Club</th><th scope="col">Discipline</th><th scope="col">Official result</th></tr></thead><tbody>{results.map((result) => <tr key={`${result.discipline}-${result.entrantId}`}><td className={styles.numeric}>{result.placing ?? '—'}</td><th scope="row">{result.name}{result.relayMembers.length > 0 && <small>{legLine(result, true) || result.relayMembers.join(', ')}</small>}</th><td>{result.clubName}</td><td>{result.disciplineLabel}</td><td className={styles.numeric}>{performance(result)}</td></tr>)}</tbody></table></div>}
   </section>;
 }

@@ -7,6 +7,7 @@ import { parseVerticalConfig, validateVerticalDefinition } from '../validation/v
 import { meetAccess, meetAudit, meetCoach, meetConflict, meetIds, meetNotFound } from './meetAccess.js';
 import { listSessionResults, loadRelayMembers, recomputeSessionResult } from './sessionPerformances.js';
 import { relayLegResults } from './relayDerivation.js';
+import { performanceFlags, relayLegHistory, type PriorPerformance } from './disciplineStatistics.js';
 import { SUPPORTED_DISCIPLINE_CODES } from './disciplineCatalog.js';
 
 export type MeetTransaction = <T>(operation: (db: DbExecutor) => Promise<T>) => Promise<T>;
@@ -162,10 +163,12 @@ export async function listEventFinalResults(actor: MeetActor, eventId: string, d
     entrant_id: string; name: string; club_name: string; code: string; discipline_label: string;
     final_result: string | null; outcome: EventFinalResult['outcome']; unit: EventFinalResult['unit'];
     precision: string | number; final_place: string | null; relay_members: string[]; entrant_type: string;
+    session_id: string; direction: DisciplineDefinition['direction']; workspace_id: string;
   }>(
     `SELECT en.id AS entrant_id, en.name, COALESCE(en.club_name, c.name, w.name) AS club_name,
             d.code, d.presentation->>'label' AS discipline_label, r.final_result, r.outcome,
             d.unit, d.precision, r.final_place, d.default_rules->>'entrantType' AS entrant_type,
+            r.workspace_id, s.id AS session_id, d.direction,
             COALESCE((SELECT json_agg(member.name ORDER BY rm.leg)
               FROM relay_members rm
               JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
@@ -198,22 +201,49 @@ export async function listEventFinalResults(actor: MeetActor, eventId: string, d
     map.set(row.relay_member_id, row.entry_id);
     selections.set(row.entrant_id, map);
   }
-  return result.rows.map((row) => ({
-    entrantId: row.entrant_id,
-    name: row.name,
-    clubName: row.club_name,
-    discipline: row.code,
-    disciplineLabel: row.discipline_label,
-    finalResult: row.final_result === null ? null : Number(row.final_result),
-    outcome: row.outcome,
-    unit: row.unit,
-    precision: Number(row.precision),
-    placing: row.final_place === null ? null : Number(row.final_place),
-    relayMembers: row.relay_members,
-    ...(row.entrant_type === 'relay'
-      ? { relayLegs: relayLegResults(members.get(row.entrant_id) ?? [], relayEntries.filter((entry) => entry.entrantId === row.entrant_id), selections.get(row.entrant_id) ?? new Map<string, string>(), Number(row.precision)) }
-      : {}),
-  }));
+  const eventDate = (await db.query<{ date: string }>("SELECT to_char(date, 'YYYY-MM-DD') AS date FROM events WHERE id = $1", [eventId])).rows[0]?.date ?? '';
+  const relayRows = result.rows.filter((row) => row.entrant_type === 'relay');
+  const legHistoryByEntrant = new Map<string, Map<string, PriorPerformance[]>>();
+  for (const row of relayRows) {
+    const athleteIds = (members.get(row.entrant_id) ?? []).map((member) => member.athleteId).filter((id): id is string => id !== null && id !== undefined);
+    legHistoryByEntrant.set(row.entrant_id, await relayLegHistory(db, {
+      workspaceId: row.workspace_id, code: row.code, athleteIds, excludeSessionId: row.session_id, eventDate,
+    }));
+  }
+  return result.rows.map((row) => {
+    const memberRows = row.entrant_type === 'relay' ? members.get(row.entrant_id) ?? [] : [];
+    const relayLegs = row.entrant_type === 'relay'
+      ? relayLegResults(memberRows, relayEntries.filter((entry) => entry.entrantId === row.entrant_id), selections.get(row.entrant_id) ?? new Map<string, string>(), Number(row.precision))
+      : null;
+    if (relayLegs && eventDate !== '') {
+      const legHistory = legHistoryByEntrant.get(row.entrant_id) ?? new Map<string, PriorPerformance[]>();
+      relayLegs.forEach((leg, legIndex) => {
+        const athleteId = memberRows[legIndex]?.athleteId ?? null;
+        if (athleteId === null || leg.value === null) {
+          leg.isPb = false;
+          leg.isSb = false;
+          return;
+        }
+        const flags = performanceFlags(leg.value, legHistory.get(athleteId) ?? [], row.direction, eventDate.slice(0, 4));
+        leg.isPb = flags.isPb;
+        leg.isSb = flags.isSb;
+      });
+    }
+    return {
+      entrantId: row.entrant_id,
+      name: row.name,
+      clubName: row.club_name,
+      discipline: row.code,
+      disciplineLabel: row.discipline_label,
+      finalResult: row.final_result === null ? null : Number(row.final_result),
+      outcome: row.outcome,
+      unit: row.unit,
+      precision: Number(row.precision),
+      placing: row.final_place === null ? null : Number(row.final_place),
+      relayMembers: row.relay_members,
+      ...(relayLegs ? { relayLegs } : {}),
+    };
+  });
 }
 
 export async function createEntrant(actor: MeetActor, eventId: string, input: EntrantCreateInput, transaction: MeetTransaction = withTransaction): Promise<MeetEntrant> {

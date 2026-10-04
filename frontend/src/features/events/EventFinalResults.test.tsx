@@ -33,7 +33,7 @@ describe('EventFinalResults', () => {
       { entrantId: 'athlete-2', name: 'Bea Jumper', clubName: 'Harbour AC', discipline: 'long_jump', disciplineLabel: 'Long jump', finalResult: 6.45, outcome: 'valid', unit: 'metres', precision: 2, placing: 1, relayMembers: [] },
       { entrantId: 'relay-1', name: 'Harbour Relay', clubName: 'Harbour AC', discipline: '4x100m', disciplineLabel: '4 x 100m relay', finalResult: 44.2, outcome: 'valid', unit: 'seconds', precision: 2, placing: 1, relayMembers: ['Ari Runner', 'Bea Dash', 'Casey Lane', 'Drew Pace'],
         relayLegs: [
-          { relayMemberId: 'rm-1', leg: 1, name: 'Ari Runner', value: 11.2, outcome: 'valid', selectedEntryId: 'entry-1' },
+          { relayMemberId: 'rm-1', leg: 1, name: 'Ari Runner', value: 11.2, outcome: 'valid', selectedEntryId: 'entry-1', isPb: true, isSb: true },
           { relayMemberId: 'rm-2', leg: 2, name: 'Bea Dash', value: 11, outcome: 'valid', selectedEntryId: 'entry-2' },
           { relayMemberId: 'rm-3', leg: 3, name: 'Casey Lane', value: 11, outcome: 'valid', selectedEntryId: 'entry-3' },
           { relayMemberId: 'rm-4', leg: 4, name: 'Drew Pace', value: 11, outcome: 'valid', selectedEntryId: 'entry-4' },
@@ -48,7 +48,7 @@ describe('EventFinalResults', () => {
     expect(table).toHaveTextContent('2Cara SprintCoast AC100m10.95 s');
     expect(table).toHaveTextContent('—Drew DNSCoast AC100mNo result');
     expect(table).toHaveTextContent('1Bea JumperHarbour ACLong jump6.45 m');
-    expect(screen.getByRole('rowheader', { name: /Harbour Relay/ })).toHaveTextContent('Ari Runner 11.20 s · Bea Dash 11.00 s · Casey Lane 11.00 s · Drew Pace 11.00 s');
+    expect(screen.getByRole('rowheader', { name: /Harbour Relay/ })).toHaveTextContent('Ari Runner 11.20 s PB SB · Bea Dash 11.00 s · Casey Lane 11.00 s · Drew Pace 11.00 s');
     await user.click(screen.getByRole('button', { name: 'Export final results CSV' }));
     expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"Place","Name","Relay members","Club","Discipline","Official result","Leg results"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
     expect(downloads.downloadFile).toHaveBeenCalledWith(expect.stringContaining('"1","Harbour Relay","Ari Runner; Bea Dash; Casey Lane; Drew Pace","Harbour AC","4 x 100m relay","44.20 s","Ari Runner 11.20 s · Bea Dash 11.00 s · Casey Lane 11.00 s · Drew Pace 11.00 s"'), 'city-meet-final-results.csv', 'text/csv;charset=utf-8');
