@@ -25,9 +25,7 @@ const brandingApi = vi.hoisted(() => ({
   getClubBranding: vi.fn(),
   updateClubBranding: vi.fn(),
   uploadClubLogo: vi.fn(),
-  uploadClubCover: vi.fn(),
   clearClubLogo: vi.fn(),
-  clearClubCover: vi.fn(),
 }));
 
 const auth0 = vi.hoisted(() => ({
@@ -70,8 +68,6 @@ beforeEach(() => {
     primaryColor: null,
     logoUrl: null,
     logoContentType: null,
-    coverUrl: null,
-    coverContentType: null,
   });
 });
 
@@ -82,8 +78,6 @@ describe('AuthPage', () => {
       primaryColor: null,
       logoUrl: null,
       logoContentType: null,
-      coverUrl: null,
-      coverContentType: null,
     };
     brandingApi.updateClubBranding.mockResolvedValue(updatedBranding);
     const dispatchEvent = vi.spyOn(window, 'dispatchEvent');

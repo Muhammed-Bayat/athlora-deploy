@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type K
 import { getPublicAthleteComparison, getPublicClubStatistics, listPublicClubs, listPublicSeasons } from '../../api/publicStatistics';
 import { SeasonSelector, Select, ClubBadge } from '../../components';
 import { PublicNavigation } from '../../components/PublicNavigation';
-import { resolveApiUrl } from '../../api/client';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState, type SeasonValue } from '../../utils/season';
 import type { PublicAthleteComparison, PublicAthleteDisciplineStatistics, PublicAthleteStatistics, PublicClub, PublicClubStatistics, PublicDiscipline } from '../../types';
 import styles from './PublicStatsPage.module.css';
@@ -130,14 +129,6 @@ function ClubStatCard({ statistics, season, discipline }: { statistics: PublicCl
 
   return (
     <article className={styles.clubCard} onPointerMove={setTilt} onPointerLeave={resetTilt}>
-      {branding?.coverUrl && (
-        <img
-          className={styles.clubCover}
-          src={resolveApiUrl(branding.coverUrl)}
-          alt=""
-          data-testid="club-cover-image"
-        />
-      )}
       <div className={styles.cardSheen} aria-hidden="true" />
       <div className={styles.clubIdentity}>
         <span>ATHLORA / CLUB RESULTS</span>

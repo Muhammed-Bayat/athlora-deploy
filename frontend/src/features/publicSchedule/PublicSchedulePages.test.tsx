@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { resolveApiUrl } from '../../api/client';
 import { PublicScheduleIndexPage } from './PublicScheduleIndexPage';
 import { PublicScheduleClubPage } from './PublicScheduleClubPage';
 
@@ -21,7 +20,7 @@ const schedule = {
   club: {
     id: CLUB_ID,
     name: 'Open Track Club',
-    branding: { description: 'Sprint-focused club.', primaryColor: null, logoUrl: null, coverUrl: '/api/v1/media/clubs/club/cover.png' },
+    branding: { description: 'Sprint-focused club.', primaryColor: null, logoUrl: null },
   },
   events: [
     {
@@ -102,7 +101,6 @@ describe('PublicScheduleClubPage', () => {
     renderClubPage();
 
     expect(await screen.findByRole('heading', { name: /Open Track Club/ })).toBeInTheDocument();
-    expect(screen.getByTestId('club-cover-image')).toHaveAttribute('src', resolveApiUrl(schedule.club.branding.coverUrl));
     expect(screen.getByRole('heading', { name: 'Spring Open' })).toBeInTheDocument();
 
     const time = screen.getByText('01 Oct 2026, 10:00');

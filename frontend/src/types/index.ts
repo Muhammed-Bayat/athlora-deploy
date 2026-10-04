@@ -40,7 +40,6 @@ export interface ClubBrandSummary {
   description?: string | null;
   primaryColor?: string | null;
   logoUrl?: string | null;
-  coverUrl?: string | null;
 }
 
 export interface ClubBranding {
@@ -48,8 +47,6 @@ export interface ClubBranding {
   primaryColor: string | null;
   logoUrl: string | null;
   logoContentType: string | null;
-  coverUrl: string | null;
-  coverContentType: string | null;
 }
 
 export interface Club {
