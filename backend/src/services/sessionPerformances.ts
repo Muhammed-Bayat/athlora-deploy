@@ -11,7 +11,7 @@ import { authoritativeResult, sessionPlaces } from './sessionResultPolicy.js';
 import type { Derivation } from './resultDerivation.js';
 import type { VerticalDerivation } from './verticalScoring.js';
 import { deriveRelayResult, relayLegResults, type RelayMemberRow, type RelaySelections } from './relayDerivation.js';
-import { FINAL_INDIVIDUAL_PERFORMANCES } from './disciplineStatistics.js';
+import { FINAL_PERFORMANCES, performanceFlags, relayLegHistory, type PriorPerformance } from './disciplineStatistics.js';
 
 async function registration(db: DbExecutor, actor: MeetActor, access: MeetAccess, eventId: string, target: SessionTarget, write: boolean) {
   meetIds(target.disciplineSessionId, target.entrantId);
@@ -65,8 +65,8 @@ async function assertRelayEntryTarget(db: DbExecutor, eventId: string, entrantId
 export async function loadRelayMembers(db: DbExecutor, entrantIds: readonly string[]): Promise<Map<string, RelayMemberRow[]>> {
   const members = new Map<string, RelayMemberRow[]>();
   if (entrantIds.length === 0) return members;
-  const result = await db.query<{ relay_id: string; id: string; leg: number; name: string }>(
-    `SELECT rm.relay_id, rm.id, rm.leg, member.name
+  const result = await db.query<{ relay_id: string; id: string; leg: number; name: string; athlete_id: string | null }>(
+    `SELECT rm.relay_id, rm.id, rm.leg, member.name, member.athlete_id
      FROM relay_members rm
      JOIN meet_entrants member ON member.id = rm.member_id AND member.event_id = rm.event_id
      WHERE rm.relay_id = ANY($1::uuid[]) ORDER BY rm.relay_id, rm.leg`,
@@ -74,7 +74,7 @@ export async function loadRelayMembers(db: DbExecutor, entrantIds: readonly stri
   );
   for (const row of result.rows) {
     const list = members.get(row.relay_id) ?? [];
-    list.push({ relayMemberId: row.id, leg: Number(row.leg), name: row.name });
+    list.push({ relayMemberId: row.id, leg: Number(row.leg), name: row.name, athleteId: row.athlete_id });
     members.set(row.relay_id, list);
   }
   return members;
@@ -295,8 +295,8 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entries.filter(e => e.entrantId === row.entrantId), eligible: row.attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
   rows.forEach(row => { row.placing = access.event.status === 'cancelled' || session.status === 'cancelled' ? null : session.resultState === 'final' ? row.finalPlace ?? null : places.get(row.entrantId) ?? null; });
   {
-    for (const row of rows) {
-      const history = await db.query<{ final_result: string; event_date: string }>(`WITH performances AS (${FINAL_INDIVIDUAL_PERFORMANCES})
+    for (const [index, row] of rows.entries()) {
+      const history = await db.query<{ final_result: string; event_date: string }>(`WITH performances AS (${FINAL_PERFORMANCES})
         SELECT final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
         WHERE workspace_id = $1 AND code = $2 AND athlete_id = (SELECT athlete_id FROM meet_entrants WHERE id = $3) AND session_id <> $4`, [row.workspaceId, definition.code, row.entrantId, sessionId]);
       const date = await db.query<{ date: string; athlete_id: string | null }>("SELECT to_char(e.date, 'YYYY-MM-DD') AS date, en.athlete_id FROM events e JOIN meet_entrants en ON en.event_id = e.id WHERE e.id = $1 AND en.id = $2", [eventId, row.entrantId]);
@@ -304,6 +304,23 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
       const prior = history.rows.filter(h => h.event_date <= (date.rows[0]?.date ?? ''));
       const better = (h: { final_result: string }) => definition.direction === 'lower' ? row.effectiveResult! < Number(h.final_result) : row.effectiveResult! > Number(h.final_result);
       Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter(h => h.event_date.slice(0, 4) === date.rows[0]?.date.slice(0, 4)).every(better) });
+      if (!relay || !row.relayLegs?.length) continue;
+      const eventDate = date.rows[0]?.date ?? '';
+      const legBase = session.resultState === 'final' && access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.attending && result.rows[index].withdrawn_at === null && eventDate !== '';
+      const memberRows: RelayMemberRow[] = relayMembers.get(row.entrantId) ?? [];
+      const athleteIds = memberRows.map((member) => member.athleteId).filter((id): id is string => id !== null && id !== undefined);
+      const legHistory = legBase ? await relayLegHistory(db, { workspaceId: row.workspaceId, code: definition.code, athleteIds, excludeSessionId: sessionId, eventDate }) : new Map<string, PriorPerformance[]>();
+      row.relayLegs.forEach((leg, legIndex) => {
+        const athleteId = memberRows[legIndex]?.athleteId ?? null;
+        if (!legBase || athleteId === null || leg.value === null) {
+          leg.isPb = false;
+          leg.isSb = false;
+          return;
+        }
+        const flags = performanceFlags(leg.value, legHistory.get(athleteId) ?? [], definition.direction, eventDate.slice(0, 4));
+        leg.isPb = flags.isPb;
+        leg.isSb = flags.isSb;
+      });
     }
   }
   return rows.filter((row) => row.attending).map(({ attending: _attending, ...row }) => {

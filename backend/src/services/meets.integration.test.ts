@@ -308,7 +308,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(corrected.effectiveResult).toBeNull();
     await selectSessionResultEntry(host, eventId, target, { entryId: entries[1].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[1] }, transaction);
     await changeSessionState(host, eventId, session100.id, { status: 'completed', expectedVersion: 2 }, transaction);
-    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toEqual([]);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 13.42, sb: 13.42, resultCount: 1, seasonCount: 1 }]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
     await pool.query('DELETE FROM session_relay_selections');
@@ -369,6 +369,49 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(result).toMatchObject({ effectiveOutcome: 'dq', effectiveResult: null });
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect((await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)).toMatchObject({ outcome: 'dq', finalResult: null });
+  });
+
+  it('marks official relay leg splits as personal bests, keeps DQ legs valid, and never flags the team total', async () => {
+    await migrate();
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
+    const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
+    const memberIds = (await pool.query<{ id: string }>('SELECT id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [relay.id])).rows.map((row) => row.id);
+    const runFinal = async (label: string, athleteSplit: number, teamIncident = false) => {
+      const s = await session('4x100m', label);
+      const target = { disciplineSessionId: s.id, entrantId: relay.id };
+      await registerEntrant(host, eventId, target, transaction);
+      await open(s.id);
+      const splits = [athleteSplit, 13.98, 14.11, 13.75];
+      const entries = [];
+      for (const [index, relayMemberId] of memberIds.entries()) {
+        entries.push(await createSessionEntry(host, eventId, target, { ...timed, value: splits[index], relayMemberId }, transaction));
+      }
+      if (teamIncident) await createSessionEntry(host, eventId, target, { ...timed, value: null, unit: null, incidentType: 'dq' }, transaction);
+      const resultVersion = async () => (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!.version;
+      for (const [index, relayMemberId] of memberIds.entries()) {
+        await selectSessionResultEntry(host, eventId, target, { entryId: entries[index].id, expectedVersion: await resultVersion(), relayMemberId }, transaction);
+      }
+      await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+      return (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!;
+    };
+
+    const first = await runFinal('4x100 Heats', 12.9);
+    expect(first.countsTowardsStatistics).toBe(false);
+    expect(first.isPb).toBe(false);
+    expect(first.relayLegs?.map((leg) => [leg.value, leg.isPb, leg.isSb])).toEqual([[12.9, true, true], [13.98, false, false], [14.11, false, false], [13.75, false, false]]);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 12.9, sb: 12.9, resultCount: 1 }]);
+
+    const dqFinal = await runFinal('4x100 Final', 13.2, true);
+    expect(dqFinal.effectiveOutcome).toBe('dq');
+    expect(dqFinal.isPb).toBe(false);
+    expect(dqFinal.relayLegs?.[0]).toMatchObject({ value: 13.2, isPb: false, isSb: false });
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 12.9, resultCount: 2 }]);
+
+    const faster = await runFinal('4x100 Repeat', 12.5);
+    expect(faster.relayLegs?.map((leg) => leg.isPb)).toEqual([true, false, false, false]);
+    expect(faster.isPb).toBe(false);
+    expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 12.5, sb: 12.5, resultCount: 3 }]);
   });
 
   it('uses measured direction, ignores fouls, and excludes cancelled/withdrawn registrations from statistics', async () => {

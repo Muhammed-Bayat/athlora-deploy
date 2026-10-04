@@ -41,7 +41,7 @@ export function relayMembersOf(entrant: { members?: SafeRelayMember[] } | undefi
 export function relayLegLine(legs: readonly RelayLegResult[] | null | undefined, definition?: DisciplineDefinition): string {
   if (!legs || legs.length === 0) return 'Awaiting selection';
   return legs
-    .map((leg) => `${leg.name} ${leg.value === null ? 'awaiting selection' : leg.value.toFixed(definition?.precision ?? 2)}`)
+    .map((leg) => `${leg.name} ${leg.value === null ? 'awaiting selection' : `${leg.value.toFixed(definition?.precision ?? 2)}${leg.isPb ? ' PB' : ''}${leg.isSb ? ' SB' : ''}`}`)
     .join(' · ');
 }
 

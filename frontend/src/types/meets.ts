@@ -55,6 +55,7 @@ export interface SessionEntry extends SessionEntryInput, SessionTarget {
 export interface RelayLegResult {
   relayMemberId: string; leg: number; name: string;
   value: number | null; outcome: ResultOutcome; selectedEntryId: string | null;
+  isPb?: boolean; isSb?: boolean;
 }
 export interface SessionResult extends SessionTarget {
   relayLegs?: RelayLegResult[];

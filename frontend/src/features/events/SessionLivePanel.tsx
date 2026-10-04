@@ -571,7 +571,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                                 Record
                               </Button>
                               <span className={styles.currentRecord} aria-label={`Official split for ${member.name}`}>
-                                {leg && leg.value !== null ? formatResult(leg.value, definition) : 'Awaiting selection'}
+                                {leg && leg.value !== null ? `${formatResult(leg.value, definition)}${leg.isPb ? ' PB' : ''}${leg.isSb ? ' SB' : ''}` : 'Awaiting selection'}
                               </span>
                               {splits.length > 0 && (
                                 <ol className={styles.attemptsList} aria-label={`Relay splits for ${member.name}`}>
