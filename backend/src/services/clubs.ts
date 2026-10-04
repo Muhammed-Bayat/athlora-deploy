@@ -25,7 +25,7 @@ import {
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { publicMediaPath } from './mediaStorage.js';
-import { listAvailableDisciplines } from './disciplineCatalog.js';
+import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
 interface ClubSummaryRow {
   id: string;
@@ -78,6 +78,7 @@ interface ClubDisciplineResultRow {
   event_id: string;
   effective_result: number | string | null;
   effective_outcome: string;
+  result_key: string;
 }
 
 interface ClubPreferredDisciplineRow {
@@ -118,7 +119,7 @@ function standardDeviation(values: number[]): number | null {
 async function getClubDisciplineStatistics(workspaceId: string, executor: DbExecutor, season: SeasonScope) {
   const rows = await executor.query<ClubDisciplineResultRow>(
     `SELECT discipline, athlete_id, lifecycle_status, event_date, event_time, event_created_at, event_id,
-            effective_result, effective_outcome
+            effective_result, effective_outcome, result_key
      FROM (
        SELECT r.discipline, r.athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
               e.created_at AS event_created_at, e.id AS event_id,
@@ -127,7 +128,8 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
                    ELSE r.final_result END AS effective_result,
               CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
-                   ELSE r.outcome END AS effective_outcome
+                   ELSE r.outcome END AS effective_outcome,
+               'legacy:' || r.event_id::text || ':' || r.athlete_id::text || ':' || r.discipline AS result_key
        FROM results r
        JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
        JOIN events e ON e.id = r.event_id
@@ -145,7 +147,8 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
                    ELSE r.final_result END AS effective_result,
               CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
-                   ELSE r.outcome END AS effective_outcome
+                   ELSE r.outcome END AS effective_outcome,
+              'session:' || r.id::text AS result_key
        FROM session_results r
        JOIN discipline_sessions s ON s.id = r.session_id
        JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -163,6 +166,36 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
            WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
              AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
          ))
+       UNION ALL
+       SELECT d.code AS discipline, a.id AS athlete_id, a.lifecycle_status, e.date AS event_date, e.time AS event_time,
+              e.created_at AS event_created_at, e.id AS event_id,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+                   ELSE r.final_result END AS effective_result,
+              CASE WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                   ELSE r.outcome END AS effective_outcome,
+              'relay:' || r.id::text AS result_key
+       FROM session_results r
+       JOIN discipline_sessions s ON s.id = r.session_id
+       JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+       JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+       JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+       JOIN relay_members rm ON rm.relay_id = en.id AND rm.event_id = en.event_id
+       JOIN meet_entrants men ON men.id = rm.member_id AND men.event_id = rm.event_id AND men.workspace_id = rm.workspace_id
+       JOIN athletes a ON a.id = men.athlete_id AND a.workspace_id = r.workspace_id
+       JOIN events e ON e.id = r.event_id
+       WHERE r.workspace_id = $1
+         AND s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+         AND e.date >= $2::date AND e.date < $3::date
+         AND en.kind = 'relay' AND d.default_rules->>'entrantType' = 'relay'
+         AND men.kind = 'athlete'
+         AND se.withdrawn_at IS NULL
+         AND (e.workspace_id = r.workspace_id OR EXISTS (
+           SELECT 1 FROM event_fixture_workspaces fw
+           WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+             AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+         ))
      ) merged`,
     [workspaceId, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
@@ -172,7 +205,7 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
      FROM athlete_preferred_disciplines preferences
      JOIN athletes ON athletes.id = preferences.athlete_id
      JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
-     WHERE athletes.workspace_id = $1`,
+     WHERE athletes.workspace_id = $1 AND definitions.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`,
     [workspaceId],
   );
   const byDiscipline = new Map<string, ClubDisciplineResultRow[]>();
@@ -185,8 +218,9 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
     results.forEach((row) => assignedAthletes.set(row.athlete_id, row.lifecycle_status));
     (preferredByDiscipline.get(discipline.discipline) ?? []).forEach((row) => assignedAthletes.set(row.athlete_id, row.lifecycle_status));
     const valid = results.filter((row) => row.effective_outcome === 'valid' && row.effective_result !== null);
-    const values = valid.map((row) => Number(row.effective_result));
-    const ordered = [...valid].sort((left, right) => `${right.event_date}T${right.event_time ?? ''}${right.event_created_at}${right.event_id}`.localeCompare(`${left.event_date}T${left.event_time ?? ''}${left.event_created_at}${left.event_id}`));
+    const validByKey = [...new Map(valid.map((row) => [row.result_key, row])).values()];
+    const values = validByKey.map((row) => Number(row.effective_result));
+    const ordered = [...validByKey].sort((left, right) => `${right.event_date}T${right.event_time ?? ''}${right.event_created_at}${right.event_id}`.localeCompare(`${left.event_date}T${left.event_time ?? ''}${left.event_created_at}${left.event_id}`));
     return {
       ...discipline,
       rosterAthleteCount: assignedAthletes.size,
@@ -194,8 +228,8 @@ async function getClubDisciplineStatistics(workspaceId: string, executor: DbExec
       inactiveAthleteCount: [...assignedAthletes.values()].filter((status) => status === 'inactive').length,
       archivedAthleteCount: [...assignedAthletes.values()].filter((status) => status === 'archived').length,
       distinctAthletesWithValidResults: new Set(valid.map((row) => row.athlete_id)).size,
-      totalResultCount: results.length,
-      validResultCount: valid.length,
+      totalResultCount: new Set(results.map((row) => row.result_key)).size,
+      validResultCount: validByKey.length,
       fastestValidResult: values.length ? discipline.direction === 'lower' ? Math.min(...values) : Math.max(...values) : null,
       latestValidResult: ordered.length ? Number(ordered[0]!.effective_result) : null,
       averageValidResult: average(values),
