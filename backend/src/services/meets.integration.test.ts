@@ -414,6 +414,143 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 12.5, sb: 12.5, resultCount: 3 }]);
   });
 
+  async function finalRelayLeg(splits: number[], label: string) {
+    const athlete = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const guests = await Promise.all(['A', 'B', 'C'].map((name) => guest(name)));
+    const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
+    const memberIds = (await pool.query<{ id: string }>('SELECT id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [relay.id])).rows.map((row) => row.id);
+    const s = await session('4x100m', label);
+    const target = { disciplineSessionId: s.id, entrantId: relay.id };
+    await registerEntrant(host, eventId, target, transaction);
+    await open(s.id);
+    const entries = [];
+    for (const [index, relayMemberId] of memberIds.entries()) {
+      entries.push(await createSessionEntry(host, eventId, target, { ...timed, value: splits[index], relayMemberId }, transaction));
+    }
+    const resultVersion = async () => (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!.version;
+    for (const [index, relayMemberId] of memberIds.entries()) {
+      await selectSessionResultEntry(host, eventId, target, { entryId: entries[index].id, expectedVersion: await resultVersion(), relayMemberId }, transaction);
+    }
+    await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+  }
+
+  async function secondHostAthlete() {
+    const secondAthleteId = (await pool.query<{ id: string }>(
+      'INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1,$2,$3) RETURNING id',
+      [host.workspaceId, host.userId, 'Second athlete'],
+    )).rows[0].id;
+    await pool.query(
+      `INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id)
+       SELECT $1, definition.id FROM discipline_definitions definition WHERE definition.code = '100m'`,
+      [secondAthleteId],
+    );
+    return secondAthleteId;
+  }
+
+  it('surfaces relay leg personal bests and team results on the roster, progression, comparison, and public statistics', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    await finalRelayLeg([12.5, 13.98, 14.11, 13.75], '4x100 Final');
+
+    const { getDashboardSummary } = await import('./dashboard.js');
+    const dashboard = await getDashboardSummary(host.workspaceId, '2026-09-01', transaction, allSeasons);
+    const rosterEntry = dashboard.rosterSnapshot.find((row) => row.athleteId === athleteId)!;
+    expect(rosterEntry.disciplines).toEqual(expect.arrayContaining([expect.objectContaining({ discipline: '4x100m', pb: 12.5 })]));
+
+    const { getDisciplineProgression } = await import('./disciplineProgression.js');
+    expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, (await definition('4x100m')).id, allSeasons)).toMatchObject({
+      summary: { personalBest: 12.5, resultCount: 1 },
+      entries: [{ eventDate: new Date('2026-09-01T00:00:00'), value: 12.5, isNewPb: true }],
+    });
+
+    const secondAthleteId = await secondHostAthlete();
+    const { getMultiAthleteComparison } = await import('./comparison.js');
+    const comparison = await getMultiAthleteComparison(host.workspaceId, [athleteId, secondAthleteId], transaction, allSeasons);
+    expect(comparison.athletes[0].disciplines.find((discipline) => discipline.discipline === '4x100m')).toMatchObject({
+      pb: 12.5, validResultCount: 1, progression: [{ date: '2026-09-01', result: 12.5 }],
+    });
+
+    await pool.query("INSERT INTO clubs (workspace_id, name, public_results_enabled) VALUES ($1,'Published',true)", [host.workspaceId]);
+    const { getClubStatistics } = await import('./clubs.js');
+    const hostClubId = (await pool.query<{ id: string }>('SELECT id FROM clubs WHERE workspace_id = $1', [host.workspaceId])).rows[0].id;
+    expect((await getClubStatistics(hostClubId, pool, allSeasons)).disciplines?.find((discipline) => discipline.discipline === '4x100m')).toMatchObject({
+      validResultCount: 1, fastestValidResult: 54.34, distinctAthletesWithValidResults: 1,
+    });
+
+    const { getPublicAthleteStatistics } = await import('./publicStatistics.js');
+    const publicAthletes = await getPublicAthleteStatistics(host.workspaceId, hostClubId, pool, allSeasons);
+    expect(publicAthletes.find((entry) => entry.athlete.id === athleteId)?.disciplines.find((discipline) => discipline.discipline === '4x100m')).toMatchObject({
+      pb: 12.5, validResultCount: 1, progression: [{ date: '2026-09-01', result: 12.5 }],
+    });
+
+    const { getPublicStatisticsReport } = await import('./publicStatisticsReport.js');
+    expect(await getPublicStatisticsReport({ discipline: '4x100m', season: '2026' }, pool)).toEqual([
+      expect.objectContaining({ athleteName: 'Speed Demons', clubName: 'Published', discipline: '4x100m', performance: 54.34, place: 1 }),
+    ]);
+    expect(await getPublicStatisticsReport({ discipline: '4x100m', season: '2026', gender: 'male' }, pool)).toEqual([]);
+
+    await pool.query("UPDATE events SET status = 'completed' WHERE id = $1", [eventId]);
+    const { getPublicLeaderboard } = await import('./leaderboard.js');
+    expect(await getPublicLeaderboard({ discipline: '4x100m', season: '2026' }, pool)).toEqual([
+      expect.objectContaining({ athleteName: 'Speed Demons', clubName: 'Published', performance: 54.34, place: 1 }),
+    ]);
+    expect(await getPublicLeaderboard({ discipline: '4x100m', season: '2026', age: '20' }, pool)).toEqual([]);
+  });
+
+  it('hides removed disciplines from roster and comparison surfaces while preferences remain in storage', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    // migrate() seeds preferences after migration 0044 runs, mimicking a workspace
+    // that still carries rows written before the prune shipped.
+    const stalePreferences = await pool.query<{ code: string }>(
+      `SELECT definitions.code FROM athlete_preferred_disciplines preferences
+       JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
+       WHERE preferences.athlete_id = $1 AND definitions.code IN ('hammer', '4x400m')`,
+      [athleteId],
+    );
+    expect(stalePreferences.rows.map((row) => row.code).sort()).toEqual(['4x400m', 'hammer']);
+
+    const { getDashboardSummary } = await import('./dashboard.js');
+    const dashboard = await getDashboardSummary(host.workspaceId, '2026-09-01', transaction, allSeasons);
+    const rosterDisciplines = dashboard.rosterSnapshot.find((row) => row.athleteId === athleteId)!.disciplines.map((row) => row.discipline);
+    expect(rosterDisciplines).toContain('100m');
+    expect(rosterDisciplines).not.toContain('hammer');
+    expect(rosterDisciplines).not.toContain('4x400m');
+
+    const secondAthleteId = await secondHostAthlete();
+    const { getMultiAthleteComparison } = await import('./comparison.js');
+    const comparison = await getMultiAthleteComparison(host.workspaceId, [athleteId, secondAthleteId], transaction, allSeasons);
+    const comparedDisciplines = comparison.athletes[0].disciplines.map((discipline) => discipline.discipline);
+    expect(comparedDisciplines).not.toContain('hammer');
+    expect(comparedDisciplines).not.toContain('4x400m');
+
+    await pool.query("INSERT INTO clubs (workspace_id, name, public_results_enabled) VALUES ($1,'Published',true)", [host.workspaceId]);
+    const { getClubStatistics } = await import('./clubs.js');
+    const hostClubId = (await pool.query<{ id: string }>('SELECT id FROM clubs WHERE workspace_id = $1', [host.workspaceId])).rows[0].id;
+    const clubStatistics = await getClubStatistics(hostClubId, pool, allSeasons);
+    expect(clubStatistics.disciplines?.map((discipline) => discipline.discipline)).not.toContain('hammer');
+    expect(clubStatistics.availableDisciplines?.map((discipline) => discipline.discipline)).not.toContain('hammer');
+  });
+
+  it('prunes unsupported discipline preferences while retaining the catalogue rows', async () => {
+    await transaction((db) => applyMigrations(db, migrations.filter(m => m.name < '0044_')));
+    await pool.query(
+      `INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id)
+       SELECT $1, definition.id FROM discipline_definitions definition WHERE definition.code IN ('hammer', '4x400m', '100m')`,
+      [athleteId],
+    );
+    await transaction((db) => applyMigrations(db, migrations.filter(m => m.name >= '0044_')));
+
+    const remaining = await pool.query<{ code: string }>(
+      `SELECT definitions.code FROM athlete_preferred_disciplines preferences
+       JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
+       WHERE preferences.athlete_id = $1`,
+      [athleteId],
+    );
+    expect(remaining.rows.map((row) => row.code)).toEqual(['100m']);
+    expect((await pool.query("SELECT 1 FROM discipline_definitions WHERE code IN ('hammer', '4x400m')")).rows).toHaveLength(2);
+  });
+
   it('uses measured direction, ignores fouls, and excludes cancelled/withdrawn registrations from statistics', async () => {
     await migrate();
     const s = await session('long_jump');

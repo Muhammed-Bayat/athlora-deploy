@@ -30,7 +30,7 @@ GET /api/v1/athletes/comparison?athlete1Id={uuid}&athlete2Id={uuid}&scope=cross-
 - The response contains only the existing safe comparison identity and performance fields. It never exposes date of birth, notes, injury data, or other private athlete profile fields.
 - The UI requires users to select two clubs first, then search each club's roster by name before selecting the athletes.
 
-Both athlete endpoints return side-by-side scoped bests, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting. They also return `availableDisciplines` and a per-athlete `disciplines[]` array, so the Compare page renders one tab per catalogue discipline alongside the legacy aggregate fields.
+Both athlete endpoints return side-by-side scoped bests, latest effective result, valid-result count, average, population standard deviation, improvement, and chronological progression entries for charting. They also return `availableDisciplines` and a per-athlete `disciplines[]` array, so the Compare page renders one tab per catalogue discipline alongside the legacy aggregate fields. Official relay leg splits are unioned into these rows under the relay discipline's code (for example `4x100m`), so a relay PB and its progression entry appear on the comparison graph under that tab.
 
 ### Multi-Athlete Comparison
 
@@ -74,7 +74,7 @@ Returns the selected season's performance for the club's current roster. The res
 - Average, median, and population standard deviation of valid 100m times.
 - Club branding summary (`description`, `primaryColor`, `logoUrl`, `coverUrl`) when present.
 
-…plus the per-discipline breakdown `availableDisciplines` and `disciplines[]`. Each discipline entry carries its catalogue metadata (`code`, label, unit, precision, direction) with roster counts, distinct athletes with valid results, total/valid result counts, and fastest/latest/average/median/standard-deviation values for that discipline.
+…plus the per-discipline breakdown `availableDisciplines` and `disciplines[]`. Each discipline entry carries its catalogue metadata (`code`, label, unit, precision, direction) with roster counts, distinct athletes with valid results, total/valid result counts, and fastest/latest/average/median/standard-deviation values for that discipline. Athlete-comparison rows union official relay leg splits under the relay discipline's code (for example `4x100m`); club-statistics rows count finalized relay team results instead — each team result counted once and attributed to the club's own members, so the fastest value is the best summed team total and the counts cover team results and the members who raced in them. Only supported-catalogue disciplines are listed.
 
 ## Club Comparison
 
@@ -95,6 +95,7 @@ Repeat `clubId` once per club; 2–5 unique UUIDs are required, otherwise `422 C
 ## Effective Result Scope
 
 - The legacy top-level aggregate is pinned to 100m and measured in seconds; `disciplines[]` entries use their own catalogue unit (seconds, metres, cm) and direction (lower-is-better or higher-is-better).
+- Preference-only `disciplines[]` rows (athletes who prefer a discipline without results yet) are limited to the supported catalogue; retired codes (`4x400m`, `hammer`) are never listed.
 - Cancelled events are excluded.
 - `dq`, `dnf`, and `dns` outcomes never count as valid results.
 - A positive `manualOverride` is used instead of `finalResult`.
@@ -102,4 +103,4 @@ Repeat `clubId` once per club; 2–5 unique UUIDs are required, otherwise `422 C
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra].
+This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra]. Relay leg splits feeding athlete and club `disciplines[]` rows and the supported-catalogue preference filter were documented with the assistance of opencode[mimo-v2.6-flash-free]. The team-based club-statistics relay aggregation and the athlete-versus-club relay row wording were documented with the assistance of opencode[mimo-v2.6-flash-free].

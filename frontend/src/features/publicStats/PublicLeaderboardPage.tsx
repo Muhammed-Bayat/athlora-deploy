@@ -85,9 +85,9 @@ export function PublicLeaderboardPage() {
         <div className={styles.explorerHeading}>
           <div>
             <p className={styles.kicker}>Official performance rankings</p>
-            <h2>Public athlete leaderboards</h2>
+            <h2>Public performance leaderboards</h2>
           </div>
-          <p>Filtered performance leaderboards across public clubs. Only finalized individual performances are included.</p>
+          <p>Filtered performance leaderboards across public clubs. Finalized individual performances and relay team results are included.</p>
         </div>
 
         <div className={styles.filtersBar} aria-label="Leaderboard filters">
@@ -118,7 +118,7 @@ export function PublicLeaderboardPage() {
         {loading && <p className={styles.loading} role="status">Loading leaderboard...</p>}
 
         {!loading && !error && entries.length === 0 && (
-          <p className={styles.empty} role="status">No matching athlete performances found for the selected filters.</p>
+          <p className={styles.empty} role="status">No matching performances found for the selected filters.</p>
         )}
 
         {!loading && !error && entries.length > 0 && (
@@ -127,7 +127,7 @@ export function PublicLeaderboardPage() {
               <thead>
                 <tr>
                   <th scope="col">Place</th>
-                  <th scope="col">Athlete</th>
+                  <th scope="col">Athlete / Team</th>
                   <th scope="col">Club</th>
                   <th scope="col">Discipline</th>
                   <th scope="col">Performance</th>

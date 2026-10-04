@@ -38,6 +38,14 @@ describe('PublicLeaderboardPage', () => {
     expect(await screen.findByRole('table', { name: 'Athlete performance leaderboard' })).toHaveTextContent('Ari JumperOpen TrackLong jump6.45 m');
   });
 
+  it('renders relay team rows with the team name, club, and result', async () => {
+    getLeaderboard.mockResolvedValueOnce([{ athleteId: 'entrant-1', athleteName: 'Speed Demons', clubId: 'club', clubName: 'Open Track', discipline: '4x100m', label: '4 × 100m relay', unit: 'seconds', precision: 2, performance: 55.26, place: 1 }]);
+    render(<MemoryRouter initialEntries={['/stats/leaderboard']}><PublicLeaderboardPage /></MemoryRouter>);
+
+    expect(await screen.findByRole('table', { name: 'Athlete performance leaderboard' })).toHaveTextContent('1Speed DemonsOpen Track4 × 100m relay55.26 s');
+    expect(screen.getByRole('columnheader', { name: 'Athlete / Team' })).toBeInTheDocument();
+  });
+
   it('applies a whole-number exact age only after it is valid', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/stats/leaderboard']}><PublicLeaderboardPage /></MemoryRouter>);

@@ -14,7 +14,8 @@ import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
-import { listAvailableDisciplines } from './disciplineCatalog.js';
+import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
+import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 import type { PublicAthleteDisciplineStatistics } from '../types/domain.js';
 
 type ReadTransactionRunner = <T>(
@@ -237,6 +238,14 @@ async function fetchAthleteDisciplineStatistics(
             WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
               AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
           ))
+        UNION ALL
+        SELECT legs.code AS discipline, legs.label, legs.discipline_unit AS unit, legs.precision, legs.direction,
+               legs.event_date::text AS event_date, legs.event_time::text AS event_time, legs.event_created_at AS event_created_at, legs.event_id,
+               legs.final_result AS result
+        FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
+        WHERE legs.athlete_id = $1
+          AND legs.workspace_id = $4
+          AND legs.event_date >= $2::date AND legs.event_date < $3::date
         ORDER BY discipline, event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC`, [
       athleteId,
       season.selected === 'all' ? '0001-01-01' : season.startDate!,
@@ -248,7 +257,7 @@ async function fetchAthleteDisciplineStatistics(
     }>(`SELECT definitions.code, definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction
         FROM athlete_preferred_disciplines preferences
         JOIN discipline_definitions definitions ON definitions.id = preferences.discipline_definition_id
-        WHERE preferences.athlete_id = $1`, [athleteId]),
+        WHERE preferences.athlete_id = $1 AND definitions.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})`, [athleteId]),
   ]);
 
   const byDiscipline = new Map<string, PublicAthleteDisciplineStatistics>();

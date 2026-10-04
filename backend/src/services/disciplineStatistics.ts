@@ -6,7 +6,8 @@ import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
  * all statistics visibility in the same commit as results and places. */
 export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_id, a.name AS athlete_name,
   d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
-  e.date AS event_date, r.final_result, r.session_id
+  s.discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
+  e.time AS event_time, e.created_at AS event_created_at, r.final_result, r.session_id
   FROM session_results r
   JOIN discipline_sessions s ON s.id = r.session_id
   JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -26,7 +27,8 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_
  * survives a later team DQ, and the team total is never part of this relation. */
 export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_id, a.name AS athlete_name,
   d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
-  e.date AS event_date, t.value AS final_result, t.session_id
+  s.discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
+  e.time AS event_time, e.created_at AS event_created_at, t.value AS final_result, t.session_id
   FROM session_timeline_entries t
   JOIN session_relay_selections rs ON rs.entry_id = t.id AND rs.session_id = t.session_id AND rs.entrant_id = t.entrant_id AND rs.event_id = t.event_id
   JOIN relay_members rm ON rm.id = rs.relay_member_id AND rm.relay_id = rs.entrant_id AND rm.event_id = rs.event_id

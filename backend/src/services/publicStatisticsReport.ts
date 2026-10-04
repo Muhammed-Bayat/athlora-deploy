@@ -82,6 +82,19 @@ export async function getPublicStatisticsReport(
     `d.code = ANY($1::text[])`,
     "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
   ];
+  const relayConditions = [
+    "s.result_state = 'final'",
+    "s.status = 'completed'",
+    "e.status <> 'cancelled'",
+    "en.kind = 'relay'",
+    "d.default_rules->>'entrantType' = 'relay'",
+    'se.withdrawn_at IS NULL',
+    "r.outcome = 'valid'",
+    'r.final_result IS NOT NULL',
+    'c.public_results_enabled = true',
+    `d.code = ANY($1::text[])`,
+    "(e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))",
+  ];
   const params: unknown[] = [SUPPORTED_DISCIPLINE_CODES];
   const add = (value: unknown) => { params.push(value); return `$${params.length}`; };
 
@@ -90,26 +103,31 @@ export async function getPublicStatisticsReport(
     const end = add(season.endDate);
     legacyConditions.push(`e.date >= ${start}::date AND e.date < ${end}::date`);
     sessionConditions.push(`e.date >= ${start}::date AND e.date < ${end}::date`);
+    relayConditions.push(`e.date >= ${start}::date AND e.date < ${end}::date`);
   }
   if (query.discipline?.trim()) {
     const value = add(query.discipline.trim());
     legacyConditions.push(`r.discipline = ${value}`);
     sessionConditions.push(`(d.code = ${value} OR d.id::text = ${value})`);
+    relayConditions.push(`(d.code = ${value} OR d.id::text = ${value})`);
   }
   if (query.club?.trim()) {
     const value = add(query.club.trim());
     legacyConditions.push(`c.id = ${value}`);
     sessionConditions.push(`c.id = ${value}`);
+    relayConditions.push(`c.id = ${value}`);
   }
   if (query.gender?.trim()) {
     const value = add(query.gender.trim());
     legacyConditions.push(`a.gender ILIKE ${value}`);
     sessionConditions.push(`a.gender ILIKE ${value}`);
+    relayConditions.push('FALSE');
   }
   if (query.age?.trim()) {
     const parameter = add(parseExactAge(query.age));
     legacyConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = ${parameter}::integer`);
     sessionConditions.push(`EXTRACT(YEAR FROM age(e.date, a.dob))::integer = ${parameter}::integer`);
+    relayConditions.push('FALSE');
   }
 
   const result = await db.query<{
@@ -141,6 +159,18 @@ export async function getPublicStatisticsReport(
       JOIN clubs c ON c.workspace_id = r.workspace_id
       JOIN events e ON e.id = r.event_id
       WHERE ${sessionConditions.join(' AND ')}
+      UNION ALL
+      SELECT r.final_result, en.id, en.name AS athlete_name, c.id AS club_id, c.name AS club_name,
+             d.code, d.presentation->>'label' AS label, d.unit AS discipline_unit, d.precision, d.direction,
+             e.title AS event_title, e.date AS event_date
+      FROM session_results r
+      JOIN discipline_sessions s ON s.id = r.session_id
+      JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+      JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+      JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+      JOIN clubs c ON c.workspace_id = r.workspace_id
+      JOIN events e ON e.id = r.event_id
+      WHERE ${relayConditions.join(' AND ')}
     )
     SELECT *, RANK() OVER (PARTITION BY code ORDER BY CASE WHEN direction = 'lower' THEN final_result ELSE -final_result END ASC) AS place
     FROM published_performances

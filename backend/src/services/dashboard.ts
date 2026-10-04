@@ -22,6 +22,8 @@ import {
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { ApiError } from '../middleware/errors.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
+import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
+import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 const LATEST_ENTRIES_LIMIT = 10;
 const RECENT_RESULTS_LIMIT = 10;
@@ -349,7 +351,7 @@ export async function getDashboardSummary(
                COALESCE(jsonb_agg(jsonb_build_object('discipline', d.code, 'label', d.presentation->>'label', 'unit', d.unit, 'precision', d.precision, 'pb', best.pb) ORDER BY d.presentation->>'label') FILTER (WHERE d.id IS NOT NULL), '[]'::jsonb) AS disciplines
         FROM athletes a
         LEFT JOIN athlete_preferred_disciplines preferences ON preferences.athlete_id = a.id
-        LEFT JOIN discipline_definitions d ON d.id = preferences.discipline_definition_id
+        LEFT JOIN discipline_definitions d ON d.id = preferences.discipline_definition_id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
        LEFT JOIN LATERAL (
          SELECT MIN(result_value) FILTER (WHERE outcome_value = 'valid') AS pb FROM (
            SELECT CASE
@@ -405,6 +407,12 @@ export async function getDashboardSummary(
                    AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
                ))
              AND e.status <> 'cancelled'
+           UNION ALL
+           SELECT legs.final_result AS result_value, 'valid' AS outcome_value
+           FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
+           WHERE legs.workspace_id = $1
+             AND legs.athlete_id = a.id
+             AND legs.code = d.code
          ) merged
         ) best ON d.id IS NOT NULL
           WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'
