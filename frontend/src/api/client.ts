@@ -1,7 +1,7 @@
 import type { ApiList, User } from '../types';
 import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 let getAccessToken: (() => Promise<string>) | undefined;
 let accessTokenGetterRegistration: symbol | undefined;
 let activeWorkspaceId: string | undefined;
@@ -72,6 +72,11 @@ export function setActiveWorkspaceId(workspaceId: string | undefined): void {
   activeWorkspaceId = workspaceId;
 }
 
+export function resolveApiUrl(value: string): string {
+  if (!API_BASE_URL || !value.startsWith('/') || value.startsWith('//')) return value;
+  return `${API_BASE_URL}${value}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -112,7 +117,7 @@ async function readBody(response: Response): Promise<unknown> {
 async function sendRequest<T>(path: string, init: RequestInit | undefined, headers: Headers): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(resolveApiUrl(path), {
       ...init,
       headers,
     });

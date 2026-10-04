@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getPublicClubSchedule } from '../../api/publicSchedule';
-import { ApiError } from '../../api/client';
+import { ApiError, resolveApiUrl } from '../../api/client';
 import { ClubBadge, EmptyState } from '../../components';
 import type { PublicClubSchedule, PublicScheduleEvent } from '../../types';
 import { formatDateOnly } from '../../utils/formatting';
@@ -98,14 +98,24 @@ export function PublicScheduleClubPage() {
       {schedule && (
         <>
           <section className={styles.identity} aria-labelledby="club-schedule-heading">
-            <a className={styles.backLink} href="/schedule">← All published schedules</a>
-            <p className={styles.kicker}>Upcoming meets</p>
-            <h1 id="club-schedule-heading" className={styles.identityHeading}>
-              <ClubBadge name={schedule.club.name} branding={schedule.club.branding} size="lg" decorative />
-              <span>{schedule.club.name}</span>
-            </h1>
-            <span className={styles.identityAccent} aria-hidden="true" />
-            {schedule.club.branding?.description && <p className={styles.identityDescription}>{schedule.club.branding.description}</p>}
+            {schedule.club.branding?.coverUrl && (
+              <img
+                className={styles.identityCover}
+                src={resolveApiUrl(schedule.club.branding.coverUrl)}
+                alt=""
+                data-testid="club-cover-image"
+              />
+            )}
+            <div className={styles.identityContent}>
+              <a className={styles.backLink} href="/schedule">← All published schedules</a>
+              <p className={styles.kicker}>Upcoming meets</p>
+              <h1 id="club-schedule-heading" className={styles.identityHeading}>
+                <ClubBadge name={schedule.club.name} branding={schedule.club.branding} size="lg" decorative />
+                <span>{schedule.club.name}</span>
+              </h1>
+              <span className={styles.identityAccent} aria-hidden="true" />
+              {schedule.club.branding?.description && <p className={styles.identityDescription}>{schedule.club.branding.description}</p>}
+            </div>
           </section>
 
           <section aria-labelledby="upcoming-meets-heading">

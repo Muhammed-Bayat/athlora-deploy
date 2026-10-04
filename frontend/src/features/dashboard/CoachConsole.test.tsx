@@ -9,7 +9,10 @@ vi.mock('../../utils/weatherLocation', () => ({ timezoneCoordinates: () => ({ la
 
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
 const permissionsQuery = vi.hoisted(() => vi.fn());
-const brandingApi = vi.hoisted(() => ({ getClubBranding: vi.fn() }));
+const brandingApi = vi.hoisted(() => ({
+  CLUB_BRANDING_CHANGED_EVENT: 'athlora-club-branding-changed',
+  getClubBranding: vi.fn(),
+}));
 const assistantApi = vi.hoisted(() => ({
   createToken: vi.fn(),
   connect: vi.fn(),
@@ -208,6 +211,19 @@ describe('CoachConsole dashboard navigation', () => {
     expect(assistantApi.createToken).toHaveBeenCalledOnce();
     expect(assistantApi.connect).toHaveBeenCalledOnce();
     expect(assistantApi.sendText).toHaveBeenCalledOnce();
+  });
+
+  it('reloads the console badge after club branding changes', async () => {
+    brandingApi.getClubBranding.mockResolvedValue(null);
+    const { container } = renderConsole();
+    await waitFor(() => expect(brandingApi.getClubBranding).toHaveBeenCalled());
+    brandingApi.getClubBranding.mockClear();
+    brandingApi.getClubBranding.mockResolvedValue({ logoUrl: '/api/v1/media/clubs/club/logo.png', primaryColor: null });
+
+    window.dispatchEvent(new Event('athlora-club-branding-changed'));
+
+    await waitFor(() => expect(brandingApi.getClubBranding).toHaveBeenCalledOnce());
+    await waitFor(() => expect(container.querySelectorAll('img[src*="/api/v1/media/clubs/club/logo.png"]')).toHaveLength(2));
   });
 
   it('shows the active Club option when it is the only workspace', async () => {

@@ -1,4 +1,5 @@
 import type { ClubBrandSummary, ClubBranding } from '../types';
+import { resolveApiUrl } from '../api/client';
 import { clubInitials, pickForeground } from '../utils/colorContrast';
 import styles from './ClubBadge.module.css';
 
@@ -13,7 +14,7 @@ export interface ClubBadgeProps {
 }
 
 export function ClubBadge({ name, branding, size = 'md', className, decorative }: ClubBadgeProps) {
-  const logoUrl = branding?.logoUrl ?? null;
+  const logoUrl = branding?.logoUrl ? resolveApiUrl(branding.logoUrl) : null;
   const primaryColor = branding?.primaryColor ?? null;
   const background = primaryColor ?? undefined;
   const color = primaryColor ? pickForeground(primaryColor) : undefined;

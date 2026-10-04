@@ -15,7 +15,7 @@ import { weatherLabel, classifyWeather, type WeatherAtmosphere } from '../../uti
 import { timezoneCoordinates } from '../../utils/weatherLocation';
 import { DashboardPage } from './DashboardPage';
 import { useWorkspace } from '../auth/WorkspaceContext';
-import { getClubBranding } from '../../api/clubBranding';
+import { CLUB_BRANDING_CHANGED_EVENT, getClubBranding } from '../../api/clubBranding';
 import { InstallButton } from '../../components/InstallButton';
 import { OfflineIndicator } from '../../components/OfflineIndicator';
 import { ClubBadge } from '../../components/ClubBadge';
@@ -392,11 +392,18 @@ export function CoachConsole() {
 
   useEffect(() => {
     let current = true;
+    const loadBranding = () => {
+      getClubBranding()
+        .then((branding) => { if (current) setClubBranding(branding); })
+        .catch(() => { if (current) setClubBranding(null); });
+    };
     setClubBranding(null);
-    getClubBranding()
-      .then((branding) => { if (current) setClubBranding(branding); })
-      .catch(() => { if (current) setClubBranding(null); });
-    return () => { current = false; };
+    loadBranding();
+    window.addEventListener(CLUB_BRANDING_CHANGED_EVENT, loadBranding);
+    return () => {
+      current = false;
+      window.removeEventListener(CLUB_BRANDING_CHANGED_EVENT, loadBranding);
+    };
   }, [activeWorkspace.id]);
 
   useEffect(() => {

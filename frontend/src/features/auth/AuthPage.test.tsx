@@ -21,6 +21,7 @@ const clubApi = vi.hoisted(() => ({
   rejectClubJoinRequest: vi.fn(),
 }));
 const brandingApi = vi.hoisted(() => ({
+  CLUB_BRANDING_CHANGED_EVENT: 'athlora-club-branding-changed',
   getClubBranding: vi.fn(),
   updateClubBranding: vi.fn(),
   uploadClubLogo: vi.fn(),
@@ -75,6 +76,27 @@ beforeEach(() => {
 });
 
 describe('AuthPage', () => {
+  it('announces successful branding changes so console chrome refreshes', async () => {
+    const updatedBranding = {
+      description: 'Sprint-focused club.',
+      primaryColor: null,
+      logoUrl: null,
+      logoContentType: null,
+      coverUrl: null,
+      coverContentType: null,
+    };
+    brandingApi.updateClubBranding.mockResolvedValue(updatedBranding);
+    const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Save branding' }));
+
+    await waitFor(() => expect(brandingApi.updateClubBranding).toHaveBeenCalledOnce());
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'athlora-club-branding-changed' }));
+    dispatchEvent.mockRestore();
+  });
+
   it('shows pending Club requests to a coach and approves an assistant', async () => {
     const user = userEvent.setup();
     clubApi.listClubs.mockResolvedValue({ data: [{ id: 'club-1', workspaceId: '00000000-0000-4000-8000-000000000000', name: 'Track Club', createdAt: '2026-09-04T00:00:00.000Z', updatedAt: '2026-09-04T00:00:00.000Z' }], meta: { count: 1 } });

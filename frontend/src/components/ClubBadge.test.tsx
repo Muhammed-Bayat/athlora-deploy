@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ClubBadge } from './ClubBadge';
+import { resolveApiUrl } from '../api/client';
 
 describe('ClubBadge', () => {
   it('renders logo when a logo URL is present', () => {
@@ -11,7 +12,7 @@ describe('ClubBadge', () => {
       />,
     );
     const image = screen.getByRole('img', { name: 'Open Track Club logo' });
-    expect(image.getAttribute('src')).toContain('/logo-abc.png');
+    expect(image).toHaveAttribute('src', resolveApiUrl('/api/v1/media/clubs/22222222-2222-4222-8222-222222222222/logo-abc.png'));
   });
 
   it('falls back to accessible initials on the primary colour', () => {

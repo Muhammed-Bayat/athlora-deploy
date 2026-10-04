@@ -5,6 +5,7 @@ import {
   get,
   list,
   remove,
+  resolveApiUrl,
   requestPublic,
   setActiveWorkspaceId,
   setAccessTokenGetter,
@@ -32,6 +33,14 @@ afterEach(() => {
 });
 
 describe('API client', () => {
+  it('resolves API-relative media paths against the configured backend origin', () => {
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+    expect(resolveApiUrl('/api/v1/media/clubs/club/logo.png')).toBe(`${baseUrl}/api/v1/media/clubs/club/logo.png`);
+    expect(resolveApiUrl('https://cdn.example.com/clubs/club/logo.png')).toBe('https://cdn.example.com/clubs/club/logo.png');
+    expect(resolveApiUrl('//cdn.example.com/clubs/club/logo.png')).toBe('//cdn.example.com/clubs/club/logo.png');
+  });
+
   it('retains standard backend error fields in ApiError', async () => {
     vi.stubGlobal(
       'fetch',
