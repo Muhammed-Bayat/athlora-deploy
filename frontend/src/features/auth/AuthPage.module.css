@@ -142,26 +142,6 @@
 .members span, .memberList small { color: var(--color-text-muted); }
 .muted { margin: 0; color: var(--color-text-muted); }
 
-.inviteForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.45fr) auto;
-  gap: var(--space-3);
-}
-
-.inviteField {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.inviteField label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.inviteAction {
-  align-self: end;
-}
-
 .roleSelect {
   min-width: 0;
   width: 100%;
@@ -180,8 +160,6 @@
   .grid { grid-template-columns: 1fr; }
   .actions { flex-direction: column; }
   .actions button { width: 100%; min-height: 44px; }
-  .inviteForm { grid-template-columns: 1fr; }
-  .inviteAction, .inviteAction button { width: 100%; }
   .clubMemberList li { grid-template-columns: 1fr; align-items: stretch; }
   .clubMemberList .roleSelect, .clubMemberList button { width: 100%; }
 }
@@ -217,14 +195,6 @@
 
 .brandingPreview strong { color: var(--color-text); font-size: 1.05rem; }
 .brandingPreview p { margin: var(--space-1) 0; color: var(--color-text-muted); line-height: 1.5; }
-
-.coverPreview {
-  grid-column: 1 / -1;
-  width: 100%;
-  max-height: 160px;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-}
 
 .swatches { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .swatches span {

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
-  clearClubCover,
   clearClubLogo,
   CLUB_BRANDING_CHANGED_EVENT,
   getClubBranding,
   updateClubBranding,
-  uploadClubCover,
   uploadClubLogo,
 } from '../../api/clubBranding';
-import { ApiError, resolveApiUrl } from '../../api/client';
+import { ApiError } from '../../api/client';
 import { Button, Card, ClubBadge } from '../../components';
 import { hasAccessibleForeground, isHexColor, pickForeground } from '../../utils/colorContrast';
 import type { ClubBranding } from '../../types';
@@ -41,7 +39,6 @@ export function ClubBrandingCard() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const applyBranding = useCallback((next: ClubBranding) => {
     setBranding(next);
@@ -87,10 +84,7 @@ export function ClubBrandingCard() {
     }
   };
 
-  const handleImage = async (
-    event: ChangeEvent<HTMLInputElement>,
-    kind: 'logo' | 'cover',
-  ) => {
+  const handleImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -106,8 +100,8 @@ export function ClubBrandingCard() {
     setError(null);
     setStatus(null);
     try {
-      applySavedBranding(kind === 'logo' ? await uploadClubLogo(file) : await uploadClubCover(file));
-      setStatus(kind === 'logo' ? 'Logo updated.' : 'Cover image updated.');
+      applySavedBranding(await uploadClubLogo(file));
+      setStatus('Logo updated.');
     } catch (requestError) {
       setError(message(requestError));
     } finally {
@@ -115,13 +109,13 @@ export function ClubBrandingCard() {
     }
   };
 
-  const clearImage = async (kind: 'logo' | 'cover') => {
+  const clearImage = async () => {
     setBusy(true);
     setError(null);
     setStatus(null);
     try {
-      applySavedBranding(kind === 'logo' ? await clearClubLogo() : await clearClubCover());
-      setStatus(kind === 'logo' ? 'Logo removed.' : 'Cover image removed.');
+      applySavedBranding(await clearClubLogo());
+      setStatus('Logo removed.');
     } catch (requestError) {
       setError(message(requestError));
     } finally {
@@ -133,7 +127,6 @@ export function ClubBrandingCard() {
     description: description || null,
     primaryColor: primaryColor || null,
     logoUrl: branding?.logoUrl ?? null,
-    coverUrl: branding?.coverUrl ?? null,
   };
 
   return (
@@ -143,7 +136,7 @@ export function ClubBrandingCard() {
         <h2>Identity for {activeWorkspace.name}</h2>
         <span>
           {isCoach
-            ? 'Upload a logo and cover image, set a short description, and choose accessible club colours.'
+            ? 'Upload a logo, set a short description, and choose an accessible club colour.'
             : 'Only coaches can change club branding. Current branding is shown below.'}
         </span>
       </div>
@@ -162,7 +155,6 @@ export function ClubBrandingCard() {
                 <span style={primaryColor && isHexColor(primaryColor) ? { background: primaryColor, color: pickForeground(primaryColor) } : undefined}>Primary</span>
               </div>
             </div>
-            {branding.coverUrl && <img className={styles.coverPreview} src={resolveApiUrl(branding.coverUrl)} alt="" />}
           </div>
 
           {isCoach && (
@@ -205,29 +197,14 @@ export function ClubBrandingCard() {
                   <span>PNG, JPEG, or WebP up to 5 MB.</span>
                   <div className={styles.actions}>
                     <Button variant="secondary" onClick={() => logoInputRef.current?.click()} disabled={busy}>Upload logo</Button>
-                    {branding.logoUrl && <Button variant="ghost" onClick={() => void clearImage('logo')} disabled={busy}>Remove</Button>}
+                    {branding.logoUrl && <Button variant="ghost" onClick={() => void clearImage()} disabled={busy}>Remove</Button>}
                   </div>
                   <input
                     ref={logoInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     hidden
-                    onChange={(event) => void handleImage(event, 'logo')}
-                  />
-                </div>
-                <div>
-                  <strong>Cover image</strong>
-                  <span>PNG, JPEG, or WebP up to 5 MB.</span>
-                  <div className={styles.actions}>
-                    <Button variant="secondary" onClick={() => coverInputRef.current?.click()} disabled={busy}>Upload cover</Button>
-                    {branding.coverUrl && <Button variant="ghost" onClick={() => void clearImage('cover')} disabled={busy}>Remove</Button>}
-                  </div>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    hidden
-                    onChange={(event) => void handleImage(event, 'cover')}
+                    onChange={(event) => void handleImage(event)}
                   />
                 </div>
               </div>

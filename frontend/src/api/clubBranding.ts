@@ -31,16 +31,7 @@ export function uploadClubLogo(file: File): Promise<ClubBranding> {
   return uploadImage(`${BRANDING_PATH}/logo`, file);
 }
 
-export function uploadClubCover(file: File): Promise<ClubBranding> {
-  return uploadImage(`${BRANDING_PATH}/cover`, file);
-}
-
 export async function clearClubLogo(): Promise<ClubBranding> {
   const response = await request<{ data: ClubBranding }>(`${BRANDING_PATH}/logo`, { method: 'DELETE' });
-  return response.data;
-}
-
-export async function clearClubCover(): Promise<ClubBranding> {
-  const response = await request<{ data: ClubBranding }>(`${BRANDING_PATH}/cover`, { method: 'DELETE' });
   return response.data;
 }

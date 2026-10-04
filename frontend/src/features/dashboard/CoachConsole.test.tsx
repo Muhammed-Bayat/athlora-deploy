@@ -174,8 +174,7 @@ describe('CoachConsole dashboard navigation', () => {
     expect(screen.getByText('Athlete target: none')).toBeInTheDocument();
   });
 
-  it('uses the Club selector to switch workspaces', async () => {
-    const user = userEvent.setup();
+  it('shows the active Club as static identity without a workspace selector', () => {
     const selectWorkspace = vi.fn();
     const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
     const relayClub = { id: 'workspace-2', name: 'Relay Club', timezone: 'Africa/Johannesburg', role: 'coach' as const };
@@ -185,12 +184,10 @@ describe('CoachConsole dashboard navigation', () => {
       </WorkspaceContext.Provider>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Active Club' }));
-    await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Relay Club' }));
-
-    expect(selectWorkspace).toHaveBeenCalledWith('workspace-2');
-    expect(screen.getByRole('button', { name: 'Active Club' }).parentElement).toHaveClass(/workspaceSelect/);
-    expect(screen.getByTestId('route-location')).toHaveTextContent('/console');
+    expect(screen.getByText('Personal workspace')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Active Club' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(selectWorkspace).not.toHaveBeenCalled();
   });
 
   it('keeps the Athlora session available when navigating between console routes', async () => {
@@ -224,20 +221,6 @@ describe('CoachConsole dashboard navigation', () => {
 
     await waitFor(() => expect(brandingApi.getClubBranding).toHaveBeenCalledOnce());
     await waitFor(() => expect(container.querySelectorAll('img[src*="/api/v1/media/clubs/club/logo.png"]')).toHaveLength(2));
-  });
-
-  it('shows the active Club option when it is the only workspace', async () => {
-    const user = userEvent.setup();
-    const personalWorkspace = { id: 'workspace-1', name: 'Personal workspace', timezone: 'UTC', role: 'coach' as const };
-    render(
-      <WorkspaceContext.Provider value={{ activeWorkspace: personalWorkspace, workspaces: [personalWorkspace], selectWorkspace: vi.fn(), refreshWorkspaces: async () => undefined }}>
-        <MemoryRouter initialEntries={['/console']}><CoachConsole /></MemoryRouter>
-      </WorkspaceContext.Provider>,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Active Club' }));
-
-    expect(within(screen.getByRole('listbox')).getByRole('option', { name: 'Personal workspace' })).toBeVisible();
   });
 
   it('closes the weather preview when the page is clicked', async () => {
