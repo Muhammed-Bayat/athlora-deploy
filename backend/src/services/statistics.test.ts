@@ -213,8 +213,18 @@ describe('getAthleteStatisticsDetail', () => {
       '2026-01-01',
       '2027-01-01',
     ]);
-    const [historySql] = query.mock.calls[2] as [string, unknown[]];
+    const [historySql, historyParameters] = query.mock.calls[2] as [string, unknown[]];
     expect(historySql).not.toContain("e.status = 'completed'");
+    // The log covers every discipline the athlete has results in.
+    expect(historySql).not.toMatch(/discipline = \$\d/);
+    expect(historySql).not.toMatch(/d\.code = \$\d/);
+    expect(historyParameters).toEqual([
+      ATHLETE_ID,
+      USER_ID,
+      10,
+      '2026-01-01',
+      '2027-01-01',
+    ]);
   });
 
   it('rejects malformed ownership identifiers without aggregate queries', async () => {

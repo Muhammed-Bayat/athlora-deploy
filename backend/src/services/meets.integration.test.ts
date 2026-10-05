@@ -971,6 +971,11 @@ describeDB('multi-discipline migration and domain integration', () => {
 
     const sprintSession = await session('100m', 'Final');
     const longJump = await definition('long_jump');
+    await pool.query(
+      `INSERT INTO results (event_id, athlete_id, discipline, outcome, final_result)
+       VALUES ($1, $2, 'long_jump', 'valid', 5.4)`,
+      [eventId, athleteId],
+    );
     const longJumpSession = await session('long_jump', 'Long jump final');
     const entrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
     const sprintTarget = { disciplineSessionId: sprintSession.id, entrantId: entrant.id };
@@ -1006,9 +1011,9 @@ describeDB('multi-discipline migration and domain integration', () => {
     });
     expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons)).entries.map((entry) => entry.value).sort()).toEqual([11.25, 11.5]);
     expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).toMatchObject({
-      entries: [{ value: 5.5 }],
-      summary: { personalBest: 5.5, resultCount: 1 },
+      summary: { personalBest: 5.5, resultCount: 2 },
     });
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).entries.map((entry) => entry.value).sort()).toEqual([5.4, 5.5]);
   });
 
   it('blocks starting an event while any host or guest athlete is pending or maybe', async () => {

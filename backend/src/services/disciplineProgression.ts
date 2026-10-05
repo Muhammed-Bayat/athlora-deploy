@@ -35,7 +35,7 @@ export async function getDisciplineProgression(
     JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
     JOIN discipline_definitions d ON d.id = $3 AND d.code = r.discipline
     JOIN events e ON e.id = r.event_id AND ${COMPLETED_COMPETITION_FILTER}
-    WHERE r.athlete_id = $2 AND r.discipline = '100m'
+    WHERE r.athlete_id = $2
       AND r.outcome = 'valid' AND COALESCE(r.manual_override, r.final_result) IS NOT NULL
       AND (e.workspace_id = $1 OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw
         JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id

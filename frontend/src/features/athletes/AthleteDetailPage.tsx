@@ -12,7 +12,7 @@ import type {
   AthleteStatisticsDetail,
   ResultOutcome,
 } from '../../types';
-import { calculateAge, format100mSeconds, formatDateOnly, formatOutcome } from '../../utils/formatting';
+import { calculateAge, formatDateOnly, formatOutcome, formatResultUnit } from '../../utils/formatting';
 import { AthleteForm } from './AthleteForm';
 import { athleteErrorMessage } from './athleteError';
 import { listDisciplines } from '../../api/meets';
@@ -73,8 +73,9 @@ function normalizeDiscipline(value: string): string {
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
   const { event, result, effectiveOutcome, effectiveResult } = entry;
   const hasOverride = result.manualOverride !== null;
+  const formatMark = (value: number) => `${value.toFixed(2)}${formatResultUnit(result.unit ?? 'seconds')}`;
   const rawDescription = result.finalResult !== null
-    ? format100mSeconds(result.finalResult)
+    ? formatMark(result.finalResult)
     : formatOutcome(result.outcome);
 
   return (
@@ -91,8 +92,8 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
         <span>Effective result</span>
         {effectiveOutcome === 'valid' && effectiveResult !== null ? (
           <>
-            <strong>{format100mSeconds(effectiveResult)}</strong>
-            <small>Valid 100m result</small>
+            <strong>{formatMark(effectiveResult)}</strong>
+            <small>Valid {result.discipline} result</small>
           </>
         ) : (
           <Badge variant={outcomeVariant(effectiveOutcome)}>{formatOutcome(effectiveOutcome)}</Badge>
