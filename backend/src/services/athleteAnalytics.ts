@@ -1,10 +1,10 @@
 import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
-import type { AthleteLifecycleStatus, EventType } from '../types/domain.js';
+import type { AthleteLifecycleStatus, EventStatus, EventType } from '../types/domain.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
-import { COMPLETED_COMPETITION_FILTER } from './disciplineStatistics.js';
+import { NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
 import { isSupportedDiscipline } from './disciplineCatalog.js';
 
 const RECENT_RESULT_LIMIT = 5;
@@ -31,6 +31,7 @@ export interface NormalizedAthleteResult {
     date: string;
     time: string | null;
     type: EventType;
+    status: EventStatus;
   };
   value: number;
   place: number | null;
@@ -108,6 +109,7 @@ interface NormalizedResultRow extends DisciplineRow {
   event_date: string;
   event_time: string | null;
   event_type: EventType;
+  event_status: EventStatus;
   result_value: number | string;
   placing: number | string | null;
 }
@@ -150,6 +152,7 @@ function mapNormalizedResult(row: NormalizedResultRow): NormalizedAthleteResult 
       date: String(row.event_date),
       time: row.event_time,
       type: row.event_type,
+      status: row.event_status,
     },
     value: Number(row.result_value),
     place: row.placing === null ? null : Number(row.placing),
@@ -164,6 +167,11 @@ function compareChronologically(left: NormalizedAthleteResult, right: Normalized
 
 function isBetter(left: number, right: number, direction: DisciplineDefinition['direction']): boolean {
   return direction === 'lower' ? left < right : left > right;
+}
+
+/** Only a completed competition may mint a personal or seasonal best. */
+function countsAsBest(result: NormalizedAthleteResult): boolean {
+  return result.event.type === 'competition' && result.event.status === 'completed';
 }
 
 function best(results: readonly NormalizedAthleteResult[], direction: DisciplineDefinition['direction']): number | null {
@@ -237,8 +245,8 @@ export function summarizeAthleteDisciplineResults(
     athleteId,
     discipline,
     season,
-    pb: best(history, discipline.direction),
-    sb: best(seasonResults, discipline.direction),
+    pb: best(history.filter(countsAsBest), discipline.direction),
+    sb: best(seasonResults.filter(countsAsBest), discipline.direction),
     latest,
     first,
     average: average(history, discipline.precision),
@@ -338,6 +346,7 @@ const NORMALIZED_RESULTS_QUERY = `
            r.athlete_id, r.discipline AS code,
            definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction,
             e.id AS event_id, e.title AS event_title, e.date::text AS event_date, e.time::text AS event_time, e.type AS event_type,
+            e.status AS event_status,
             COALESCE(r.manual_override, r.final_result) AS result_value, r."placing" AS placing
     FROM results r
     JOIN athletes a ON a.id = r.athlete_id
@@ -354,7 +363,7 @@ const NORMALIZED_RESULTS_QUERY = `
       AND r.discipline = $2
       AND r.outcome = 'valid'
       AND COALESCE(r.manual_override, r.final_result) IS NOT NULL
-      AND ${COMPLETED_COMPETITION_FILTER}
+      AND ${NON_CANCELLED_EVENT_FILTER}
       AND (e.workspace_id = $1 OR EXISTS (
         SELECT 1
         FROM event_fixture_workspaces fw
@@ -369,6 +378,7 @@ const NORMALIZED_RESULTS_QUERY = `
            en.athlete_id, d.code,
            d.presentation->>'label' AS label, d.unit, d.precision, d.direction,
             e.id AS event_id, e.title AS event_title, e.date::text AS event_date, e.time::text AS event_time, e.type AS event_type,
+            e.status AS event_status,
             COALESCE(r.manual_override, r.final_result) AS result_value, r.final_place AS placing
     FROM session_results r
     JOIN discipline_sessions s ON s.id = r.session_id
@@ -384,7 +394,7 @@ const NORMALIZED_RESULTS_QUERY = `
       AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
       AND se.withdrawn_at IS NULL
       AND r.outcome = 'valid' AND r.final_result IS NOT NULL
-      AND ${COMPLETED_COMPETITION_FILTER}
+      AND ${NON_CANCELLED_EVENT_FILTER}
       AND (e.workspace_id = r.workspace_id OR EXISTS (
         SELECT 1 FROM event_fixture_workspaces fw
         WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id

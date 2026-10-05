@@ -204,6 +204,7 @@ export async function getDashboardSummary(
            WITH history AS (
              SELECT r.athlete_id, r.is_pb AS stored_is_pb, 'legacy' AS result_source,
                     e.date AS event_date, e.time AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+                    e.type AS event_type, e.status AS event_status,
                     CASE
                       WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
                       WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
@@ -231,6 +232,7 @@ export async function getDashboardSummary(
              UNION ALL
              SELECT en.athlete_id, NULL::boolean, 'session' AS result_source,
                     e.date AS event_date, e.time AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+                    e.type AS event_type, e.status AS event_status,
                     CASE
                       WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
                       WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
@@ -423,7 +425,8 @@ export async function getDashboardSummary(
             UNION ALL
             SELECT legs.final_result AS result_value, 'valid' AS outcome_value
             FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
-            WHERE legs.workspace_id = $1
+            WHERE legs.counts_for_best
+              AND legs.workspace_id = $1
               AND legs.athlete_id = a.id
               AND legs.code = d.code
           ) merged

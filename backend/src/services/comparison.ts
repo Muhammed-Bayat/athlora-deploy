@@ -15,7 +15,7 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { FINAL_RELAY_LEG_PERFORMANCES, NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
 import type { PublicAthleteDisciplineStatistics } from '../types/domain.js';
 
 type ReadTransactionRunner = <T>(
@@ -62,7 +62,8 @@ const PROGRESSION_SELECT = `
              WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
              WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
              ELSE r.outcome
-           END AS effective_outcome
+           END AS effective_outcome,
+           e.status = 'completed' AND e.type = 'competition' AS counts_for_best
     FROM results r
     JOIN events e ON e.id = r.event_id
     JOIN athletes a ON a.id = r.athlete_id
@@ -76,7 +77,7 @@ const PROGRESSION_SELECT = `
          WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
-        AND ${COMPLETED_COMPETITION_FILTER}
+        AND ${NON_CANCELLED_EVENT_FILTER}
         AND e.date >= $4::date AND e.date < $5::date
     UNION ALL
     SELECT r.event_id, en.athlete_id, d.code, r.final_result,
@@ -104,7 +105,8 @@ const PROGRESSION_SELECT = `
              WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
              WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
              ELSE r.outcome
-           END AS effective_outcome
+           END AS effective_outcome,
+           e.status = 'completed' AND e.type = 'competition' AS counts_for_best
     FROM session_results r
     JOIN discipline_sessions s ON s.id = r.session_id
     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -123,7 +125,7 @@ const PROGRESSION_SELECT = `
          WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
-        AND ${COMPLETED_COMPETITION_FILTER}
+        AND ${NON_CANCELLED_EVENT_FILTER}
         AND e.date >= $4::date AND e.date < $5::date
   ), enriched AS (
     SELECT *,
@@ -134,7 +136,9 @@ const PROGRESSION_SELECT = `
     SELECT *,
            CASE
              WHEN effective_outcome = 'valid' AND effective_result IS NOT NULL THEN
-               MIN(effective_result) OVER (
+               MIN(effective_result) FILTER (
+                 WHERE counts_for_best
+               ) OVER (
                  ORDER BY event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC
                  ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
                )
@@ -146,7 +150,7 @@ const PROGRESSION_SELECT = `
     FROM enriched
   ), summary AS (
     SELECT
-      MIN(effective_result) FILTER (WHERE effective_outcome = 'valid') AS all_time_pb,
+      MIN(effective_result) FILTER (WHERE effective_outcome = 'valid' AND counts_for_best) AS all_time_pb,
       COUNT(*) AS total_results,
       COUNT(*) FILTER (WHERE effective_outcome = 'valid') AS total_valid
     FROM enriched
@@ -156,9 +160,9 @@ const PROGRESSION_SELECT = `
          (summary.total_results) AS summary_total,
          (summary.total_valid) AS summary_valid,
          CASE
-           WHEN ranked.effective_outcome = 'valid' AND ranked.effective_result IS NOT NULL
+           WHEN ranked.counts_for_best AND ranked.effective_outcome = 'valid' AND ranked.effective_result IS NOT NULL
              AND ranked.running_pb IS NULL THEN true
-           WHEN ranked.effective_outcome = 'valid' AND ranked.effective_result IS NOT NULL
+           WHEN ranked.counts_for_best AND ranked.effective_outcome = 'valid' AND ranked.effective_result IS NOT NULL
              AND ranked.running_pb IS NOT NULL AND ranked.effective_result < ranked.running_pb THEN true
            ELSE false
          END AS is_new_pb
@@ -196,14 +200,15 @@ async function fetchAthleteDisciplineStatistics(
   const [results, preferences] = await Promise.all([
     client.query<{
       discipline: string; label: string; unit: PublicAthleteDisciplineStatistics['unit']; precision: number | string; direction: PublicAthleteDisciplineStatistics['direction'];
-      event_date: string; event_time: string | null; event_created_at: string | Date; event_id: string; result: number | string;
+      event_date: string; event_time: string | null; event_created_at: string | Date; event_id: string; result: number | string; counts_for_best: boolean;
     }>(`SELECT r.discipline, definitions.presentation->>'label' AS label, definitions.unit, definitions.precision, definitions.direction,
                e.date::text AS event_date, e.time::text AS event_time, e.created_at AS event_created_at, e.id AS event_id,
-               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result
+               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result,
+               e.status = 'completed' AND e.type = 'competition' AS counts_for_best
         FROM results r
         JOIN events e ON e.id = r.event_id
         JOIN discipline_definitions definitions ON definitions.code = r.discipline
-        WHERE r.athlete_id = $1 AND ${COMPLETED_COMPETITION_FILTER}
+        WHERE r.athlete_id = $1 AND ${NON_CANCELLED_EVENT_FILTER}
           AND r.outcome NOT IN ('dq', 'dnf', 'dns')
           AND (r.manual_override IS NOT NULL AND r.manual_override > 0 OR r.final_result IS NOT NULL)
           AND e.date >= $2::date AND e.date < $3::date
@@ -217,7 +222,8 @@ async function fetchAthleteDisciplineStatistics(
         UNION ALL
         SELECT d.code AS discipline, d.presentation->>'label' AS label, d.unit, d.precision, d.direction,
                e.date::text AS event_date, e.time::text AS event_time, e.created_at AS event_created_at, e.id AS event_id,
-               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result
+               CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override ELSE r.final_result END AS result,
+               e.status = 'completed' AND e.type = 'competition' AS counts_for_best
         FROM session_results r
         JOIN discipline_sessions s ON s.id = r.session_id
         JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -227,7 +233,7 @@ async function fetchAthleteDisciplineStatistics(
         JOIN events e ON e.id = r.event_id
         WHERE en.athlete_id = $1
           AND r.workspace_id = $4
-          AND s.result_state = 'final' AND s.status = 'completed' AND ${COMPLETED_COMPETITION_FILTER}
+          AND s.result_state = 'final' AND s.status = 'completed' AND ${NON_CANCELLED_EVENT_FILTER}
           AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
           AND se.withdrawn_at IS NULL
           AND r.outcome NOT IN ('dq', 'dnf', 'dns')
@@ -241,7 +247,7 @@ async function fetchAthleteDisciplineStatistics(
         UNION ALL
         SELECT legs.code AS discipline, legs.label, legs.discipline_unit AS unit, legs.precision, legs.direction,
                legs.event_date::text AS event_date, legs.event_time::text AS event_time, legs.event_created_at AS event_created_at, legs.event_id,
-               legs.final_result AS result
+               legs.final_result AS result, legs.counts_for_best AS counts_for_best
         FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
         WHERE legs.athlete_id = $1
           AND legs.workspace_id = $4
@@ -261,19 +267,25 @@ async function fetchAthleteDisciplineStatistics(
   ]);
 
   const byDiscipline = new Map<string, PublicAthleteDisciplineStatistics>();
+  const bestValues = new Map<string, number[]>();
   for (const row of results?.rows ?? []) {
     const existing = byDiscipline.get(row.discipline);
     const value = Number(row.result);
+    const priorBest = bestValues.get(row.discipline) ?? [];
+    const best = row.counts_for_best ? [...priorBest, value] : priorBest;
+    bestValues.set(row.discipline, best);
+    const pb = best.length === 0
+      ? null
+      : row.direction === 'lower' ? Math.min(...best) : Math.max(...best);
     if (!existing) {
       byDiscipline.set(row.discipline, {
         discipline: row.discipline, label: row.label, unit: row.unit, precision: Number(row.precision), direction: row.direction,
-        pb: value, latestEffectiveResult: value, validResultCount: 1, average: value, consistency: null, improvement: null,
+        pb, latestEffectiveResult: value, validResultCount: 1, average: value, consistency: null, improvement: null,
         progression: [{ date: row.event_date, result: value }],
       });
       continue;
     }
     const values = [...existing.progression.map(({ result }) => result), value];
-    const pb = existing.direction === 'lower' ? Math.min(...values) : Math.max(...values);
     const average = values.reduce((total, result) => total + result, 0) / values.length;
     const variance = values.reduce((total, result) => total + (result - average) ** 2, 0) / values.length;
     existing.pb = pb;
@@ -281,9 +293,11 @@ async function fetchAthleteDisciplineStatistics(
     existing.validResultCount = values.length;
     existing.average = Math.round(average * 100) / 100;
     existing.consistency = Math.round(Math.sqrt(variance) * 100) / 100;
-    existing.improvement = existing.direction === 'lower'
-      ? Math.round((existing.progression[0]!.result - pb) * 100) / 100
-      : Math.round((pb - existing.progression[0]!.result) * 100) / 100;
+    existing.improvement = pb === null
+      ? null
+      : existing.direction === 'lower'
+        ? Math.round((existing.progression[0]!.result - pb) * 100) / 100
+        : Math.round((pb - existing.progression[0]!.result) * 100) / 100;
     existing.progression.push({ date: row.event_date, result: value });
   }
   for (const preference of preferences?.rows ?? []) {

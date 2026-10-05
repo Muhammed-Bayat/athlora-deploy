@@ -17,7 +17,7 @@ import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { FINAL_RELAY_LEG_PERFORMANCES, NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
 
 interface PublicClubRow {
   id: string;
@@ -180,14 +180,15 @@ export async function getPublicAthleteStatistics(
                 WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                 ELSE r.outcome
-              END AS effective_outcome
+              END AS effective_outcome,
+              e.status = 'completed' AND e.type = 'competition' AS counts_for_best
        FROM results r
        JOIN athletes a ON a.id = r.athlete_id
        JOIN events e ON e.id = r.event_id
        WHERE a.workspace_id = $1
          AND a.lifecycle_status <> 'archived'
          AND r.discipline = $2
-          AND ${COMPLETED_COMPETITION_FILTER}
+          AND ${NON_CANCELLED_EVENT_FILTER}
           AND e.date >= $3::date AND e.date < $4::date
           AND (e.workspace_id = $1 OR EXISTS (
             SELECT 1
@@ -217,7 +218,8 @@ export async function getPublicAthleteStatistics(
                 WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                 ELSE r.outcome
-              END AS effective_outcome
+              END AS effective_outcome,
+              e.status = 'completed' AND e.type = 'competition' AS counts_for_best
        FROM session_results r
        JOIN discipline_sessions s ON s.id = r.session_id
        JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -229,7 +231,7 @@ export async function getPublicAthleteStatistics(
          AND a.lifecycle_status <> 'archived'
          AND d.code = $2
           AND s.result_state = 'final' AND s.status = 'completed'
-          AND ${COMPLETED_COMPETITION_FILTER}
+          AND ${NON_CANCELLED_EVENT_FILTER}
           AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
           AND se.withdrawn_at IS NULL
           AND e.date >= $3::date AND e.date < $4::date
@@ -250,7 +252,7 @@ export async function getPublicAthleteStatistics(
        GROUP BY athlete_id
      ), metrics AS (
        SELECT athlete_id,
-              MIN(effective_result) AS pb,
+              MIN(effective_result) FILTER (WHERE counts_for_best) AS pb,
               (ARRAY_AGG(effective_result ORDER BY event_date DESC, event_time DESC NULLS LAST, event_created_at DESC, event_id DESC))[1] AS latest_effective_result,
               COUNT(*) AS valid_result_count,
               AVG(effective_result) AS average,

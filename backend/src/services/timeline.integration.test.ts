@@ -126,11 +126,35 @@ describeDB('timeline entries against a real database', () => {
     expect(first.version).toBe(1);
     expect(second.recordedBy).toBe(coachId);
 
-    const { rows } = await pool.query(
+    const readResult = () => pool.query(
       `SELECT outcome, final_result, unit, "placing" AS placing, is_pb, is_sb
        FROM results WHERE event_id = $1 AND athlete_id = $2`,
       [eventId, athleteId],
     );
+
+    let { rows } = await readResult();
+    expect(rows[0]).toMatchObject({
+      outcome: 'valid',
+      final_result: '11.05',
+      unit: 'seconds',
+      placing: 1,
+      is_pb: false,
+      is_sb: false,
+    });
+
+    await replaceEvent(coachId, eventId, {
+      type: 'competition',
+      discipline: '100m',
+      title: 'Sprint Competition',
+      date: '2026-09-01',
+      time: null,
+      locationName: null,
+      latitude: null,
+      longitude: null,
+      status: 'completed',
+    }, runTransaction);
+
+    ({ rows } = await readResult());
     expect(rows[0]).toMatchObject({
       outcome: 'valid',
       final_result: '11.05',
@@ -349,8 +373,8 @@ describeDB('timeline entries against a real database', () => {
       finalResult: null,
       manualOverride: 10.8,
       placing: 1,
-      isPb: true,
-      isSb: true,
+      isPb: false,
+      isSb: false,
       overrideReason: 'Photo finish',
       overriddenBy: coachId,
     });
@@ -407,8 +431,21 @@ describeDB('timeline entries against a real database', () => {
        WHERE athlete_id = $1 ORDER BY event_id`,
       [athleteId],
     );
-    expect(rows.rows.find((row) => row.event_id === eventId)).toMatchObject({ final_result: '11', is_pb: true });
+    expect(rows.rows.find((row) => row.event_id === eventId)).toMatchObject({ final_result: '11', is_pb: false });
     expect(rows.rows.find((row) => row.event_id === futureId)).toMatchObject({ final_result: '11.2', is_pb: false });
+
+    // The second meet may only carry a best mark once it is completed itself.
+    await replaceEvent(coachId, futureId, {
+      type: 'competition',
+      discipline: '100m',
+      title: 'Sprint Future',
+      date: '2026-10-01',
+      time: null,
+      locationName: null,
+      latitude: null,
+      longitude: null,
+      status: 'completed',
+    }, runTransaction);
 
     await cancelEvent(coachId, eventId, runTransaction);
     rows = await pool.query(

@@ -60,7 +60,8 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                e.status = 'completed' AND e.type = 'competition' AS counts_for_best
          FROM results r
          JOIN events e ON e.id = r.event_id
          JOIN athletes a ON a.id = r.athlete_id
@@ -74,7 +75,7 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
-           AND e.status = 'completed'
+           AND e.status <> 'cancelled'
          UNION ALL
          SELECT r.outcome,
                 r.final_result,
@@ -95,7 +96,8 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                e.status = 'completed' AND e.type = 'competition' AS counts_for_best
          FROM session_results r
          JOIN discipline_sessions s ON s.id = r.session_id
          JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -114,7 +116,7 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
-           AND e.status = 'completed'
+           AND e.status <> 'cancelled'
        ), latest AS (
          SELECT effective_result, effective_outcome
          FROM effective
@@ -129,11 +131,11 @@ export async function getAthleteStatisticsDetail(
               $4::text AS unit,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
-                  AND e.event_type = 'competition'
+                  AND e.counts_for_best
               ) AS pb,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
-                  AND e.event_type = 'competition'
+                  AND e.counts_for_best
                   AND e.event_date >= $5::date
                   AND e.event_date < $6::date
               ) AS sb,

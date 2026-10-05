@@ -197,7 +197,7 @@ describe('getTwoAthleteComparison', () => {
         return Promise.resolve({ rows: [{ code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
       }
       if (sql.includes('SELECT r.discipline, definitions.presentation')) {
-        return Promise.resolve({ rows: [{ discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-01-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_1_ID, result: '6.10' }, { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-02-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_2_ID, result: '6.25' }] });
+        return Promise.resolve({ rows: [{ discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-01-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_1_ID, result: '6.10', counts_for_best: true }, { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-02-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_2_ID, result: '6.25', counts_for_best: true }] });
       }
       if (sql.includes("SELECT code, presentation->>'label' AS label, unit, precision, direction")) {
         return Promise.resolve({ rows: [{ code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' }, { code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
