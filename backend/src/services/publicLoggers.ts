@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getPool, type DbExecutor } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import { DISCIPLINE_100M, type EventStatus, type EventType, type TimelineEntry } from '../types/domain.js';
+import { DISCIPLINE_100M, type Discipline, type EventStatus, type EventType, type TimelineEntry } from '../types/domain.js';
 import type { TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../validation/payloads.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
@@ -24,7 +24,7 @@ export interface PublicLoggerLink {
 }
 
 export interface PublicLoggerSnapshot {
-  event: { id: string; title: string; status: EventStatus; discipline: typeof DISCIPLINE_100M | null };
+  event: { id: string; title: string; status: EventStatus; discipline: Discipline | null };
   participants: Array<{ athleteId: string; name: string; teamName: string | null }>;
   timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit: boolean; canUndo: boolean }>;
 }

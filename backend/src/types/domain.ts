@@ -196,10 +196,10 @@ export interface ClubJoinRequest {
 // Legacy events retain their 100m contract. Null identifies a generic meet whose
 // disciplines are configured through immutable catalogue-backed sessions.
 export const DISCIPLINE_100M = '100m' as const;
-export type Discipline = typeof DISCIPLINE_100M;
+export type Discipline = string;
 
 export const RESULT_UNIT_SECONDS = 'seconds' as const;
-export type ResultUnit = typeof RESULT_UNIT_SECONDS;
+export type ResultUnit = 'seconds' | 'metres' | 'cm';
 
 export const RESULT_OUTCOMES = ['no_result', 'valid', 'dq', 'dnf', 'dns'] as const;
 export type ResultOutcome = (typeof RESULT_OUTCOMES)[number];

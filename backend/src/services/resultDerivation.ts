@@ -1,4 +1,4 @@
-import type { Discipline, EntryType, EventType, IncidentType, ResultOutcome } from '../types/domain.js';
+import type { EntryType, EventType, IncidentType, ResultOutcome } from '../types/domain.js';
 import { isPositiveRaceTime } from '../validation/primitives.js';
 
 export interface EntryInput {
@@ -18,7 +18,7 @@ export interface Derivation {
 
 export type DisciplineKind = 'field' | 'track';
 
-export const DISCIPLINE_KIND: Record<Discipline, DisciplineKind> = {
+export const DISCIPLINE_KIND: Readonly<Record<string, DisciplineKind>> = {
   '100m': 'track',
 };
 

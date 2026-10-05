@@ -1016,6 +1016,36 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).entries.map((entry) => entry.value).sort()).toEqual([5.4, 5.5]);
   });
 
+  it('keeps non-100m discipline rows in the athlete performance log', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    await pool.query(
+      `INSERT INTO results (event_id, athlete_id, discipline, outcome, final_result, unit)
+       VALUES ($1, $2, 'long_jump', 'valid', 5.4, 'metres')`,
+      [eventId, athleteId],
+    );
+
+    const { getAthleteStatisticsDetail } = await import('./statistics.js');
+    const statistics = await getAthleteStatisticsDetail(
+      host.workspaceId,
+      athleteId,
+      undefined,
+      transaction,
+      allSeasons,
+    );
+
+    expect(statistics.recentResults.competitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: expect.objectContaining({ discipline: 'long_jump' }),
+          result: expect.objectContaining({ discipline: 'long_jump', unit: 'metres' }),
+          effectiveResult: 5.4,
+          effectiveOutcome: 'valid',
+        }),
+      ]),
+    );
+  });
+
   it('blocks starting an event while any host or guest athlete is pending or maybe', async () => {
     await migrate();
     const { replaceEvent } = await import('./events.js');

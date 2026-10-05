@@ -183,21 +183,27 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
           ? (right.event.time ?? '').localeCompare(left.event.time ?? '')
           : right.event.date.localeCompare(left.event.date)))
     : [];
-  const logDisciplines = [...new Set(sortedLogEntries.map((entry) => entry.event.discipline))]
-    .map((code) => {
-      const definition = disciplines.find((discipline) => discipline.code === code || discipline.id === code);
-      return { code, label: definition?.presentation.label ?? code };
-    });
-  const selectedLogDiscipline = logDisciplines.find((discipline) => discipline.code === activeLogDiscipline) ?? logDisciplines[0];
-  const showLogDisciplineTabs = logDisciplines.length > 1;
+  const assignedLogDisciplines = athlete?.preferredDisciplineIds.map((id) => {
+    const definition = disciplines.find((discipline) => discipline.id === id);
+    return { code: definition?.code ?? id, label: definition?.presentation.label ?? id };
+  }) ?? [];
+  const loggedCodes = [...new Set(sortedLogEntries.map((entry) => entry.event.discipline))];
+  const logDisciplines = [
+    ...assignedLogDisciplines,
+    ...loggedCodes
+      .filter((code) => !assignedLogDisciplines.some((discipline) => discipline.code === code))
+      .map((code) => {
+        const definition = disciplines.find((discipline) => discipline.code === code || discipline.id === code);
+        return { code, label: definition?.presentation.label ?? code };
+      }),
+  ];
+  const selectedLogDiscipline = logDisciplines.find((discipline) => discipline.code === activeLogDiscipline)
+    ?? logDisciplines.find((discipline) => loggedCodes.includes(discipline.code))
+    ?? logDisciplines[0];
   const logEntries = sortedLogEntries.filter((entry) => (
     (!selectedLogDiscipline || entry.event.discipline === selectedLogDiscipline.code)
     && (resultType === 'all' || entry.event.type === resultType)
   ));
-  const emptyLogMessage = `No ${[
-    ...(resultType === 'all' ? [] : [resultType]),
-    selectedLogDiscipline?.label ?? '',
-  ].filter(Boolean).join(' ')} results yet.`;
   const isArchived = athlete?.status === 'archived';
   const disciplineLabels = athlete?.preferredDisciplineIds
     .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id)
@@ -359,34 +365,32 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         {statisticsLoading && <p role="status">Loading recent results...</p>}
         {!statisticsLoading && statisticsError && <p className={styles.historyUnavailable}>Recent results are unavailable until statistics can be loaded.</p>}
         {!statisticsLoading && statistics && (
-          logDisciplines.length === 0
+          !selectedLogDiscipline
             ? <p className={styles.emptyHistory}>No results yet.</p>
             : (
               <>
-                {showLogDisciplineTabs && (
-                  <div className={styles.historyDisciplineTabs} role="tablist" aria-label="Result history discipline">
-                    {logDisciplines.map((discipline) => (
-                      <button
-                        key={discipline.code}
-                        id={`log-tab-${discipline.code}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={selectedLogDiscipline?.code === discipline.code}
-                        aria-controls="log-results-panel"
-                        onClick={() => setActiveLogDiscipline(discipline.code)}
-                      >{discipline.label}</button>
-                    ))}
-                  </div>
-                )}
+                <div className={styles.historyDisciplineTabs} role="tablist" aria-label="Result history discipline">
+                  {logDisciplines.map((discipline) => (
+                    <button
+                      key={discipline.code}
+                      id={`log-tab-${discipline.code}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedLogDiscipline.code === discipline.code}
+                      aria-controls="log-results-panel"
+                      onClick={() => setActiveLogDiscipline(discipline.code)}
+                    >{discipline.label}</button>
+                  ))}
+                </div>
                 <div
                   className={styles.historyTableWrap}
-                  role={showLogDisciplineTabs ? 'tabpanel' : undefined}
-                  id={showLogDisciplineTabs ? 'log-results-panel' : undefined}
-                  aria-labelledby={showLogDisciplineTabs && selectedLogDiscipline ? `log-tab-${selectedLogDiscipline.code}` : undefined}
-                  tabIndex={showLogDisciplineTabs ? 0 : undefined}
+                  role="tabpanel"
+                  id="log-results-panel"
+                  aria-labelledby={`log-tab-${selectedLogDiscipline.code}`}
+                  tabIndex={0}
                 >
                   {logEntries.length === 0
-                    ? <p className={styles.emptyHistory}>{emptyLogMessage}</p>
+                    ? <p className={styles.emptyHistory}>No results yet.</p>
                     : (
                       <table className={styles.historyTable} aria-label="Recent results">
                         <thead>

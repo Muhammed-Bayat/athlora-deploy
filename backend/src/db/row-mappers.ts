@@ -1,13 +1,11 @@
 import type { ApplicationUserContext } from '../types/auth.js';
 import {
-  DISCIPLINE_100M,
   ATHLETE_LIFECYCLE_STATUSES,
   ENTRY_TYPES,
   EVENT_STATUSES,
   EVENT_TYPES,
   INCIDENT_TYPES,
   RESULT_OUTCOMES,
-  RESULT_UNIT_SECONDS,
   RSVP_STATUSES,
   USER_ROLES,
   INJURY_REGIONS,
@@ -27,11 +25,13 @@ import {
   type DashboardRosterDiscipline,
   type DashboardTimelineEntry,
   type DashboardUpcomingEvent,
+  type Discipline,
   type EventParticipant,
   type EventParticipantSummary,
   type Result,
   type ProgressionEntry,
   type RosterSnapshotEntry,
+  type ResultUnit,
   type TimelineEntry,
   type User,
   type Club,
@@ -340,25 +340,27 @@ function enumValue<const Values extends readonly string[]>(
   return value as Values[number];
 }
 
-function discipline(value: unknown, field: string): typeof DISCIPLINE_100M {
-  if (value !== DISCIPLINE_100M) {
-    return invalid(field, `expected ${DISCIPLINE_100M}`);
+function discipline(value: unknown, field: string): Discipline {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return invalid(field, 'expected a discipline code');
   }
-  return DISCIPLINE_100M;
+  return value;
 }
 
-function nullableDiscipline(value: unknown, field: string): typeof DISCIPLINE_100M | null {
+function nullableDiscipline(value: unknown, field: string): Discipline | null {
   return value === null ? null : discipline(value, field);
 }
 
-function resultUnit(value: unknown, field: string): typeof RESULT_UNIT_SECONDS {
-  if (value !== RESULT_UNIT_SECONDS) {
-    return invalid(field, `expected ${RESULT_UNIT_SECONDS}`);
+const RESULT_UNITS: readonly ResultUnit[] = ['seconds', 'metres', 'cm'];
+
+function resultUnit(value: unknown, field: string): ResultUnit {
+  if (typeof value !== 'string' || !RESULT_UNITS.includes(value as ResultUnit)) {
+    return invalid(field, `expected one of ${RESULT_UNITS.join(', ')}`);
   }
-  return RESULT_UNIT_SECONDS;
+  return value as ResultUnit;
 }
 
-function nullableResultUnit(value: unknown, field: string): typeof RESULT_UNIT_SECONDS | null {
+function nullableResultUnit(value: unknown, field: string): ResultUnit | null {
   return value === null ? null : resultUnit(value, field);
 }
 
@@ -521,7 +523,7 @@ function nullableTimestamp(value: unknown, field: string): string | null {
 
 function assertValueUnitConsistency(
   value: number | null,
-  unit: typeof RESULT_UNIT_SECONDS | null,
+  unit: ResultUnit | null,
   field: string,
 ): void {
   if ((value === null) !== (unit === null)) {
