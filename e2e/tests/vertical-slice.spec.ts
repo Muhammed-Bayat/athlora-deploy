@@ -317,10 +317,11 @@ test.describe.serial('100m vertical slice', () => {
     const kpi = page.getByRole('region', { name: '100m performance summary' });
     await expect(kpi.getByText('10.40s', { exact: true })).toHaveCount(2);
 
-    const competitions = page.getByRole('tabpanel', { name: /Competitions/ });
-    await expect(competitions.getByText(competition, { exact: true })).toBeVisible();
-    await expect(competitions.getByText('Personal best (PB)', { exact: true })).toHaveCount(0);
-    await expect(competitions.getByText('Season best (SB)', { exact: true })).toHaveCount(0);
+    const log = page.getByRole('table', { name: 'Recent results' });
+    await expect(log.getByRole('columnheader', { name: 'Date' })).toBeVisible();
+    await expect(log.getByText(competition, { exact: true })).toBeVisible();
+    await expect(log.getByText('Personal best (PB)', { exact: true })).toHaveCount(0);
+    await expect(log.getByText('Season best (SB)', { exact: true })).toHaveCount(0);
 
     // Cancel the training session; it stays in history as cancelled.
     await openView(page, 'Events', 'Events');

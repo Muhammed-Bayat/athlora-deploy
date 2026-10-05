@@ -139,7 +139,7 @@ describe('AthleteDetailPage', () => {
     expect(await screen.findByText('Discipline groups')).toBeInTheDocument();
     expect(screen.getAllByText('100m, Long jump')).toHaveLength(1);
     expect(screen.getByRole('list', { name: 'Disciplines' })).toHaveTextContent('100mLong jump');
-    expect(within(screen.getByRole('tablist', { name: 'Result history discipline' })).getByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tablist', { name: 'Result history discipline' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Season goals' })).not.toBeInTheDocument();
   });
 
@@ -210,14 +210,11 @@ describe('AthleteDetailPage', () => {
     expect(screen.getByText('29 Feb 2004')).toBeInTheDocument();
     expect(screen.getAllByText(/years/)).toHaveLength(2);
     expect(screen.getByText('No disciplines selected. Edit this athlete to add disciplines.')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Competitions 0' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Training 0' })).toHaveAttribute('tabindex', '-1');
-    expect(screen.getByText('No competition results yet.')).toBeInTheDocument();
-    expect(screen.queryByText('No training results yet.')).not.toBeInTheDocument();
+    expect(screen.getByText('No results yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Result history' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Competitions/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Training/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fitness' })).toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Training 0' }));
-    expect(screen.getByText('No training results yet.')).toBeInTheDocument();
-    expect(screen.queryByText('No competition results yet.')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Fitness' }));
     expect(await screen.findByRole('heading', { name: 'Fitness & injury map' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -247,64 +244,58 @@ describe('AthleteDetailPage', () => {
 
     expect(await screen.findByText('City Final')).toBeInTheDocument();
     expect(screen.getByText('11.10s')).toBeInTheDocument();
-    expect(screen.getByText('Valid 100m result')).toBeInTheDocument();
-    expect(screen.getByText('Override')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Competition' })).toBeInTheDocument();
+    const overrideNote = screen.getByText(/Override/);
+    expect(overrideNote).toHaveTextContent('11.24s');
+    expect(overrideNote).toHaveTextContent('Timing review');
     expect(screen.queryByText('Personal best (PB)')).not.toBeInTheDocument();
     expect(screen.queryByText('Season best (SB)')).not.toBeInTheDocument();
     expect(screen.queryByText('PB', { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText('SB', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('Cancelled event')).toBeInTheDocument();
-    expect(screen.getByText(/Raw result:/)).toHaveTextContent('11.24s');
-    expect(screen.getByText('Excluded from statistics')).toBeInTheDocument();
+    expect(screen.getByText('Non-scoring')).toBeInTheDocument();
     expect(screen.queryByText('Valid result')).not.toBeInTheDocument();
+    expect(screen.queryByText('Excluded from statistics')).not.toBeInTheDocument();
   });
 
-  it('switches result tabs with click and roving keyboard navigation', async () => {
+  it('renders competitions and training together in one four-column table', async () => {
     const competition = history('City Final', 'valid');
     const training = history('Block session', 'valid');
-    training.event = { ...training.event, id: 'training-event', title: 'Block session', type: 'training' };
+    training.event = { ...training.event, id: 'training-event', title: 'Block session', type: 'training', date: '2026-08-12' };
     statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
       recentResults: { competitions: [competition], training: [training] },
     }));
-    const user = userEvent.setup();
     renderDetail();
 
-    const competitionsTab = await screen.findByRole('tab', { name: 'Competitions 1' });
-    const trainingTab = screen.getByRole('tab', { name: 'Training 1' });
-    expect(screen.getByText('City Final')).toBeInTheDocument();
-    expect(screen.queryByText('Block session')).not.toBeInTheDocument();
-
-    await user.click(trainingTab);
-    expect(trainingTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Block session')).toBeInTheDocument();
-    expect(screen.queryByText('City Final')).not.toBeInTheDocument();
-
-    await user.keyboard('{ArrowLeft}');
-    expect(competitionsTab).toHaveFocus();
-    expect(competitionsTab).toHaveAttribute('aria-selected', 'true');
-    await user.keyboard('{End}');
-    expect(trainingTab).toHaveFocus();
-    await user.keyboard('{Home}');
-    expect(competitionsTab).toHaveFocus();
-    await user.keyboard('{ArrowLeft}');
-    expect(trainingTab).toHaveFocus();
+    const table = await screen.findByRole('table', { name: 'Recent results' });
+    expect(screen.queryByRole('tablist', { name: 'Result history' })).not.toBeInTheDocument();
+    expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'Date', 'Event', 'Type', 'Result',
+    ]);
+    expect(within(table).getByRole('cell', { name: 'Competition' })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: 'Training' })).toBeInTheDocument();
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Block session');
+    expect(rows[1]).toHaveTextContent('City Final');
   });
 
-  it('defaults to training when competitions are empty and keeps independent empty states', async () => {
+  it('shows one empty state when the athlete has no results at all', async () => {
     const training = history('Flying 30s', 'valid');
     training.event = { ...training.event, type: 'training' };
     statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
       recentResults: { competitions: [], training: [training] },
     }));
-    const user = userEvent.setup();
     renderDetail();
 
-    const trainingTab = await screen.findByRole('tab', { name: 'Training 1' });
-    expect(trainingTab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('table', { name: 'Recent results' })).toBeInTheDocument();
     expect(screen.getByText('Flying 30s')).toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Competitions 0' }));
-    expect(screen.getByText('No competition results yet.')).toBeInTheDocument();
-    expect(screen.queryByText('No training results yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Training' })).toBeInTheDocument();
+    expect(screen.queryByText('No results yet.')).not.toBeInTheDocument();
+
+    statisticsApi.getAthleteStatistics.mockResolvedValue(statistics());
+    renderDetail();
+    expect(await screen.findByText('No results yet.')).toBeInTheDocument();
   });
 
   it('shows DQ, DNF, DNS, no-result, and non-scoring incidents as visible text', async () => {
@@ -357,7 +348,7 @@ describe('AthleteDetailPage', () => {
     expect(await screen.findByText('29 Feb 2004')).toBeInTheDocument();
     expect(statisticsApi.getAthleteDisciplineStatistics).toHaveBeenCalledOnce();
     await act(async () => resolveStatistics([]));
-    expect(await screen.findByText('No competition results yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No results yet.')).toBeInTheDocument();
   });
 
   it('edits the profile with the shared form and updates displayed data', async () => {

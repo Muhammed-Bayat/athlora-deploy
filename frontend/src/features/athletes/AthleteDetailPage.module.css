@@ -172,7 +172,6 @@
 }
 
 .heroActions button,
-.tabs button,
 .sectionError button {
   min-height: 44px;
 }
@@ -239,37 +238,6 @@
 }
 
 .performanceTabs button:focus-visible {
-  outline: 3px solid var(--console-focus);
-  outline-offset: 2px;
-}
-
-.historyDisciplineTabs {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.historyDisciplineTabs button {
-  flex: none;
-  min-height: 36px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--console-line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--console-muted);
-  font: var(--font-weight-bold) 0.75rem var(--font-family-base);
-  cursor: pointer;
-}
-
-.historyDisciplineTabs button[aria-selected='true'] {
-  border-color: color-mix(in srgb, var(--console-teal) 36%, transparent);
-  background: var(--console-selected-surface);
-  color: var(--console-selected-text);
-}
-
-.historyDisciplineTabs button:focus-visible {
   outline: 3px solid var(--console-focus);
   outline-offset: 2px;
 }
@@ -392,133 +360,74 @@
   color: var(--console-danger-surface);
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
-  padding-bottom: var(--space-2);
+.historyTableWrap {
+  overflow-x: auto;
+}
+
+.historyTable {
+  width: 100%;
+  margin-top: var(--space-4);
+  border-collapse: collapse;
+}
+
+.historyTable th,
+.historyTable td {
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--console-line);
+  text-align: left;
+  vertical-align: top;
 }
 
-.tabs button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+.historyTable thead th {
   color: var(--console-muted);
-  font: var(--font-weight-bold) var(--font-size-sm) var(--font-family-base);
-  cursor: pointer;
-}
-
-.tabs button strong {
-  display: grid;
-  place-items: center;
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-pill);
-  background: var(--console-soft);
-  color: var(--console-teal);
   font: var(--font-weight-bold) 0.7rem var(--font-family-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.tabs button[aria-selected='true'] {
-  background: var(--console-selected-surface);
-  color: var(--console-selected-text);
-  box-shadow: inset 0 -2px var(--blue-500);
-}
-
-.tabs button:focus-visible,
-.tabPanel:focus-visible {
-  outline: 3px solid var(--console-focus);
-  outline-offset: 2px;
-}
-
-.tabPanel {
-  min-width: 0;
-  padding-top: var(--space-4);
-}
-
-.tabPanel ol {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.historyRow {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.85fr) minmax(180px, 0.7fr) minmax(240px, 1.2fr);
-  gap: var(--space-6);
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--console-line);
-  border-radius: var(--radius-sm);
+.historyRow:hover {
   background: var(--console-row-surface);
 }
 
-.eventIdentity,
-.effectiveResult,
-.auditContext {
-  min-width: 0;
+.historyDate {
+  white-space: nowrap;
+  color: var(--console-muted);
+  font-size: 0.8rem;
 }
 
-.eventIdentity,
-.effectiveResult {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+.historyEvent strong {
+  display: block;
+  color: var(--console-ink);
+  overflow-wrap: anywhere;
 }
 
-.eventIdentity time,
-.effectiveResult > span,
-.effectiveResult small,
-.auditContext {
+.historyType {
+  white-space: nowrap;
+  color: var(--console-muted);
+  font-size: 0.8rem;
+}
+
+.historyResult {
+  min-width: 160px;
+}
+
+.historyMark {
+  display: block;
+  color: var(--console-ink);
+  font: var(--font-weight-bold) 1.15rem var(--font-family-mono);
+}
+
+.historyOutcome {
+  color: var(--console-muted);
+}
+
+.rowNote {
+  display: block;
+  margin-top: var(--space-1);
   color: var(--console-muted);
   font-size: 0.75rem;
   line-height: 1.5;
-}
-
-.eventIdentity strong,
-.effectiveResult > strong {
   overflow-wrap: anywhere;
-  color: var(--console-ink);
-}
-
-.effectiveResult > strong {
-  font: var(--font-weight-bold) 1.65rem var(--font-family-mono);
-}
-
-.effectiveResult small {
-  font-weight: var(--font-weight-medium);
-}
-
-.labels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-}
-
-.auditContext {
-  align-self: stretch;
-  padding-left: var(--space-4);
-  border-left: 1px solid var(--console-line);
-  overflow-wrap: anywhere;
-}
-
-.auditContext p {
-  margin: 0 0 var(--space-2);
-}
-
-.auditContext strong {
-  color: var(--console-ink);
 }
 
 .emptyHistory,
@@ -551,16 +460,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .historyRow {
-    grid-template-columns: minmax(160px, 0.8fr) minmax(180px, 1fr);
-  }
-
-  .auditContext {
-    grid-column: 1 / -1;
-    padding: var(--space-3) 0 0;
-    border-top: 1px solid var(--console-line);
-    border-left: 0;
-  }
 }
 
 @media (max-width: 640px) {
@@ -604,23 +503,11 @@
     border-left: 0;
   }
 
-  .profileDetails,
-  .historyRow {
+  .profileDetails {
     grid-template-columns: 1fr;
   }
 
-  .profileDetails .notes,
-  .auditContext {
+  .profileDetails .notes {
     grid-column: 1;
-  }
-
-  .tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .tabs button {
-    min-width: 0;
-    padding-inline: var(--space-2);
   }
 }
