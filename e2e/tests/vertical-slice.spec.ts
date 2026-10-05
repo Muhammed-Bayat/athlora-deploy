@@ -319,8 +319,8 @@ test.describe.serial('100m vertical slice', () => {
 
     const competitions = page.getByRole('tabpanel', { name: /Competitions/ });
     await expect(competitions.getByText(competition, { exact: true })).toBeVisible();
-    await expect(competitions.getByText('Personal best (PB)', { exact: true })).toBeVisible();
-    await expect(competitions.getByText('Season best (SB)', { exact: true })).toBeVisible();
+    await expect(competitions.getByText('Personal best (PB)', { exact: true })).toHaveCount(0);
+    await expect(competitions.getByText('Season best (SB)', { exact: true })).toHaveCount(0);
 
     // Cancel the training session; it stays in history as cancelled.
     await openView(page, 'Events', 'Events');

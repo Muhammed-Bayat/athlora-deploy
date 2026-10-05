@@ -100,8 +100,6 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
         )}
         <div className={styles.labels}>
           {hasOverride && <Badge variant="neutral">Override</Badge>}
-          {result.isPb && <Badge variant="pb">Personal best (PB)</Badge>}
-          {result.isSb && <Badge variant="sb">Season best (SB)</Badge>}
           {!entry.countsTowardsStatistics && event.status !== 'cancelled' && <Badge variant="neutral">Non-scoring</Badge>}
         </div>
       </div>

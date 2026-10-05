@@ -236,7 +236,7 @@ describe('AthleteDetailPage', () => {
     expect(screen.getAllByText('Not provided')).toHaveLength(6);
   });
 
-  it('labels valid, PB, SB, override, cancelled, and raw result context', async () => {
+  it('labels valid, override, cancelled, and raw result context without best-mark tags', async () => {
     const overridden = history('City Final', 'valid');
     overridden.event.status = 'cancelled';
     overridden.result = { ...overridden.result, finalResult: 11.24, manualOverride: 11.1, overrideReason: 'Timing review', isPb: true, isSb: true };
@@ -249,8 +249,10 @@ describe('AthleteDetailPage', () => {
     expect(screen.getByText('11.10s')).toBeInTheDocument();
     expect(screen.getByText('Valid 100m result')).toBeInTheDocument();
     expect(screen.getByText('Override')).toBeInTheDocument();
-    expect(screen.getByText('Personal best (PB)')).toBeInTheDocument();
-    expect(screen.getByText('Season best (SB)')).toBeInTheDocument();
+    expect(screen.queryByText('Personal best (PB)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Season best (SB)')).not.toBeInTheDocument();
+    expect(screen.queryByText('PB', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('SB', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('Cancelled event')).toBeInTheDocument();
     expect(screen.getByText(/Raw result:/)).toHaveTextContent('11.24s');
     expect(screen.getByText('Excluded from statistics')).toBeInTheDocument();
