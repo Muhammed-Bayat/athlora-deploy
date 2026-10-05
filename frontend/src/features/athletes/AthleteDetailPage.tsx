@@ -38,6 +38,8 @@ interface PerformanceTab {
   seasonCount: number;
 }
 
+type ResultTypeFilter = 'all' | 'competition' | 'training';
+
 const FitnessView = lazy(async () => ({ default: (await import('../fitness/FitnessView')).FitnessView }));
 
 function initials(name: string): string {
@@ -61,9 +63,6 @@ function formatPerformance(value: number | null, precision: number, unit: Discip
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
   const { event, result, effectiveOutcome, effectiveResult } = entry;
   const formatMark = (value: number) => `${value.toFixed(2)}${formatResultUnit(result.unit ?? 'seconds')}`;
-  const rawDescription = result.finalResult !== null
-    ? formatMark(result.finalResult)
-    : formatOutcome(result.outcome);
 
   return (
     <tr className={styles.historyRow}>
@@ -78,11 +77,7 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
       <td className={styles.historyResult}>
         {effectiveOutcome === 'valid' && effectiveResult !== null
           ? <strong className={styles.historyMark}>{formatMark(effectiveResult)}</strong>
-          : <span className={styles.historyOutcome}>{formatOutcome(effectiveOutcome)}</span>}
-        {result.manualOverride !== null && (
-          <small className={styles.rowNote}>Override &middot; raw {rawDescription}{result.overrideReason ? ` &middot; ${result.overrideReason}` : ''}</small>
-        )}
-        {!entry.countsTowardsStatistics && <small className={styles.rowNote}>Non-scoring</small>}
+          : <span className={styles.historyOutcome}>{effectiveOutcome === 'valid' ? 'No result' : formatOutcome(effectiveOutcome)}</span>}
       </td>
     </tr>
   );
@@ -102,6 +97,8 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const [disciplineStatisticsError, setDisciplineStatisticsError] = useState<string | null>(null);
   const [disciplineStatisticsRetry, setDisciplineStatisticsRetry] = useState(0);
   const [activePerformanceTab, setActivePerformanceTab] = useState<string | null>(null);
+  const [resultType, setResultType] = useState<ResultTypeFilter>('all');
+  const [activeLogDiscipline, setActiveLogDiscipline] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editorBusy, setEditorBusy] = useState(false);
   const [fitnessOpen, setFitnessOpen] = useState(initialFitnessOpen);
@@ -180,12 +177,27 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
 
   const displayName = athlete?.name ?? statistics?.athlete.name ?? 'Athlete performance';
   const age = calculateAge(athlete?.dob ?? null);
-  const logEntries = statistics
+  const sortedLogEntries = statistics
     ? [...statistics.recentResults.competitions, ...statistics.recentResults.training]
         .sort((left, right) => (left.event.date === right.event.date
           ? (right.event.time ?? '').localeCompare(left.event.time ?? '')
           : right.event.date.localeCompare(left.event.date)))
     : [];
+  const logDisciplines = [...new Set(sortedLogEntries.map((entry) => entry.event.discipline))]
+    .map((code) => {
+      const definition = disciplines.find((discipline) => discipline.code === code || discipline.id === code);
+      return { code, label: definition?.presentation.label ?? code };
+    });
+  const selectedLogDiscipline = logDisciplines.find((discipline) => discipline.code === activeLogDiscipline) ?? logDisciplines[0];
+  const showLogDisciplineTabs = logDisciplines.length > 1;
+  const logEntries = sortedLogEntries.filter((entry) => (
+    (!selectedLogDiscipline || entry.event.discipline === selectedLogDiscipline.code)
+    && (resultType === 'all' || entry.event.type === resultType)
+  ));
+  const emptyLogMessage = `No ${[
+    ...(resultType === 'all' ? [] : [resultType]),
+    selectedLogDiscipline?.label ?? '',
+  ].filter(Boolean).join(' ')} results yet.`;
   const isArchived = athlete?.status === 'archived';
   const disciplineLabels = athlete?.preferredDisciplineIds
     .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id)
@@ -331,28 +343,67 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
        </Card>
 
        <Card className={styles.historyCard}>
-        <header><div><p>Performance log</p><h2>Recent results</h2></div></header>
+        <header>
+          <div><p>Performance log</p><h2>Recent results</h2></div>
+          {statistics && (
+            <label className={styles.logFilter}>
+              <span>Type</span>
+              <select value={resultType} onChange={(event) => setResultType(event.target.value as ResultTypeFilter)}>
+                <option value="all">All types</option>
+                <option value="competition">Competition</option>
+                <option value="training">Training</option>
+              </select>
+            </label>
+          )}
+        </header>
         {statisticsLoading && <p role="status">Loading recent results...</p>}
         {!statisticsLoading && statisticsError && <p className={styles.historyUnavailable}>Recent results are unavailable until statistics can be loaded.</p>}
         {!statisticsLoading && statistics && (
-          logEntries.length === 0
+          logDisciplines.length === 0
             ? <p className={styles.emptyHistory}>No results yet.</p>
             : (
-              <div className={styles.historyTableWrap}>
-                <table className={styles.historyTable} aria-label="Recent results">
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Event</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logEntries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {showLogDisciplineTabs && (
+                  <div className={styles.historyDisciplineTabs} role="tablist" aria-label="Result history discipline">
+                    {logDisciplines.map((discipline) => (
+                      <button
+                        key={discipline.code}
+                        id={`log-tab-${discipline.code}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={selectedLogDiscipline?.code === discipline.code}
+                        aria-controls="log-results-panel"
+                        onClick={() => setActiveLogDiscipline(discipline.code)}
+                      >{discipline.label}</button>
+                    ))}
+                  </div>
+                )}
+                <div
+                  className={styles.historyTableWrap}
+                  role={showLogDisciplineTabs ? 'tabpanel' : undefined}
+                  id={showLogDisciplineTabs ? 'log-results-panel' : undefined}
+                  aria-labelledby={showLogDisciplineTabs && selectedLogDiscipline ? `log-tab-${selectedLogDiscipline.code}` : undefined}
+                  tabIndex={showLogDisciplineTabs ? 0 : undefined}
+                >
+                  {logEntries.length === 0
+                    ? <p className={styles.emptyHistory}>{emptyLogMessage}</p>
+                    : (
+                      <table className={styles.historyTable} aria-label="Recent results">
+                        <thead>
+                          <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Event</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Result</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {logEntries.map((entry) => <HistoryRow key={`${entry.event.id}-${entry.result.updatedAt}`} entry={entry} />)}
+                        </tbody>
+                      </table>
+                    )}
+                </div>
+              </>
             )
         )}
       </Card>
