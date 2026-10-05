@@ -2,6 +2,39 @@ import type { DbExecutor } from '../db/client.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
+/** The single definition of a performance that may contribute to a personal or season best:
+ * only results produced by an event that has been completed and that was run as a competition.
+ * Training sessions, cancelled events and events still in progress are never best marks. */
+export const COMPLETED_COMPETITION_FILTER = `e.status = 'completed' AND e.type = 'competition'`;
+
+/** Legacy event-logger rows (the `results` table). `results` carries no workspace column, so the
+ * row is scoped through the athlete; the guest-fixture branch mirrors the read models in
+ * statistics.ts/comparison.ts. The NOT EXISTS guard keeps a meet event that also wrote legacy
+ * rows from contributing the same performance twice. */
+const LEGACY_INDIVIDUAL_PERFORMANCES = `SELECT a.workspace_id, a.athlete_id, a.name AS athlete_name,
+  d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
+  d.id AS discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
+  e.time AS event_time, e.created_at AS event_created_at,
+  CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+    ELSE r.final_result END AS final_result,
+  NULL::uuid AS session_id
+  FROM results r
+  JOIN discipline_definitions d ON d.code = r.discipline
+  JOIN events e ON e.id = r.event_id
+  JOIN athletes a ON a.id = r.athlete_id
+  WHERE ${COMPLETED_COMPETITION_FILTER}
+    AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
+    AND d.default_rules->>'entrantType' = 'individual'
+    AND r.outcome NOT IN ('dq', 'dnf', 'dns')
+    AND COALESCE(NULLIF(r.manual_override, 0), r.final_result) IS NOT NULL
+    AND a.lifecycle_status <> 'archived'
+    AND NOT EXISTS (SELECT 1 FROM discipline_sessions s WHERE s.event_id = e.id)
+    AND (e.workspace_id = a.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw
+      JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id
+        AND ep.participant_workspace_id = fw.workspace_id
+      WHERE fw.event_id = e.id AND fw.workspace_id = a.workspace_id AND fw.role = 'guest'
+        AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))`;
+
 /** A live relation, not an eventually consistent cache: finalization/reopen changes
  * all statistics visibility in the same commit as results and places. */
 export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_id, a.name AS athlete_name,
@@ -15,7 +48,7 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_
   JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
   JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
   JOIN events e ON e.id = r.event_id
-  WHERE s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+  WHERE s.result_state = 'final' AND s.status = 'completed' AND ${COMPLETED_COMPETITION_FILTER}
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
     AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
     AND se.withdrawn_at IS NULL AND r.outcome = 'valid' AND r.final_result IS NOT NULL
@@ -38,7 +71,7 @@ export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_
   JOIN meet_entrants en ON en.id = rm.member_id AND en.event_id = rm.event_id AND en.workspace_id = rm.workspace_id
   JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = en.workspace_id
   JOIN events e ON e.id = t.event_id
-  WHERE s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+  WHERE s.result_state = 'final' AND s.status = 'completed' AND ${COMPLETED_COMPETITION_FILTER}
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'relay'
     AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
     AND se.withdrawn_at IS NULL AND t.deleted_at IS NULL
@@ -47,7 +80,7 @@ export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_
     AND (e.workspace_id = en.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
       AND fw.workspace_id = en.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))`;
 
-export const FINAL_PERFORMANCES = `((${FINAL_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_RELAY_LEG_PERFORMANCES}))`;
+export const FINAL_PERFORMANCES = `((${LEGACY_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_RELAY_LEG_PERFORMANCES}))`;
 
 export interface PriorPerformance { value: number; date: string; }
 
@@ -61,7 +94,7 @@ export async function relayLegHistory(
   const result = await db.query<{ athlete_id: string; final_result: string; event_date: string }>(
     `WITH performances AS (${FINAL_PERFORMANCES})
      SELECT athlete_id, final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
-     WHERE workspace_id = $1 AND code = $2 AND athlete_id = ANY($3::uuid[]) AND session_id <> $4 AND event_date <= $5::date`,
+     WHERE workspace_id = $1 AND code = $2 AND athlete_id = ANY($3::uuid[]) AND (session_id IS NULL OR session_id <> $4) AND event_date <= $5::date`,
     [params.workspaceId, params.code, [...params.athleteIds], params.excludeSessionId, params.eventDate],
   );
   for (const row of result.rows) {

@@ -17,7 +17,7 @@ import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 interface PublicClubRow {
   id: string;
@@ -187,19 +187,59 @@ export async function getPublicAthleteStatistics(
        WHERE a.workspace_id = $1
          AND a.lifecycle_status <> 'archived'
          AND r.discipline = $2
-          AND e.status <> 'cancelled'
+          AND ${COMPLETED_COMPETITION_FILTER}
           AND e.date >= $3::date AND e.date < $4::date
-         AND (e.workspace_id = $1 OR EXISTS (
-           SELECT 1
-           FROM event_fixture_workspaces fw
-           JOIN event_participants ep ON ep.event_id = fw.event_id
-             AND ep.athlete_id = r.athlete_id
-             AND ep.participant_workspace_id = fw.workspace_id
-           WHERE fw.event_id = e.id
-             AND fw.workspace_id = $1
-             AND fw.role = 'guest'
-             AND fw.status = 'accepted'
-             AND fw.accepted_revision = e.fixture_revision
+          AND (e.workspace_id = $1 OR EXISTS (
+            SELECT 1
+            FROM event_fixture_workspaces fw
+            JOIN event_participants ep ON ep.event_id = fw.event_id
+              AND ep.athlete_id = r.athlete_id
+              AND ep.participant_workspace_id = fw.workspace_id
+            WHERE fw.event_id = e.id
+              AND fw.workspace_id = $1
+              AND fw.role = 'guest'
+              AND fw.status = 'accepted'
+              AND fw.accepted_revision = e.fixture_revision
+         ))
+         AND NOT EXISTS (SELECT 1 FROM discipline_sessions ds WHERE ds.event_id = e.id)
+       UNION ALL
+       SELECT en.athlete_id,
+              e.date AS event_date,
+              e.time AS event_time,
+              e.created_at AS event_created_at,
+              e.id AS event_id,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+                ELSE r.final_result
+              END AS effective_result,
+              CASE
+                WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                ELSE r.outcome
+              END AS effective_outcome
+       FROM session_results r
+       JOIN discipline_sessions s ON s.id = r.session_id
+       JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+       JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+       JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+       JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
+       JOIN events e ON e.id = r.event_id
+       WHERE a.workspace_id = $1
+         AND a.lifecycle_status <> 'archived'
+         AND d.code = $2
+          AND s.result_state = 'final' AND s.status = 'completed'
+          AND ${COMPLETED_COMPETITION_FILTER}
+          AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+          AND se.withdrawn_at IS NULL
+          AND e.date >= $3::date AND e.date < $4::date
+          AND (e.workspace_id = r.workspace_id OR EXISTS (
+            SELECT 1
+            FROM event_fixture_workspaces fw
+            WHERE fw.event_id = e.id
+              AND fw.workspace_id = r.workspace_id
+              AND fw.status = 'accepted'
+              AND fw.accepted_revision = e.fixture_revision
          ))
      ), valid AS (
        SELECT * FROM effective

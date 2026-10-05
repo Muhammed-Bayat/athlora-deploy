@@ -2,6 +2,7 @@ import { getPool, type DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { parseSeasonYear } from './seasons.js';
+import { COMPLETED_COMPETITION_FILTER } from './disciplineStatistics.js';
 import { isSupportedDiscipline, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
 export interface LeaderboardQuery {
@@ -49,7 +50,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
   }
 
   const legacyConditions = [
-    "e.status = 'completed'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "r.outcome = 'valid'",
     "COALESCE(r.manual_override, r.final_result) > 0",
     "a.lifecycle_status <> 'archived'",
@@ -60,7 +61,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
   const sessionConditions = [
     "s.result_state = 'final'",
     "s.status = 'completed'",
-    "e.status = 'completed'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "en.kind = 'athlete'",
     "d.default_rules->>'entrantType' = 'individual'",
     "se.withdrawn_at IS NULL",
@@ -74,7 +75,7 @@ export async function getPublicLeaderboard(query: LeaderboardQuery, db: DbExecut
   const relayConditions = [
     "s.result_state = 'final'",
     "s.status = 'completed'",
-    "e.status = 'completed'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "en.kind = 'relay'",
     "d.default_rules->>'entrantType' = 'relay'",
     "se.withdrawn_at IS NULL",

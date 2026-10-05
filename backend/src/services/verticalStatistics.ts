@@ -10,7 +10,8 @@ export const VERTICAL_PERFORMANCES = `SELECT r.*, en.athlete_id, d.code, d.preci
   JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
   JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
   JOIN events e ON e.id = r.event_id
-  WHERE d.kind = 'vertical' AND s.status = 'completed' AND s.result_state = 'final' AND e.status <> 'cancelled'
+  WHERE d.kind = 'vertical' AND s.status = 'completed' AND s.result_state = 'final'
+    AND e.status = 'completed' AND e.type = 'competition'
     AND se.withdrawn_at IS NULL AND r.outcome = 'valid' AND r.final_result IS NOT NULL
     AND a.lifecycle_status <> 'archived'
     AND (e.workspace_id = r.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id

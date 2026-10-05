@@ -4,6 +4,7 @@ import type { AthleteLifecycleStatus, EventType } from '../types/domain.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
+import { COMPLETED_COMPETITION_FILTER } from './disciplineStatistics.js';
 import { isSupportedDiscipline } from './disciplineCatalog.js';
 
 const RECENT_RESULT_LIMIT = 5;
@@ -353,7 +354,7 @@ const NORMALIZED_RESULTS_QUERY = `
       AND r.discipline = $2
       AND r.outcome = 'valid'
       AND COALESCE(r.manual_override, r.final_result) IS NOT NULL
-      AND e.status <> 'cancelled'
+      AND ${COMPLETED_COMPETITION_FILTER}
       AND (e.workspace_id = $1 OR EXISTS (
         SELECT 1
         FROM event_fixture_workspaces fw
@@ -383,7 +384,7 @@ const NORMALIZED_RESULTS_QUERY = `
       AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
       AND se.withdrawn_at IS NULL
       AND r.outcome = 'valid' AND r.final_result IS NOT NULL
-      AND e.status <> 'cancelled'
+      AND ${COMPLETED_COMPETITION_FILTER}
       AND (e.workspace_id = r.workspace_id OR EXISTS (
         SELECT 1 FROM event_fixture_workspaces fw
         WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id

@@ -298,15 +298,15 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
     for (const [index, row] of rows.entries()) {
       const history = await db.query<{ final_result: string; event_date: string }>(`WITH performances AS (${FINAL_PERFORMANCES})
         SELECT final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
-        WHERE workspace_id = $1 AND code = $2 AND athlete_id = (SELECT athlete_id FROM meet_entrants WHERE id = $3) AND session_id <> $4`, [row.workspaceId, definition.code, row.entrantId, sessionId]);
+        WHERE workspace_id = $1 AND code = $2 AND athlete_id = (SELECT athlete_id FROM meet_entrants WHERE id = $3) AND (session_id IS NULL OR session_id <> $4)`, [row.workspaceId, definition.code, row.entrantId, sessionId]);
       const date = await db.query<{ date: string; athlete_id: string | null }>("SELECT to_char(e.date, 'YYYY-MM-DD') AS date, en.athlete_id FROM events e JOIN meet_entrants en ON en.event_id = e.id WHERE e.id = $1 AND en.id = $2", [eventId, row.entrantId]);
-      const eligible = row.countsTowardsStatistics && !!date.rows[0]?.athlete_id && row.effectiveResult !== null;
+      const eligible = row.countsTowardsStatistics && access.event.status === 'completed' && !!date.rows[0]?.athlete_id && row.effectiveResult !== null;
       const prior = history.rows.filter(h => h.event_date <= (date.rows[0]?.date ?? ''));
       const better = (h: { final_result: string }) => definition.direction === 'lower' ? row.effectiveResult! < Number(h.final_result) : row.effectiveResult! > Number(h.final_result);
       Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter(h => h.event_date.slice(0, 4) === date.rows[0]?.date.slice(0, 4)).every(better) });
       if (!relay || !row.relayLegs?.length) continue;
       const eventDate = date.rows[0]?.date ?? '';
-      const legBase = session.resultState === 'final' && access.event.status !== 'cancelled' && session.status !== 'cancelled' && row.attending && result.rows[index].withdrawn_at === null && eventDate !== '';
+      const legBase = session.resultState === 'final' && access.event.status === 'completed' && session.status !== 'cancelled' && row.attending && result.rows[index].withdrawn_at === null && eventDate !== '';
       const memberRows: RelayMemberRow[] = relayMembers.get(row.entrantId) ?? [];
       const athleteIds = memberRows.map((member) => member.athleteId).filter((id): id is string => id !== null && id !== undefined);
       const legHistory = legBase ? await relayLegHistory(db, { workspaceId: row.workspaceId, code: definition.code, athleteIds, excludeSessionId: sessionId, eventDate }) : new Map<string, PriorPerformance[]>();

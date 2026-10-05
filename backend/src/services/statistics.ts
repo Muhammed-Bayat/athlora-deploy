@@ -74,7 +74,7 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
-           AND e.status <> 'cancelled'
+           AND e.status = 'completed'
          UNION ALL
          SELECT r.outcome,
                 r.final_result,
@@ -114,7 +114,7 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
-           AND e.status <> 'cancelled'
+           AND e.status = 'completed'
        ), latest AS (
          SELECT effective_result, effective_outcome
          FROM effective
@@ -129,9 +129,11 @@ export async function getAthleteStatisticsDetail(
               $4::text AS unit,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
+                  AND e.event_type = 'competition'
               ) AS pb,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
+                  AND e.event_type = 'competition'
                   AND e.event_date >= $5::date
                   AND e.event_date < $6::date
               ) AS sb,

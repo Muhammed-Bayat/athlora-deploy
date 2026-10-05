@@ -63,7 +63,8 @@ function successfulQuery(options: {
     final_result: string | null;
     manual_override: string | null;
     event_date: string;
-    event_status: 'in_progress';
+    event_status: 'in_progress' | 'completed' | 'scheduled' | 'cancelled';
+    event_type?: 'competition' | 'training';
   }>;
   eventAthletes?: { athlete_id: string }[];
 } = {}) {
@@ -80,7 +81,7 @@ function successfulQuery(options: {
     if (sql.includes('FROM athletes') && sql.includes('ANY($1::uuid[])')) {
       return { rows: (options.eventAthletes ?? []).map((row) => ({ id: row.athlete_id })) };
     }
-    if (sql.includes('e.type AS event_type')) {
+    if (sql.includes('e.type AS event_type') && !sql.includes('SELECT r.event_id')) {
       return { rows: [{ ...current, event_type: 'competition', event_status: options.status ?? 'in_progress' }] };
     }
     if (sql.includes('INSERT INTO timeline_entries')) return { rows: [entryRow] };
@@ -103,7 +104,8 @@ function successfulQuery(options: {
         final_result: '11.20',
         manual_override: null,
         event_date: '2026-09-01',
-        event_status: 'in_progress',
+        event_status: 'completed',
+        event_type: 'competition',
       }] };
     }
     if (sql.includes('UPDATE results')) return { rows: [] };
@@ -258,7 +260,8 @@ describe('timeline service', () => {
         event_id: EVENT_ID,
         ...overridden,
         event_date: '2026-09-01',
-        event_status: 'in_progress',
+        event_status: 'completed',
+        event_type: 'competition',
       }],
     });
 
@@ -267,6 +270,31 @@ describe('timeline service', () => {
     expect(placingUpdate?.[1]?.[0]).toBe(1);
     const flagsUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET is_pb'));
     expect(flagsUpdate?.[1]?.slice(0, 2)).toEqual([true, true]);
+  });
+
+  it.each([
+    ['an in-progress event', { event_status: 'in_progress' as const, event_type: 'competition' as const }],
+    ['a scheduled event', { event_status: 'scheduled' as const, event_type: 'competition' as const }],
+    ['a training session', { event_status: 'completed' as const, event_type: 'training' as const }],
+    ['a cancelled event', { event_status: 'cancelled' as const, event_type: 'competition' as const }],
+  ])('never sets PB or SB flags for %s', async (_label, state) => {
+    const query = successfulQuery({
+      eventAthletes: [{ athlete_id: ATHLETE_ID }],
+      historical: [{
+        event_id: EVENT_ID,
+        athlete_id: ATHLETE_ID,
+        outcome: 'valid',
+        final_result: '10.50',
+        manual_override: null,
+        event_date: '2026-09-01',
+        ...state,
+      }],
+    });
+
+    await recomputeEventResults({ query } as never, EVENT_ID, state.event_type);
+
+    const flagsUpdate = query.mock.calls.find(([sql]) => String(sql).includes('SET is_pb'));
+    expect(flagsUpdate?.[1]?.slice(0, 2)).toEqual([false, false]);
   });
 
   it('uses one generic not-found response for malformed IDs', async () => {

@@ -15,7 +15,7 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 import { getAthlete } from './athletes.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 import type { PublicAthleteDisciplineStatistics } from '../types/domain.js';
 
 type ReadTransactionRunner = <T>(
@@ -76,7 +76,7 @@ const PROGRESSION_SELECT = `
          WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
-        AND e.status <> 'cancelled'
+        AND ${COMPLETED_COMPETITION_FILTER}
         AND e.date >= $4::date AND e.date < $5::date
     UNION ALL
     SELECT r.event_id, en.athlete_id, d.code, r.final_result,
@@ -123,7 +123,7 @@ const PROGRESSION_SELECT = `
          WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
            AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
        ))
-        AND e.status <> 'cancelled'
+        AND ${COMPLETED_COMPETITION_FILTER}
         AND e.date >= $4::date AND e.date < $5::date
   ), enriched AS (
     SELECT *,
@@ -203,7 +203,7 @@ async function fetchAthleteDisciplineStatistics(
         FROM results r
         JOIN events e ON e.id = r.event_id
         JOIN discipline_definitions definitions ON definitions.code = r.discipline
-        WHERE r.athlete_id = $1 AND e.status <> 'cancelled'
+        WHERE r.athlete_id = $1 AND ${COMPLETED_COMPETITION_FILTER}
           AND r.outcome NOT IN ('dq', 'dnf', 'dns')
           AND (r.manual_override IS NOT NULL AND r.manual_override > 0 OR r.final_result IS NOT NULL)
           AND e.date >= $2::date AND e.date < $3::date
@@ -227,7 +227,7 @@ async function fetchAthleteDisciplineStatistics(
         JOIN events e ON e.id = r.event_id
         WHERE en.athlete_id = $1
           AND r.workspace_id = $4
-          AND s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+          AND s.result_state = 'final' AND s.status = 'completed' AND ${COMPLETED_COMPETITION_FILTER}
           AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
           AND se.withdrawn_at IS NULL
           AND r.outcome NOT IN ('dq', 'dnf', 'dns')
