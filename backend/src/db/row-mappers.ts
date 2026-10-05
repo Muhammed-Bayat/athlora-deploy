@@ -227,6 +227,8 @@ export interface ProgressionEntryRow extends ResultRow {
   effective_result: NumericValue | null;
   effective_outcome: string;
   counts_towards_statistics: boolean;
+  /** Present only where the query projects the completed-competition best-mark flag. */
+  counts_for_best?: boolean;
   running_pb: NumericValue | null;
   is_new_pb: boolean;
 }

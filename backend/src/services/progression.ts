@@ -8,6 +8,7 @@ import {
   DISCIPLINE_100M,
   type ProgressionDetail,
 } from '../types/domain.js';
+import { COMPLETED_COMPETITION_FILTER } from './disciplineStatistics.js';
 import { getAthlete } from './athletes.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 
@@ -110,7 +111,7 @@ export async function getAthleteProgressionDetail(
              WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
            ))
-           AND e.status <> 'cancelled'
+           AND ${COMPLETED_COMPETITION_FILTER}
            ${seasonCondition}
           ${cursorCondition}
           ${typeCondition}
@@ -159,7 +160,7 @@ export async function getAthleteProgressionDetail(
              WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
                AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
            ))
-           AND e.status <> 'cancelled'
+           AND ${COMPLETED_COMPETITION_FILTER}
            ${seasonCondition}
           ${cursorCondition}
           ${typeCondition}

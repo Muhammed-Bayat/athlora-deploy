@@ -268,11 +268,15 @@ async function fetchAthleteDisciplineStatistics(
 
   const byDiscipline = new Map<string, PublicAthleteDisciplineStatistics>();
   const bestValues = new Map<string, number[]>();
+  const chartPoints = new Map<string, Array<{ date: string; result: number }>>();
   for (const row of results?.rows ?? []) {
     const existing = byDiscipline.get(row.discipline);
     const value = Number(row.result);
     const priorBest = bestValues.get(row.discipline) ?? [];
     const best = row.counts_for_best ? [...priorBest, value] : priorBest;
+    if (row.counts_for_best) {
+      chartPoints.set(row.discipline, [...(chartPoints.get(row.discipline) ?? []), { date: row.event_date, result: value }]);
+    }
     bestValues.set(row.discipline, best);
     const pb = best.length === 0
       ? null
@@ -308,7 +312,9 @@ async function fetchAthleteDisciplineStatistics(
       });
     }
   }
-  return [...byDiscipline.values()].sort((left, right) => left.label.localeCompare(right.label));
+  return [...byDiscipline.values()]
+    .map((discipline) => ({ ...discipline, progression: chartPoints.get(discipline.discipline) ?? [] }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 }
 
 async function fetchAthleteAggregate(
@@ -323,6 +329,7 @@ async function fetchAthleteAggregate(
     summary_pb: number | string | null;
     summary_total: number;
     summary_valid: number;
+    counts_for_best: boolean;
   }>(PROGRESSION_SELECT, [
     athlete.id,
     workspaceId,
@@ -368,7 +375,7 @@ async function fetchAthleteAggregate(
     average,
     consistency,
     improvement,
-    progression: entries,
+    progression: result.rows.filter((row) => row.counts_for_best).map(mapProgressionEntryRow),
     disciplines: [],
   };
 }

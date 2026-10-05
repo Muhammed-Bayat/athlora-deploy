@@ -33,11 +33,18 @@ const SQL_BEST_MARK_SOURCES: Array<[file: string, probe: string, count: number]>
   ['verticalStatistics.ts', 'FILTER (WHERE counts_for_best', 2],
   ['publicStatistics.ts', 'FILTER (WHERE counts_for_best', 1],
   ['comparison.ts', "MIN(effective_result) FILTER (WHERE effective_outcome = 'valid' AND counts_for_best)", 1],
-  ['comparison.ts', 'row.counts_for_best', 1],
+  ['comparison.ts', 'row.counts_for_best', 3],
   ['athleteAnalytics.ts', 'history.filter(countsAsBest)', 1],
   ['athleteAnalytics.ts', 'seasonResults.filter(countsAsBest)', 1],
   ['leaderboard.ts', '${COMPLETED_COMPETITION_FILTER}', 3],
   ['publicStatisticsReport.ts', '${COMPLETED_COMPETITION_FILTER}', 3],
+];
+
+/** Progression charts plot only points from a completed competition. */
+const PROGRESSION_SOURCES: Array<[file: string, count: number]> = [
+  ['progression.ts', 2],
+  ['disciplineProgression.ts', 2],
+  ['publicStatistics.ts', 2],
 ];
 
 /** Surfaces that derive a best mark somewhere other than through the shared relations. */
@@ -79,6 +86,10 @@ describe('surfaces that report a personal or season best', () => {
 
   it.each(DERIVED_BEST_MARK_SOURCES)('%s applies the completed-competition rule to every best mark it derives', (file, probe, count) => {
     expect(readSource(file).split(probe).length - 1).toBe(count);
+  });
+
+  it.each(PROGRESSION_SOURCES)('%s plots its chart from the completed-competition set only', (file, count) => {
+    expect(readSource(file).split('AND ${COMPLETED_COMPETITION_FILTER}').length - 1).toBe(count);
   });
 
   it.each(ROW_SET_SOURCES)('%s still counts a merely non-cancelled event in its row set', (file) => {

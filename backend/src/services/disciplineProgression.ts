@@ -2,7 +2,7 @@ import type { DbExecutor } from '../db/client.js';
 import { ApiError } from '../middleware/errors.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import type { SeasonScope } from './seasons.js';
-import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 export interface DisciplineProgressionDetail {
   entries: Array<{ eventId: string; eventDate: string; eventTitle: string; value: number; isNewPb: boolean }>;
@@ -34,7 +34,7 @@ export async function getDisciplineProgression(
     FROM results r
     JOIN athletes a ON a.id = r.athlete_id AND a.workspace_id = $1
     JOIN discipline_definitions d ON d.id = $3 AND d.code = r.discipline
-    JOIN events e ON e.id = r.event_id AND e.status <> 'cancelled'
+    JOIN events e ON e.id = r.event_id AND ${COMPLETED_COMPETITION_FILTER}
     WHERE r.athlete_id = $2 AND r.discipline = '100m'
       AND r.outcome = 'valid' AND COALESCE(r.manual_override, r.final_result) IS NOT NULL
       AND (e.workspace_id = $1 OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw
@@ -50,7 +50,7 @@ export async function getDisciplineProgression(
     JOIN discipline_definitions d ON d.id = s.discipline_definition_id
     JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id AND se.withdrawn_at IS NULL
     JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
-    JOIN events e ON e.id = r.event_id AND e.status <> 'cancelled'
+    JOIN events e ON e.id = r.event_id AND ${COMPLETED_COMPETITION_FILTER}
     WHERE r.workspace_id = $1 AND en.athlete_id = $2 AND s.discipline_definition_id = $3
       AND s.status = 'completed' AND s.result_state = 'final' AND en.kind = 'athlete'
       AND r.outcome = 'valid' AND r.final_result IS NOT NULL
@@ -60,7 +60,8 @@ export async function getDisciplineProgression(
     UNION ALL
     SELECT legs.event_id, legs.event_date, legs.event_title, legs.final_result AS value, legs.direction
     FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
-    WHERE legs.workspace_id = $1 AND legs.athlete_id = $2 AND legs.discipline_definition_id = $3
+    WHERE legs.counts_for_best
+      AND legs.workspace_id = $1 AND legs.athlete_id = $2 AND legs.discipline_definition_id = $3
       ${relaySeasonCondition}
   ), ranked AS (
     SELECT *, CASE WHEN direction = 'lower' THEN MIN(value) OVER (ORDER BY event_date, event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)

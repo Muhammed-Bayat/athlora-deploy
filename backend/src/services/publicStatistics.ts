@@ -17,7 +17,7 @@ import { publicMediaPath } from './mediaStorage.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { getPublicStatisticsReport, type PublicStatisticsReportEntry } from './publicStatisticsReport.js';
 import { listAvailableDisciplines, SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { FINAL_RELAY_LEG_PERFORMANCES, NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
+import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES, NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
 
 interface PublicClubRow {
   id: string;
@@ -373,7 +373,7 @@ async function getPublicAthleteProgression(
        WHERE r.athlete_id = $1
          AND r.discipline = $2
          AND r.outcome NOT IN ('dq', 'dnf', 'dns')
-         AND e.status <> 'cancelled'
+         AND ${COMPLETED_COMPETITION_FILTER}
          AND e.date >= $3::date AND e.date < $4::date
          AND (e.workspace_id = $5 OR EXISTS (
            SELECT 1
@@ -407,7 +407,7 @@ async function getPublicAthleteProgression(
          AND r.outcome NOT IN ('dq', 'dnf', 'dns')
          AND (r.manual_override IS NOT NULL AND r.manual_override > 0 OR r.final_result IS NOT NULL)
          AND s.result_state = 'final' AND s.status = 'completed'
-         AND e.status <> 'cancelled'
+         AND ${COMPLETED_COMPETITION_FILTER}
          AND e.date >= $3::date AND e.date < $4::date
          AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
          AND se.withdrawn_at IS NULL
