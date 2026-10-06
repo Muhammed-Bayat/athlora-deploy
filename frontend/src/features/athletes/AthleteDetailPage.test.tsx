@@ -349,6 +349,82 @@ describe('AthleteDetailPage', () => {
     expect(screen.queryByText('City Final')).not.toBeInTheDocument();
   });
 
+  it('shows the relay team, its squad order, and every leg split in a single row', async () => {
+    const RELAY_ID = '66666666-6666-4666-8666-666666666666';
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: RELAY_ID, code: '4x100m', version: 1, kind: 'relay', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'relay' }, precision: 2, presentation: { label: '4 × 100m relay' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 1 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [RELAY_ID] }));
+
+    const team = history('Relay final', 'valid');
+    team.event = { ...team.event, id: 'relay-event', discipline: '4x100m' };
+    team.result = { ...team.result, eventId: 'relay-event', discipline: '4x100m', finalResult: 38.15, updatedAt: '2026-08-10T10:00:00.000Z-team' };
+    team.effectiveResult = 38.15;
+    team.note = null;
+    team.relay = {
+      teamName: "Pook's relay team",
+      members: ['Aaliah Reddy', 'K. One', 'K. Two', 'K. Three'],
+      legs: [
+        { leg: 1, name: 'Aaliah Reddy', value: 9.5 },
+        { leg: 2, name: 'K. One', value: 10 },
+        { leg: 3, name: 'K. Two', value: null },
+        { leg: 4, name: 'K. Three', value: 9.95 },
+      ],
+    };
+
+    statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
+      recentResults: { competitions: [team], training: [] },
+    }));
+    renderDetail();
+
+    const table = await screen.findByRole('table', { name: 'Recent results' });
+    // One relay row instead of a team row plus a leg row.
+    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByText("Team: Pook's relay team")).toBeInTheDocument();
+    expect(screen.getByText('Aaliah Reddy -> K. One -> K. Two -> K. Three')).toBeInTheDocument();
+    expect(screen.getByText('Leg 1: Aaliah Reddy')).toBeInTheDocument();
+    expect(screen.getByText('Leg 4: K. Three')).toBeInTheDocument();
+    expect(screen.getByText('38.15s')).toBeInTheDocument();
+    expect(screen.getByText('9.50s')).toBeInTheDocument();
+    expect(screen.getByText('10.00s')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('9.95s')).toBeInTheDocument();
+  });
+
+  it('keeps a previously assigned discipline in the log even after it is unassigned', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID], assignedDisciplineHistoryIds: [SPRINT_ID, ELITE_ID] }));
+    statisticsApi.getAthleteStatistics.mockResolvedValue(statistics({
+      recentResults: { competitions: [history('City Final', 'valid')], training: [] },
+    }));
+    renderDetail();
+
+    const historyTabs = await screen.findByRole('tablist', { name: 'Result history discipline' });
+    expect(within(historyTabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['100m', 'Long jump']);
+
+    // A historical discipline with no marks does not get a performance tab.
+    const performanceTabs = screen.getByRole('tablist', { name: 'Discipline performance statistics' });
+    expect(within(performanceTabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['100m']);
+  });
+
+  it('shows a previously assigned discipline as a performance tab once it has results', async () => {
+    meetsApi.listDisciplines.mockResolvedValue({ data: [
+      { id: SPRINT_ID, code: '100m', version: 1, kind: 'track', unit: 'seconds', direction: 'lower', defaultRules: { aggregation: 'timed', entrantType: 'individual' }, precision: 2, presentation: { label: '100m' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+      { id: ELITE_ID, code: 'long_jump', version: 1, kind: 'field', unit: 'metres', direction: 'higher', defaultRules: { aggregation: 'best', entrantType: 'individual' }, precision: 2, presentation: { label: 'Long jump' }, createdAt: '2026-01-01T00:00:00.000Z', source: 'test' },
+    ], meta: { count: 2 } });
+    athleteApi.getAthlete.mockResolvedValue(athlete({ preferredDisciplineIds: [SPRINT_ID], assignedDisciplineHistoryIds: [SPRINT_ID, ELITE_ID] }));
+    statisticsApi.getAthleteDisciplineStatistics.mockResolvedValue([
+      { athleteId: ATHLETE_ID, athleteName: 'Ari Runner', discipline: 'long_jump', label: 'Long jump', unit: 'metres', direction: 'higher', precision: 2, pb: 5.4, sb: 5.4, resultCount: 1, seasonCount: 1, seasonAverage: 5.4, seasonTotal: 5.4, placing: 1 },
+    ]);
+    renderDetail();
+
+    const performanceTabs = await screen.findByRole('tablist', { name: 'Discipline performance statistics' });
+    expect(within(performanceTabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['100m', 'Long jump']);
+  });
+
   it('filters the log between competitions and training by type', async () => {
     const competition = history('City Final', 'valid');
     const training = history('Block session', 'valid');

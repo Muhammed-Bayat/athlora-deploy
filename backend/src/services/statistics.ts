@@ -200,12 +200,17 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                NULL::text AS note,
+                NULL::jsonb AS relay
          FROM results r
          JOIN events e ON e.id = r.event_id
          JOIN athletes a ON a.id = r.athlete_id
          WHERE r.athlete_id = $1
             AND a.workspace_id = $2
+            -- Multi-discipline meet events carry no legacy logger discipline; any legacy row
+            -- on one is an attendance artefact (outcome 'no_result') rather than a performance.
+            AND e.discipline IS NOT NULL
              AND (e.workspace_id = $2 OR EXISTS (
                SELECT 1 FROM event_fixture_workspaces fw
                JOIN event_participants ep ON ep.event_id = fw.event_id
@@ -240,7 +245,9 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                NULL::text AS note,
+                NULL::jsonb AS relay
          FROM session_results r
          JOIN discipline_sessions s ON s.id = r.session_id
          JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -259,6 +266,95 @@ export async function getAthleteStatisticsDetail(
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
            AND e.date >= $4::date AND e.date < $5::date
+        UNION ALL
+        -- Relay team result attributed to each member athlete (the mark the squad ran).
+        SELECT r.event_id, a.id AS athlete_id, d.code, r.final_result,
+               CASE WHEN r.final_result IS NULL THEN NULL ELSE r.unit END AS unit,
+               NULL::int AS placing, false AS is_pb, false AS is_sb,
+               r.manual_override, r.override_reason, r.overridden_by, r.updated_at,
+               r.outcome, r.override_at,
+               a.name AS athlete_name,
+               a.archived_at AS athlete_archived_at,
+               e.title AS event_title,
+               e.type AS event_type,
+               d.code AS event_discipline,
+               e.date AS event_date,
+               e.time AS event_time,
+               e.location_name AS event_location_name,
+               e.status AS event_status,
+               e.created_at AS event_created_at,
+               CASE
+                 WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+                   THEN r.manual_override
+                 ELSE r.final_result
+               END AS effective_result,
+               CASE
+                 WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                 WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                 ELSE r.outcome
+                END AS effective_outcome,
+                NULL::text AS note,
+                -- One row per relay: the squad line-up and every leg split ride along so the
+                -- log can render the team mark and its legs together instead of as two rows.
+                jsonb_build_object(
+                  'teamName', en.name,
+                  'members', (
+                    SELECT COALESCE(jsonb_agg(
+                      CASE WHEN rm2.member_kind = 'athlete' THEN ma.name ELSE me2.name END
+                      ORDER BY rm2.leg), '[]'::jsonb)
+                    FROM relay_members rm2
+                    JOIN meet_entrants me2 ON me2.id = rm2.member_id AND me2.event_id = rm2.event_id
+                      AND me2.workspace_id = rm2.workspace_id
+                    LEFT JOIN athletes ma ON ma.id = me2.athlete_id
+                    WHERE rm2.relay_id = en.id AND rm2.event_id = r.event_id
+                      AND rm2.workspace_id = r.workspace_id
+                  ),
+                  'legs', (
+                    SELECT COALESCE(jsonb_agg(
+                      jsonb_build_object(
+                        'leg', rm2.leg,
+                        'name', CASE WHEN rm2.member_kind = 'athlete' THEN ma.name ELSE me2.name END,
+                        'value', CASE
+                          WHEN t2.value IS NOT NULL AND t2.value > 0 AND NOT t2.is_foul
+                            AND t2.incident_type IS NULL AND t2.deleted_at IS NULL
+                            THEN t2.value
+                        END)
+                      ORDER BY rm2.leg), '[]'::jsonb)
+                    FROM relay_members rm2
+                    JOIN meet_entrants me2 ON me2.id = rm2.member_id AND me2.event_id = rm2.event_id
+                      AND me2.workspace_id = rm2.workspace_id
+                    LEFT JOIN athletes ma ON ma.id = me2.athlete_id
+                    LEFT JOIN session_relay_selections rs2 ON rs2.relay_member_id = rm2.id
+                      AND rs2.session_id = r.session_id AND rs2.entrant_id = r.entrant_id
+                      AND rs2.event_id = r.event_id AND rs2.workspace_id = r.workspace_id
+                    LEFT JOIN session_timeline_entries t2 ON t2.id = rs2.entry_id
+                    WHERE rm2.relay_id = en.id AND rm2.event_id = r.event_id
+                      AND rm2.workspace_id = r.workspace_id
+                  )
+                ) AS relay
+         FROM session_results r
+         JOIN discipline_sessions s ON s.id = r.session_id
+         JOIN discipline_definitions d ON d.id = s.discipline_definition_id
+         JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
+         JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
+         JOIN relay_members rm ON rm.relay_id = en.id AND rm.event_id = r.event_id
+           AND rm.workspace_id = r.workspace_id AND rm.member_kind = 'athlete'
+         JOIN meet_entrants mem ON mem.id = rm.member_id AND mem.event_id = rm.event_id
+           AND mem.workspace_id = rm.workspace_id
+         JOIN athletes a ON a.id = mem.athlete_id AND a.workspace_id = mem.workspace_id
+         JOIN events e ON e.id = r.event_id
+         WHERE a.id = $1
+           AND r.workspace_id = $2
+            AND s.result_state = 'final' AND s.status = 'completed'
+            AND en.kind = 'relay' AND d.default_rules->>'entrantType' = 'relay'
+            AND se.withdrawn_at IS NULL
+            AND (e.workspace_id = r.workspace_id OR EXISTS (
+              SELECT 1 FROM event_fixture_workspaces fw
+              WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+                AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+            ))
+          AND e.date >= $4::date AND e.date < $5::date
         ), selected AS (
          (SELECT * FROM history
           WHERE event_type = 'competition'

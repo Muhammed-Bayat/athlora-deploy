@@ -98,6 +98,7 @@ export interface AthleteRow {
   dob: DateValue | null;
   gender: string | null;
   preferred_discipline_ids?: unknown;
+  assigned_discipline_history_ids?: unknown;
   season_goals?: unknown;
   notes: string | null;
   archived_at: TimestampValue | null;
@@ -199,6 +200,18 @@ export interface AthleteStatisticsAggregateRow extends AthleteStatisticsRow {
   training_all_time_count: CountValue;
 }
 
+export interface AthleteHistoryRelayLeg {
+  leg: number;
+  name: string;
+  value: number | null;
+}
+
+export interface AthleteHistoryRelay {
+  teamName: string;
+  members: string[];
+  legs: AthleteHistoryRelayLeg[];
+}
+
 export interface AthleteResultHistoryRow extends ResultRow {
   athlete_name: string;
   athlete_archived_at: TimestampValue | null;
@@ -212,6 +225,10 @@ export interface AthleteResultHistoryRow extends ResultRow {
   effective_result: NumericValue | null;
   effective_outcome: string;
   counts_towards_statistics: boolean;
+  /** Optional row caption (relay team/leg rows); absent where the query does not project one. */
+  note?: string | null;
+  /** Relay team rows carry the squad line-up and every leg split; absent where the query does not project one. */
+  relay?: AthleteHistoryRelay | null;
 }
 
 export interface ProgressionEntryRow extends ResultRow {
@@ -593,13 +610,19 @@ export function mapAthleteRow(row: AthleteRow): Athlete {
     ATHLETE_LIFECYCLE_STATUSES,
     'athletes.lifecycle_status',
   );
+  const preferredDisciplineIds = Array.isArray(row.preferred_discipline_ids)
+    ? row.preferred_discipline_ids.map((id, index) => uuid(id, `athletes.preferred_discipline_ids.${index}`))
+    : [];
   return {
     id: uuid(row.id, 'athletes.id'),
     coachId: uuid(row.coach_id, 'athletes.coach_id'),
     name: nonemptyString(row.name, 'athletes.name'),
     dob: row.dob === null ? null : databaseDate(row.dob, 'athletes.dob'),
     gender: nullableString(row.gender, 'athletes.gender'),
-    preferredDisciplineIds: Array.isArray(row.preferred_discipline_ids) ? row.preferred_discipline_ids.map((id, index) => uuid(id, `athletes.preferred_discipline_ids.${index}`)) : [],
+    preferredDisciplineIds,
+    assignedDisciplineHistoryIds: Array.isArray(row.assigned_discipline_history_ids)
+      ? row.assigned_discipline_history_ids.map((id, index) => uuid(id, `athletes.assigned_discipline_history_ids.${index}`))
+      : preferredDisciplineIds,
     seasonGoals: Array.isArray(row.season_goals) ? row.season_goals.map((goal, index) => mapSeasonGoal(goal, `athletes.season_goals.${index}`)) : [],
     notes: nullableString(row.notes, 'athletes.notes'),
     archivedAt: nullableTimestamp(row.archived_at, 'athletes.archived_at'),
@@ -867,6 +890,36 @@ function mapAggregateEventIdentity(
   };
 }
 
+function mapRelayHistory(
+  value: unknown,
+  field: string,
+): import('../types/domain.js').AthleteHistoryRelay | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) invalid(field, 'relay payload object');
+  const payload = value as Record<string, unknown>;
+  const members = payload.members;
+  const legs = payload.legs;
+  if (!Array.isArray(members)) invalid(`${field}.members`, 'relay members array');
+  if (!Array.isArray(legs)) invalid(`${field}.legs`, 'relay legs array');
+  return {
+    teamName: nonemptyString(payload.teamName, `${field}.teamName`),
+    members: members.map((member, index) => nonemptyString(member, `${field}.members[${index}]`)),
+    legs: legs.map((leg, index) => {
+      if (typeof leg !== 'object' || leg === null || Array.isArray(leg)) {
+        invalid(`${field}.legs[${index}]`, 'relay leg object');
+      }
+      const entry = leg as Record<string, unknown>;
+      return {
+        leg: positiveInteger(entry.leg, `${field}.legs[${index}].leg`),
+        name: nonemptyString(entry.name, `${field}.legs[${index}].name`),
+        value: entry.value === null || entry.value === undefined
+          ? null
+          : nullablePositiveNumeric(entry.value, `${field}.legs[${index}].value`),
+      };
+    }),
+  };
+}
+
 export function mapAthleteResultHistoryRow(
   row: AthleteResultHistoryRow,
 ): AthleteResultHistoryEntry {
@@ -910,6 +963,8 @@ export function mapAthleteResultHistoryRow(
     effectiveResult,
     effectiveOutcome,
     countsTowardsStatistics,
+    note: row.note ?? null,
+    relay: mapRelayHistory(row.relay, 'athlete history.relay'),
   };
 }
 

@@ -282,7 +282,9 @@ export async function replaceEvent(
         client,
         eventId,
         updated.type,
-        currentEvent.status !== 'completed' && updated.status === 'completed',
+        // A multi-discipline meet event has no legacy logger discipline: recomputing every
+        // present participant would fabricate a 100m 'no_result' row from attendance alone.
+        currentEvent.status !== 'completed' && updated.status === 'completed' && updated.discipline !== null,
       );
     }
     return updated;

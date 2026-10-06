@@ -13,6 +13,7 @@ import type {
 
 const ATHLETE_COLUMNS = `a.id, a.coach_id, a.name, a.dob, a.gender, a.notes, a.archived_at, a.lifecycle_status, a.status_changed_at, a.status_changed_by, a.created_at, a.updated_at,
   COALESCE((SELECT json_agg(apd.discipline_definition_id ORDER BY apd.discipline_definition_id) FROM athlete_preferred_disciplines apd JOIN discipline_definitions d ON d.id = apd.discipline_definition_id WHERE apd.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS preferred_discipline_ids,
+  COALESCE((SELECT json_agg(hh.discipline_definition_id ORDER BY hh.discipline_definition_id) FROM athlete_discipline_assignments hh JOIN discipline_definitions d ON d.id = hh.discipline_definition_id WHERE hh.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS assigned_discipline_history_ids,
   COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g JOIN discipline_definitions d ON d.id = g.discipline_definition_id WHERE g.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS season_goals`;
 
 function notFound(): ApiError {
@@ -155,10 +156,18 @@ function hasAllowedPrecision(value: number, precision: number): boolean {
 
 async function replaceDisciplineProfile(athleteId: string, payload: AthleteCreatePayload, executor: DbExecutor): Promise<void> {
   if (payload.preferredDisciplineIds !== undefined) await executor.query('DELETE FROM athlete_preferred_disciplines WHERE athlete_id = $1', [athleteId]);
-  if (payload.preferredDisciplineIds?.length) await executor.query(
-    'INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) SELECT $1, unnest($2::uuid[])',
-    [athleteId, payload.preferredDisciplineIds],
-  );
+  if (payload.preferredDisciplineIds?.length) {
+    await executor.query(
+      'INSERT INTO athlete_preferred_disciplines (athlete_id, discipline_definition_id) SELECT $1, unnest($2::uuid[])',
+      [athleteId, payload.preferredDisciplineIds],
+    );
+    // Append-only: a discipline that is later unassigned must keep showing in the athlete's
+    // performance log, so the assignment itself is never forgotten.
+    await executor.query(
+      'INSERT INTO athlete_discipline_assignments (athlete_id, discipline_definition_id) SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING',
+      [athleteId, payload.preferredDisciplineIds],
+    );
+  }
   if (payload.seasonGoals === undefined) return;
   const retainedIds = payload.seasonGoals.flatMap((goal) => goal.id ? [goal.id] : []);
   if (retainedIds.length) {

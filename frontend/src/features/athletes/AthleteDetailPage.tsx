@@ -61,8 +61,43 @@ function formatPerformance(value: number | null, precision: number, unit: Discip
 }
 
 function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
-  const { event, result, effectiveOutcome, effectiveResult } = entry;
+  const { event, result, effectiveOutcome, effectiveResult, note, relay } = entry;
   const formatMark = (value: number) => `${value.toFixed(2)}${formatResultUnit(result.unit ?? 'seconds')}`;
+
+  // A relay is one row: the squad line-up and the leg labels stack in the event
+  // column, while the team mark and the leg splits stack in the result column.
+  if (relay) {
+    const metaLines = [
+      `Team: ${relay.teamName}`,
+      relay.members.join(' -> '),
+    ];
+    const tailLines = event.status === 'cancelled' ? ['Cancelled event'] : [];
+    const hasMark = effectiveOutcome === 'valid' && effectiveResult !== null;
+
+    return (
+      <tr className={styles.historyRow}>
+        <th scope="row" className={styles.historyDate}>
+          <time dateTime={event.date}>{formatDateOnly(event.date)}</time>
+        </th>
+        <td className={styles.historyEvent}>
+          <strong className={styles.relayHead}>{event.title}</strong>
+          {[...metaLines, ...relay.legs.map((leg) => `Leg ${leg.leg}: ${leg.name}`), ...tailLines]
+            .map((line, index) => <span className={styles.relayLine} key={`${index}-${line}`}>{line}</span>)}
+        </td>
+        <td className={styles.historyType}>{event.type === 'competition' ? 'Competition' : 'Training'}</td>
+        <td className={styles.historyResult}>
+          {hasMark
+            ? <strong className={`${styles.historyMark} ${styles.relayHead}`}>{formatMark(effectiveResult!)}</strong>
+            : <span className={`${styles.historyOutcome} ${styles.relayHead}`}>{effectiveOutcome === 'valid' ? 'No result' : formatOutcome(effectiveOutcome)}</span>}
+          {metaLines.map((line) => <span className={styles.relayLine} aria-hidden="true" key={`spacer-${line}`} />)}
+          {relay.legs.map((leg) => (
+            <span className={styles.relayLine} key={`leg-${leg.leg}`}>{leg.value === null ? '—' : formatMark(leg.value)}</span>
+          ))}
+          {tailLines.map((line) => <span className={styles.relayLine} aria-hidden="true" key={`tail-${line}`} />)}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr className={styles.historyRow}>
@@ -71,6 +106,7 @@ function HistoryRow({ entry }: { entry: AthleteResultHistoryEntry }) {
       </th>
       <td className={styles.historyEvent}>
         <strong>{event.title}</strong>
+        {note && <small className={styles.rowNote}>{note}</small>}
         {event.status === 'cancelled' && <small className={styles.rowNote}>Cancelled event</small>}
       </td>
       <td className={styles.historyType}>{event.type === 'competition' ? 'Competition' : 'Training'}</td>
@@ -183,10 +219,16 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
           ? (right.event.time ?? '').localeCompare(left.event.time ?? '')
           : right.event.date.localeCompare(left.event.date)))
     : [];
-  const assignedLogDisciplines = athlete?.preferredDisciplineIds.map((id) => {
+  const preferredDisciplineIds = athlete?.preferredDisciplineIds ?? [];
+  // A discipline stays available after it is unassigned: the log must keep every discipline
+  // the athlete was ever assigned, not only the ones selected today.
+  const assignedDisciplineIds = [
+    ...new Set([...preferredDisciplineIds, ...(athlete?.assignedDisciplineHistoryIds ?? preferredDisciplineIds)]),
+  ];
+  const assignedLogDisciplines = assignedDisciplineIds.map((id) => {
     const definition = disciplines.find((discipline) => discipline.id === id);
     return { code: definition?.code ?? id, label: definition?.presentation.label ?? id };
-  }) ?? [];
+  });
   const loggedCodes = [...new Set(sortedLogEntries.map((entry) => entry.event.discipline))];
   const logDisciplines = [
     ...assignedLogDisciplines,
@@ -208,23 +250,30 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
   const disciplineLabels = athlete?.preferredDisciplineIds
     .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id)
     ?? [];
-  const performanceTabs: PerformanceTab[] = athlete?.preferredDisciplineIds.map((id) => {
-    const definition = disciplines.find((discipline) => discipline.id === id);
-    const statisticsForDiscipline = definition
-      ? disciplineStatistics.find((entry) => entry.discipline === definition.code)
-      : undefined;
-    return {
-      id,
-      label: definition?.presentation.label ?? statisticsForDiscipline?.label ?? id,
-      unit: definition?.unit ?? statisticsForDiscipline?.unit ?? 'seconds',
-      direction: definition?.direction ?? statisticsForDiscipline?.direction ?? 'lower',
-      precision: definition?.precision ?? statisticsForDiscipline?.precision ?? 2,
-      pb: statisticsForDiscipline?.pb ?? null,
-      sb: statisticsForDiscipline?.sb ?? null,
-      resultCount: statisticsForDiscipline?.resultCount ?? 0,
-      seasonCount: statisticsForDiscipline?.seasonCount ?? 0,
-    };
-  }) ?? [];
+  const performanceTabs: PerformanceTab[] = assignedDisciplineIds
+    .filter((id) => {
+      if (preferredDisciplineIds.includes(id)) return true;
+      const definition = disciplines.find((candidate) => candidate.id === id);
+      if (!definition) return false;
+      return disciplineStatistics.some((entry) => entry.discipline === definition.code && entry.resultCount > 0);
+    })
+    .map((id) => {
+      const definition = disciplines.find((discipline) => discipline.id === id);
+      const statisticsForDiscipline = definition
+        ? disciplineStatistics.find((entry) => entry.discipline === definition.code)
+        : undefined;
+      return {
+        id,
+        label: definition?.presentation.label ?? statisticsForDiscipline?.label ?? id,
+        unit: definition?.unit ?? statisticsForDiscipline?.unit ?? 'seconds',
+        direction: definition?.direction ?? statisticsForDiscipline?.direction ?? 'lower',
+        precision: definition?.precision ?? statisticsForDiscipline?.precision ?? 2,
+        pb: statisticsForDiscipline?.pb ?? null,
+        sb: statisticsForDiscipline?.sb ?? null,
+        resultCount: statisticsForDiscipline?.resultCount ?? 0,
+        seasonCount: statisticsForDiscipline?.seasonCount ?? 0,
+      };
+    });
   const selectedPerformanceTab = performanceTabs.find((tab) => tab.id === activePerformanceTab) ?? performanceTabs[0];
   useEffect(() => {
     if (selectedPerformanceTab && selectedPerformanceTab.id !== activePerformanceTab) {

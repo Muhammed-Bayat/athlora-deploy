@@ -85,8 +85,11 @@ async function listRecentResults(
                AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
            ))
            AND a.workspace_id = $1
-         AND r.discipline = $2
-          AND e.status <> 'cancelled'
+           AND r.discipline = $2
+           -- Multi-discipline meet events hold no legacy discipline; their legacy rows are
+           -- attendance artefacts rather than performances.
+           AND e.discipline IS NOT NULL
+            AND e.status <> 'cancelled'
           AND e.date >= $4::date AND e.date < $5::date
        UNION ALL
        SELECT r.event_id, en.athlete_id, d.code, r.final_result,

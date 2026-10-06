@@ -137,6 +137,21 @@ describe('getDashboardSummary', () => {
     });
   });
 
+  it('ignores legacy attendance rows on multi-discipline events in recent results', async () => {
+    const sqls: string[] = [];
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      sqls.push(sql);
+      if (sql.includes('AS athletes_count')) return { rows: [metricsRow()] };
+      return { rows: [] };
+    });
+
+    await getDashboardSummary(USER_ID, '2026-08-17', runner(query));
+
+    const recentResultsSql = sqls.find((sql) => sql.includes('athlete_id ASC'));
+    expect(recentResultsSql).toBeDefined();
+    expect(recentResultsSql).toContain('e.discipline IS NOT NULL');
+  });
+
   it('assembles the selected live event and preserves archived historical identity', async () => {
     const roster: RosterSnapshotRow = {
       athlete_id: ATHLETE_ID,

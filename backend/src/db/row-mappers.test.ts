@@ -256,6 +256,7 @@ describe('PostgreSQL row mapping', () => {
       dob: '2004-02-29',
       gender: 'open',
       preferredDisciplineIds: [],
+      assignedDisciplineHistoryIds: [],
       seasonGoals: [],
       notes: 'Returning from injury',
       archivedAt: null,
@@ -264,6 +265,24 @@ describe('PostgreSQL row mapping', () => {
       statusChangedBy: USER_ID,
       createdAt: ISO_TIMESTAMP,
       updatedAt: ISO_TIMESTAMP,
+    });
+
+    expect(
+      mapAthleteRow(
+        changed(athleteRow, {
+          preferred_discipline_ids: ['55555555-5555-4555-8555-555555555555'],
+          assigned_discipline_history_ids: [
+            '55555555-5555-4555-8555-555555555555',
+            '66666666-6666-4666-8666-666666666666',
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      preferredDisciplineIds: ['55555555-5555-4555-8555-555555555555'],
+      assignedDisciplineHistoryIds: [
+        '55555555-5555-4555-8555-555555555555',
+        '66666666-6666-4666-8666-666666666666',
+      ],
     });
 
     expect(
@@ -479,7 +498,38 @@ describe('PostgreSQL row mapping', () => {
       effectiveResult: 11.24,
       effectiveOutcome: 'valid',
       countsTowardsStatistics: true,
+      relay: null,
     });
+  });
+
+  it('maps a relay history payload with the squad order and every leg split', () => {
+    const relay = {
+      teamName: "Pook's relay team",
+      members: ['Ari Runner', 'A', 'B', 'C'],
+      legs: [
+        { leg: 1, name: 'Ari Runner', value: 9.5 },
+        { leg: 2, name: 'A', value: 10 },
+        { leg: 3, name: 'B', value: null },
+      ],
+    };
+
+    expect(mapAthleteResultHistoryRow(changed(historyRow, { relay }))).toMatchObject({
+      note: null,
+      relay: {
+        teamName: "Pook's relay team",
+        members: ['Ari Runner', 'A', 'B', 'C'],
+        legs: [
+          { leg: 1, name: 'Ari Runner', value: 9.5 },
+          { leg: 2, name: 'A', value: 10 },
+          { leg: 3, name: 'B', value: null },
+        ],
+      },
+    });
+  });
+
+  it('rejects a malformed relay history payload', () => {
+    expectMappingError(() => mapAthleteResultHistoryRow(changed(historyRow, { relay: { members: 'A' } })));
+    expectMappingError(() => mapAthleteResultHistoryRow(changed(historyRow, { relay: { teamName: '', members: [], legs: [] } })));
   });
 
   it('maps roster discipline PBs', () => {

@@ -278,6 +278,8 @@ export interface Athlete {
   dob: string | null;
   gender: string | null;
   preferredDisciplineIds: string[];
+  /** Every discipline ever assigned; the performance log keeps these tabs after an unassign. */
+  assignedDisciplineHistoryIds?: string[];
   seasonGoals: AthleteSeasonGoal[];
   notes: string | null;
   archivedAt: string | null;
@@ -598,6 +600,18 @@ export interface AggregateEventIdentity {
   status: EventStatus;
 }
 
+export interface AthleteRelayHistoryLeg {
+  leg: number;
+  name: string;
+  value: number | null;
+}
+
+export interface AthleteRelayHistory {
+  teamName: string;
+  members: string[];
+  legs: AthleteRelayHistoryLeg[];
+}
+
 export interface AthleteResultHistoryEntry {
   athlete: AggregateAthleteIdentity;
   event: AggregateEventIdentity;
@@ -605,6 +619,10 @@ export interface AthleteResultHistoryEntry {
   effectiveResult: number | null;
   effectiveOutcome: ResultOutcome;
   countsTowardsStatistics: boolean;
+  /** Optional row caption; relay captions are carried by `relay` instead. */
+  note?: string | null;
+  /** Relay rows collapse the squad line-up and every leg split into this single entry. */
+  relay?: AthleteRelayHistory | null;
 }
 
 export interface AthleteResultCounts {

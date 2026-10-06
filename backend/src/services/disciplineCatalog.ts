@@ -4,7 +4,7 @@ import type { PublicDiscipline } from '../types/domain.js';
 // The immutable catalogue retains retired definitions for historical foreign keys,
 // while current Athlora surfaces expose only this supported set.
 export const SUPPORTED_DISCIPLINE_CODES = [
-  '100m', '200m', '400m', '800m', '1500m', '100mh', '400mh',
+  '100m', '200m', '400m', '800m', '1500m', '100mh', '110mh', '400mh',
   '4x100m', 'high_jump', 'long_jump', 'triple_jump', 'javelin', 'discus', 'shot_put',
 ] as const;
 
