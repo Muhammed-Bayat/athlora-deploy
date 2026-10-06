@@ -591,7 +591,7 @@ describe('persisted value validation', () => {
     expectMappingError(() => mapUserRow(changed(userRow, { role: 'admin' })));
     expectMappingError(() => mapEventRow(changed(eventRow, { type: 'race' })));
     expectMappingError(() => mapEventRow(changed(eventRow, { status: 'postponed' })));
-    expectMappingError(() => mapEventRow(changed(eventRow, { discipline: '200m' })));
+    expectMappingError(() => mapEventRow(changed(eventRow, { discipline: '' })));
     expectMappingError(() =>
       mapEventParticipantRow(changed(participantRow, { rsvp_status: 'invalid' })),
     );
@@ -601,11 +601,22 @@ describe('persisted value validation', () => {
     expectMappingError(() =>
       mapTimelineEntryRow(changed(timelineRow, { incident_type: 'injury' })),
     );
-    expectMappingError(() => mapTimelineEntryRow(changed(timelineRow, { unit: 'metres' })));
+    expectMappingError(() => mapTimelineEntryRow(changed(timelineRow, { unit: 'furlongs' })));
     expectMappingError(() => mapResultRow(changed(resultRow, { outcome: 'pending' })));
     expectMappingError(() =>
-      mapAthleteStatisticsRow(changed(statisticsRow, { discipline: '200m' })),
+      mapAthleteStatisticsRow(changed(statisticsRow, { discipline: '' })),
     );
+  });
+
+  it('accepts any discipline code and any supported result unit', () => {
+    expect(() => mapEventRow(changed(eventRow, { discipline: 'long_jump' }))).not.toThrow();
+    expect(() => mapTimelineEntryRow(changed(timelineRow, { unit: 'metres' }))).not.toThrow();
+    expect(() => mapAthleteStatisticsRow(changed(statisticsRow, { discipline: '200m' }))).not.toThrow();
+    expect(() =>
+      mapAthleteResultHistoryRow(
+        changed(historyRow, { event_discipline: 'long_jump', unit: 'metres' }),
+      ),
+    ).not.toThrow();
   });
 
   it('rejects non-boolean persisted flags', () => {

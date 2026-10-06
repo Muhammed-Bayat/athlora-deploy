@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getPool, type DbExecutor } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import { ApiError } from '../middleware/errors.js';
-import { DISCIPLINE_100M, type EventStatus, type EventType, type TimelineEntry } from '../types/domain.js';
+import type { Discipline, EventStatus, EventType, TimelineEntry } from '../types/domain.js';
 import type { TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../validation/payloads.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { mapTimelineEntryRow, type TimelineEntryRow } from '../db/row-mappers.js';
@@ -24,7 +24,7 @@ export interface PublicLoggerLink {
 }
 
 export interface PublicLoggerSnapshot {
-  event: { id: string; title: string; status: EventStatus; discipline: typeof DISCIPLINE_100M | null };
+  event: { id: string; title: string; status: EventStatus; discipline: Discipline | null };
   participants: Array<{ athleteId: string; name: string; teamName: string | null }>;
   timeline: Array<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt' | 'noteText'> & { canEdit: boolean; canUndo: boolean }>;
 }
@@ -230,7 +230,7 @@ export async function publicLoggerSnapshot(
       id: session.event_id,
       title: session.title,
       status: session.status,
-      discipline: session.discipline === null ? null : DISCIPLINE_100M,
+      discipline: session.discipline,
     },
     participants: participants.rows.map((participant) => ({ athleteId: participant.athlete_id, name: participant.name, teamName: participant.team_name })),
     timeline: entries.rows.map((entry) => {
@@ -341,8 +341,8 @@ export async function createPublicLoggerEntry(
 ): Promise<Omit<TimelineEntry, 'recordedBy' | 'publicLoggerSessionId' | 'deviceId' | 'updatedAt' | 'deletedAt'>> {
   assertUuid(eventId);
   return runTransaction(async (client) => {
-    const session = await client.query<{ id: string; type: EventType; status: EventStatus }>(
-      `SELECT ps.id, e.type, e.status
+    const session = await client.query<{ id: string; type: EventType; status: EventStatus; discipline: string | null }>(
+      `SELECT ps.id, e.type, e.status, e.discipline
        FROM public_logger_sessions ps
        JOIN public_logger_links pl ON pl.id = ps.link_id
        JOIN events e ON e.id = ps.event_id
@@ -353,6 +353,7 @@ export async function createPublicLoggerEntry(
     );
     const actor = session.rows[0];
     if (!actor || actor.status !== 'in_progress') throw unavailable();
+    if (actor.discipline === null) throw new ApiError(409, 'DISCIPLINE_UNSUPPORTED', 'Single-discipline events only; use the meet logger for a multi-discipline event');
     const participant = await client.query(
       'SELECT 1 FROM event_participants WHERE event_id = $1 AND athlete_id = $2',
       [eventId, payload.athleteId],
@@ -363,7 +364,7 @@ export async function createPublicLoggerEntry(
        (event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, device_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, NULL)
        RETURNING ${TIMELINE_COLUMNS}`,
-      [eventId, payload.athleteId, DISCIPLINE_100M, payload.entryType, payload.value, payload.unit, false, payload.incidentType, null, actor.id],
+      [eventId, payload.athleteId, actor.discipline, payload.entryType, payload.value, payload.unit, false, payload.incidentType, null, actor.id],
     );
     await recomputeEventResults(client, eventId, actor.type);
     const {

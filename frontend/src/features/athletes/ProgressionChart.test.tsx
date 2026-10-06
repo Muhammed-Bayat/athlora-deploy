@@ -73,6 +73,41 @@ describe('ProgressionChart', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('11.05s');
   });
 
+  it('never plots a DQ, DNS or DNF row on the chart', async () => {
+    const disqualification: ProgressionDetail['entries'][number] = {
+      ...progression.entries[0],
+      event: { ...progression.entries[0].event, id: '33333333-3333-4333-8333-333333333333', title: 'City Sprint DQ', date: '2026-08-18' },
+      result: {
+        ...progression.entries[0].result,
+        eventId: '33333333-3333-4333-8333-333333333333',
+        outcome: 'dq',
+        finalResult: null,
+        unit: null,
+        isPb: false,
+        isSb: false,
+      },
+      effectiveResult: null,
+      effectiveOutcome: 'dq',
+      countsTowardsStatistics: false,
+      runningPb: 11.05,
+      isNewPb: false,
+    };
+    statisticsApi.getAthleteProgression.mockResolvedValue({
+      ...progression,
+      entries: [progression.entries[0], disqualification],
+      pagination: { nextCursor: null, count: 2, total: 2 },
+      summary: { allTimePb: 11.05, totalResults: 2, totalValid: 1 },
+    });
+
+    render(<ProgressionChart athleteId={ATHLETE_ID} athleteName="Ari Runner" />);
+
+    expect(await screen.findByRole('heading', { name: 'All-time 100m progression' })).toBeInTheDocument();
+    expect(screen.getByText('All-time PB: 11.05s · 1 of 2 valid')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '17 Aug 2026: 11.05s, personal best' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /18 Aug 2026/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dq/i })).not.toBeInTheDocument();
+  });
+
   it('uses the shared personal-best chart token', async () => {
     statisticsApi.getAthleteProgression.mockResolvedValue(progression);
 

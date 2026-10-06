@@ -2,12 +2,55 @@ import type { DbExecutor } from '../db/client.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
 
+/** The single definition of a performance that may contribute to a personal or season best:
+ * only results produced by an event that has been completed and that was run as a competition.
+ * Training sessions, cancelled events and events still in progress are never best marks. */
+export const COMPLETED_COMPETITION_FILTER = `e.status = 'completed' AND e.type = 'competition'`;
+
+/** The single definition of a performance that exists at all: everything a cancelled event
+ * produced is gone, but an event that is still running still holds real results. */
+export const NON_CANCELLED_EVENT_FILTER = `e.status <> 'cancelled'`;
+
+/** Every performance relation carries this flag so one row set can serve both questions:
+ * "what has this athlete done?" (keep the row) and "what is their best mark?" (keep the flag). */
+const COUNTS_FOR_BEST = `${COMPLETED_COMPETITION_FILTER} AS counts_for_best`;
+
+/** Legacy event-logger rows (the `results` table). `results` carries no workspace column, so the
+ * row is scoped through the athlete; the guest-fixture branch mirrors the read models in
+ * statistics.ts/comparison.ts. The NOT EXISTS guard keeps a meet event that also wrote legacy
+ * rows from contributing the same performance twice. */
+const LEGACY_INDIVIDUAL_PERFORMANCES = `SELECT a.workspace_id, a.id AS athlete_id, a.name AS athlete_name,
+  d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
+  d.id AS discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
+  e.time AS event_time, e.created_at AS event_created_at,
+  CASE WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN r.manual_override
+    ELSE r.final_result END AS final_result,
+  NULL::uuid AS session_id,
+  ${COUNTS_FOR_BEST}
+  FROM results r
+  JOIN discipline_definitions d ON d.code = r.discipline
+  JOIN events e ON e.id = r.event_id
+  JOIN athletes a ON a.id = r.athlete_id
+  WHERE ${NON_CANCELLED_EVENT_FILTER}
+    AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
+    AND d.default_rules->>'entrantType' = 'individual'
+    AND r.outcome NOT IN ('dq', 'dnf', 'dns')
+    AND COALESCE(NULLIF(r.manual_override, 0), r.final_result) IS NOT NULL
+    AND a.lifecycle_status <> 'archived'
+    AND NOT EXISTS (SELECT 1 FROM discipline_sessions s WHERE s.event_id = e.id)
+    AND (e.workspace_id = a.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw
+      JOIN event_participants ep ON ep.event_id = fw.event_id AND ep.athlete_id = r.athlete_id
+        AND ep.participant_workspace_id = fw.workspace_id
+      WHERE fw.event_id = e.id AND fw.workspace_id = a.workspace_id AND fw.role = 'guest'
+        AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))`;
+
 /** A live relation, not an eventually consistent cache: finalization/reopen changes
  * all statistics visibility in the same commit as results and places. */
 export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_id, a.name AS athlete_name,
   d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
   s.discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
-  e.time AS event_time, e.created_at AS event_created_at, r.final_result, r.session_id
+  e.time AS event_time, e.created_at AS event_created_at, r.final_result, r.session_id,
+  ${COUNTS_FOR_BEST}
   FROM session_results r
   JOIN discipline_sessions s ON s.id = r.session_id
   JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -15,7 +58,7 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_
   JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
   JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
   JOIN events e ON e.id = r.event_id
-  WHERE s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+  WHERE s.result_state = 'final' AND s.status = 'completed' AND ${NON_CANCELLED_EVENT_FILTER}
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
     AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
     AND se.withdrawn_at IS NULL AND r.outcome = 'valid' AND r.final_result IS NOT NULL
@@ -28,7 +71,8 @@ export const FINAL_INDIVIDUAL_PERFORMANCES = `SELECT r.workspace_id, en.athlete_
 export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_id, a.name AS athlete_name,
   d.code, d.unit AS discipline_unit, d.precision, d.direction, d.presentation->>'label' AS label,
   s.discipline_definition_id, e.date AS event_date, e.id AS event_id, e.title AS event_title,
-  e.time AS event_time, e.created_at AS event_created_at, t.value AS final_result, t.session_id
+  e.time AS event_time, e.created_at AS event_created_at, t.value AS final_result, t.session_id,
+  ${COUNTS_FOR_BEST}
   FROM session_timeline_entries t
   JOIN session_relay_selections rs ON rs.entry_id = t.id AND rs.session_id = t.session_id AND rs.entrant_id = t.entrant_id AND rs.event_id = t.event_id
   JOIN relay_members rm ON rm.id = rs.relay_member_id AND rm.relay_id = rs.entrant_id AND rm.event_id = rs.event_id
@@ -38,7 +82,7 @@ export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_
   JOIN meet_entrants en ON en.id = rm.member_id AND en.event_id = rm.event_id AND en.workspace_id = rm.workspace_id
   JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = en.workspace_id
   JOIN events e ON e.id = t.event_id
-  WHERE s.result_state = 'final' AND s.status = 'completed' AND e.status <> 'cancelled'
+  WHERE s.result_state = 'final' AND s.status = 'completed' AND ${NON_CANCELLED_EVENT_FILTER}
     AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'relay'
     AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
     AND se.withdrawn_at IS NULL AND t.deleted_at IS NULL
@@ -47,7 +91,7 @@ export const FINAL_RELAY_LEG_PERFORMANCES = `SELECT en.workspace_id, en.athlete_
     AND (e.workspace_id = en.workspace_id OR EXISTS (SELECT 1 FROM event_fixture_workspaces fw WHERE fw.event_id = e.id
       AND fw.workspace_id = en.workspace_id AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision))`;
 
-export const FINAL_PERFORMANCES = `((${FINAL_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_RELAY_LEG_PERFORMANCES}))`;
+export const FINAL_PERFORMANCES = `((${LEGACY_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_INDIVIDUAL_PERFORMANCES}) UNION ALL (${FINAL_RELAY_LEG_PERFORMANCES}))`;
 
 export interface PriorPerformance { value: number; date: string; }
 
@@ -61,7 +105,9 @@ export async function relayLegHistory(
   const result = await db.query<{ athlete_id: string; final_result: string; event_date: string }>(
     `WITH performances AS (${FINAL_PERFORMANCES})
      SELECT athlete_id, final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
-     WHERE workspace_id = $1 AND code = $2 AND athlete_id = ANY($3::uuid[]) AND session_id <> $4 AND event_date <= $5::date`,
+     WHERE counts_for_best
+       AND workspace_id = $1 AND code = $2 AND athlete_id = ANY($3::uuid[])
+       AND (session_id IS NULL OR session_id <> $4) AND event_date <= $5::date`,
     [params.workspaceId, params.code, [...params.athleteIds], params.excludeSessionId, params.eventDate],
   );
   for (const row of result.rows) {
@@ -80,18 +126,21 @@ export function performanceFlags(value: number, prior: readonly PriorPerformance
 export interface DisciplineAthleteStatistics {
   athleteId: string; athleteName: string; discipline: string; label: string;
   unit: DisciplineDefinition['unit']; direction: DisciplineDefinition['direction']; precision: number;
-  pb: number; sb: number | null; resultCount: number; seasonCount: number; seasonAverage: number | null;
+  pb: number | null; sb: number | null; resultCount: number; seasonCount: number; seasonAverage: number | null;
   seasonTotal: number | null; placing: number | null;
 }
 export async function disciplineAthleteStatistics(db: DbExecutor, workspaceId: string, athleteId: string | null, year: number): Promise<DisciplineAthleteStatistics[]> {
   const result = await db.query<{
     athlete_id: string; athlete_name: string; code: string; label: string; discipline_unit: DisciplineDefinition['unit']; direction: DisciplineDefinition['direction']; precision: number;
-    pb: string; sb: string | null; result_count: string; season_count: string; season_average: string | null; season_total: string | null; placing: string | null;
+    pb: string | null; sb: string | null; result_count: string; season_count: string; season_average: string | null; season_total: string | null; placing: string | null;
   }>(`WITH performances AS (${FINAL_PERFORMANCES}), aggregates AS (
     SELECT athlete_id, athlete_name, code, label, discipline_unit, direction, precision,
-      CASE WHEN direction = 'lower' THEN MIN(final_result) ELSE MAX(final_result) END AS pb,
-      CASE WHEN direction = 'lower' THEN MIN(final_result) FILTER (WHERE EXTRACT(YEAR FROM event_date) = $3)
-        ELSE MAX(final_result) FILTER (WHERE EXTRACT(YEAR FROM event_date) = $3) END AS sb,
+      CASE WHEN direction = 'lower'
+           THEN MIN(final_result) FILTER (WHERE counts_for_best)
+           ELSE MAX(final_result) FILTER (WHERE counts_for_best) END AS pb,
+      CASE WHEN direction = 'lower'
+           THEN MIN(final_result) FILTER (WHERE counts_for_best AND EXTRACT(YEAR FROM event_date) = $3)
+           ELSE MAX(final_result) FILTER (WHERE counts_for_best AND EXTRACT(YEAR FROM event_date) = $3) END AS sb,
       COUNT(*) AS result_count, COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM event_date) = $3) AS season_count,
       AVG(final_result) FILTER (WHERE EXTRACT(YEAR FROM event_date) = $3) AS season_average,
       SUM(final_result) FILTER (WHERE EXTRACT(YEAR FROM event_date) = $3) AS season_total
@@ -101,5 +150,5 @@ export async function disciplineAthleteStatistics(db: DbExecutor, workspaceId: s
   SELECT * FROM ranked WHERE ($2::uuid IS NULL OR athlete_id = $2) ORDER BY code, ranked.placing NULLS LAST, athlete_id`, [workspaceId, athleteId, year]);
   const number = (value: string | null) => value === null ? null : Number(value);
   return result.rows.map(r => ({ athleteId: r.athlete_id, athleteName: r.athlete_name, discipline: r.code, label: r.label, unit: r.discipline_unit, direction: r.direction, precision: r.precision,
-    pb: Number(r.pb), sb: number(r.sb), resultCount: Number(r.result_count), seasonCount: Number(r.season_count), seasonAverage: number(r.season_average), seasonTotal: number(r.season_total), placing: number(r.placing) }));
+    pb: number(r.pb), sb: number(r.sb), resultCount: Number(r.result_count), seasonCount: Number(r.season_count), seasonAverage: number(r.season_average), seasonTotal: number(r.season_total), placing: number(r.placing) }));
 }

@@ -60,7 +60,8 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                e.status = 'completed' AND e.type = 'competition' AS counts_for_best
          FROM results r
          JOIN events e ON e.id = r.event_id
          JOIN athletes a ON a.id = r.athlete_id
@@ -95,7 +96,8 @@ export async function getAthleteStatisticsDetail(
                   WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
                   WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
                   ELSE r.outcome
-                END AS effective_outcome
+                END AS effective_outcome,
+                e.status = 'completed' AND e.type = 'competition' AS counts_for_best
          FROM session_results r
          JOIN discipline_sessions s ON s.id = r.session_id
          JOIN discipline_definitions d ON d.id = s.discipline_definition_id
@@ -129,9 +131,11 @@ export async function getAthleteStatisticsDetail(
               $4::text AS unit,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
+                  AND e.counts_for_best
               ) AS pb,
               MIN(e.effective_result) FILTER (
                 WHERE e.effective_outcome = 'valid'
+                  AND e.counts_for_best
                   AND e.event_date >= $5::date
                   AND e.event_date < $6::date
               ) AS sb,
@@ -201,7 +205,6 @@ export async function getAthleteStatisticsDetail(
          JOIN events e ON e.id = r.event_id
          JOIN athletes a ON a.id = r.athlete_id
          WHERE r.athlete_id = $1
-           AND r.discipline = $3
             AND a.workspace_id = $2
              AND (e.workspace_id = $2 OR EXISTS (
                SELECT 1 FROM event_fixture_workspaces fw
@@ -210,7 +213,7 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = $2 AND fw.role = 'guest'
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
               ))
-           AND e.date >= $5::date AND e.date < $6::date
+           AND e.date >= $4::date AND e.date < $5::date
          UNION ALL
          SELECT r.event_id, en.athlete_id, d.code, r.final_result,
                 CASE WHEN r.final_result IS NULL THEN NULL ELSE r.unit END AS unit,
@@ -246,7 +249,6 @@ export async function getAthleteStatisticsDetail(
          JOIN athletes a ON a.id = en.athlete_id AND a.workspace_id = r.workspace_id
          JOIN events e ON e.id = r.event_id
          WHERE en.athlete_id = $1
-           AND d.code = $3
             AND r.workspace_id = $2
              AND s.result_state = 'final' AND s.status = 'completed'
              AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
@@ -256,17 +258,17 @@ export async function getAthleteStatisticsDetail(
                WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
                  AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
              ))
-           AND e.date >= $5::date AND e.date < $6::date
+           AND e.date >= $4::date AND e.date < $5::date
         ), selected AS (
          (SELECT * FROM history
           WHERE event_type = 'competition'
           ORDER BY event_date DESC, event_time DESC NULLS LAST, event_created_at DESC, event_id DESC
-          LIMIT $4)
+          LIMIT $3)
          UNION
          (SELECT * FROM history
           WHERE event_type = 'training'
           ORDER BY event_date DESC, event_time DESC NULLS LAST, event_created_at DESC, event_id DESC
-          LIMIT $4)
+          LIMIT $3)
          UNION
          (SELECT * FROM history
           WHERE event_status <> 'cancelled'
@@ -281,7 +283,7 @@ export async function getAthleteStatisticsDetail(
                 event_time DESC NULLS LAST,
                 event_created_at DESC,
                 event_id DESC`,
-        [athlete.id, workspaceId, DISCIPLINE_100M, RECENT_RESULTS_PER_TYPE, yearStart, nextYearStart],
+        [athlete.id, workspaceId, RECENT_RESULTS_PER_TYPE, yearStart, nextYearStart],
     );
     const history = historyResult.rows.map(mapAthleteResultHistoryRow);
     const statistics = mapAthleteStatisticsRow(statisticsRow);

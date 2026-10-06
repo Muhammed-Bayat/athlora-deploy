@@ -56,7 +56,7 @@ function progressionRow(overrides: Partial<ProgressionEntryRow> = {}): Progressi
     event_time: '10:00:00',
     event_location_name: 'Central Track',
     event_status: 'completed',
-    effective_result: '11.20',
+    counts_for_best: true, effective_result: '11.20',
     effective_outcome: 'valid',
     counts_towards_statistics: true,
     running_pb: null,
@@ -130,22 +130,22 @@ describe('getTwoAthleteComparison', () => {
 
     const a1Results = [
       queryRow(
-        { event_id: EVENT_1_ID, athlete_id: ATHLETE_1_ID, event_date: '2026-01-01', effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
+        { event_id: EVENT_1_ID, athlete_id: ATHLETE_1_ID, event_date: '2026-01-01', counts_for_best: true, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
         { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
-        { event_id: 'aaaa1111-1111-4111-8111-111111111111', athlete_id: ATHLETE_1_ID, event_date: '2026-02-01', effective_result: '11.30', final_result: '11.30', running_pb: '11.50', is_new_pb: true },
+        { event_id: 'aaaa1111-1111-4111-8111-111111111111', athlete_id: ATHLETE_1_ID, event_date: '2026-02-01', counts_for_best: true, effective_result: '11.30', final_result: '11.30', running_pb: '11.50', is_new_pb: true },
         { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
-        { event_id: 'bbbb2222-2222-4222-8222-222222222222', athlete_id: ATHLETE_1_ID, event_date: '2026-03-01', effective_result: '11.20', final_result: '11.20', running_pb: '11.30', is_new_pb: true },
+        { event_id: 'bbbb2222-2222-4222-8222-222222222222', athlete_id: ATHLETE_1_ID, event_date: '2026-03-01', counts_for_best: true, effective_result: '11.20', final_result: '11.20', running_pb: '11.30', is_new_pb: true },
         { summary_pb: '11.20', summary_total: 3, summary_valid: 3 },
       ),
     ];
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-01-15', effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-01-15', counts_for_best: true, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: '11.80', summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -197,7 +197,7 @@ describe('getTwoAthleteComparison', () => {
         return Promise.resolve({ rows: [{ code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
       }
       if (sql.includes('SELECT r.discipline, definitions.presentation')) {
-        return Promise.resolve({ rows: [{ discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-01-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_1_ID, result: '6.10' }, { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-02-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_2_ID, result: '6.25' }] });
+        return Promise.resolve({ rows: [{ discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-01-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_1_ID, result: '6.10', counts_for_best: true }, { discipline: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher', event_date: '2026-02-01', event_time: null, event_created_at: TIMESTAMP, event_id: EVENT_2_ID, result: '6.25', counts_for_best: true }] });
       }
       if (sql.includes("SELECT code, presentation->>'label' AS label, unit, precision, direction")) {
         return Promise.resolve({ rows: [{ code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' }, { code: 'long_jump', label: 'Long Jump', unit: 'metres', precision: 2, direction: 'higher' }] });
@@ -243,22 +243,22 @@ describe('getTwoAthleteComparison', () => {
 
     const a1Results = [
       queryRow(
-        { event_id: EVENT_1_ID, effective_result: '11.20', final_result: '11.20', outcome: 'valid', running_pb: null, is_new_pb: true },
+        { event_id: EVENT_1_ID, counts_for_best: true, effective_result: '11.20', final_result: '11.20', outcome: 'valid', running_pb: null, is_new_pb: true },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 1 },
       ),
       queryRow(
-        { event_id: 'aaaa1111-1111-4111-8111-111111111111', effective_result: null, final_result: null, unit: null, outcome: 'dq', effective_outcome: 'dq', running_pb: null, is_new_pb: false, counts_towards_statistics: false, placing: null, is_pb: false, is_sb: false },
+        { event_id: 'aaaa1111-1111-4111-8111-111111111111', counts_for_best: true, effective_result: null, final_result: null, unit: null, outcome: 'dq', effective_outcome: 'dq', running_pb: null, is_new_pb: false, counts_towards_statistics: false, placing: null, is_pb: false, is_sb: false },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 1 },
       ),
       queryRow(
-        { event_id: 'bbbb2222-2222-4222-8222-222222222222', effective_result: null, final_result: null, unit: null, outcome: 'dns', effective_outcome: 'dns', running_pb: null, is_new_pb: false, counts_towards_statistics: false, placing: null, is_pb: false, is_sb: false },
+        { event_id: 'bbbb2222-2222-4222-8222-222222222222', counts_for_best: true, effective_result: null, final_result: null, unit: null, outcome: 'dns', effective_outcome: 'dns', running_pb: null, is_new_pb: false, counts_towards_statistics: false, placing: null, is_pb: false, is_sb: false },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 1 },
       ),
     ];
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, counts_for_best: true, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -286,7 +286,7 @@ describe('getTwoAthleteComparison', () => {
       queryRow(
         {
           event_id: EVENT_1_ID,
-          effective_result: '11.05',
+          counts_for_best: true, effective_result: '11.05',
           final_result: '11.50',
           manual_override: '11.05',
           override_reason: 'timing correction',
@@ -301,7 +301,7 @@ describe('getTwoAthleteComparison', () => {
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, counts_for_best: true, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -326,14 +326,14 @@ describe('getTwoAthleteComparison', () => {
 
     const a1Results = [
       queryRow(
-        { event_id: EVENT_1_ID, event_date: '2020-01-01', effective_result: '12.00', final_result: '12.00', running_pb: null, is_new_pb: true },
+        { event_id: EVENT_1_ID, event_date: '2020-01-01', counts_for_best: true, effective_result: '12.00', final_result: '12.00', running_pb: null, is_new_pb: true },
         { summary_pb: 12.00, summary_total: 1, summary_valid: 1 },
       ),
     ];
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-06-15', effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-06-15', counts_for_best: true, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: 11.50, summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -365,14 +365,14 @@ describe('getTwoAthleteComparison', () => {
 
     const a1Results = [
       queryRow(
-        { event_id: EVENT_1_ID, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
+        { event_id: EVENT_1_ID, counts_for_best: true, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
         { summary_pb: 11.50, summary_total: 1, summary_valid: 1 },
       ),
     ];
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, effective_result: '11.30', final_result: '11.30', running_pb: null, is_new_pb: true, athlete_name: 'Active Athlete' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, counts_for_best: true, effective_result: '11.30', final_result: '11.30', running_pb: null, is_new_pb: true, athlete_name: 'Active Athlete' },
         { summary_pb: 11.30, summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -397,22 +397,22 @@ describe('getTwoAthleteComparison', () => {
 
     const a1Results = [
       queryRow(
-        { event_id: EVENT_1_ID, event_date: '2026-06-01', effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
+        { event_id: EVENT_1_ID, event_date: '2026-06-01', counts_for_best: true, effective_result: '11.50', final_result: '11.50', running_pb: null, is_new_pb: true },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
-        { event_id: 'aaaa1111-1111-4111-8111-111111111111', event_date: '2026-07-01', effective_result: '11.30', final_result: '11.30', running_pb: '11.50', is_new_pb: true },
+        { event_id: 'aaaa1111-1111-4111-8111-111111111111', event_date: '2026-07-01', counts_for_best: true, effective_result: '11.30', final_result: '11.30', running_pb: '11.50', is_new_pb: true },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
       ),
       queryRow(
-        { event_id: 'bbbb2222-2222-4222-8222-222222222222', event_date: '2026-08-01', effective_result: '11.20', final_result: '11.20', running_pb: '11.30', is_new_pb: true },
+        { event_id: 'bbbb2222-2222-4222-8222-222222222222', event_date: '2026-08-01', counts_for_best: true, effective_result: '11.20', final_result: '11.20', running_pb: '11.30', is_new_pb: true },
         { summary_pb: 11.20, summary_total: 3, summary_valid: 3 },
       ),
     ];
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-06-15', effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, event_date: '2026-06-15', counts_for_best: true, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
       ),
     ];
@@ -442,7 +442,7 @@ describe('getTwoAthleteComparison', () => {
       queryRow(
         {
           event_id: EVENT_1_ID,
-          effective_result: null,
+          counts_for_best: true, effective_result: null,
           final_result: null,
           unit: null,
           outcome: 'dq',
@@ -460,7 +460,7 @@ describe('getTwoAthleteComparison', () => {
 
     const a2Results = [
       queryRow(
-        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
+        { event_id: EVENT_2_ID, athlete_id: ATHLETE_2_ID, counts_for_best: true, effective_result: '11.80', final_result: '11.80', running_pb: null, is_new_pb: true, athlete_name: 'Athlete Two' },
         { summary_pb: 11.80, summary_total: 1, summary_valid: 1 },
       ),
     ];

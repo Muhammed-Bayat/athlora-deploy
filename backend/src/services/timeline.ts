@@ -55,6 +55,7 @@ interface HistoricalResultRow extends ScoringRow {
   event_id: string;
   event_date: Date | string;
   event_status: EventStatus;
+  event_type: EventType;
 }
 
 function notFound(): ApiError {
@@ -156,13 +157,14 @@ async function recomputeBestFlags(
   athleteId: string,
 ): Promise<void> {
   const result = await client.query<HistoricalResultRow>(
-    `SELECT r.event_id,
+     `SELECT r.event_id,
             r.athlete_id,
             r.outcome,
             r.final_result,
             r.manual_override,
             e.date AS event_date,
-            e.status AS event_status
+            e.status AS event_status,
+            e.type AS event_type
      FROM results r
      JOIN events e ON e.id = r.event_id
      WHERE r.athlete_id = $1 AND r.discipline = $2
@@ -173,16 +175,19 @@ async function recomputeBestFlags(
   for (const row of result.rows) {
     const effective = effectiveScoring(row);
     const date = eventDate(row.event_date);
-    const flags = row.event_status === 'cancelled'
-      ? { isPb: false, isSb: false }
-      : checkPbSb(effective.value, effective.outcome, date, history);
+    // A best mark is only ever set by a completed competition; training, cancelled and
+    // still-running events are never a personal or season best.
+    const countsAsBest = row.event_status === 'completed' && row.event_type === 'competition';
+    const flags = countsAsBest
+      ? checkPbSb(effective.value, effective.outcome, date, history)
+      : { isPb: false, isSb: false };
     await client.query(
       `UPDATE results
        SET is_pb = $1, is_sb = $2, updated_at = now()
        WHERE event_id = $3 AND athlete_id = $4 AND discipline = $5`,
       [flags.isPb, flags.isSb, row.event_id, athleteId, DISCIPLINE_100M],
     );
-    if (row.event_status !== 'cancelled' && effective.outcome === 'valid' && effective.value !== null) {
+    if (countsAsBest && effective.outcome === 'valid' && effective.value !== null) {
       history.push({ value: effective.value, date, outcome: effective.outcome });
     }
   }

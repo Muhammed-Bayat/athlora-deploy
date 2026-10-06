@@ -3,6 +3,7 @@ import { ApiError } from '../middleware/errors.js';
 import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear } from './seasons.js';
+import { COMPLETED_COMPETITION_FILTER } from './disciplineStatistics.js';
 import { SUPPORTED_DISCIPLINE_CODES, isSupportedDiscipline } from './disciplineCatalog.js';
 
 export interface PublicStatisticsReportQuery {
@@ -61,7 +62,7 @@ export async function getPublicStatisticsReport(
   validateQuery(query);
   const season = parseSeasonYear(query.season);
   const legacyConditions = [
-    "e.status = 'completed'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "r.outcome = 'valid'",
     "a.lifecycle_status <> 'archived'",
     'c.public_results_enabled = true',
@@ -71,7 +72,7 @@ export async function getPublicStatisticsReport(
   const sessionConditions = [
     "s.result_state = 'final'",
     "s.status = 'completed'",
-    "e.status <> 'cancelled'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "en.kind = 'athlete'",
     "d.default_rules->>'entrantType' = 'individual'",
     'se.withdrawn_at IS NULL',
@@ -85,7 +86,7 @@ export async function getPublicStatisticsReport(
   const relayConditions = [
     "s.result_state = 'final'",
     "s.status = 'completed'",
-    "e.status <> 'cancelled'",
+    `${COMPLETED_COMPETITION_FILTER}`,
     "en.kind = 'relay'",
     "d.default_rules->>'entrantType' = 'relay'",
     'se.withdrawn_at IS NULL',

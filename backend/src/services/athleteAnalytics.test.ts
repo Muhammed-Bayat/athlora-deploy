@@ -35,7 +35,7 @@ function result(
     sourceResultId,
     athleteId: athlete,
     discipline,
-    event: { id: `event-${date}-${value}`, title: 'Meet', date, time: null, type: 'competition' },
+    event: { id: `event-${date}-${value}`, title: 'Meet', date, time: null, type: 'competition', status: 'completed' },
     value,
     place: null,
   };
@@ -163,12 +163,12 @@ describe('athlete discipline analytics', () => {
           {
             source: 'legacy_result', source_result_id: `legacy-${athleteId}`, athlete_id: athleteId,
             ...timeDiscipline, precision: '2', event_id: 'legacy-event', event_title: 'Legacy meet',
-            event_date: '2025-12-01', event_time: null, event_type: 'competition', result_value: '11.4', placing: 2,
+            event_date: '2025-12-01', event_time: null, event_type: 'competition', event_status: 'completed', result_value: '11.4', placing: 2,
           },
           {
             source: 'session_result', source_result_id: 'session-result-id', athlete_id: athleteId,
             ...timeDiscipline, precision: '2', event_id: 'generic-event', event_title: 'Finalized meet',
-            event_date: '2026-03-01', event_time: null, event_type: 'competition', result_value: '11.1', placing: 1,
+            event_date: '2026-03-01', event_time: null, event_type: 'competition', event_status: 'completed', result_value: '11.1', placing: 1,
           },
         ],
       });
@@ -209,12 +209,12 @@ describe('athlete discipline analytics', () => {
           {
             source: 'legacy_result', source_result_id: `legacy-${athleteId}`, athlete_id: athleteId,
             ...timeDiscipline, precision: '2', event_id: 'legacy-event', event_title: 'Legacy meet',
-            event_date: '2025-12-01', event_time: null, event_type: 'competition', result_value: '11.4', placing: 2,
+            event_date: '2025-12-01', event_time: null, event_type: 'competition', event_status: 'completed', result_value: '11.4', placing: 2,
           },
           {
             source: 'session_result', source_result_id: 'session-result-id', athlete_id: athleteId,
             ...timeDiscipline, precision: '2', event_id: 'generic-event', event_title: 'Finalized meet',
-            event_date: '2026-03-01', event_time: null, event_type: 'competition', result_value: '11.1', placing: 1,
+            event_date: '2026-03-01', event_time: null, event_type: 'competition', event_status: 'completed', result_value: '11.1', placing: 1,
           },
         ],
       });

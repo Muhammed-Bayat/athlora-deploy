@@ -63,6 +63,9 @@ describeDB('multi-discipline migration and domain integration', () => {
     await pool.end();
   });
 
+  async function setEventStatus(status: 'scheduled' | 'in_progress' | 'completed') {
+    await pool.query('UPDATE events SET status = $1 WHERE id = $2', [status, eventId]);
+  }
   async function migrate() {
     await transaction((db) => applyMigrations(db, migrations));
     await pool.query(
@@ -308,6 +311,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(corrected.effectiveResult).toBeNull();
     await selectSessionResultEntry(host, eventId, target, { entryId: entries[1].id, expectedVersion: await resultVersion(), relayMemberId: memberIds[1] }, transaction);
     await changeSessionState(host, eventId, session100.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    await setEventStatus('completed');
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026)).toMatchObject([{ discipline: '4x100m', pb: 13.42, sb: 13.42, resultCount: 1, seasonCount: 1 }]);
     await expect(updateEntrant(host, eventId, relay.id, { memberIds: [guests[0].id, athlete.id, guests[1].id, guests[2].id] }, transaction)).rejects.toMatchObject({ code: 'ROSTER_LOCKED' });
     await pool.query("UPDATE events SET status = 'scheduled' WHERE id = $1", [eventId]);
@@ -378,6 +382,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     const relay = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: [athlete.id, ...guests.map((g) => g.id)] }, transaction);
     const memberIds = (await pool.query<{ id: string }>('SELECT id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [relay.id])).rows.map((row) => row.id);
     const runFinal = async (label: string, athleteSplit: number, teamIncident = false) => {
+      await setEventStatus('in_progress');
       const s = await session('4x100m', label);
       const target = { disciplineSessionId: s.id, entrantId: relay.id };
       await registerEntrant(host, eventId, target, transaction);
@@ -393,6 +398,7 @@ describeDB('multi-discipline migration and domain integration', () => {
         await selectSessionResultEntry(host, eventId, target, { entryId: entries[index].id, expectedVersion: await resultVersion(), relayMemberId }, transaction);
       }
       await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+      await setEventStatus('completed');
       return (await listSessionResults(host, eventId, s.id, pool)).find((row) => row.entrantId === relay.id)!;
     };
 
@@ -451,6 +457,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await migrate();
     const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
     await finalRelayLeg([12.5, 13.98, 14.11, 13.75], '4x100 Final');
+    await setEventStatus('completed');
 
     const { getDashboardSummary } = await import('./dashboard.js');
     const dashboard = await getDashboardSummary(host.workspaceId, '2026-09-01', transaction, allSeasons);
@@ -767,6 +774,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toEqual([]);
     const final = await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
     expect(final.resultState).toBe('final');
+    await setEventStatus('completed');
     expect((await listSessionResults(host, eventId, s.id, pool)).find(r => r.entrantId === athlete.id)).toMatchObject({ placing: 2, finalPlace: 2, isPb: true, isSb: true, countsTowardsStatistics: true });
     expect(await disciplineAthleteStatistics(pool, host.workspaceId, null, 2026)).toMatchObject([{ athleteId, pb: 10.9, sb: 10.9, seasonCount: 1, seasonAverage: 10.9, resultCount: 1 }]);
     expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2025))[0]).toMatchObject({ pb: 10.9, sb: null, seasonCount: 0 });
@@ -842,6 +850,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     if (d.defaultRules.aggregation !== 'vertical') await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
     else await expect(selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction)).rejects.toMatchObject({ code: 'DERIVED_RESULT_ONLY' });
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    await setEventStatus('completed');
     expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ discipline: code, direction: d.direction, pb: value, sb: value });
   });
 
@@ -858,20 +867,25 @@ describeDB('multi-discipline migration and domain integration', () => {
     await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
     const { getDisciplineProgression } = await import('./disciplineProgression.js');
-    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+    // The progression chart waits for the meet itself to be completed.
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(0);
 
     // A revision advance used to leave the host row's accepted_revision behind,
     // silently hiding host-club results from statistics.
     await pool.query("UPDATE event_fixture_workspaces SET accepted_revision = 99 WHERE event_id = $1 AND role = 'host'", [eventId]);
-    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ pb: 11.25, sb: 11.25 });
-    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ resultCount: 1, pb: null, sb: null });
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(0);
 
     const unfinished = await createSession(host, eventId, { disciplineDefinitionId: d.id, label: 'Still running' }, transaction);
     await registerEntrant(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, transaction);
     await open(unfinished.id);
     const pending = await createSessionEntry(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, timed, transaction);
     await selectSessionResultEntry(host, eventId, { disciplineSessionId: unfinished.id, entrantId: en.id }, { entryId: pending.id, expectedVersion: 1 }, transaction);
+
+    // Only the finalised session plots once the meet is over; the pending one never does.
+    await setEventStatus('completed');
     expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, d.id, allSeasons)).summary.resultCount).toBe(1);
+    expect((await disciplineAthleteStatistics(pool, host.workspaceId, athleteId, 2026))[0]).toMatchObject({ pb: 11.25, sb: 11.25 });
   });
 
   it('propagates finalized 100m session results into every comparison and statistics surface', async () => {
@@ -898,6 +912,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     await selectSessionResultEntry(host, eventId, firstTarget, { entryId: firstEntry.id, expectedVersion: 1 }, transaction);
     await selectSessionResultEntry(host, eventId, secondTarget, { entryId: secondEntry.id, expectedVersion: 1 }, transaction);
     await changeSessionState(host, eventId, s.id, { status: 'completed', expectedVersion: 2 }, transaction);
+    await setEventStatus('completed');
 
     const { getMultiAthleteComparison, getCrossClubMultiAthleteComparison } = await import('./comparison.js');
     const comparison = await getMultiAthleteComparison(host.workspaceId, [athleteId, secondAthleteId], transaction, allSeasons);
@@ -938,7 +953,8 @@ describeDB('multi-discipline migration and domain integration', () => {
     const { getDashboardSummary } = await import('./dashboard.js');
     const dashboard = await getDashboardSummary(host.workspaceId, '2026-09-01', transaction, allSeasons);
     expect(dashboard.seasonPbs).toBe(2);
-    expect(dashboard.rosterSnapshot.find((athlete) => athlete.athleteId === athleteId)).toMatchObject({ discipline: '100m', pb: 11.25 });
+    const rosterEntry = dashboard.rosterSnapshot.find((row) => row.athleteId === athleteId)!;
+    expect(rosterEntry.disciplines.find((row) => row.discipline === '100m')).toMatchObject({ discipline: '100m', pb: 11.25 });
     expect(dashboard.recentResults.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
     expect(dashboard.recentPbs.find((entry) => entry.athlete.id === athleteId)).toMatchObject({ effectiveResult: 11.25 });
   });
@@ -954,33 +970,80 @@ describeDB('multi-discipline migration and domain integration', () => {
     );
 
     const sprintSession = await session('100m', 'Final');
-    const sprintEntrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
-    const sprintTarget = { disciplineSessionId: sprintSession.id, entrantId: sprintEntrant.id };
+    const longJump = await definition('long_jump');
+    await pool.query(
+      `INSERT INTO results (event_id, athlete_id, discipline, outcome, final_result)
+       VALUES ($1, $2, 'long_jump', 'valid', 5.4)`,
+      [eventId, athleteId],
+    );
+    const longJumpSession = await session('long_jump', 'Long jump final');
+    const entrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
+    const sprintTarget = { disciplineSessionId: sprintSession.id, entrantId: entrant.id };
+    const longJumpTarget = { disciplineSessionId: longJumpSession.id, entrantId: entrant.id };
     await registerEntrant(host, eventId, sprintTarget, transaction);
+    await registerEntrant(host, eventId, longJumpTarget, transaction);
+
     await open(sprintSession.id);
     const sprintEntry = await createSessionEntry(host, eventId, sprintTarget, timed, transaction);
     await selectSessionResultEntry(host, eventId, sprintTarget, { entryId: sprintEntry.id, expectedVersion: 1 }, transaction);
     await changeSessionState(host, eventId, sprintSession.id, { status: 'completed', expectedVersion: 2 }, transaction);
 
     const { getDisciplineProgression } = await import('./disciplineProgression.js');
-    const progression = await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons);
-    expect(progression.summary).toEqual({ personalBest: 11.25, resultCount: 2 });
-    expect(progression.entries.map((entry) => entry.value).sort()).toEqual([11.25, 11.5]);
+    // Nothing plots while the meet itself is still running.
+    const running = await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons);
+    expect(running.summary).toEqual({ personalBest: null, resultCount: 0 });
+    expect(running.entries).toEqual([]);
 
-    const longJump = await definition('long_jump');
-    const longJumpSession = await session('long_jump', 'Long jump final');
-    const longJumpEntrant = await createEntrant(host, eventId, { kind: 'athlete', athleteId }, transaction);
-    const longJumpTarget = { disciplineSessionId: longJumpSession.id, entrantId: longJumpEntrant.id };
-    await registerEntrant(host, eventId, longJumpTarget, transaction);
     await open(longJumpSession.id);
     const longJumpEntry = await createSessionEntry(host, eventId, longJumpTarget, { ...timed, value: 5.5, unit: 'metres' }, transaction);
     await selectSessionResultEntry(host, eventId, longJumpTarget, { entryId: longJumpEntry.id, expectedVersion: 1 }, transaction);
     await changeSessionState(host, eventId, longJumpSession.id, { status: 'completed', expectedVersion: 2 }, transaction);
 
     expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).toMatchObject({
-      entries: [{ value: 5.5 }],
-      summary: { personalBest: 5.5, resultCount: 1 },
+      entries: [],
+      summary: { personalBest: null, resultCount: 0 },
     });
+
+    // Completing the meet makes every already-finalised session eligible for the chart.
+    await setEventStatus('completed');
+    expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons)).toMatchObject({
+      summary: { personalBest: 11.25, resultCount: 2 },
+    });
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, sprint.id, allSeasons)).entries.map((entry) => entry.value).sort()).toEqual([11.25, 11.5]);
+    expect(await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).toMatchObject({
+      summary: { personalBest: 5.5, resultCount: 2 },
+    });
+    expect((await getDisciplineProgression(pool, host.workspaceId, athleteId, longJump.id, allSeasons)).entries.map((entry) => entry.value).sort()).toEqual([5.4, 5.5]);
+  });
+
+  it('keeps non-100m discipline rows in the athlete performance log', async () => {
+    await migrate();
+    const allSeasons = { selected: 'all' as const, startDate: null, endDate: null };
+    await pool.query(
+      `INSERT INTO results (event_id, athlete_id, discipline, outcome, final_result, unit)
+       VALUES ($1, $2, 'long_jump', 'valid', 5.4, 'metres')`,
+      [eventId, athleteId],
+    );
+
+    const { getAthleteStatisticsDetail } = await import('./statistics.js');
+    const statistics = await getAthleteStatisticsDetail(
+      host.workspaceId,
+      athleteId,
+      undefined,
+      transaction,
+      allSeasons,
+    );
+
+    expect(statistics.recentResults.competitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: expect.objectContaining({ discipline: 'long_jump' }),
+          result: expect.objectContaining({ discipline: 'long_jump', unit: 'metres' }),
+          effectiveResult: 5.4,
+          effectiveOutcome: 'valid',
+        }),
+      ]),
+    );
   });
 
   it('blocks starting an event while any host or guest athlete is pending or maybe', async () => {

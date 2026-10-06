@@ -23,7 +23,7 @@ import { isCanonicalUuid } from '../validation/primitives.js';
 import { ApiError } from '../middleware/errors.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { SUPPORTED_DISCIPLINE_SQL_LIST } from './disciplineCatalog.js';
-import { FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
+import { COMPLETED_COMPETITION_FILTER, FINAL_RELAY_LEG_PERFORMANCES } from './disciplineStatistics.js';
 
 const LATEST_ENTRIES_LIMIT = 10;
 const RECENT_RESULTS_LIMIT = 10;
@@ -136,7 +136,10 @@ async function listRecentResults(
           AND e.date >= $4::date AND e.date < $5::date
      ), windowed AS (
        SELECT history.*,
-              MIN(effective_result) FILTER (WHERE effective_outcome = 'valid')
+              MIN(effective_result) FILTER (
+              WHERE effective_outcome = 'valid'
+                AND event_type = 'competition' AND event_status = 'completed'
+            )
                 OVER (PARTITION BY athlete_id
                       ORDER BY event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC
                       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS running_pb
@@ -144,13 +147,16 @@ async function listRecentResults(
      )
      SELECT windowed.*,
             CASE WHEN result_source = 'legacy' THEN stored_is_pb
-                 ELSE effective_outcome = 'valid' AND (running_pb IS NULL OR effective_result < running_pb)
+                 ELSE effective_outcome = 'valid'
+                      AND event_type = 'competition' AND event_status = 'completed'
+                      AND (running_pb IS NULL OR effective_result < running_pb)
             END AS is_pb,
             (effective_outcome = 'valid') AS counts_towards_statistics
      FROM windowed
-     ${onlyPbs ? `WHERE (result_source = 'legacy' AND stored_is_pb)
-                OR (result_source = 'session' AND effective_outcome = 'valid'
-                    AND (running_pb IS NULL OR effective_result < running_pb))` : ''}
+     ${onlyPbs ? `WHERE ((result_source = 'legacy' AND stored_is_pb)
+                   OR (result_source = 'session' AND effective_outcome = 'valid'
+                       AND (running_pb IS NULL OR effective_result < running_pb)))
+                AND event_type = 'competition' AND event_status = 'completed'` : ''}
      ORDER BY event_date DESC,
               event_time DESC NULLS LAST,
               event_created_at DESC,
@@ -198,6 +204,7 @@ export async function getDashboardSummary(
            WITH history AS (
              SELECT r.athlete_id, r.is_pb AS stored_is_pb, 'legacy' AS result_source,
                     e.date AS event_date, e.time AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+                    e.type AS event_type, e.status AS event_status,
                     CASE
                       WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
                       WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
@@ -225,6 +232,7 @@ export async function getDashboardSummary(
              UNION ALL
              SELECT en.athlete_id, NULL::boolean, 'session' AS result_source,
                     e.date AS event_date, e.time AS event_time, e.created_at AS event_created_at, e.id AS event_id,
+                    e.type AS event_type, e.status AS event_status,
                     CASE
                       WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
                       WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
@@ -256,7 +264,10 @@ export async function getDashboardSummary(
                  AND e.status <> 'cancelled'
            ), windowed AS (
              SELECT history.*,
-                    MIN(effective_result) FILTER (WHERE effective_outcome = 'valid')
+                    MIN(effective_result) FILTER (
+              WHERE effective_outcome = 'valid'
+                AND event_type = 'competition' AND event_status = 'completed'
+            )
                       OVER (PARTITION BY athlete_id
                             ORDER BY event_date ASC, event_time ASC NULLS LAST, event_created_at ASC, event_id ASC
                             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS running_pb
@@ -266,6 +277,7 @@ export async function getDashboardSummary(
            WHERE ((result_source = 'legacy' AND stored_is_pb)
                   OR (result_source = 'session' AND effective_outcome = 'valid'
                       AND (running_pb IS NULL OR effective_result < running_pb)))
+             AND event_type = 'competition' AND event_status = 'completed'
              AND event_date >= $3::date
              AND event_date < $4::date
          ) season_pbs) AS season_pbs`,
@@ -353,67 +365,71 @@ export async function getDashboardSummary(
         LEFT JOIN athlete_preferred_disciplines preferences ON preferences.athlete_id = a.id
         LEFT JOIN discipline_definitions d ON d.id = preferences.discipline_definition_id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})
        LEFT JOIN LATERAL (
-         SELECT MIN(result_value) FILTER (WHERE outcome_value = 'valid') AS pb FROM (
+         SELECT CASE WHEN d.direction = 'lower'
+                     THEN MIN(result_value) FILTER (WHERE outcome_value = 'valid')
+                     ELSE MAX(result_value) FILTER (WHERE outcome_value = 'valid') END AS pb FROM (
            SELECT CASE
-                    WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
-                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
-                      THEN r.manual_override
-                    ELSE r.final_result
-                  END AS result_value,
-                  CASE
-                    WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
-                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
-                    ELSE r.outcome
-                  END AS outcome_value
-           FROM results r
-           JOIN events e ON e.id = r.event_id
-           WHERE r.athlete_id = a.id
-              AND r.discipline = d.code
-               AND (e.workspace_id = $1 OR EXISTS (
-                 SELECT 1 FROM event_fixture_workspaces fw
-                 JOIN event_participants ep ON ep.event_id = fw.event_id
-                   AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
-                 WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
-                   AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-               ))
-             AND e.status <> 'cancelled'
-           UNION ALL
-           SELECT CASE
-                    WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
-                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
-                      THEN r.manual_override
-                    ELSE r.final_result
-                  END AS result_value,
-                  CASE
-                    WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
-                    WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
-                    ELSE r.outcome
-                  END AS outcome_value
-           FROM session_results r
-           JOIN discipline_sessions s ON s.id = r.session_id
-            JOIN discipline_definitions session_definition ON session_definition.id = s.discipline_definition_id
+                     WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                     WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+                       THEN r.manual_override
+                     ELSE r.final_result
+                   END AS result_value,
+                   CASE
+                     WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                     WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                     ELSE r.outcome
+                   END AS outcome_value
+            FROM results r
+            JOIN events e ON e.id = r.event_id
+            WHERE r.athlete_id = a.id
+               AND r.discipline = d.code
+                AND (e.workspace_id = $1 OR EXISTS (
+                  SELECT 1 FROM event_fixture_workspaces fw
+                  JOIN event_participants ep ON ep.event_id = fw.event_id
+                    AND ep.athlete_id = r.athlete_id AND ep.participant_workspace_id = fw.workspace_id
+                  WHERE fw.event_id = e.id AND fw.workspace_id = $1 AND fw.role = 'guest'
+                    AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+                ))
+              AND ${COMPLETED_COMPETITION_FILTER}
+              AND NOT EXISTS (SELECT 1 FROM discipline_sessions s WHERE s.event_id = e.id)
+            UNION ALL
+            SELECT CASE
+                     WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN NULL
+                     WHEN r.manual_override IS NOT NULL AND r.manual_override > 0
+                       THEN r.manual_override
+                     ELSE r.final_result
+                   END AS result_value,
+                   CASE
+                     WHEN r.outcome IN ('dq', 'dnf', 'dns') THEN r.outcome
+                     WHEN r.manual_override IS NOT NULL AND r.manual_override > 0 THEN 'valid'
+                     ELSE r.outcome
+                   END AS outcome_value
+            FROM session_results r
+            JOIN discipline_sessions s ON s.id = r.session_id
+             JOIN discipline_definitions session_definition ON session_definition.id = s.discipline_definition_id
            JOIN session_entrants se ON se.session_id = r.session_id AND se.entrant_id = r.entrant_id
            JOIN meet_entrants en ON en.id = r.entrant_id AND en.workspace_id = r.workspace_id
            JOIN events e ON e.id = r.event_id
-           WHERE en.athlete_id = a.id
-              AND session_definition.code = d.code
-               AND r.workspace_id = $1
-               AND s.result_state = 'final' AND s.status = 'completed'
-               AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
-               AND se.withdrawn_at IS NULL
-               AND (e.workspace_id = r.workspace_id OR EXISTS (
-                 SELECT 1 FROM event_fixture_workspaces fw
-                 WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
-                   AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
-               ))
-             AND e.status <> 'cancelled'
-           UNION ALL
-           SELECT legs.final_result AS result_value, 'valid' AS outcome_value
-           FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
-           WHERE legs.workspace_id = $1
-             AND legs.athlete_id = a.id
-             AND legs.code = d.code
-         ) merged
+            WHERE en.athlete_id = a.id
+               AND session_definition.code = d.code
+                AND r.workspace_id = $1
+                AND s.result_state = 'final' AND s.status = 'completed'
+                AND en.kind = 'athlete' AND d.default_rules->>'entrantType' = 'individual'
+                AND se.withdrawn_at IS NULL
+                AND (e.workspace_id = r.workspace_id OR EXISTS (
+                  SELECT 1 FROM event_fixture_workspaces fw
+                  WHERE fw.event_id = e.id AND fw.workspace_id = r.workspace_id
+                    AND fw.status = 'accepted' AND fw.accepted_revision = e.fixture_revision
+                ))
+              AND ${COMPLETED_COMPETITION_FILTER}
+            UNION ALL
+            SELECT legs.final_result AS result_value, 'valid' AS outcome_value
+            FROM (${FINAL_RELAY_LEG_PERFORMANCES}) legs
+            WHERE legs.counts_for_best
+              AND legs.workspace_id = $1
+              AND legs.athlete_id = a.id
+              AND legs.code = d.code
+          ) merged
         ) best ON d.id IS NOT NULL
           WHERE a.workspace_id = $1 AND a.lifecycle_status = 'active'
         GROUP BY a.id

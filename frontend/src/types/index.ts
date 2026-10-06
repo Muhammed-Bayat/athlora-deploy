@@ -130,10 +130,10 @@ export interface ClubJoinRequest {
 
 // Legacy events retain their 100m contract. Generic meets use catalogue sessions.
 export const DISCIPLINE_100M = '100m' as const;
-export type Discipline = typeof DISCIPLINE_100M;
+export type Discipline = string;
 
 export const RESULT_UNIT_SECONDS = 'seconds' as const;
-export type ResultUnit = typeof RESULT_UNIT_SECONDS;
+export type ResultUnit = 'seconds' | 'metres' | 'cm';
 
 export type ResultOutcome = 'no_result' | 'valid' | 'dq' | 'dnf' | 'dns';
 export type AthleteStatus = 'active' | 'inactive' | 'archived';
