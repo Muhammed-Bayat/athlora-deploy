@@ -1,11 +1,25 @@
 import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { DbExecutor } from '../db/client.js';
 import { applyMigrations, loadMigrations } from '../db/migrate.js';
-import { createPublicLoggerLink, listPublicLoggerLinks, revokePublicLoggerLink } from './publicLoggers.js';
+import type { TimelineEntryCreatePayload } from '../validation/payloads.js';
+import { createPublicLoggerEntry, createPublicLoggerLink, createPublicLoggerSession, listPublicLoggerLinks, revokePublicLoggerLink } from './publicLoggers.js';
 
 const describeDB = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
-describeDB('public logger link authorization against a real database', () => {
+const entryPayload: TimelineEntryCreatePayload = {
+  athleteId: '',
+  discipline: '100m',
+  entryType: 'attempt',
+  value: 11.4,
+  unit: 'seconds',
+  isFoul: false,
+  incidentType: null,
+  noteText: null,
+  deviceId: null,
+};
+
+describeDB('public logger service against a real database', () => {
   let pool: pg.Pool;
   let migrations: Awaited<ReturnType<typeof loadMigrations>>;
   let host: { userId: string; workspaceId: string };
@@ -49,6 +63,21 @@ describeDB('public logger link authorization against a real database', () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     await pool.end();
   });
+
+  const runTransaction = async <T>(operation: (client: DbExecutor) => Promise<T>): Promise<T> => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await operation(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  };
 
   it('lets the host create, list and revoke links for a scheduled event', async () => {
     const created = await createPublicLoggerLink(host.workspaceId, eventId, host.userId, pool);
@@ -99,5 +128,62 @@ describeDB('public logger link authorization against a real database', () => {
     await expect(createPublicLoggerLink(invited.workspaceId, eventId, invited.userId, pool)).rejects.toMatchObject({ status: 409 });
     expect(await listPublicLoggerLinks(invited.workspaceId, eventId, pool)).toEqual([]);
     expect(await listPublicLoggerLinks(host.workspaceId, eventId, pool)).toHaveLength(1);
+  });
+
+  it('stamps the event discipline on logged entries and their derived results', async () => {
+    await pool.query("UPDATE events SET status = 'in_progress' WHERE id = $1", [eventId]);
+    const athlete = await pool.query(
+      'INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1, $2, $3) RETURNING id',
+      [host.workspaceId, host.userId, 'Sprinter'],
+    );
+    const athleteId: string = athlete.rows[0].id;
+    await pool.query(
+      'INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id) VALUES ($1, $2, $3)',
+      [eventId, athleteId, host.workspaceId],
+    );
+
+    const link = await createPublicLoggerLink(host.workspaceId, eventId, host.userId, pool);
+    const { sessionToken } = await createPublicLoggerSession(link.token, 'Meet Official', 'City Track Club', pool);
+
+    const entry = await createPublicLoggerEntry(
+      sessionToken,
+      eventId,
+      { ...entryPayload, athleteId },
+      runTransaction,
+    );
+
+    expect(entry.discipline).toBe('100m');
+    const logged = await pool.query('SELECT discipline FROM timeline_entries WHERE event_id = $1', [eventId]);
+    expect(logged.rows.map((row) => row.discipline)).toEqual(['100m']);
+    const derived = await pool.query('SELECT discipline FROM results WHERE event_id = $1', [eventId]);
+    expect(derived.rows.map((row) => row.discipline)).toEqual(['100m']);
+  });
+
+  it('refuses to log an entry for a multi-discipline event', async () => {
+    const generic = await pool.query(
+      `INSERT INTO events (workspace_id, created_by, type, discipline, title, date, status)
+       VALUES ($1, $2, 'competition', NULL, 'Combined Meet', '2026-09-02', 'in_progress') RETURNING id`,
+      [host.workspaceId, host.userId],
+    );
+    const genericEventId: string = generic.rows[0].id;
+    const athlete = await pool.query(
+      'INSERT INTO athletes (workspace_id, coach_id, name) VALUES ($1, $2, $3) RETURNING id',
+      [host.workspaceId, host.userId, 'Jumper'],
+    );
+    const athleteId: string = athlete.rows[0].id;
+    await pool.query(
+      'INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id) VALUES ($1, $2, $3)',
+      [genericEventId, athleteId, host.workspaceId],
+    );
+
+    const link = await createPublicLoggerLink(host.workspaceId, genericEventId, host.userId, pool);
+    const { sessionToken } = await createPublicLoggerSession(link.token, 'Meet Official', 'City Track Club', pool);
+
+    await expect(
+      createPublicLoggerEntry(sessionToken, genericEventId, { ...entryPayload, athleteId }, runTransaction),
+    ).rejects.toMatchObject({ status: 409, code: 'DISCIPLINE_UNSUPPORTED' });
+
+    const logged = await pool.query('SELECT count(*)::int AS count FROM timeline_entries WHERE event_id = $1', [genericEventId]);
+    expect(logged.rows[0].count).toBe(0);
   });
 });

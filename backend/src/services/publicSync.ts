@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
+import type { Pool } from 'pg';
 import { getPool } from '../db/client.js';
-import { DISCIPLINE_100M, type EventType } from '../types/domain.js';
+import type { EventType } from '../types/domain.js';
 import { recomputeEventResults } from './timeline.js';
 
 export interface PublicSyncActionInput {
@@ -33,15 +34,15 @@ export async function processPublicSyncBatch(
   eventId: string,
   deviceId: string,
   actions: PublicSyncActionInput[],
+  pool: Pool = getPool(),
 ): Promise<PublicSyncBatchResult> {
-  const pool = getPool();
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    const sessionRes = await client.query<{ id: string; link_id: string; logger_name: string; logger_club: string; type: EventType; status: string }>(
-      `SELECT ps.id, pl.id AS link_id, ps.logger_name, ps.logger_club, e.type, e.status
+    const sessionRes = await client.query<{ id: string; link_id: string; logger_name: string; logger_club: string; type: EventType; status: string; discipline: string | null }>(
+      `SELECT ps.id, pl.id AS link_id, ps.logger_name, ps.logger_club, e.type, e.status, e.discipline
        FROM public_logger_sessions ps
        JOIN public_logger_links pl ON pl.id = ps.link_id
        JOIN events e ON e.id = ps.event_id
@@ -99,6 +100,16 @@ export async function processPublicSyncBatch(
                 noteText?: string;
               };
 
+            if (session.discipline === null) {
+              await client.query(
+                `INSERT INTO public_sync_action_receipts (action_id, session_id, event_id, device_id, action_type, status, error_code)
+                 VALUES ($1, $2, $3, $4, $5, 'rejected', 'DISCIPLINE_UNSUPPORTED')`,
+                [action.actionId, session.id, eventId, deviceId, action.actionType],
+              );
+              receipts.push({ actionId: action.actionId, status: 'rejected', code: 'DISCIPLINE_UNSUPPORTED' });
+              break;
+            }
+
             const participant = await client.query(
               'SELECT 1 FROM event_participants WHERE event_id = $1 AND athlete_id = $2',
               [eventId, athleteId],
@@ -117,7 +128,7 @@ export async function processPublicSyncBatch(
               `INSERT INTO timeline_entries (id, event_id, athlete_id, discipline, entry_type, value, unit, is_foul, incident_type, note_text, recorded_by, public_logger_session_id, version, device_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, NULL, $10, 1, $11)
                RETURNING id, version`,
-              [action.actionId, eventId, athleteId, DISCIPLINE_100M, entryType, value, unit ?? null, incidentType ?? null, noteText ?? null, session.id, deviceId],
+              [action.actionId, eventId, athleteId, session.discipline, entryType, value, unit ?? null, incidentType ?? null, noteText ?? null, session.id, deviceId],
             );
 
             const entryId = insertRes.rows[0].id;
@@ -336,7 +347,7 @@ export async function processPublicSyncBatch(
 
     const recomputedResults = receipts.some((r) => r.status === 'accepted');
     if (recomputedResults) {
-      await recomputeEventResults(getPool(), eventId, session.type);
+      await recomputeEventResults(pool, eventId, session.type);
     }
 
     return { receipts, recomputedResults };
