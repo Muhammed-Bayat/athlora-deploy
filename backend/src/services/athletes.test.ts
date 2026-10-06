@@ -67,6 +67,7 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
     preferredDisciplineIds: overrides.preferredDisciplineIds ?? [],
+    assignedDisciplineHistoryIds: overrides.assignedDisciplineHistoryIds ?? overrides.preferredDisciplineIds ?? [],
     seasonGoals: overrides.seasonGoals ?? [],
   };
 }
@@ -187,6 +188,25 @@ describe('replaceAthlete', () => {
     ).rejects.toMatchObject(genericNotFound);
   });
 
+  it('keeps an append-only record of every discipline ever assigned', async () => {
+    query.mockResolvedValue({ rows: [athleteRow()] });
+
+    await replaceAthlete(USER_ID, ATHLETE_ID, {
+      name: 'Ari Runner',
+      dob: null,
+      gender: null,
+      notes: null,
+      preferredDisciplineIds: [ATHLETE_ID],
+    }, { query } as never);
+
+    const calls = query.mock.calls as [string, unknown[]][];
+    const historyInsert = calls.find(([sql]) => sql.includes('INSERT INTO athlete_discipline_assignments'));
+    expect(historyInsert?.[0]).toContain('ON CONFLICT DO NOTHING');
+    expect(historyInsert?.[1]).toEqual([ATHLETE_ID, [ATHLETE_ID]]);
+    expect(calls.find(([sql]) => sql.includes('DELETE FROM athlete_preferred_disciplines'))).toBeDefined();
+    expect(calls.find(([sql]) => sql.includes('assigned_discipline_history_ids'))).toBeDefined();
+  });
+
   it('rejects goal units and values that do not match catalogue definitions', async () => {
     query.mockResolvedValue({ rows: [{ id: ATHLETE_ID, unit: 'seconds', precision: 2 }] });
     const payload = { name: 'Ari Runner', dob: null, gender: null, notes: null, preferredDisciplineIds: [ATHLETE_ID], seasonGoals: [{ disciplineDefinitionId: ATHLETE_ID, targetValue: 11.234, targetUnit: 'seconds' as const, targetDate: null, status: 'active' as const }] };
@@ -194,7 +214,7 @@ describe('replaceAthlete', () => {
     await expect(replaceAthlete(USER_ID, ATHLETE_ID, payload, { query } as never)).rejects.toMatchObject({ code: 'INVALID_GOAL_TARGET' });
     expect(query).toHaveBeenCalledWith(expect.stringContaining('discipline_definitions'), [
       [ATHLETE_ID],
-      ['100m', '200m', '400m', '800m', '1500m', '100mh', '400mh', '4x100m', 'high_jump', 'long_jump', 'triple_jump', 'javelin', 'discus', 'shot_put'],
+      ['100m', '200m', '400m', '800m', '1500m', '100mh', '110mh', '400mh', '4x100m', 'high_jump', 'long_jump', 'triple_jump', 'javelin', 'discus', 'shot_put'],
     ]);
 
     query.mockClear();

@@ -487,6 +487,28 @@
   overflow-wrap: anywhere;
 }
 
+/* Relay rows keep the event and result columns on a shared line grid so the leg
+   labels line up with their splits. */
+.relayHead {
+  display: block;
+  height: 1.6rem;
+  line-height: 1.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.relayLine {
+  display: block;
+  height: 1.4rem;
+  line-height: 1.4rem;
+  color: var(--console-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .emptyHistory,
 .historyUnavailable {
   overflow-wrap: anywhere;

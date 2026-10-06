@@ -303,6 +303,20 @@ describe('replaceEvent', () => {
     expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', true);
   });
 
+  it('never materialises legacy rows from attendance when completing a multi-discipline meet', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'in_progress', discipline: null })] })
+      .mockResolvedValueOnce({ rows: [eventRow({ status: 'completed', discipline: null })] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await replaceEvent(USER_ID, EVENT_ID, {
+      type: 'competition', discipline: null, title: 'Multi-club Meet', date: '2026-09-01',
+      time: null, locationName: null, latitude: null, longitude: null, status: 'completed',
+    });
+
+    expect(recomputeEventResults).toHaveBeenCalledWith(expect.anything(), EVENT_ID, 'competition', false);
+  });
+
   it('sends a live_logger_started notification when transitioning from scheduled to in_progress', async () => {
     query
       .mockResolvedValueOnce({ rows: [eventRow()] })

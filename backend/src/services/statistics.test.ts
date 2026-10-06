@@ -227,6 +227,58 @@ describe('getAthleteStatisticsDetail', () => {
     ]);
   });
 
+  it('loads a single relay history row carrying the squad and every leg split', async () => {
+    const relay = {
+      teamName: "Pook's relay team",
+      members: ['Ari Runner', 'A', 'B', 'C'],
+      legs: [
+        { leg: 1, name: 'Ari Runner', value: 9.5 },
+        { leg: 2, name: 'A', value: 10 },
+        { leg: 3, name: 'B', value: 8.7 },
+        { leg: 4, name: 'C', value: 9.95 },
+      ],
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [athleteRow()] })
+      .mockResolvedValueOnce({ rows: [aggregateRow()] })
+      .mockResolvedValueOnce({
+        rows: [
+          historyRow({
+            discipline: '4x100m',
+            event_discipline: '4x100m',
+            final_result: '38.15',
+            effective_result: '38.15',
+            placing: null,
+            is_pb: false,
+            is_sb: false,
+            note: null,
+            relay,
+          }),
+        ],
+      });
+
+    const statistics = await getAthleteStatisticsDetail(
+      USER_ID,
+      ATHLETE_ID,
+      '2026-08-17',
+      runner(query),
+    );
+
+    expect(statistics.recentResults.competitions).toHaveLength(1);
+    const [team] = statistics.recentResults.competitions;
+    expect(team).toMatchObject({ effectiveResult: 38.15, note: null, relay });
+
+    const [historySql] = query.mock.calls[2] as [string, unknown[]];
+    expect(historySql).toContain('e.discipline IS NOT NULL');
+    expect(historySql).toContain("'teamName', en.name");
+    expect(historySql).toContain("'legs'");
+    expect(historySql).toContain('session_relay_selections');
+    expect(historySql).toContain("entrantType' = 'relay'");
+    // The squad and its splits ride inside the team row rather than as extra rows.
+    expect(historySql).not.toContain("'Team: ' || en.name");
+    expect(historySql).not.toContain("'Leg ' || rm.leg::text");
+  });
+
   it('rejects malformed ownership identifiers without aggregate queries', async () => {
     const query = vi.fn();
 

@@ -168,7 +168,7 @@ describeDB('multi-discipline migration and domain integration', () => {
   it('installs the complete schema on an empty database with UUID keys and catalogue seeds', async () => {
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
     await migrate();
-    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['100m', '100mh', '1500m', '200m', '400m', '400mh', '4x100m', '800m', 'discus', 'high_jump', 'javelin', 'long_jump', 'shot_put', 'triple_jump']);
+    expect((await listDisciplines(pool)).map((row) => row.code)).toEqual(['100m', '100mh', '110mh', '1500m', '200m', '400m', '400mh', '4x100m', '800m', 'discus', 'high_jump', 'javelin', 'long_jump', 'shot_put', 'triple_jump']);
     const columns = await pool.query("SELECT table_name, data_type FROM information_schema.columns WHERE column_name = 'id' AND table_name IN ('discipline_definitions','discipline_sessions','meet_entrants','relay_members','session_entrants','session_timeline_entries','session_results','meet_domain_audit')");
     expect(columns.rows).toHaveLength(8);
     expect(columns.rows.every((row) => row.data_type === 'uuid')).toBe(true);

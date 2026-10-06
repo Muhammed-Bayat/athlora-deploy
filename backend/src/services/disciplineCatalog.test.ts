@@ -17,7 +17,7 @@ describe('discipline catalogue', () => {
       { discipline: 'long_jump' },
     ]);
     expect(SUPPORTED_DISCIPLINE_CODES).toEqual([
-      '100m', '200m', '400m', '800m', '1500m', '100mh', '400mh', '4x100m',
+      '100m', '200m', '400m', '800m', '1500m', '100mh', '110mh', '400mh', '4x100m',
       'high_jump', 'long_jump', 'triple_jump', 'javelin', 'discus', 'shot_put',
     ]);
     expect(query).toHaveBeenCalledWith(expect.stringContaining('ORDER BY array_position($1::text[], code), version DESC'), [SUPPORTED_DISCIPLINE_CODES]);

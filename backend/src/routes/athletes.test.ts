@@ -90,6 +90,7 @@ function athleteBody(overrides: Partial<Athlete> = {}): Athlete {
     updatedAt: '2026-08-01T09:00:00.000Z',
     ...overrides,
     preferredDisciplineIds: overrides.preferredDisciplineIds ?? [],
+    assignedDisciplineHistoryIds: overrides.assignedDisciplineHistoryIds ?? overrides.preferredDisciplineIds ?? [],
     seasonGoals: overrides.seasonGoals ?? [],
   };
 }

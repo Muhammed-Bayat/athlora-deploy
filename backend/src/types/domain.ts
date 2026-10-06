@@ -214,6 +214,8 @@ export interface Athlete {
   dob: string | null;
   gender: string | null;
   preferredDisciplineIds: string[];
+  /** Every discipline ever assigned to this athlete, so the performance log keeps its history. */
+  assignedDisciplineHistoryIds: string[];
   seasonGoals: AthleteSeasonGoal[];
   notes: string | null;
   archivedAt: string | null;
@@ -420,6 +422,18 @@ export interface AggregateEventIdentity {
   status: EventStatus;
 }
 
+export interface AthleteHistoryRelayLeg {
+  leg: number;
+  name: string;
+  value: number | null;
+}
+
+export interface AthleteHistoryRelay {
+  teamName: string;
+  members: string[];
+  legs: AthleteHistoryRelayLeg[];
+}
+
 export interface AthleteResultHistoryEntry {
   athlete: AggregateAthleteIdentity;
   event: AggregateEventIdentity;
@@ -427,6 +441,10 @@ export interface AthleteResultHistoryEntry {
   effectiveResult: number | null;
   effectiveOutcome: ResultOutcome;
   countsTowardsStatistics: boolean;
+  /** Optional row caption; relay captions are carried by `relay` instead. */
+  note: string | null;
+  /** Relay rows collapse the squad line-up and every leg split into this single entry. */
+  relay?: AthleteHistoryRelay | null;
 }
 
 export interface AthleteResultCounts {
