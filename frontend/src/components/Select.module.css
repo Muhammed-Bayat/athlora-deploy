@@ -60,6 +60,11 @@
   z-index: 80;
 }
 
+/* A transformed ancestor would reposition the fixed viewport listbox. */
+.filterOpen:hover {
+  transform: none;
+}
+
 .disabled {
   opacity: 0.58;
 }
