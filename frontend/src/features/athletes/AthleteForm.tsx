@@ -4,6 +4,7 @@ import { ApiError } from '../../api/client';
 import { Button, DatePicker, Input, Select } from '../../components';
 import type { Athlete, AthleteMutationPayload, AthleteSeasonGoalInput } from '../../types';
 import type { DisciplineDefinition } from '../../types/meets';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import { athleteErrorMessage } from './athleteError';
 import styles from './AthleteForm.module.css';
 
@@ -125,9 +126,9 @@ export function AthleteForm({ athlete, onSave, onCancel, onSubmittingChange }: A
   };
 
   const disciplineGroups = [
-    { key: 'track', label: 'Track', items: disciplines.filter((discipline) => discipline.kind === 'track') },
-    { key: 'field', label: 'Field', items: disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical') },
-    { key: 'relay', label: 'Relays', items: disciplines.filter((discipline) => discipline.kind === 'relay') },
+    { key: 'track', label: 'Track', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'track'), (discipline) => discipline.code) },
+    { key: 'field', label: 'Field', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical'), (discipline) => discipline.code) },
+    { key: 'relay', label: 'Relays', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'relay'), (discipline) => discipline.code) },
   ].filter((group) => group.items.length > 0);
 
   return (

@@ -37,6 +37,7 @@ import {
 import styles from './EventsPage.module.css';
 import { useWorkspace } from '../auth/WorkspaceContext';
 import { eventDisplayStatus } from '../../utils/eventStatus';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 
 type DateTab = 'upcoming' | 'past' | 'all';
 type EventView = 'list' | 'calendar';
@@ -406,9 +407,9 @@ export function EventForm({ event, onSave, onCancel, onSubmittingChange }: Event
   };
 
   const initialSessionGroups = [
-    { key: 'track', label: 'Track', items: disciplines.filter((discipline) => discipline.kind === 'track') },
-    { key: 'field', label: 'Field', items: disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical') },
-    { key: 'relay', label: 'Relays', items: disciplines.filter((discipline) => discipline.kind === 'relay') },
+    { key: 'track', label: 'Track', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'track'), (discipline) => discipline.code) },
+    { key: 'field', label: 'Field', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'field' || discipline.kind === 'vertical'), (discipline) => discipline.code) },
+    { key: 'relay', label: 'Relays', items: sortDisciplines(disciplines.filter((discipline) => discipline.kind === 'relay'), (discipline) => discipline.code) },
   ].filter((group) => group.items.length > 0);
 
   const toggleSessionDefinition = (discipline: DisciplineDefinition, checked: boolean) => {

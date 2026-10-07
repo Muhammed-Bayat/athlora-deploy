@@ -5,6 +5,7 @@ import { listInjuries } from '../../api/injuries';
 import { CompactAnatomy } from '../fitness/CompactAnatomy';
 import { Button, Card, Modal, SeasonSelector, Toast } from '../../components';
 import { seasonLabel, seasonQueryValue, useSeasonQueryState } from '../../utils/season';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import type {
   Athlete,
   AthleteMutationPayload,
@@ -230,7 +231,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     return { code: definition?.code ?? id, label: definition?.presentation.label ?? id };
   });
   const loggedCodes = [...new Set(sortedLogEntries.map((entry) => entry.event.discipline))];
-  const logDisciplines = [
+  const logDisciplines = sortDisciplines([
     ...assignedLogDisciplines,
     ...loggedCodes
       .filter((code) => !assignedLogDisciplines.some((discipline) => discipline.code === code))
@@ -238,7 +239,7 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
         const definition = disciplines.find((discipline) => discipline.code === code || discipline.id === code);
         return { code, label: definition?.presentation.label ?? code };
       }),
-  ];
+  ], (discipline) => discipline.code);
   const selectedLogDiscipline = logDisciplines.find((discipline) => discipline.code === activeLogDiscipline)
     ?? logDisciplines.find((discipline) => loggedCodes.includes(discipline.code))
     ?? logDisciplines[0];
@@ -247,17 +248,19 @@ export function AthleteDetailPage({ athleteId, onBack, onAthleteUpdated, initial
     && (resultType === 'all' || entry.event.type === resultType)
   ));
   const isArchived = athlete?.status === 'archived';
-  const disciplineLabels = athlete?.preferredDisciplineIds
-    .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id)
-    ?? [];
-  const performanceTabs: PerformanceTab[] = assignedDisciplineIds
-    .filter((id) => {
+  const disciplineLabels = sortDisciplines(
+    athlete?.preferredDisciplineIds ?? [],
+    (id) => disciplines.find((discipline) => discipline.id === id)?.code ?? id,
+  ).map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id);
+  const performanceTabs: PerformanceTab[] = sortDisciplines(
+    assignedDisciplineIds.filter((id) => {
       if (preferredDisciplineIds.includes(id)) return true;
       const definition = disciplines.find((candidate) => candidate.id === id);
       if (!definition) return false;
       return disciplineStatistics.some((entry) => entry.discipline === definition.code && entry.resultCount > 0);
-    })
-    .map((id) => {
+    }),
+    (id) => disciplines.find((candidate) => candidate.id === id)?.code ?? id,
+  ).map((id) => {
       const definition = disciplines.find((discipline) => discipline.id === id);
       const statisticsForDiscipline = definition
         ? disciplineStatistics.find((entry) => entry.discipline === definition.code)

@@ -56,8 +56,8 @@ describe('MeetRosterPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.listDisciplines.mockResolvedValue({ data: [
-      { id: 'track', kind: 'track', presentation: { label: '200m' }, defaultRules: { entrantType: 'individual' } },
-      { id: 'relay', kind: 'relay', presentation: { label: '4 x 100m relay' }, defaultRules: { entrantType: 'relay', teamSize: 4 } },
+      { id: 'track', code: '200m', kind: 'track', presentation: { label: '200m' }, defaultRules: { entrantType: 'individual' } },
+      { id: 'relay', code: '4x100m', kind: 'relay', presentation: { label: '4 x 100m relay' }, defaultRules: { entrantType: 'relay', teamSize: 4 } },
     ] });
     api.listSessions.mockResolvedValue({ data: [
       { id: 'session-track', disciplineDefinitionId: 'track', label: '200m', status: 'scheduled', version: 1 },
@@ -107,6 +107,18 @@ describe('MeetRosterPanel', () => {
     await user.keyboard('{ArrowRight}');
     const relayTab = await screen.findByRole('tab', { name: /4 x 100m relay/i, selected: true });
     await waitFor(() => expect(relayTab).toHaveFocus());
+  });
+
+  it('orders session tabs by the canonical discipline order', async () => {
+    api.listSessions.mockResolvedValue({ data: [
+      { id: 'session-relay', disciplineDefinitionId: 'relay', label: '4 x 100m relay', status: 'scheduled', version: 1 },
+      { id: 'session-track', disciplineDefinitionId: 'track', label: '200m', status: 'scheduled', version: 1 },
+    ] });
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
+
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((tab) => tab.querySelector('span')?.textContent)).toEqual(['200m', '4 x 100m relay']);
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
   });
 
   it('shows relay creation only for a selected relay session and never exposes guest entry', async () => {

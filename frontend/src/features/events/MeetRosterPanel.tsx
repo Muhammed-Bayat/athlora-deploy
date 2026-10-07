@@ -6,6 +6,7 @@ import { addGuestFixtureParticipant, listGuestFixtureParticipants, updateGuestFi
 import { Button, Select } from '../../components';
 import type { Athlete, AthleticsEvent, EventParticipantSummary, RsvpStatus } from '../../types';
 import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionRegistration } from '../../types/meets';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import styles from './MeetRosterPanel.module.css';
 
 const RSVP_OPTIONS: Array<{ value: RsvpStatus; label: string }> = [
@@ -57,7 +58,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
     ]);
     if (request !== reloadRequestRef.current) return;
     setDefinitions(catalogue.data);
-    setSessions(nextSessions.data);
+    setSessions(sortDisciplines(nextSessions.data, (session) => catalogue.data.find((item) => item.id === session.disciplineDefinitionId)?.code ?? session.disciplineDefinitionId));
     setEntrants(nextEntrants.data);
     setAthletes(roster.data);
     setParticipants(eventParticipants.data);

@@ -472,6 +472,10 @@ describe('SessionLivePanel', () => {
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((tab) => tab.querySelector('span')?.textContent)).toEqual(['100m Final', '1500m Final', 'Discus Final']);
+
+    await user.click(screen.getByRole('tab', { name: /Discus Final/ }));
     const discusRow = await screen.findByRole('group', { name: 'Ari Runner' });
     expect(within(discusRow).getByLabelText('Mark (metres) for Ari Runner')).toBeInTheDocument();
     expect(within(discusRow).getByRole('button', { name: 'Foul for Ari Runner' })).toBeInTheDocument();
