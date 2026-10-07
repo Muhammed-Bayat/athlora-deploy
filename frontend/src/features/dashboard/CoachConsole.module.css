@@ -49,7 +49,9 @@
   --console-focus-ring: rgba(69, 190, 215, 0.24);
 
   position: relative;
+  --mobile-nav-block-size: calc(64px + env(safe-area-inset-bottom));
   min-height: 100vh;
+  min-height: 100svh;
   color: var(--ui-text);
 }
 
@@ -137,6 +139,7 @@
   position: relative;
   z-index: 2;
   min-height: 100vh;
+  min-height: 100svh;
   margin-left: 264px;
   padding-bottom: 84px;
 }
@@ -1113,7 +1116,7 @@
 
 @media (max-width: 760px) {
   .sidebar { display: none; }
-  .main { margin-left: 0; padding-bottom: 92px; }
+  .main { margin-left: 0; padding-bottom: calc(var(--mobile-nav-block-size) + 24px); }
   .topbar { min-height: 64px; padding: 10px 16px; gap: 10px; }
   .weatherOrigin { right: 0; opacity: 0.56; }
   .content { padding: 22px 16px; }
@@ -1125,6 +1128,9 @@
     left: 0;
     z-index: 50;
     display: flex;
+    min-height: var(--mobile-nav-block-size);
+    box-sizing: border-box;
+    align-items: center;
     justify-content: space-around;
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
     background: rgba(0, 7, 13, 0.92);

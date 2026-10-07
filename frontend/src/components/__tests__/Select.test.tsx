@@ -14,7 +14,7 @@ describe('Select', () => {
     await user.click(screen.getByRole('button', { name: 'Select athlete' }));
 
     const listbox = screen.getByRole('listbox');
-    expect(listbox.querySelector(`.${styles.scrollableOptions}`)).toBeInTheDocument();
+    expect(listbox).toHaveClass(styles.scrollableOptions);
     expect(within(listbox).getAllByRole('option')).toHaveLength(7);
   });
 });

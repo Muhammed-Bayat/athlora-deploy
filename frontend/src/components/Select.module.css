@@ -11,7 +11,6 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
-
 .select:focus {
   border-color: var(--console-focus, var(--cyan-400));
   box-shadow: 0 0 0 3px rgba(69, 190, 215, 0.10), 0 0 22px rgba(69, 190, 215, 0.05);
@@ -178,12 +177,11 @@
 }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 90;
-  width: max(100%, 190px);
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
   padding: 7px;
+  overflow: hidden;
   border: 1px solid rgba(138, 233, 242, 0.17);
   border-radius: 15px;
   background:
@@ -205,8 +203,8 @@
   transform: translateY(0) scale(1);
 }
 
-.menuUp { top: auto; bottom: calc(100% + 8px); transform: translateY(5px) scale(0.985); transform-origin: bottom center; }
-.menuUp.menuOpen { transform: translateY(0) scale(1); }
+.menu[data-placement='up'] { transform: translateY(5px) scale(0.985); transform-origin: bottom center; }
+.menu[data-placement='up'].menuOpen { transform: translateY(0) scale(1); }
 
 .menu::before {
   content: '';
@@ -255,9 +253,11 @@
 }
 
 .scrollableOptions {
-  max-height: min(114px, 30vh);
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-color: rgba(138, 233, 242, 0.45) transparent;
   scrollbar-width: thin;
 }
@@ -330,7 +330,7 @@
 .compact { min-width: 0; height: 40px; }
 .compact .trigger { padding-right: 34px; font: var(--font-weight-bold) .9rem var(--font-family-mono); }
 .compact .trigger::after { right: 13px; }
-.compact .menu { max-height: min(320px, 50vh); padding: 5px; overflow-y: auto; }
+.compact .menu { padding: 5px; }
 .compact .option { min-height: 34px; padding: 6px 9px; font-size: .78rem; }
 
 /* ---------- Aurora Mist (light) version of the open dropdown ---------- */
@@ -437,11 +437,4 @@
   background: #CBE4E9;
   color: #173E50;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
-}
-
-@media (max-width: 760px) {
-  .menu {
-    width: 100%;
-    min-width: 100%;
-  }
 }

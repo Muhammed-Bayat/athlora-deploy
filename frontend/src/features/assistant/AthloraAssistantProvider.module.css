@@ -39,6 +39,6 @@
 :global(html.theme-light) .aiComposer { border-color: rgba(0, 94, 131, .15); background: rgba(237, 248, 250, .9); }
 :global(html.theme-light) .aiComposer input { color: #173e50; }
 
-@media (max-width: 760px) { .assistant { right: max(16px, calc(12px + env(safe-area-inset-right))); bottom: calc(78px + env(safe-area-inset-bottom)); } }
+@media (max-width: 760px) { .assistant { right: max(16px, calc(12px + env(safe-area-inset-right))); bottom: calc(var(--mobile-nav-block-size, 64px) + 14px); } }
 @media (max-width: 480px) { .aiComposer { align-items: stretch; flex-direction: column; }.aiComposer input { min-height: 40px; padding-inline: var(--space-2); }.aiComposer button { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .aiTrigger[data-connected] { animation: none; } }

@@ -143,21 +143,41 @@ function WeatherCanvas({ layers, precipitation, reducedMotion }: { layers: Reado
     if (!canvas || reducedMotion) return;
     const context = canvas.getContext('2d');
     if (!context) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
     let width = 0;
     let height = 0;
     let rafId = 0;
+    let resizeFrame = 0;
+    let bitmapWidth = 0;
+    let bitmapHeight = 0;
 
     const resizeCanvas = () => {
       const rect = canvas.getBoundingClientRect();
-      width = Math.max(1, rect.width);
-      height = Math.max(1, rect.height);
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
+      const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+      const nextWidth = Math.max(1, rect.width);
+      const nextHeight = Math.max(1, rect.height);
+      const nextBitmapWidth = Math.round(nextWidth * nextDpr);
+      const nextBitmapHeight = Math.round(nextHeight * nextDpr);
+      if (nextBitmapWidth === bitmapWidth && nextBitmapHeight === bitmapHeight && nextDpr === dpr) return;
+      dpr = nextDpr;
+      width = nextWidth;
+      height = nextHeight;
+      bitmapWidth = nextBitmapWidth;
+      bitmapHeight = nextBitmapHeight;
+      canvas.width = bitmapWidth;
+      canvas.height = bitmapHeight;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
+    const scheduleResize = () => {
+      if (!resizeFrame) {
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = 0;
+          resizeCanvas();
+        });
+      }
+    };
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas, { passive: true });
+    window.addEventListener('resize', scheduleResize, { passive: true });
 
     const particles: Particle[] = [];
     const precip = Number(precipitation) || 0;
@@ -259,8 +279,9 @@ function WeatherCanvas({ layers, precipitation, reducedMotion }: { layers: Reado
     rafId = requestAnimationFrame(frame);
 
     return () => {
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('resize', scheduleResize);
     };
   }, [layersKey, precipitation, reducedMotion]);
 
@@ -504,16 +525,16 @@ export function CoachConsole() {
         : 'Weather effects use the selected local atmosphere preset.';
 
   const sceneLayers: string[] = [];
-  if (isNight) sceneLayers.push('sparks');
-  if (weather === 'rain' || weather === 'night-rain' || weather === 'storm') sceneLayers.push('rain');
-  if (weather === 'snow') sceneLayers.push('snow');
+  if (weatherEnabled && isNight) sceneLayers.push('sparks');
+  if (weatherEnabled && (weather === 'rain' || weather === 'night-rain' || weather === 'storm')) sceneLayers.push('rain');
+  if (weatherEnabled && weather === 'snow') sceneLayers.push('snow');
 
   return <div className={styles.console} data-weather={weatherEnabled ? weather : undefined} data-weather-night={weatherEnabled && isNight ? true : undefined} data-weather-enabled={weatherEnabled}>
     <AthloraAssistantProvider>
-    <div className={styles.weatherScene} aria-hidden="true">
+    {sceneLayers.length > 0 && <div className={styles.weatherScene} aria-hidden="true">
       <WeatherCanvas layers={sceneLayers} precipitation={weatherPrecipitation} reducedMotion={reducedMotion} />
       {weather === 'storm' && <i className={styles.lightning} />}
-    </div>
+    </div>}
     <aside className={styles.sidebar}>
       <div className={styles.brand}><img src="/logo-removebg.png" alt="" /><span><b>Athlora</b><small>Athletics Coaching</small></span></div>
       <div className={styles.workspaceSwitcher}>
