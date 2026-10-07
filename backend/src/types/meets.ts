@@ -169,7 +169,7 @@ export interface SessionStatistics {
 
 export type VerticalState = 'clearance' | 'failure' | 'pass' | 'void';
 export interface VerticalConfig { startingHeight: number; heightIncrement: number; failureLimit: number; round: 'qualification' | 'final' }
-export interface VerticalSummary { failuresAtBest: number; totalFailuresToBest: number; consecutiveFailures: number; eliminated: boolean }
+export interface VerticalSummary { failuresAtBest: number; totalFailures: number; consecutiveFailures: number; eliminated: boolean }
 export interface SessionCreateInput { disciplineDefinitionId: string; label: string; verticalConfig?: VerticalConfig }
 export interface SessionStateInput { status: EventStatus; expectedVersion: number }
 export type EntrantCreateInput =

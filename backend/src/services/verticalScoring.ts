@@ -7,7 +7,7 @@ type Attempt = SessionEntryInput & { deletedAt?: string | null; attemptOrder?: n
 export interface VerticalDerivation extends Derivation, VerticalSummary {}
 export function deriveVertical(entries: readonly Attempt[], config: VerticalConfig): VerticalDerivation {
   parseVerticalConfig(config);
-  const result: VerticalDerivation = { value: null, outcome: 'no_result', incident: null, failuresAtBest: 0, totalFailuresToBest: 0, consecutiveFailures: 0, eliminated: false };
+  const result: VerticalDerivation = { value: null, outcome: 'no_result', incident: null, failuresAtBest: 0, totalFailures: 0, consecutiveFailures: 0, eliminated: false };
   let height = 0, closed = false, failuresAtHeight = 0, totalFailures = 0;
   const active = entries.filter(e => !e.deletedAt).slice().sort((a,b) => (a.attemptOrder ?? 0) - (b.attemptOrder ?? 0));
   for (const entry of active) {
@@ -19,21 +19,21 @@ export function deriveVertical(entries: readonly Attempt[], config: VerticalConf
     if (entry.verticalState === 'void') continue;
     if (result.eliminated || h < height || (h === height && closed)) throw new ApiError(409, 'INVALID_VERTICAL_SEQUENCE', 'Entrant is eliminated or this height is closed');
     if (h > height) { height = h; closed = false; failuresAtHeight = 0; }
-    if (entry.verticalState === 'pass') { closed = true; continue; }
+    if (entry.verticalState === 'pass') { closed = true; result.consecutiveFailures = 0; continue; }
     if (entry.verticalState === 'failure') {
       failuresAtHeight++; totalFailures++; result.consecutiveFailures++;
       result.eliminated = result.consecutiveFailures >= config.failureLimit;
     } else {
-      result.value = h / 100; result.outcome = 'valid'; result.failuresAtBest = failuresAtHeight;
-      result.totalFailuresToBest = totalFailures; result.consecutiveFailures = 0; closed = true;
+      result.value = h / 100; result.outcome = 'valid'; result.failuresAtBest = failuresAtHeight; result.consecutiveFailures = 0; closed = true;
     }
   }
+  result.totalFailures = totalFailures;
   const incident = active.some(e => e.incidentType === 'dq') ? 'dq' : active.some(e => e.incidentType === 'dns') ? 'dns' : null;
   if (incident) { result.value = null; result.outcome = incident; result.incident = incident; }
   return result;
 }
-export function compareVertical(a: Pick<VerticalDerivation, 'value' | 'failuresAtBest' | 'totalFailuresToBest'>, b: Pick<VerticalDerivation, 'value' | 'failuresAtBest' | 'totalFailuresToBest'>): number {
-  return (b.value ?? 0) - (a.value ?? 0) || a.failuresAtBest - b.failuresAtBest || a.totalFailuresToBest - b.totalFailuresToBest;
+export function compareVertical(a: Pick<VerticalDerivation, 'value' | 'failuresAtBest' | 'totalFailures'>, b: Pick<VerticalDerivation, 'value' | 'failuresAtBest' | 'totalFailures'>): number {
+  return (b.value ?? 0) - (a.value ?? 0) || a.failuresAtBest - b.failuresAtBest || a.totalFailures - b.totalFailures;
 }
 export function verticalPlacings(results: readonly { entrantId: string; score: VerticalDerivation }[]): Map<string, number | null> {
   const places = new Map<string, number | null>(results.map(r => [r.entrantId, null]));

@@ -531,7 +531,7 @@ describe('SessionLivePanel', () => {
     api.listSessionResults.mockResolvedValue({ data: [{
       eventId: 'event-1', disciplineSessionId: 'session-1', entrantId: 'athlete-a',
       outcome: 'valid', finalResult: 1.5, effectiveOutcome: 'valid', effectiveResult: 1.5, placing: 1,
-      vertical: { failuresAtBest: 0, totalFailuresToBest: 0, consecutiveFailures: 0, eliminated: false },
+      vertical: { failuresAtBest: 0, totalFailures: 0, consecutiveFailures: 0, eliminated: false },
       isPb: false, isSb: false, manualOverride: null, overrideReason: null, overriddenBy: null, overriddenAt: null,
       selectedEntryId: null, version: 1, updatedAt: '2026-09-20T10:00:00.000Z',
     }] });
@@ -549,7 +549,10 @@ describe('SessionLivePanel', () => {
 
     expect(await within(row).findByLabelText('Target height (m) for Ari Runner')).toHaveValue(1.5);
     expect(screen.getByText(/starts at 1\.50 m, then \+0\.02 m per height\. 3 consecutive failures/)).toBeInTheDocument();
-    await user.click(within(row).getByRole('button', { name: 'Clearance' }));
+    expect(within(row).getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Fail' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Skip' })).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Clear' }));
     await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith(
       'event-1',
       { disciplineSessionId: 'session-1', entrantId: 'athlete-a' },

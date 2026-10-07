@@ -60,7 +60,7 @@ export interface RelayLegResult {
 export interface SessionResult extends SessionTarget {
   relayLegs?: RelayLegResult[];
   finalPlace?: number | null;
-  vertical?: { failuresAtBest: number; totalFailuresToBest: number; consecutiveFailures: number; eliminated: boolean };
+  vertical?: { failuresAtBest: number; totalFailures: number; consecutiveFailures: number; eliminated: boolean };
   isPb?: boolean; isSb?: boolean;
   id: string; eventId: string; workspaceId: string; outcome: ResultOutcome; finalResult: number | null;
   unit: DisciplineDefinition['unit']; manualOverride: number | null; overrideReason: string | null;

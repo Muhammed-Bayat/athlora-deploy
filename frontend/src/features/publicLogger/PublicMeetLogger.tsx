@@ -408,7 +408,7 @@ export function PublicMeetLogger({
                                 onClick={() => void logVerticalAttempt(entrant.id, state)}
                                 style={{ minHeight: '44px', minWidth: '44px' }}
                               >
-                                {state === 'clearance' ? 'Clearance' : state === 'failure' ? 'Failure' : 'Pass'}
+                                {state === 'clearance' ? 'Clear' : state === 'failure' ? 'Fail' : 'Skip'}
                               </Button>
                             ))}
                           </div>
@@ -488,7 +488,7 @@ export function PublicMeetLogger({
                               {entry.entryType === 'penalty'
                                 ? `${entry.incidentType?.toUpperCase() ?? 'Penalty'}`
                                 : `#${entry.attemptOrder ?? index + 1} ${vertical
-                                ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? entry.incidentType ?? ''}`
+                                ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState === 'pass' ? 'skip' : entry.verticalState ?? entry.incidentType ?? ''}`
                                 : `${formatValue(entry.value, definition)} ${entry.incidentType ?? ''} ${entry.isFoul ? 'Foul' : ''}`}`}
                               {entry.recorderName && ` · by ${entry.recorderName}`}
                               {!vertical && result?.selectedEntryId === entry.id && ' · official'}
