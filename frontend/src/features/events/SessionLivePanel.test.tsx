@@ -502,6 +502,13 @@ describe('SessionLivePanel', () => {
     expect(screen.queryByRole('button', { name: 'Finalize session' })).not.toBeInTheDocument();
   });
 
+  it('omits the offline reconciliation controls', async () => {
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+    await screen.findByRole('tabpanel');
+    expect(screen.queryByRole('button', { name: 'Review offline reconciliation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Offline reconciliation' })).not.toBeInTheDocument();
+  });
+
   it('logs a vertical clearance with countback standings and voids an attempt', async () => {
     api.listDisciplines.mockResolvedValue({ data: [{
       id: 'high-jump', code: 'high_jump', kind: 'vertical', unit: 'metres', precision: 2,

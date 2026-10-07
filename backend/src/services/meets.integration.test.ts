@@ -116,6 +116,23 @@ describeDB('multi-discipline migration and domain integration', () => {
     const audit = await pool.query("SELECT * FROM meet_domain_audit WHERE event_id = $1 AND entity_type = 'entry'", [eventId]);
     expect(audit.rows.length).toBe(16);
   });
+
+  it('finalizes a session while unresolved offline conflict evidence remains', async () => {
+    const target = await ready();
+    const entry = await createSessionEntry(host, eventId, target, timed, transaction);
+    await selectSessionResultEntry(host, eventId, target, { entryId: entry.id, expectedVersion: 1 }, transaction);
+    await pool.query(
+      `INSERT INTO offline_sync_conflicts (event_id, discipline_session_id, entrant_id, actor_id, device_id, action_id, action_type, attempted_payload)
+       VALUES ($1, $2, $3, $4, 'device-1', $5, 'create_entry', '{"value":11.25}'::jsonb)`,
+      [eventId, target.disciplineSessionId, target.entrantId, host.userId, randomUUID()],
+    );
+    const finalized = await changeSessionState(host, eventId, target.disciplineSessionId, { status: 'completed', expectedVersion: 2 }, transaction);
+    expect(finalized.status).toBe('completed');
+    expect(finalized.resultState).toBe('final');
+    const conflicts = await pool.query('SELECT resolved_at FROM offline_sync_conflicts WHERE event_id = $1 AND discipline_session_id = $2', [eventId, target.disciplineSessionId]);
+    expect(conflicts.rows).toEqual([{ resolved_at: null }]);
+  });
+
   function action(target: SessionTarget, overrides: Partial<SessionSyncAction> = {}): SessionSyncAction {
     return { actionId: randomUUID(), actionType: 'create_entry', target, payload: { ...timed }, clientTimestamp: new Date().toISOString(), ...overrides };
   }
