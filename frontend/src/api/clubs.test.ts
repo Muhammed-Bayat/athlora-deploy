@@ -15,6 +15,18 @@ describe('club API', () => {
     );
   });
 
+  it('serializes the calendar scope', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ data: [], meta: { count: 0 } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await clubs.listClubCalendarEvents(['club-1'], undefined, 'past');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/clubs/calendar?clubId=club-1&scope=past'),
+      expect.any(Object),
+    );
+  });
+
   it('covers discovery, membership, and review requests', async () => {
     const data = { id: 'id-1' };
     const fetchMock = vi.fn<typeof fetch>();

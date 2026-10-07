@@ -15,10 +15,11 @@ export async function listClubs(search = ''): Promise<{ data: Club[]; meta: { co
   return request(`/api/v1/clubs${query}`);
 }
 
-export async function listClubCalendarEvents(clubIds: string[], year?: string): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
+export async function listClubCalendarEvents(clubIds: string[], year?: string, scope?: 'upcoming' | 'past' | 'all'): Promise<{ data: ClubCalendarEvent[]; meta: { count: number } }> {
   const query = new URLSearchParams();
   clubIds.forEach((clubId) => query.append('clubId', clubId));
   if (year) query.set('year', year);
+  if (scope) query.set('scope', scope);
   return request(`/api/v1/clubs/calendar?${query.toString()}`);
 }
 

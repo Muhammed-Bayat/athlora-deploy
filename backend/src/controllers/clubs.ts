@@ -37,8 +37,8 @@ export const calendar: RequestHandler = async (req, res, next) => {
   try {
     const clubIds = Array.isArray(req.query.clubId) ? req.query.clubId : req.query.clubId ? [req.query.clubId] : [];
     const events = req.query.year === undefined
-      ? await listClubCalendarEvents(clubIds)
-      : await listClubCalendarEvents(clubIds, undefined, parseSeasonYear(req.query.year));
+      ? await listClubCalendarEvents(clubIds, undefined, undefined, req.query.scope)
+      : await listClubCalendarEvents(clubIds, undefined, parseSeasonYear(req.query.year), req.query.scope);
     res.json({ data: events, meta: { count: events.length } });
   } catch (error) { next(error); }
 };

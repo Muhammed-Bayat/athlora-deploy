@@ -885,15 +885,15 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
     let current = true;
     setClubLoading(true);
     void (seasonQueryValue(season)
-      ? listClubCalendarEvents(selectedClubs.map((club) => club.id), season)
-      : listClubCalendarEvents(selectedClubs.map((club) => club.id)))
+      ? listClubCalendarEvents(selectedClubs.map((club) => club.id), season, dateTab)
+      : listClubCalendarEvents(selectedClubs.map((club) => club.id), undefined, dateTab))
       .then(({ data }) => {
         if (current) setClubEvents(data.map(({ event, club }) => ({ event, clubId: club.id, clubName: club.name })));
       })
       .catch(() => { if (current) setClubEvents([]); })
       .finally(() => { if (current) setClubLoading(false); });
     return () => { current = false; };
-  }, [calendarScope, selectedClubs, season]);
+  }, [calendarScope, dateTab, selectedClubs, season]);
 
   useEffect(() => {
     setSelectedId(null);
