@@ -8,7 +8,7 @@ import { useCurrentUser } from '../auth/CurrentUserContext';
 import { getOfflineLoggerDesignation, type OfflineLoggerDesignation } from '../../api/eventHelpers';
 import { cacheSession, getCachedSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
-import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResolution, SessionResult } from '../../types/meets';
+import type { DisciplineDefinition, DisciplineSession, MeetEntrant, SessionEntry, SessionRegistration, SessionResult } from '../../types/meets';
 import { incidentButtons } from './disciplineIncidents';
 import { memberSummary, relayLegCell, relayLegLine, relayMembersOf, standingsClub, standingsMembers, standingsTeam } from './standingsDisplay';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
@@ -38,8 +38,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [reloadKey, setReloadKey] = useState(0);
   const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
   const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
-  const [resolution, setResolution] = useState<SessionResolution | null>(null);
-  const [resolutionReason, setResolutionReason] = useState('');
   const [registrations, setRegistrations] = useState<{ sessionId: string; rows: SessionRegistration[] }>({ sessionId: '', rows: [] });
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -258,15 +256,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
 
   const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
   const completeSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'completed', session!.version));
-  const loadResolution = () => run(async () => {
-    if (sessionId) setResolution(await meets.getSessionResolution(event.id, sessionId));
-  });
-  const resolveConflict = (conflictId: string) => run(async () => {
-    if (!sessionId || !resolutionReason.trim()) return;
-    await meets.resolveSessionConflict(event.id, sessionId, conflictId, resolutionReason);
-    setResolutionReason('');
-    setResolution(await meets.getSessionResolution(event.id, sessionId));
-  });
 
   const recoveryActions = (offline.queueActions ?? []).map((action) => {
     const targetEntrant = action.target?.entrantId ? entrants.find((entrant) => entrant.id === action.target?.entrantId) : null;
@@ -421,7 +410,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>{vertical ? 'Make results official' : 'Finalize session'}</Button>
           )}
           {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
-          {isCoach && <Button variant="secondary" onClick={() => void loadResolution()} disabled={busy}>Review offline reconciliation</Button>}
           {vertical && session.verticalConfig && (
             <p>{session.verticalConfig.round}: starts at {session.verticalConfig.startingHeight.toFixed(2)} m, then +{session.verticalConfig.heightIncrement.toFixed(2)} m per height. {session.verticalConfig.failureLimit} consecutive failures eliminate an entrant.</p>
           )}
@@ -716,25 +704,6 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             </table>
           </div>
           <Button variant="secondary" onClick={exportResults} disabled={results.length === 0}>Export results CSV</Button>
-          {resolution && (
-            <section aria-label="Offline reconciliation">
-              <h3>Offline reconciliation</h3>
-              <p>{resolution.conflicts.filter((conflict) => !conflict.resolvedAt).length} unresolved conflict(s). Select the official attempt above, then record the resolution below.</p>
-              <label>
-                Resolution reason
-                <input value={resolutionReason} onChange={(input) => setResolutionReason(input.target.value)} maxLength={500} />
-              </label>
-              <ol>
-                {resolution.conflicts.map((conflict) => (
-                  <li key={conflict.id}>
-                    {conflict.actionType} from device {conflict.deviceId} at {new Date(conflict.createdAt).toLocaleString()}; expected v{conflict.expectedVersion ?? '—'}, canonical v{conflict.actualVersion ?? '—'}.
-                    {conflict.resolvedAt ? ` Resolved: ${conflict.resolutionReason ?? 'Acknowledged'}.` : <Button variant="secondary" disabled={busy || !resolutionReason.trim()} onClick={() => void resolveConflict(conflict.id)}>Acknowledge resolution</Button>}
-                  </li>
-                ))}
-                {resolution.conflicts.length === 0 && <li>No cross-device conflicts recorded.</li>}
-              </ol>
-            </section>
-          )}
         </div>
       )}
     </section>

@@ -198,7 +198,7 @@ Opened multi-discipline sessions are cached with their catalogue, entrants, entr
 
 Concurrent creates are independent observations and are never discarded. Stale authenticated edits are rejected, while public logger edits retain their last-write-wins behaviour. Both paths retain immutable conflict evidence containing the device, actor or public session, action ID, attempted payload, expected/canonical version, and source timestamps.
 
-Coaches can read `GET /api/v1/events/:eventId/sessions/:disciplineSessionId/resolution` to review session-scoped conflicts and audit history. A coach acknowledges a conflict through `POST /api/v1/events/:eventId/sessions/:disciplineSessionId/conflicts/:conflictId/resolve` with a reason, then uses the normal official-entry selection control. A session cannot be finalized while it has unresolved offline conflicts. This preserves every source observation and keeps the existing result rules as the sole finalization authority.
+Conflict evidence is audit-only: `offline_sync_conflicts` rows record every observation, but there is no resolution API and unresolved rows never block finalization. Coaches review results and record decisions exclusively through the normal official-entry selection and result-override controls, which remain the sole finalization authority.
 
 Public logger expiry or link revocation purges the token-scoped IndexedDB database when the browser next learns of invalidation. Public logger API routes are network-only in the service worker, so a revoked session cannot render a shared stale response. An offline browser cannot learn about revocation until it reconnects.
 
