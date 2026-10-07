@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicStatsPage } from './PublicStatsPage';
@@ -85,15 +85,73 @@ describe('PublicStatsPage', () => {
     await screen.findByText('Open Track Club');
 
     await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
-    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari Runner' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari Runner - Open Track Club' }));
     await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
-    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Bea Dash' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Bea Dash - Harbour Athletics' }));
 
     expect(await screen.findByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('table', { name: '100m public athlete comparison' })).toHaveTextContent('Ari Runner');
     await userEvent.click(screen.getByRole('tab', { name: 'Long jump' }));
     expect(screen.getByRole('table', { name: 'Long jump public athlete comparison' })).toHaveTextContent('6.40 m');
     expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith([clubDetail.athletes[0].athlete.id, OTHER_ATHLETE_ID], expect.any(AbortSignal), undefined);
+  });
+
+  it('lets visitors build a comparison with three clubs and three athletes', async () => {
+    const THIRD_CLUB_ID = '77777777-7777-4777-8777-777777777777';
+    const THIRD_ATHLETE_ID = '88888888-8888-4888-8888-888888888888';
+    const harbourDetail = { ...clubDetail, club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' }, athletes: [{ ...clubDetail.athletes[0], athlete: { id: OTHER_ATHLETE_ID, name: 'Bea Dash' } }] };
+    const thirdDetail = { ...clubDetail, club: { id: THIRD_CLUB_ID, name: 'Veldt Athletic Club' }, athletes: [{ ...clubDetail.athletes[0], athlete: { id: THIRD_ATHLETE_ID, name: 'Cleo Marks' } }] };
+    mockListPublicClubs.mockResolvedValue({ data: [clubDetail.club, harbourDetail.club, thirdDetail.club], meta: { count: 3 } });
+    mockGetPublicClubStatistics.mockImplementation((clubId: string) => Promise.resolve(clubId === CLUB_ID ? clubDetail : clubId === OTHER_CLUB_ID ? harbourDetail : thirdDetail));
+    render(<PublicStatsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Public statistics view' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Compare athletes' }));
+    for (const clubName of ['Open Track Club', 'Harbour Athletics', 'Veldt Athletic Club']) {
+      await userEvent.click(screen.getByRole('button', { name: 'Add club to comparison' }));
+      await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: clubName }));
+    }
+    await waitFor(() => expect(mockGetPublicClubStatistics).toHaveBeenCalledTimes(3));
+    expect(screen.getByText('3 / 5')).toBeInTheDocument();
+    expect(screen.getByText('3 clubs ready to compare.')).toBeInTheDocument();
+
+    for (const optionName of ['Ari Runner - Open Track Club', 'Bea Dash - Harbour Athletics', 'Cleo Marks - Veldt Athletic Club']) {
+      await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+      await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: optionName }));
+    }
+    expect(screen.getByLabelText('Add athlete to comparison')).not.toBeDisabled();
+    expect(screen.getByText('3 athletes ready to compare.')).toBeInTheDocument();
+    expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith(
+      [clubDetail.athletes[0].athlete.id, OTHER_ATHLETE_ID, THIRD_ATHLETE_ID],
+      expect.any(AbortSignal),
+      undefined,
+    );
+  });
+
+  it('allows selecting multiple athletes from the same club', async () => {
+    const secondAthlete = { ...clubDetail.athletes[0], athlete: { id: '99999999-9999-4999-8999-999999999999', name: 'Dev Sprint' } };
+    mockListPublicClubs.mockResolvedValue({ data: [clubDetail.club], meta: { count: 1 } });
+    mockGetPublicClubStatistics.mockResolvedValue({ ...clubDetail, athletes: [clubDetail.athletes[0], secondAthlete] });
+    render(<PublicStatsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Public statistics view' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Compare athletes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add club to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Open Track Club' }));
+    await waitFor(() => expect(mockGetPublicClubStatistics).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari Runner - Open Track Club' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Dev Sprint - Open Track Club' }));
+
+    expect(screen.getByText('2 athletes ready to compare.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Add athlete to comparison')).not.toBeDisabled();
+    expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith(
+      [clubDetail.athletes[0].athlete.id, '99999999-9999-4999-8999-999999999999'],
+      expect.any(AbortSignal),
+      undefined,
+    );
   });
 
   it('compares selected clubs by discipline', async () => {

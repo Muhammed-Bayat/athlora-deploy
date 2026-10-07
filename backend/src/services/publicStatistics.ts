@@ -444,9 +444,6 @@ export async function getPublicAthleteComparison(
     if (result.rows.length !== ids.length) throw notFound();
     const athletesById = new Map(result.rows.map((athlete) => [athlete.id, athlete]));
     const selected = ids.map((id) => athletesById.get(id)!);
-    if (new Set(selected.map((athlete) => athlete.workspace_id)).size !== ids.length) {
-      throw new ApiError(422, 'CROSS_CLUB_COMPARISON_REQUIRES_DISTINCT_CLUBS', 'Select athletes from different published clubs');
-    }
 
     const athletes = await Promise.all(selected.map(async (selectedAthlete): Promise<PublicAthleteComparisonAthlete> => {
       const statistics = await getPublicAthleteStatistics(selectedAthlete.workspace_id, selectedAthlete.club_id, client, season);
