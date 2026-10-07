@@ -121,6 +121,15 @@ describe('MeetRosterPanel', () => {
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('wraps the session tablist and roster panel in one shared card parent', async () => {
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
+
+    const tablist = await screen.findByRole('tablist', { name: 'Event discipline sessions' });
+    const panel = await screen.findByRole('tabpanel');
+    expect(tablist.parentElement).toBe(panel.parentElement);
+    expect(screen.getByRole('region', { name: 'Event roster' })).not.toBe(tablist.parentElement);
+  });
+
   it('shows relay creation only for a selected relay session and never exposes guest entry', async () => {
     const user = userEvent.setup();
     render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
