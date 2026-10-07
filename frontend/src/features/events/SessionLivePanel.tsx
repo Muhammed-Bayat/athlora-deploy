@@ -297,7 +297,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const quote = (cell: unknown) => `"${String(cell ?? '').replaceAll('"', '""')}"`;
     const rows = vertical
       ? [
-        ['Place', 'Team / club', 'Members', 'Highest clearance', 'Failures at best', 'Failures through best', 'Status'],
+        ['Place', 'Team / club', 'Members', 'Highest clearance', 'Failures at best', 'Total failures', 'Status'],
         ...results.map((row) => {
           const entrant = entrants.find((item) => item.id === row.entrantId);
           return [
@@ -306,7 +306,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             standingsMembers(entrant, entrants),
             row.effectiveResult === null ? 'NH' : row.effectiveResult.toFixed(definition?.precision ?? 2),
             row.vertical?.failuresAtBest ?? '',
-            row.vertical?.totalFailuresToBest ?? '',
+            row.vertical?.totalFailures ?? '',
             row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome,
           ];
         }),
@@ -520,7 +520,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                               onClick={() => void logVerticalAttempt(entrant.id, state)}
                               style={{ minHeight: '44px', minWidth: '44px' }}
                             >
-                              {state === 'clearance' ? 'Clearance' : state === 'failure' ? 'Failure' : 'Pass'}
+                              {state === 'clearance' ? 'Clear' : state === 'failure' ? 'Fail' : 'Skip'}
                             </Button>
                           ))}
                         </div>
@@ -611,7 +611,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         {teamEntries.map((entry, index) => (
                           <li key={entry.id}>
                             #{entry.attemptOrder ?? index + 1} {vertical
-                              ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState ?? (entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : '')}`
+                              ? `${entry.value === null ? '—' : entry.value.toFixed(definition.precision)} ${definition.unit} — ${entry.verticalState === 'pass' ? 'skip' : entry.verticalState ?? (entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : '')}`
                               : `${formatResult(entry.value, definition)} ${entry.incidentType ? getIncidentTypeLabel(entry.incidentType) : ''} ${entry.isFoul ? 'Foul' : ''}`}
                             {entry.recorderName && ` · by ${entry.recorderName}`}
                             {!vertical && result?.selectedEntryId === entry.id && ' · official'}
@@ -702,7 +702,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
                         <td>{standingsTeam(entrant)}</td>
                         <td>{standingsMembers(entrant, entrants)}</td>
                         <td className={styles.numeric}>{vertical && row.effectiveResult === null ? 'NH' : formatResult(row.effectiveResult, definition)} {row.isPb && 'PB'} {row.isSb && 'SB'}</td>
-                        {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailuresToBest}` : '—'}</td>}
+                        {vertical && <td className={styles.numeric}>{row.vertical ? `${row.vertical.failuresAtBest} / ${row.vertical.totalFailures}` : '—'}</td>}
                         <td>{row.vertical?.eliminated ? 'Eliminated' : row.effectiveOutcome}</td>
                         {!vertical && <td>{row.selectedEntryId ? 'Selected' : 'Awaiting selection'}</td>}
                       </tr>

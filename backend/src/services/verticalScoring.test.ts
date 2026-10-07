@@ -22,29 +22,50 @@ describe('high jump vertical rules', () => {
     expect(score([attempt(1.5, 'failure'), attempt(1.5), attempt(1.6)])).toMatchObject({ value: 1.6, outcome: 'valid', consecutiveFailures: 0 });
   });
   it('passes close a height, preserve failures and allow skipped heights', () => {
-    expect(score([attempt(1.5, 'failure'), attempt(1.5, 'pass'), attempt(1.6, 'failure')])).toMatchObject({ value: null, consecutiveFailures: 2 });
-    expect(score([attempt(1.5, 'pass'), attempt(1.65)])).toMatchObject({ value: 1.65, totalFailuresToBest: 0 });
+    expect(score([attempt(1.5, 'failure'), attempt(1.5, 'pass'), attempt(1.6, 'failure')])).toMatchObject({ value: null, consecutiveFailures: 1 });
+    expect(score([attempt(1.5, 'pass'), attempt(1.65)])).toMatchObject({ value: 1.65, totalFailures: 0 });
     expect(() => score([attempt(1.5, 'pass'), attempt(1.5)])).toThrow();
   });
   it('eliminates on consecutive failures across heights and rejects later attempts', () => {
-    const failures = [attempt(1.5, 'failure'), attempt(1.5, 'pass'), attempt(1.55, 'failure'), attempt(1.6, 'failure')];
+    const failures = [attempt(1.5, 'failure'), attempt(1.55, 'failure'), attempt(1.6, 'failure')];
     expect(score(failures)).toMatchObject({ value: null, outcome: 'no_result', eliminated: true });
     expect(() => score([...failures, attempt(1.65)])).toThrow();
     expect(score([attempt(1.5, 'failure'), attempt(1.5, 'failure')], { ...config, failureLimit: 2 }).eliminated).toBe(true);
     expect(score([attempt(1.5, 'failure'), attempt(1.5), attempt(1.55, 'failure'), attempt(1.55, 'failure')]).eliminated).toBe(false);
+  });
+  it('treats a skipped height as breaking the consecutive-failure streak', () => {
+    const skipped = [attempt(1.5, 'failure'), attempt(1.5, 'failure'), attempt(1.5, 'pass'), attempt(1.55, 'failure'), attempt(1.55, 'failure')];
+    expect(score(skipped)).toMatchObject({ eliminated: false, consecutiveFailures: 2, totalFailures: 4 });
+    expect(() => score([...skipped, attempt(1.6)])).not.toThrow();
+    expect(score([...skipped, attempt(1.55, 'failure')])).toMatchObject({ eliminated: true, consecutiveFailures: 3 });
+    expect(score([attempt(1.5, 'pass')]).consecutiveFailures).toBe(0);
   });
   it('void and deleted attempts are not clearances or failures', () => {
     expect(score([attempt(1.5, 'void')])).toMatchObject({ outcome: 'no_result', consecutiveFailures: 0 });
     expect(deriveVertical([{ ...attempt(1.5), deletedAt: '2026-01-01' }], config).value).toBeNull();
     expect(() => score([attempt(1.5, 'failure'), attempt(1.5, 'void'), attempt(1.5, 'failure'), attempt(1.5, 'failure'), attempt(1.55)])).toThrow();
   });
-  it('counts failures at best height then total failures only through best', () => {
+  it('counts failures at best height then total failures across the competition', () => {
     const first = score([attempt(1.5), attempt(1.55), attempt(1.6, 'failure')]);
     const second = score([attempt(1.5), attempt(1.55, 'failure'), attempt(1.55)]);
-    expect(compareVertical(first, second)).toBeLessThan(0);
     const third = score([attempt(1.5, 'failure'), attempt(1.5), attempt(1.55)]);
-    expect(compareVertical(first, third)).toBeLessThan(0);
-    expect(compareVertical(first, score([attempt(1.5), attempt(1.55)]))).toBe(0);
+    expect(first).toMatchObject({ value: 1.55, failuresAtBest: 0, totalFailures: 1 });
+    expect(second).toMatchObject({ value: 1.55, failuresAtBest: 1, totalFailures: 1 });
+    expect(third).toMatchObject({ value: 1.55, failuresAtBest: 0, totalFailures: 1 });
+    expect(compareVertical(first, second)).toBeLessThan(0);
+    expect(compareVertical(first, third)).toBe(0);
+    expect(compareVertical(first, score([attempt(1.5), attempt(1.55)]))).toBeGreaterThan(0);
+    expect(score([attempt(1.5)])).toMatchObject({ value: 1.5, failuresAtBest: 0, totalFailures: 0 });
+  });
+  it('counts failures after the final clearance towards the countback total', () => {
+    expect(score([attempt(1.5), attempt(1.6, 'failure'), attempt(1.6, 'failure'), attempt(1.6, 'failure')]))
+      .toMatchObject({ value: 1.5, failuresAtBest: 0, totalFailures: 3, eliminated: true });
+    expect(score([attempt(1.5, 'failure'), attempt(1.5), attempt(1.6, 'failure'), attempt(1.6, 'failure'), attempt(1.6, 'failure')]))
+      .toMatchObject({ value: 1.5, failuresAtBest: 1, totalFailures: 4, eliminated: true });
+    expect(score([attempt(1.5, 'failure'), attempt(1.5, 'pass'), attempt(1.6)]))
+      .toMatchObject({ value: 1.6, failuresAtBest: 0, totalFailures: 1 });
+    expect(score([attempt(1.6, 'failure'), attempt(1.6, 'failure'), attempt(1.6, 'failure')]))
+      .toMatchObject({ value: null, failuresAtBest: 0, totalFailures: 3, eliminated: true });
   });
   it('rejects incompatible definitions', () => {
     for (const change of [{ unit: 'seconds' }, { precision: 3 }, { direction: 'lower' }]) expect(() => validateVerticalDefinition({ ...definition, ...change } as DisciplineDefinition)).toThrow();

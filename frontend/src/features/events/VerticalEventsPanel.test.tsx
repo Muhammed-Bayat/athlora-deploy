@@ -29,9 +29,13 @@ it('logs a height-specific clearance and displays the authoritative result witho
   await screen.findByRole('button', { name: 'Vertical entrant' });
   await user.click(screen.getByRole('button', { name: 'Vertical entrant' }));
   await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari' }));
-  vi.mocked(api.listSessionResults).mockResolvedValue({ data: [{ entrantId: 'en', effectiveResult: 1.5, effectiveOutcome: 'valid', placing: null, vertical: { failuresAtBest: 0, totalFailuresToBest: 0, eliminated: false } }] } as never);
-  fireEvent.click(screen.getByRole('button', { name: 'clearance' }));
+  vi.mocked(api.listSessionResults).mockResolvedValue({ data: [{ entrantId: 'en', effectiveResult: 1.5, effectiveOutcome: 'valid', placing: null, vertical: { failuresAtBest: 0, totalFailures: 0, eliminated: false } }] } as never);
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event', { disciplineSessionId: 's', entrantId: 'en' }, expect.objectContaining({ verticalState: 'clearance', value: 1.5, unit: 'metres' })));
+  expect(screen.getByRole('button', { name: 'Fail' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+  await waitFor(() => expect(api.createSessionEntry).toHaveBeenCalledWith('event', { disciplineSessionId: 's', entrantId: 'en' }, expect.objectContaining({ verticalState: 'pass', value: 1.5, unit: 'metres' })));
   expect(await screen.findByRole('cell', { name: '1.50 m' })).toBeInTheDocument();
   expect(screen.getByRole('table')).toHaveTextContent('Guest');
   expect(screen.getByRole('table')).toHaveTextContent('Ari');

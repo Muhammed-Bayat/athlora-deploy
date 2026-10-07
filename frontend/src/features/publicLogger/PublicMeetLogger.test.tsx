@@ -156,7 +156,7 @@ describe('PublicMeetLogger', () => {
     expect(heightInput).toHaveAttribute('type', 'text');
     await user.clear(heightInput);
     await user.type(heightInput, '1,85');
-    await user.click(screen.getByRole('button', { name: 'Clearance' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
 
     await waitFor(() => expect(publicLoggerApi.createPublicMeetLoggerEntry).toHaveBeenCalledWith(
       'public-session', EVENT_ID, { disciplineSessionId: verticalSessionId, entrantId: GUEST_ID },
