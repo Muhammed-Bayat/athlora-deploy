@@ -72,6 +72,19 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/stats/report');
   });
 
+  it('keeps app destinations and account actions in the scrollable mobile menu', () => {
+    renderLanding();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /navigation menu/i });
+    expect(within(dialog).getByRole('link', { name: 'Schedule' })).toHaveAttribute('href', '/schedule');
+    expect(within(dialog).getByRole('link', { name: 'Stats' })).toHaveAttribute('href', '/stats');
+    expect(within(dialog).getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/stats/report');
+    expect(within(dialog).getByRole('button', { name: /^log in$/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^get started$/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'The squad' })).not.toBeInTheDocument();
+  });
+
   it('supports keyboard tabs, FAQ relationships, and menu focus restoration', () => {
     renderLanding();
     const athletesTab = screen.getByRole('tab', { name: 'Athletes' });

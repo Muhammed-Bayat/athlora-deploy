@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, SelectHTMLAttributes } from 'react';
 import styles from './Select.module.css';
+import { useFloatingPosition } from './useFloatingPosition';
 
 export interface SelectOption {
   value: string;
@@ -39,6 +40,8 @@ export function Select({
   disabled,
   className,
   'aria-label': ariaLabel,
+  'aria-describedby': describedBy,
+  'aria-invalid': ariaInvalid,
   ...props
 }: SelectProps) {
   const fallbackId = useId();
@@ -51,6 +54,13 @@ export function Select({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const { style: menuStyle, placement } = useFloatingPosition({
+    open,
+    anchorRef: triggerRef,
+    floatingRef: menuRef,
+    preferredPlacement: menuPlacement,
+    minWidth: 190,
+  });
 
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label ?? placeholder ?? options[0]?.label ?? '',
@@ -76,8 +86,6 @@ export function Select({
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedSearch));
   }, [options, search, searchable]);
-  const scrollableOptions = visibleOptions.length > 6;
-
   if (variant === 'field') {
     return (
       <select
@@ -211,6 +219,8 @@ export function Select({
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
+        aria-invalid={ariaInvalid}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={handleTriggerKeyDown}
         disabled={disabled}
@@ -218,12 +228,10 @@ export function Select({
         <span className={styles.triggerLabel}>{selectedLabel}</span>
       </button>
       {open && <div
-        id={menuId}
         ref={menuRef}
-        className={[styles.menu, menuPlacement === 'up' ? styles.menuUp : '', styles.menuOpen].filter(Boolean).join(' ')}
-        role="listbox"
-        aria-labelledby={`${selectId}-trigger`}
-        onKeyDown={handleMenuKeyDown}
+        className={[styles.menu, styles.menuOpen].join(' ')}
+        data-placement={placement}
+        style={menuStyle}
       >
         {searchable && (
           <div className={styles.menuSearch}>
@@ -239,7 +247,13 @@ export function Select({
             />
           </div>
         )}
-        <div className={scrollableOptions ? styles.scrollableOptions : undefined}>
+        <div
+          id={menuId}
+          className={styles.scrollableOptions}
+          role="listbox"
+          aria-labelledby={`${selectId}-trigger`}
+          onKeyDown={handleMenuKeyDown}
+        >
           {visibleOptions.map((option) => (
             <button
               type="button"

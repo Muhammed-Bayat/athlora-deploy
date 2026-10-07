@@ -1,5 +1,7 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Select } from './Select';
 import styles from './DatePicker.module.css';
+import { useFloatingPosition } from './useFloatingPosition';
 
 interface DatePickerProps {
   id?: string;
@@ -37,9 +39,17 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   const pickerId = id ?? fallbackId;
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => triggerRef.current!);
   const selected = parseIso(value);
   const [open, setOpen] = useState(false);
+  const { style: calendarStyle } = useFloatingPosition({
+    open,
+    anchorRef: triggerRef,
+    floatingRef: calendarRef,
+    minWidth: 284,
+    matchAnchorWidth: false,
+  });
   const [month, setMonth] = useState(() => {
     const date = selected ?? new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -132,13 +142,20 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
     >
       <span>{displayValue}</span><i aria-hidden="true" />
     </button>
-    {open && <div id={`${pickerId}-calendar`} className={styles.calendar} role="dialog" aria-label={`${ariaLabel} calendar`} onKeyDown={handleCalendarKeyDown}>
+    {open && <div ref={calendarRef} id={`${pickerId}-calendar`} className={styles.calendar} role="dialog" aria-label={`${ariaLabel} calendar`} style={calendarStyle} onKeyDown={handleCalendarKeyDown}>
       <header>
         <div className={styles.monthYear}>
           <strong>{month.toLocaleDateString(undefined, { month: 'long' })}</strong>
-          <select aria-label="Year" value={month.getFullYear()} onChange={(event) => setMonth((current) => new Date(Number(event.target.value), current.getMonth(), 1))}>
-            {years.map((year) => <option key={year} value={year}>{year}</option>)}
-          </select>
+          <Select
+            aria-label="Year"
+            className={styles.yearSelect}
+            compact
+            searchable
+            searchPlaceholder="Search year"
+            value={String(month.getFullYear())}
+            onChange={(event) => setMonth((current) => new Date(Number(event.target.value), current.getMonth(), 1))}
+            options={years.map((year) => ({ value: String(year), label: String(year) }))}
+          />
         </div>
         <div><button type="button" aria-label="Previous month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div>
       </header>

@@ -284,8 +284,9 @@ function SummaryDashboard({
     const table = wrap.firstElementChild;
     const measure = () => {
       const scrollable = wrap.scrollHeight > wrap.clientHeight + 2;
-      setRosterScrollable(scrollable);
-      setRosterAtEnd(!scrollable || wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2);
+      const atEnd = !scrollable || wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2;
+      setRosterScrollable((current) => current === scrollable ? current : scrollable);
+      setRosterAtEnd((current) => current === atEnd ? current : atEnd);
     };
     measure();
     if (typeof ResizeObserver === 'undefined' || !table) return;

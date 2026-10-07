@@ -118,6 +118,7 @@ describe('CoachConsole dashboard navigation', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
@@ -136,6 +137,13 @@ describe('CoachConsole dashboard navigation', () => {
       json: async () => ({ results: [{ latitude: -26.2041, longitude: 28.0473, timezone: 'Africa/Johannesburg' }] }),
     } as Response);
     vi.mocked(weatherApi.getCurrentWeather).mockRejectedValue(new Error('Weather service unavailable'));
+  });
+
+  it('does not mount the weather canvas when weather effects are disabled', () => {
+    localStorage.setItem('athlora-weather-effects', 'off');
+    const { container } = renderConsole();
+
+    expect(container.querySelector('canvas')).not.toBeInTheDocument();
   });
 
   it('opens exact athlete, event, and live logging destinations', async () => {
