@@ -297,7 +297,7 @@ describe('AthleteDetailPage', () => {
 
     await screen.findByRole('table', { name: 'Recent results' });
     const tabs = screen.getByRole('tablist', { name: 'Result history discipline' });
-    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Long jump', '100m', '4x100m relay']);
+    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['100m', '4x100m relay', 'Long jump']);
     expect(within(tabs).getByRole('tab', { name: '100m' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('City Final')).toBeInTheDocument();
 

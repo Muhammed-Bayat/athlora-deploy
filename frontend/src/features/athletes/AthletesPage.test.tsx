@@ -90,7 +90,7 @@ afterEach(() => {
 describe('AthletesPage', () => {
   it('shows selected disciplines prominently and a clear empty state when none are selected', async () => {
     athleteApi.listAthletes.mockResolvedValue({
-      data: [athlete({ preferredDisciplineIds: [ONE_HUNDRED_ID, LONG_JUMP_ID] }), bea],
+      data: [athlete({ preferredDisciplineIds: [LONG_JUMP_ID, ONE_HUNDRED_ID] }), bea],
       meta: { count: 2 },
     });
 

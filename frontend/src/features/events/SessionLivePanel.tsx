@@ -13,6 +13,7 @@ import { incidentButtons } from './disciplineIncidents';
 import { memberSummary, relayLegCell, relayLegLine, relayMembersOf, standingsClub, standingsMembers, standingsTeam } from './standingsDisplay';
 import { getIncidentTypeLabel } from '../results/resultPresentation';
 import { formatResultUnit } from '../../utils/formatting';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import styles from './SessionLivePanel.module.css';
 
 function formatResult(value: number | null, definition?: DisciplineDefinition): string {
@@ -43,7 +44,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const timedSessions = sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId));
+  const timedSessions = sortDisciplines(
+    sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId)),
+    (item) => definitions.find((candidate) => candidate.id === item.disciplineDefinitionId)?.code ?? item.disciplineDefinitionId,
+  );
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
   const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
