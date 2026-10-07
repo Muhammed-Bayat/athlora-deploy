@@ -80,8 +80,8 @@ function athleteDiscipline(athlete: ComparisonAthleteAggregate, discipline: Publ
   return athlete.disciplines?.find((entry) => entry.discipline === discipline.discipline);
 }
 
-function DisciplineTabs({ disciplines, selected, onSelect, onClear, label }: { disciplines: PublicDiscipline[]; selected: PublicDiscipline | undefined; onSelect: (code: string) => void; onClear?: () => void; label: string }) {
-  return <div className={styles.disciplinePicker}><div className={styles.disciplineActions}><div className={styles.disciplineLabel}>Discipline {selected && <strong>Selected: {selected.label}</strong>}</div>{onClear && <Button onClick={onClear} disabled={!selected}>Clear discipline</Button>}</div><div className={styles.disciplineTabs} role="tablist" aria-label={label}>{disciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selected?.discipline} onClick={() => onSelect(discipline.discipline)}>{discipline.label}</button>)}</div></div>;
+function DisciplineTabs({ disciplines, selected, onSelect, label }: { disciplines: PublicDiscipline[]; selected: PublicDiscipline | undefined; onSelect: (code: string) => void; label: string }) {
+  return <div className={styles.disciplinePicker}><div className={styles.disciplineActions}><div className={styles.disciplineLabel}>Discipline {selected && <strong>Selected: {selected.label}</strong>}</div></div><div className={styles.disciplineTabs} role="tablist" aria-label={label}>{disciplines.map((discipline) => <button key={discipline.discipline} type="button" role="tab" aria-selected={discipline.discipline === selected?.discipline} onClick={() => onSelect(discipline.discipline)}>{discipline.label}</button>)}</div></div>;
 }
 
 function ComparisonTable({ comparison, discipline }: { comparison: MultiComparisonDetail; discipline: PublicDiscipline }) {
@@ -230,7 +230,6 @@ export function ComparisonPage() {
   const [publicationError, setPublicationError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('chart');
   const [disciplineCode, setDisciplineCode] = useState('');
-  const [disciplineCleared, setDisciplineCleared] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -439,7 +438,6 @@ export function ComparisonPage() {
     });
     setCrossAthletes({});
     setDisciplineCode('');
-    setDisciplineCleared(false);
   }, [setSearchParams]);
 
   const updateClub = useCallback((clubKey: 'club1Id' | 'club2Id', value: string) => {
@@ -466,17 +464,12 @@ export function ComparisonPage() {
       ? clubStatistics?.availableDisciplines ?? []
       : [...new Map((clubComparison?.clubs ?? []).flatMap((club) => club.availableDisciplines ?? []).map((discipline) => [discipline.discipline, discipline])).values()];
   const selectedDiscipline = availableDisciplines.find((discipline) => discipline.discipline === disciplineCode)
-    ?? (athleteMode || !disciplineCleared ? availableDisciplines[0] : undefined);
+    ?? availableDisciplines[0];
   useEffect(() => {
     if (selectedDiscipline && selectedDiscipline.discipline !== disciplineCode) setDisciplineCode(selectedDiscipline.discipline);
   }, [disciplineCode, selectedDiscipline]);
   const selectDiscipline = useCallback((code: string) => {
     setDisciplineCode(code);
-    setDisciplineCleared(false);
-  }, []);
-  const clearClubDiscipline = useCallback(() => {
-    setDisciplineCode('');
-    setDisciplineCleared(true);
   }, []);
   const loading = athleteMode
     ? athleteComparisonLoading
@@ -646,7 +639,7 @@ export function ComparisonPage() {
 
       {!loading && !error && mode === 'club-statistics' && clubStatistics && (
         <>
-          {availableDisciplines.length > 0 && <Card><DisciplineTabs disciplines={availableDisciplines} selected={selectedDiscipline} onSelect={selectDiscipline} onClear={clearClubDiscipline} label="Club statistics discipline" /></Card>}
+          {availableDisciplines.length > 0 && <Card><DisciplineTabs disciplines={availableDisciplines} selected={selectedDiscipline} onSelect={selectDiscipline} label="Club statistics discipline" /></Card>}
           <Card>
             <div className={styles.metricsGrid} role="list" aria-label="Club statistics summary">
               <div role="listitem"><TextMetricCard label="Total roster" value={selectedDiscipline ? clubDiscipline(clubStatistics, selectedDiscipline)?.rosterAthleteCount ?? clubStatistics.roster.total : clubStatistics.roster.total} /></div>
@@ -661,7 +654,7 @@ export function ComparisonPage() {
 
       {!loading && !error && mode === 'club-comparison' && clubComparison && (
         <>
-          {availableDisciplines.length > 0 && <Card><DisciplineTabs disciplines={availableDisciplines} selected={selectedDiscipline} onSelect={selectDiscipline} onClear={clearClubDiscipline} label="Club comparison discipline" /></Card>}
+          {availableDisciplines.length > 0 && <Card><DisciplineTabs disciplines={availableDisciplines} selected={selectedDiscipline} onSelect={selectDiscipline} label="Club comparison discipline" /></Card>}
           <Card>
             <div className={styles.metricsGrid} role="list" aria-label="Club comparison summary">
               {clubComparison.clubs.flatMap((club) => {

@@ -409,23 +409,12 @@ describe('ComparisonPage', () => {
     renderPage({ mode: 'club-statistics', club1Id: CLUB_1.id });
 
     await screen.findByRole('tablist', { name: 'Club statistics discipline' });
+    expect(screen.queryByRole('button', { name: 'Clear discipline' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Long jump' }));
 
     expect(screen.getByText('Selected: Long jump')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: new RegExp('long jump statistics', 'i') })).toHaveTextContent('6.80 m');
     expect(screen.getByRole('list', { name: 'Club statistics summary' })).toHaveTextContent('Total roster3Active athletes2');
-  });
-
-  it('clears club statistics discipline metrics to the full roster and hides the table', async () => {
-    mockGetClubStatistics.mockResolvedValue(clubStatistics);
-    renderPage({ mode: 'club-statistics', club1Id: CLUB_1.id });
-
-    await screen.findByRole('table', { name: new RegExp('100m statistics', 'i') });
-    await userEvent.click(screen.getByRole('button', { name: 'Clear discipline' }));
-
-    expect(screen.getByRole('list', { name: 'Club statistics summary' })).toHaveTextContent('Total roster7Active athletes4');
-    expect(screen.getByText('Choose a discipline to view discipline-specific statistics.')).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: new RegExp('statistics', 'i') })).not.toBeInTheDocument();
   });
 
   it('compares two clubs side by side', async () => {
@@ -436,18 +425,6 @@ describe('ComparisonPage', () => {
     expect(within(table).getByRole('columnheader', { name: 'Bravo Track' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Club comparison summary' })).toHaveTextContent('Alpha Athletics total roster6Alpha Athletics active athletes4');
     expect(mockGetClubComparison).toHaveBeenCalledWith(CLUB_1.id, CLUB_2.id);
-  });
-
-  it('clears club comparison discipline metrics to the full roster and hides the table', async () => {
-    mockGetClubComparison.mockResolvedValue({ clubs: [clubStatistics, { ...clubStatistics, club: { id: CLUB_2.id, name: CLUB_2.name } }] });
-    renderPage({ mode: 'club-comparison', club1Id: CLUB_1.id, club2Id: CLUB_2.id });
-
-    await screen.findByRole('table', { name: new RegExp('club comparison metrics', 'i') });
-    await userEvent.click(screen.getByRole('button', { name: 'Clear discipline' }));
-
-    expect(screen.getByRole('list', { name: 'Club comparison summary' })).toHaveTextContent('Alpha Athletics total roster7Alpha Athletics active athletes4Bravo Track total roster7Bravo Track active athletes4');
-    expect(screen.getByText('Choose a discipline to view discipline-specific comparison metrics.')).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: new RegExp('club comparison metrics', 'i') })).not.toBeInTheDocument();
   });
 
   it('uses the multi-club API and renders every selected club', async () => {
