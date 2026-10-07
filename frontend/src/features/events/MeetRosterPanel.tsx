@@ -210,7 +210,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   return <section className={styles.roster} aria-label="Event roster" aria-busy={busy}>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {sessions.length === 0 && <p className={styles.empty}>No discipline sessions have been added to this event yet.</p>}
-    {sessions.length > 0 && <div className={styles.sessionTabs} role="tablist" aria-label="Event discipline sessions">
+    {sessions.length > 0 && <div className={styles.rosterCard}><div className={styles.sessionTabs} role="tablist" aria-label="Event discipline sessions">
       {sessions.map((session) => {
         const sessionDefinition = definitions.find((item) => item.id === session.disciplineDefinitionId);
         const active = session.id === sessionId;
@@ -224,7 +224,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
           <small>{session.label === sessionDefinition?.presentation.label ? session.status.replace('_', ' ') : session.label}</small>
         </button>;
       })}
-    </div>}
+    </div>
 
     {selected && <div className={styles.sessionPanel} role="tabpanel" id={`meet-session-${selected.id}-panel`} aria-labelledby={`meet-session-${selected.id}-tab`} tabIndex={0}>
       <header className={styles.rosterHeader}>
@@ -286,6 +286,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
           <div className={styles.pickerActions}><Button onClick={() => void saveRelayEdit()} disabled={busy || !editRelayName.trim() || !editReadiness.allAttending}>Save team</Button><Button variant="secondary" onClick={() => setEditingRelayId('')} disabled={busy}>Cancel</Button></div>
         </fieldset>;
       })()}
+    </div>}
     </div>}
   </section>;
 }

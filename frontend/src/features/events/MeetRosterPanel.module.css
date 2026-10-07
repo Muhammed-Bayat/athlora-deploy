@@ -22,11 +22,19 @@
 
 .empty { color: var(--console-muted); }
 
+.rosterCard {
+  overflow: hidden;
+  border: 2px solid var(--console-cyan);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--console-surface) 92%, #00111a);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--console-cyan) 18%, transparent);
+}
+
 .sessionTabs {
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
-  padding: 0 var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--console-line);
 }
 
@@ -61,10 +69,6 @@
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-4);
-  border: 2px solid var(--console-cyan);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--console-surface) 92%, #00111a);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--console-cyan) 18%, transparent);
 }
 
 .sessionPanel:focus-visible,
@@ -321,6 +325,7 @@
 .rsvpSummary strong { color: var(--console-ink); }
 
 @media (max-width: 700px) {
+  .sessionTabs { padding: var(--space-1) var(--space-2); }
   .sessionPanel { padding: var(--space-3); }
   .rosterHeader,
   .addAthletes,
