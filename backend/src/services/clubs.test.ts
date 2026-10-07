@@ -108,6 +108,27 @@ describe('listClubCalendarEvents', () => {
     expect(parameters).toEqual([[CLUB_ID], '2026-01-01', '2027-01-01']);
   });
 
+  it('filters by scope and rejects unknown scopes', async () => {
+    query.mockResolvedValue(poolRow([]));
+    const season = { selected: 2026, startDate: '2026-01-01', endDate: '2027-01-01' };
+
+    await listClubCalendarEvents([CLUB_ID], undefined, season, 'past');
+    const [pastSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(pastSql).toContain('e.date < CURRENT_DATE');
+    expect(pastSql).not.toContain('e.date >= CURRENT_DATE');
+    expect(pastSql).toContain('ORDER BY e.date DESC');
+
+    await listClubCalendarEvents([CLUB_ID], undefined, season, 'all');
+    const [allSql] = query.mock.calls[1] as [string, unknown[]];
+    expect(allSql).not.toContain('CURRENT_DATE');
+
+    await expect(listClubCalendarEvents([CLUB_ID], undefined, season, 'week')).rejects.toMatchObject({
+      status: 422,
+      code: 'CLUB_CALENDAR_SCOPE_INVALID',
+    });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects an empty or malformed club selection before querying', async () => {
     await expect(listClubCalendarEvents([])).rejects.toMatchObject({
       status: 422,

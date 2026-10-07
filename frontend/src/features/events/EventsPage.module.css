@@ -327,10 +327,10 @@
   background: color-mix(in srgb, var(--console-teal) 14%, transparent);
 }
 
-.calendarEvent[data-club-index='0'] { border-left-color: #ae79e9; background: color-mix(in srgb, #ae79e9 18%, transparent); }
-.calendarEvent[data-club-index='1'] { border-left-color: #ef9a4f; background: color-mix(in srgb, #ef9a4f 18%, transparent); }
-.calendarEvent[data-club-index='2'] { border-left-color: #77c990; background: color-mix(in srgb, #77c990 18%, transparent); }
-.calendarEvent[data-club-index='3'] { border-left-color: #ee6e98; background: color-mix(in srgb, #ee6e98 18%, transparent); }
+.calendarEvent[data-club-index='0'] { border-left-color: #ae79e9; background: color-mix(in srgb, #ae79e9 28%, transparent); }
+.calendarEvent[data-club-index='1'] { border-left-color: #ef9a4f; background: color-mix(in srgb, #ef9a4f 28%, transparent); }
+.calendarEvent[data-club-index='2'] { border-left-color: #77c990; background: color-mix(in srgb, #77c990 28%, transparent); }
+.calendarEvent[data-club-index='3'] { border-left-color: #ee6e98; background: color-mix(in srgb, #ee6e98 28%, transparent); }
 .calendarEvent[data-shared='true'] { border-left-width: 4px; background-image: repeating-linear-gradient(135deg, rgba(138, 233, 242, 0.14) 0 5px, transparent 5px 10px); font-weight: var(--font-weight-bold); }
 
 .calendarEvent b {
@@ -350,12 +350,12 @@
 .clubBadge {
   border: 1px solid rgba(174, 121, 233, 0.45) !important;
   background: rgba(174, 121, 233, 0.14) !important;
-  color: #d8bcff !important;
+  color: color-mix(in srgb, #ae79e9 65%, var(--console-ink, var(--ui-text, currentColor))) !important;
 }
 
-.clubBadge[data-club-index='1'] { border-color: rgba(239, 154, 79, 0.45) !important; background: rgba(239, 154, 79, 0.14) !important; color: #ffc68f !important; }
-.clubBadge[data-club-index='2'] { border-color: rgba(119, 201, 144, 0.45) !important; background: rgba(119, 201, 144, 0.14) !important; color: #a8e5b9 !important; }
-.clubBadge[data-club-index='3'] { border-color: rgba(238, 110, 152, 0.45) !important; background: rgba(238, 110, 152, 0.14) !important; color: #ffb7cd !important; }
+.clubBadge[data-club-index='1'] { border-color: rgba(239, 154, 79, 0.45) !important; background: rgba(239, 154, 79, 0.14) !important; color: color-mix(in srgb, #ef9a4f 65%, var(--console-ink, var(--ui-text, currentColor))) !important; }
+.clubBadge[data-club-index='2'] { border-color: rgba(119, 201, 144, 0.45) !important; background: rgba(119, 201, 144, 0.14) !important; color: color-mix(in srgb, #77c990 65%, var(--console-ink, var(--ui-text, currentColor))) !important; }
+.clubBadge[data-club-index='3'] { border-color: rgba(238, 110, 152, 0.45) !important; background: rgba(238, 110, 152, 0.14) !important; color: color-mix(in srgb, #ee6e98 65%, var(--console-ink, var(--ui-text, currentColor))) !important; }
 .clubBadge[data-shared='true'] { border-style: dashed !important; }
 
 .dayHeading {
@@ -496,6 +496,11 @@
 [data-status='cancelled'] {
   color: var(--console-badge-danger-text);
   background: var(--console-badge-danger-surface);
+}
+
+.calendarEvent {
+  color: inherit;
+  background: color-mix(in srgb, var(--console-cyan) 12%, transparent);
 }
 
 [data-status='archived'] {

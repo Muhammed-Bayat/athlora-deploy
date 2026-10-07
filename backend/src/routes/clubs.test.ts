@@ -154,7 +154,19 @@ describe('club routes', () => {
       .set('Authorization', 'Bearer valid');
 
     expect(response.status).toBe(200);
-    expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID]);
+    expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID, REQUEST_ID], undefined, undefined, undefined);
+  });
+
+  it('forwards the calendar scope query parameter', async () => {
+    query.mockResolvedValue(applicationUser());
+    vi.mocked(clubService.listClubCalendarEvents).mockResolvedValue([]);
+
+    const response = await request(app)
+      .get(`/api/v1/clubs/calendar?clubId=${CLUB_ID}&scope=past`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(clubService.listClubCalendarEvents).toHaveBeenCalledWith([CLUB_ID], undefined, undefined, 'past');
   });
 
   it('lets a coach view and update the active club publication settings', async () => {

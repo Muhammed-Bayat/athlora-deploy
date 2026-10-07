@@ -303,7 +303,7 @@ describe('EventsPage', () => {
     await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
     await user.click(await screen.findByRole('button', { name: 'Add' }));
 
-    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888']));
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888'], undefined, 'upcoming'));
     const rivalDate = new Date('2026-08-22T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
     await user.click(screen.getByRole('button', { name: `${rivalDate}, 1 event` }));
     expect(screen.getByRole('button', { name: /Rival Relay/ })).toBeInTheDocument();
@@ -329,6 +329,7 @@ describe('EventsPage', () => {
     await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(
       ['88888888-8888-4888-8888-888888888888'],
       '2025',
+      'upcoming',
     ));
     expect(screen.getByText('Showing your schedule alongside 1 selected club.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove Rival Track Club' }));
@@ -336,6 +337,24 @@ describe('EventsPage', () => {
     expect(screen.queryByLabelText('Selected clubs')).not.toBeInTheDocument();
     expect(screen.getByText('Search for one or more clubs to combine their upcoming schedules with yours.')).toBeInTheDocument();
     window.history.replaceState({}, '', '/');
+  });
+
+  it('loads past club events when the Past tab is active', async () => {
+    clubsApi.listClubCalendarEvents.mockResolvedValue({ data: [{ club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: event({ id: '99999999-9999-4999-8999-999999999999', title: 'Rival Relay', date: '2026-08-05' }) }], meta: { count: 1 } });
+    const user = userEvent.setup();
+    renderPage({ defaultView: 'calendar' });
+
+    await user.click(await screen.findByRole('button', { name: 'Club calendars' }));
+    await user.type(screen.getByLabelText('Add clubs to the calendar'), 'Rival');
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888'], undefined, 'upcoming'));
+
+    await user.click(screen.getByRole('button', { name: 'Past' }));
+    await waitFor(() => expect(clubsApi.listClubCalendarEvents).toHaveBeenCalledWith(['88888888-8888-4888-8888-888888888888'], undefined, 'past'));
+
+    const pastDate = new Date('2026-08-05T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    await user.click(await screen.findByRole('button', { name: `${pastDate}, 1 event` }));
+    expect(await screen.findByRole('button', { name: /Rival Relay/ })).toBeInTheDocument();
   });
 
   it('hands an event id to routed detail navigation', async () => {

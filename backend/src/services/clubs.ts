@@ -293,20 +293,28 @@ export async function listClubCalendarEvents(
   clubIds: unknown,
   executor: DbExecutor = getPool(),
   season: SeasonScope = parseSeasonYear(undefined),
+  scope: unknown = 'upcoming',
 ): Promise<ClubCalendarEvent[]> {
   if (!Array.isArray(clubIds) || clubIds.length === 0 || !clubIds.every(isCanonicalUuid)) {
     throw new ApiError(422, 'CLUB_CALENDAR_SELECTION_INVALID', 'Select at least one valid club');
   }
+  if (scope !== 'upcoming' && scope !== 'past' && scope !== 'all') {
+    throw new ApiError(422, 'CLUB_CALENDAR_SCOPE_INVALID', 'Scope must be upcoming, past, or all');
+  }
 
+  const scopeFilter = scope === 'all' ? '' : scope === 'past' ? 'AND e.date < CURRENT_DATE' : 'AND e.date >= CURRENT_DATE';
+  const orderBy = scope === 'past'
+    ? 'ORDER BY e.date DESC, e.time DESC NULLS LAST, e.created_at DESC, e.id DESC'
+    : 'ORDER BY e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC';
   const result = await executor.query<ClubCalendarEventRow>(
     `SELECT e.id, e.workspace_id, e.created_by, e.type, e.discipline, e.title, e.date, e.time, e.location_name, e.latitude, e.longitude, e.status, e.created_at, e.updated_at,
             c.id AS club_id, c.name AS club_name
      FROM events e
      JOIN clubs c ON c.workspace_id = e.workspace_id
       WHERE c.id = ANY($1::uuid[])
-        AND (e.date >= CURRENT_DATE OR $2::date = '0001-01-01'::date)
+        ${scopeFilter}
         AND e.date >= $2::date AND e.date < $3::date
-     ORDER BY e.date ASC, e.time ASC NULLS LAST, e.created_at ASC, e.id ASC`,
+     ${orderBy}`,
     [clubIds, season.selected === 'all' ? '0001-01-01' : season.startDate!, season.selected === 'all' ? '9999-12-31' : season.endDate!],
   );
   return result.rows.map((row) => ({
