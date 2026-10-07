@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { Athlete, AthleticsEvent, EventParticipantSummary, Result, User } from '../../types';
 import { CurrentUserProvider } from '../auth/CurrentUserProvider';
@@ -185,6 +185,7 @@ function result(overrides: Partial<Result> = {}): Result {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-16T08:00:00.000Z') });
   eventApi.listEvents.mockResolvedValue({
     data: [past, cancelled, city, training],
     meta: { count: 4 },
@@ -220,6 +221,10 @@ beforeEach(() => {
   meetsApi.createSession.mockResolvedValue({});
   clubsApi.listClubs.mockResolvedValue({ data: [{ id: '88888888-8888-4888-8888-888888888888', workspaceId: '99999999-9999-4999-8999-999999999999', name: 'Rival Track Club', createdAt: '2026-08-16T10:00:00.000Z', updatedAt: '2026-08-16T10:00:00.000Z' }], meta: { count: 1 } });
   clubsApi.listClubCalendarEvents.mockResolvedValue({ data: [{ club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: event({ id: '99999999-9999-4999-8999-999999999999', title: 'Rival Relay', date: '2026-08-22' }) }, { club: { id: '88888888-8888-4888-8888-888888888888', name: 'Rival Track Club' }, event: city }], meta: { count: 2 } });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function renderPage(props: Partial<React.ComponentProps<typeof EventsPage>> = {}) {
@@ -498,6 +503,37 @@ describe('EventsPage', () => {
     expect(screen.queryByRole('button', { name: /City Sprint Meet/ })).not.toBeInTheDocument();
     expect(eventApi.listEvents).toHaveBeenLastCalledWith({ status: 'archived' });
     expect(await screen.findByText(/1 event shown/)).toBeInTheDocument();
+  });
+
+  it('flags scheduled events past their grace period as overdue', async () => {
+    const lateEvent = event({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', title: 'Morning Mile', date: TODAY, time: '06:00:00' });
+    eventApi.listEvents.mockResolvedValueOnce({ data: [lateEvent, city], meta: { count: 2 } });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /Morning Mile/ })).toHaveTextContent('Overdue');
+    expect(screen.getByRole('button', { name: /City Sprint Meet/ })).toHaveTextContent('Scheduled');
+  });
+
+  it('filters to overdue events regardless of their date group', async () => {
+    const yesterdayLate = event({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', title: 'Yesterday Meet', date: '2026-08-15', time: '17:00:00' });
+    eventApi.listEvents.mockResolvedValueOnce({ data: [past, cancelled, city, training, yesterdayLate], meta: { count: 5 } });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /City Sprint Meet/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Yesterday Meet/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by event status'), 'overdue');
+
+    expect(await screen.findByRole('button', { name: /Yesterday Meet/ })).toHaveTextContent('Overdue');
+    expect(screen.queryByRole('button', { name: /City Sprint Meet/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /August Time Trial/ })).not.toBeInTheDocument();
+    expect(eventApi.listEvents).toHaveBeenCalledTimes(1);
+
+    await user.selectOptions(screen.getByLabelText('Filter by event status'), 'scheduled');
+
+    expect(await screen.findByRole('button', { name: /City Sprint Meet/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Yesterday Meet/ })).not.toBeInTheDocument();
   });
 
   it('validates and creates an event with an exact normalized payload', async () => {

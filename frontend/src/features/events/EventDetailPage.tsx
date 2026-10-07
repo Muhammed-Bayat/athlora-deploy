@@ -16,6 +16,7 @@ import { FixtureHostPanel } from './FixtureHostPanel';
 import { GuestRosterPanel } from './GuestRosterPanel';
 import { EventForm, ParticipantManager, errorMessage, formattedDate, formattedStatus, formattedType, replacement, type SessionDefinitionSelection } from './EventsPage';
 import styles from './EventsPage.module.css';
+import { eventDisplayStatus } from '../../utils/eventStatus';
 import { VerticalEventsPanel } from './VerticalEventsPanel';
 import { MeetRosterPanel } from './MeetRosterPanel';
 import { createSession, listDisciplines, listSessions } from '../../api/meets';
@@ -162,6 +163,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
 
   const isHost = event.workspaceId === activeWorkspace.id;
   const archived = event.archivedAt !== null;
+  const tag = archived ? 'archived' as const : eventDisplayStatus(event, activeWorkspace.timezone);
   const canManageLifecycle = canOperate && isHost;
   const canEditRoster = !archived && event.status !== 'completed' && event.status !== 'cancelled';
   const canEditEvent = !archived && (event.status === 'scheduled' || event.status === 'in_progress');
@@ -172,7 +174,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     {notice && <Toast variant="success" onDismiss={() => setNotice(null)}>{notice}</Toast>}
     {errorNotice && <Toast variant="error" onDismiss={() => setErrorNotice(null)}>{errorNotice}</Toast>}
     <div ref={detailRef} className={styles.detail} hidden={Boolean(correctionTarget)} tabIndex={-1}>
-      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={event.archivedAt !== null ? 'archived' : event.status}>{event.archivedAt !== null ? 'Archived' : formattedStatus(event.status)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>
+      <div className={styles.detailTags}><span data-type={event.type}>{formattedType(event.type)}</span><span data-status={tag}>{archived ? 'Archived' : formattedStatus(tag)}</span><span>{event.discipline === null ? 'Multi-discipline' : '100m'}</span></div>
       <dl className={styles.detailGrid}><div><dt>Date</dt><dd><time dateTime={event.date}>{formattedDate(event.date, true)}</time></dd></div><div><dt>Time</dt><dd>{event.time ?? 'Time not set'}</dd></div><div><dt>Location</dt><dd>{event.locationName ?? 'Location not set'}</dd></div><div><dt>Format</dt><dd>{event.discipline === null ? 'Catalogue sessions' : '100m'}</dd></div></dl>
       <VenuePreview latitude={event.latitude} longitude={event.longitude} locationName={event.locationName} />
       <EventWeatherPanel key={`${event.id}-${event.updatedAt}`} event={event} />

@@ -23,6 +23,8 @@
   --console-badge-pb-text: #001018;
   --console-badge-danger-surface: rgba(226, 102, 79, 0.16);
   --console-badge-danger-text: #FF8F78;
+  --console-badge-warn-surface: rgba(245, 197, 99, 0.16);
+  --console-badge-warn-text: #F5C563;
   --console-badge-neutral-surface: rgba(138, 233, 242, 0.10);
   --console-badge-neutral-text: var(--cyan-200);
   --console-badge-sb-surface: rgba(138, 233, 242, 0.10);
@@ -941,6 +943,8 @@
   --console-badge-pb-surface: var(--blue-500);
   --console-badge-pb-text: #FFFFFF;
   --console-badge-danger-text: #9C2F1B;
+  --console-badge-warn-surface: rgba(226, 166, 79, 0.16);
+  --console-badge-warn-text: #8A5A0B;
   --console-badge-neutral-surface: rgba(0, 146, 188, 0.07);
   --console-badge-neutral-text: #285B6E;
   --console-badge-sb-surface: rgba(0, 146, 188, 0.08);

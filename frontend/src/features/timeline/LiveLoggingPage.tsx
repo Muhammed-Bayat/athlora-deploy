@@ -17,6 +17,7 @@ import { PublicLoggerPanel } from '../events/PublicLoggerPanel';
 import { SessionLivePanel } from '../events/SessionLivePanel';
 import { format100mSeconds, getIncidentTypeLabel, has100mHundredthPrecision } from '../results/resultPresentation';
 import { useEventOffline } from '../../hooks/useEventOffline';
+import { isLiveListable } from '../../utils/eventStatus';
 import { isDeviceOnline } from '../../offline/networkStatus';
 import type {
   AthleticsEvent,
@@ -594,7 +595,7 @@ export function LiveLoggingPage({ initialEventId = null, onOpenEvent, onBackToEv
   };
 
   if (!selectedEventId || !activeEvent) {
-    const activeOrScheduled = events.filter(e => e.status === 'scheduled' || e.status === 'in_progress');
+    const activeOrScheduled = events.filter(e => isLiveListable(e, activeWorkspace.timezone));
     return (
       <div className={styles.container}>
         <div className={styles.header}>
