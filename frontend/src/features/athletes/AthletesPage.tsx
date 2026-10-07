@@ -9,6 +9,7 @@ import {
 } from '../../api/athletes';
 import { Button, Card, EmptyState, Modal, SeasonSelector, Select, Toast } from '../../components';
 import { useSeasonQueryState } from '../../utils/season';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import type { Athlete, AthleteMutationPayload, AthleteStatus } from '../../types';
 import type { AthleteActiveInjurySummary } from '../../types';
 import { listAthleteInjurySummaries } from '../../api/injuries';
@@ -354,7 +355,8 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
                </div>
                <h2>{athlete.name}</h2>
                 <p className={styles.disciplines}>{athlete.preferredDisciplineIds.length > 0
-                  ? athlete.preferredDisciplineIds.map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ')
+                  ? sortDisciplines(athlete.preferredDisciplineIds, (id) => disciplines.find((discipline) => discipline.id === id)?.code ?? id)
+                    .map((id) => disciplines.find((discipline) => discipline.id === id)?.presentation.label ?? id).join(', ')
                   : 'No disciplines selected'}</p>
               <dl className={styles.details}>
                 <div><dt>Date of birth</dt><dd>{formatDate(athlete.dob)}</dd></div>

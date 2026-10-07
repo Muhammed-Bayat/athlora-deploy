@@ -8,6 +8,7 @@ import { ApiError } from '../../api/client';
 import { Button, Input, OfflineRecoverySurface } from '../../components';
 import { parseDecimalInput } from '../../utils/decimalInput';
 import { formatResultUnit } from '../../utils/formatting';
+import { sortDisciplines } from '../../utils/disciplineOrder';
 import type { PublicOfflineSyncResult } from '../../hooks/usePublicOfflineSync';
 import { cachePublicSession, getCachedPublicSession } from '../../offline/sessionCache';
 import type { AthleticsEvent, IncidentType } from '../../types';
@@ -105,7 +106,10 @@ export function PublicMeetLogger({
   const definitions = snapshot?.disciplines ?? [];
   const sessions = snapshot?.sessions ?? [];
   const entrants = snapshot?.entrants ?? [];
-  const timedSessions = sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId));
+  const timedSessions = sortDisciplines(
+    sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId)),
+    (item) => definitions.find((candidate) => candidate.id === item.disciplineDefinitionId)?.code ?? item.disciplineDefinitionId,
+  );
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
   const live = event.status === 'in_progress' && session?.status === 'in_progress' && session.resultState !== 'final';
