@@ -324,7 +324,8 @@ export interface AthleteListFilters {
 
 export type EventType = 'competition' | 'training';
 export type EventStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-export type EventListStatus = EventStatus | 'archived';
+export type EventDisplayStatus = EventStatus | 'overdue';
+export type EventListStatus = EventStatus | 'archived' | 'overdue';
 
 export interface AthleticsEvent {
   id: string;

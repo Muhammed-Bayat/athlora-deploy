@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LiveLoggingPage } from './LiveLoggingPage';
 import * as eventsApi from '../../api/events';
 import * as athletesApi from '../../api/athletes';
@@ -118,10 +118,15 @@ describe('LiveLoggingPage', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-20T10:30:00.000Z') });
     vi.mocked(eventsApi.getEvent).mockResolvedValue(mockActiveEvent);
     vi.mocked(athletesApi.listAthletes).mockResolvedValue({ data: [], meta: { count: 0 } });
     vi.mocked(eventHelpersApi.getOfflineLoggerDesignation).mockResolvedValue(null);
     vi.mocked(getGuestFixture).mockRejectedValue(new Error('Not a guest fixture'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   function renderPage(initialEventId?: string) {
@@ -187,6 +192,34 @@ describe('LiveLoggingPage', () => {
     await waitFor(() => {
       expect(eventsApi.updateEvent).toHaveBeenCalledWith('ev-1', expect.objectContaining({ status: 'in_progress' }));
     });
+  });
+
+  it('hides scheduled events once their grace period has passed', async () => {
+    const stale = { ...mockEvent, id: 'ev-stale', title: 'Yesterday Session', date: '2026-08-19', time: '09:00' };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [stale], meta: { count: 1 } });
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'No events available' })).toBeInTheDocument();
+    expect(screen.queryByText('Yesterday Session')).not.toBeInTheDocument();
+  });
+
+  it('keeps a scheduled event listed inside its one-hour grace period', async () => {
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [mockEvent], meta: { count: 1 } });
+
+    renderPage();
+
+    expect(await screen.findByText('100m Regional Final')).toBeInTheDocument();
+    expect(screen.getByText('scheduled')).toBeInTheDocument();
+  });
+
+  it('keeps an in-progress event from a previous day listed', async () => {
+    const overnight = { ...mockActiveEvent, id: 'ev-overnight', title: 'Overnight Meet', date: '2026-08-19' };
+    vi.mocked(eventsApi.listEvents).mockResolvedValue({ data: [overnight], meta: { count: 1 } });
+
+    renderPage();
+
+    expect(await screen.findByText('Overnight Meet')).toBeInTheDocument();
   });
 
   it('lets assistants start, complete, and operate live logging', async () => {

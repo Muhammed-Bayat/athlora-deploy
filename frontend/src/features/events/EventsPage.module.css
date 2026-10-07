@@ -478,6 +478,11 @@
   background: var(--console-badge-neutral-surface);
 }
 
+[data-status='overdue'] {
+  color: var(--console-badge-warn-text);
+  background: var(--console-badge-warn-surface);
+}
+
 [data-status='in_progress'] {
   color: var(--console-selected-text);
   background: var(--console-selected-surface);

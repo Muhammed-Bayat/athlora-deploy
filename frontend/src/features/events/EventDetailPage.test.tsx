@@ -1,13 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import type { AthleticsEvent } from '../../types';
 import { EventDetailPage } from './EventDetailPage';
 
 const eventApi = vi.hoisted(() => ({ getEvent: vi.fn(), updateEvent: vi.fn(), cancelEvent: vi.fn(), archiveEvent: vi.fn(), unarchiveEvent: vi.fn() }));
 const fixtureApi = vi.hoisted(() => ({ getGuestFixture: vi.fn() }));
-const workspace = vi.hoisted(() => ({ role: 'coach', id: 'host-workspace' }));
+const workspace = vi.hoisted(() => ({ role: 'coach', id: 'host-workspace', timezone: 'UTC' }));
 
 vi.mock('../../api/events', () => eventApi);
 vi.mock('../../api/fixtures', () => fixtureApi);
@@ -41,10 +41,15 @@ const event: AthleticsEvent = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-16T08:00:00.000Z') });
   workspace.id = 'host-workspace';
   workspace.role = 'coach';
   eventApi.getEvent.mockResolvedValue(event);
-  fixtureApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Not a guest fixture'));
+  fixtureApi.getGuestFixture.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'not a guest fixture'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('EventDetailPage', () => {
@@ -67,6 +72,15 @@ describe('EventDetailPage', () => {
     expect(await screen.findByRole('heading', { name: event.title })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back to events' }));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('marks a scheduled event past its grace period as overdue', async () => {
+    eventApi.getEvent.mockResolvedValue({ ...event, date: '2026-08-15', time: '17:00:00' });
+    render(<EventDetailPage eventId={event.id} onBack={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: event.title })).toBeInTheDocument();
+    expect(screen.getByText('overdue')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start event' })).toBeInTheDocument();
   });
 
   it('lets the host edit and start a shared fixture, then reports the updated calendar state', async () => {
