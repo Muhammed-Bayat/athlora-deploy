@@ -58,9 +58,11 @@
 
 .filterOpen {
   z-index: 80;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
-/* A transformed ancestor would reposition the fixed viewport listbox. */
+/* A transformed ancestor would reposition the fixed viewport listbox, and the
+   transform transition above would interpolate non-none values while open. */
 .filterOpen:hover {
   transform: none;
 }
@@ -260,6 +262,7 @@
 .scrollableOptions {
   min-height: 0;
   flex: 1 1 auto;
+  max-height: min(240px, 34vh);
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
