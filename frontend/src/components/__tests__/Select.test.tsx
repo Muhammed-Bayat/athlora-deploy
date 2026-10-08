@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import styles from '../Select.module.css';
 import { Select } from '../Select';
 
+function mockTriggerRect(top: number, bottom: number) {
+  return vi.fn(() => ({
+    top, bottom, left: 20, right: 220, width: 200, height: bottom - top, x: 20, y: top, toJSON: () => ({}),
+  })) as unknown as () => DOMRect;
+}
+
 describe('Select', () => {
   it('provides a scrollable options region for long searchable lists', async () => {
     const user = userEvent.setup();
@@ -16,5 +22,32 @@ describe('Select', () => {
     const listbox = screen.getByRole('listbox');
     expect(listbox).toHaveClass(styles.scrollableOptions);
     expect(within(listbox).getAllByRole('option')).toHaveLength(7);
+  });
+
+  it('opens the menu downward with a viewport-capped height when there is room below the trigger', async () => {
+    const user = userEvent.setup();
+    render(<Select aria-label="Select club" options={[{ value: 'a', label: 'Club A' }]} value="" onChange={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'Select club' });
+    trigger.getBoundingClientRect = mockTriggerRect(100, 146);
+
+    await user.click(trigger);
+
+    const menu = screen.getByRole('listbox').parentElement!;
+    expect(menu).toHaveAttribute('data-placement', 'down');
+    expect(menu.style.position).toBe('fixed');
+    expect(menu.style.maxHeight).toBeTruthy();
+  });
+
+  it('flips the menu above the trigger when the viewport has no room below', async () => {
+    const user = userEvent.setup();
+    render(<Select aria-label="Select club" options={[{ value: 'a', label: 'Club A' }]} value="" onChange={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'Select club' });
+    trigger.getBoundingClientRect = mockTriggerRect(700, 746);
+
+    await user.click(trigger);
+
+    const menu = screen.getByRole('listbox').parentElement!;
+    expect(menu).toHaveAttribute('data-placement', 'up');
+    expect(menu.style.maxHeight).toBe('680px');
   });
 });
