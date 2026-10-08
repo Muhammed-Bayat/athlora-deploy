@@ -359,6 +359,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const geminiMicrophoneRef = useRef<GeminiMicrophone | null>(null);
   const geminiStartPromiseRef = useRef<Promise<AthloraGeminiSession> | null>(null);
   const greetedGeminiSessionRef = useRef<AthloraGeminiSession | null>(null);
+  const greetingInFlightRef = useRef(false);
   const geminiAssistantStartingRef = useRef(false);
   const sleepPendingRef = useRef(false);
   const assistantInactivityTimeoutRef = useRef<number | null>(null);
@@ -436,6 +437,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     geminiSessionRef.current = null;
     geminiStartPromiseRef.current = null;
     greetedGeminiSessionRef.current = null;
+    greetingInFlightRef.current = false;
     geminiAssistantStartingRef.current = false;
 
     // Stop capture synchronously before awaiting AudioContext shutdown.
@@ -1076,13 +1078,15 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
             microphone.pause();
             geminiSessionRef.current?.endAudioStream();
           }
-          setGeminiResponse('');
+          if (!greetingInFlightRef.current) setGeminiResponse('');
         },
         onAudio: (audio) => {
           if (isCurrentLifecycle(generation)) geminiAudioPlayerRef.current?.playPcm16(audio);
         },
         onTranscript: (text) => {
-          if (isCurrentLifecycle(generation)) setGeminiResponse((current) => `${current ?? ''}${text}`);
+          if (isCurrentLifecycle(generation) && !greetingInFlightRef.current) {
+            setGeminiResponse((current) => `${current ?? ''}${text}`);
+          }
         },
         onInputTranscript: (text) => {
           if (!isCurrentLifecycle(generation)) return;
@@ -1231,8 +1235,20 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       if (!isCurrentLifecycle(generation) || greetedGeminiSessionRef.current === session) return;
 
       greetedGeminiSessionRef.current = session;
-      await session.sendText(`Greet the coach with exactly this sentence and nothing else: "${START_GREETING}"`);
-      if (isCurrentLifecycle(generation)) setGeminiResponse(START_GREETING);
+      greetingInFlightRef.current = true;
+      setGeminiResponse(START_GREETING);
+      void session
+        .sendText(`Greet the coach with exactly this sentence and nothing else: "${START_GREETING}"`)
+        .catch((error: unknown) => {
+          if (isCurrentLifecycle(generation)) {
+            setActionError(error instanceof Error ? error.message : 'Failed to start Athlora.');
+          }
+        })
+        .finally(() => {
+          if (isCurrentLifecycle(generation) && greetedGeminiSessionRef.current === session) {
+            greetingInFlightRef.current = false;
+          }
+        });
     } catch (error) {
       if (isCurrentLifecycle(generation)) {
         setActionError(error instanceof Error ? error.message : 'Failed to start Athlora.');
@@ -1558,6 +1574,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
 
           <div className={styles.aiActions}>
             {geminiConnected && !geminiListening && <Button variant="secondary" onClick={() => void startGeminiListening()}>Enable hands-free</Button>}
+            {!geminiConnected && actionError && <Button variant="secondary" onClick={() => void startAthloraAssistant()} disabled={geminiTesting}>Retry Athlora</Button>}
             {geminiListening && <span role="status">Listening hands-free</span>}
           </div>
 

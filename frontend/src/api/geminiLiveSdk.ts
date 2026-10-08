@@ -11,6 +11,7 @@ import {
 
 const DEV = import.meta.env.DEV;
 const GEMINI_OUTPUT_SAMPLE_RATE = "24000";
+const GEMINI_SETUP_TIMEOUT_MS = 15_000;
 
 export const GEMINI_LIVE_DEFAULT_MODEL = "gemini-3.8-live-extended-thinking";
 
@@ -97,6 +98,10 @@ export class AthloraGeminiSession {
 
   private connecting: Promise<void> | null = null;
 
+  private pendingConnectionReject: ((error: Error) => void) | null = null;
+
+  private setupTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+
   private connectionGeneration = 0;
 
   private ready = false;
@@ -108,8 +113,6 @@ export class AthloraGeminiSession {
   private receivingTurn = false;
 
   private interactionInProgress = false;
-
-  private hasReceivedInteractionStatus = false;
 
   private activeToolCalls = new Map<AbortController, string | undefined>();
 
@@ -132,8 +135,6 @@ export class AthloraGeminiSession {
 
     const generation = ++this.connectionGeneration;
     this.interactionInProgress = false;
-    this.hasReceivedInteractionStatus = false;
-
     const connecting = (async () => {
       const ai = new GoogleGenAI({
         apiKey: this.options.token,
@@ -145,7 +146,27 @@ export class AthloraGeminiSession {
 
       debugSession("Gemini connecting");
 
-      const liveSession = await ai.live.connect({
+      const liveSession = await new Promise<Session>((resolve, reject) => {
+        const rejectConnection = (error: Error) => {
+          if (this.pendingConnectionReject !== rejectConnection) {
+            return;
+          }
+
+          this.clearPendingConnection();
+          reject(error);
+        };
+
+        this.pendingConnectionReject = rejectConnection;
+        this.setupTimeout = globalThis.setTimeout(() => {
+          debugSession("Gemini setup timed out", {
+            timeoutMs: GEMINI_SETUP_TIMEOUT_MS,
+          });
+          rejectConnection(
+            new Error("Gemini did not complete setup. Please try again."),
+          );
+        }, GEMINI_SETUP_TIMEOUT_MS);
+
+        void ai.live.connect({
         model: this.options.model ?? GEMINI_LIVE_DEFAULT_MODEL,
 
         config: {
@@ -651,6 +672,11 @@ export class AthloraGeminiSession {
               event.message || "Gemini Live connection error",
             );
 
+            debugSession("Gemini connection error", {
+              phase: this.ready ? "session" : "setup",
+              message: error.message,
+            });
+
             this.options.onError?.(error);
 
             this.cancelActiveToolCalls();
@@ -659,23 +685,56 @@ export class AthloraGeminiSession {
             this.pendingTurnReject?.(error);
 
             this.clearPendingTurn();
+            this.rejectPendingConnection(error);
           },
 
-          onclose: () => {
+          onclose: (event) => {
             if (generation !== this.connectionGeneration) {
               return;
             }
+
+            const closedDuringSetup = !this.ready;
+            const error = new Error(
+              closedDuringSetup
+                ? "Gemini closed before setup completed. Please try again."
+                : "Gemini Live session closed",
+            );
+
+            debugSession("Gemini connection closed", {
+              phase: closedDuringSetup ? "setup" : "session",
+              code: event.code,
+              reason: event.reason || undefined,
+            });
 
             this.session = null;
             this.ready = false;
             this.receivingTurn = false;
             this.interactionInProgress = false;
             this.cancelActiveToolCalls();
-            this.rejectPendingTurn(new Error("Gemini Live session closed"));
+            this.rejectPendingTurn(error);
+
+            if (closedDuringSetup) {
+              this.options.onError?.(error);
+              this.rejectPendingConnection(error);
+            }
 
             this.options.onDisconnected?.();
           },
         },
+        }).then(
+          (connectedSession) => {
+            this.clearPendingConnection();
+            resolve(connectedSession);
+          },
+          (error: unknown) => {
+            const connectionError =
+              error instanceof Error
+                ? error
+                : new Error("Gemini Live connection failed");
+            this.clearPendingConnection();
+            reject(connectionError);
+          },
+        );
       });
 
       if (generation !== this.connectionGeneration) {
@@ -731,6 +790,8 @@ export class AthloraGeminiSession {
       turnComplete: true,
     });
 
+    debugSession("Gemini text turn sent");
+
     return responsePromise;
   }
 
@@ -759,6 +820,7 @@ export class AthloraGeminiSession {
 
   close(): void {
     this.connectionGeneration += 1;
+    this.rejectPendingConnection(new Error("Gemini Live session closed"));
     this.cancelActiveToolCalls();
     this.session?.close();
     this.session = null;
@@ -775,12 +837,33 @@ export class AthloraGeminiSession {
     this.clearPendingTurn();
   }
 
+  private rejectPendingConnection(error: Error): void {
+    this.pendingConnectionReject?.(error);
+  }
+
+  private clearPendingConnection(): void {
+    if (this.setupTimeout !== null) {
+      globalThis.clearTimeout(this.setupTimeout);
+      this.setupTimeout = null;
+    }
+
+    this.pendingConnectionReject = null;
+  }
+
   private clearPendingTurn(): void {
     this.pendingTurnResolve = null;
     this.pendingTurnReject = null;
   }
 
   private completeTurn(): void {
+    if (
+      !this.pendingTurnResolve &&
+      !this.receivingTurn &&
+      !this.interactionInProgress
+    ) {
+      return;
+    }
+
     const response = this.transcript.trim() || "Gemini completed the request.";
 
     this.pendingTurnResolve?.(response);
@@ -937,7 +1020,6 @@ export class AthloraGeminiSession {
     const interactionStatus = content.interactionStatus;
 
     if (interactionStatus) {
-      this.hasReceivedInteractionStatus = true;
       this.options.onInteractionStatus?.(interactionStatus);
 
       if (interactionStatus === InteractionStatus.IN_PROGRESS) {
@@ -963,6 +1045,11 @@ export class AthloraGeminiSession {
       this.receivingTurn = true;
       this.transcript = "";
 
+      debugSession("Gemini turn output started", {
+        audio: parts.some((part) => Boolean(part.inlineData?.data)),
+        transcription: Boolean(transcription),
+      });
+
       this.options.onTurnStart?.();
     }
 
@@ -984,10 +1071,7 @@ export class AthloraGeminiSession {
       this.options.onTranscript?.(transcription);
     }
 
-    if (
-      interactionStatus === InteractionStatus.IDLE ||
-      (!this.hasReceivedInteractionStatus && content.turnComplete)
-    ) {
+    if (content.turnComplete || interactionStatus === InteractionStatus.IDLE) {
       this.completeTurn();
     }
   }

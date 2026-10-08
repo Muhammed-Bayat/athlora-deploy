@@ -277,9 +277,58 @@ describe("AthloraGeminiSession", () => {
       const session = createSession({ onDisconnected });
       await session.connect();
 
-      (capturedCallbacks.onclose as () => void)();
+      (capturedCallbacks.onclose as (event: { code: number; reason: string }) => void)(
+        { code: 1000, reason: "" },
+      );
 
       expect(onDisconnected).toHaveBeenCalledOnce();
+    });
+
+    it("rejects setup when Gemini closes before acknowledging it", async () => {
+      liveConnect.mockImplementation(
+        (config: Record<string, unknown>) => {
+          capturedCallbacks =
+            (config.callbacks as Record<string, unknown>) ?? {};
+          return new Promise(() => undefined);
+        },
+      );
+      const onError = vi.fn();
+      const session = createSession({ onError });
+
+      const connecting = session.connect();
+      (capturedCallbacks.onclose as (event: { code: number; reason: string }) => void)(
+        { code: 1007, reason: "Thinking level must be specified" },
+      );
+
+      await expect(connecting).rejects.toThrow(
+        "Gemini closed before setup completed",
+      );
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Gemini closed before setup completed. Please try again.",
+        }),
+      );
+    });
+
+    it("rejects setup after the bounded timeout", async () => {
+      vi.useFakeTimers();
+      liveConnect.mockImplementation(
+        (config: Record<string, unknown>) => {
+          capturedCallbacks =
+            (config.callbacks as Record<string, unknown>) ?? {};
+          return new Promise(() => undefined);
+        },
+      );
+      const session = createSession();
+      const connecting = session.connect();
+      const expectedRejection = expect(connecting).rejects.toThrow(
+        "Gemini did not complete setup. Please try again.",
+      );
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expectedRejection;
+      vi.useRealTimers();
     });
 
     it("fires onError on session error", async () => {
@@ -737,7 +786,7 @@ describe("AthloraGeminiSession", () => {
       expect(onAudio).toHaveBeenNthCalledWith(2, "pcm-24k");
     });
 
-    it("resolves pending turn on interaction status IDLE", async () => {
+    it("resolves pending turns on turnComplete even after an interaction status", async () => {
       const onTurnComplete = vi.fn();
       const onInteractionStatus = vi.fn();
       const session = createSession({
@@ -755,19 +804,8 @@ describe("AthloraGeminiSession", () => {
         },
       });
 
-      await Promise.resolve();
-      expect(onTurnComplete).not.toHaveBeenCalled();
-      await expect(session.sendText("second")).rejects.toThrow(
-        "Gemini is already responding",
-      );
-
-      fireCallback("onmessage", {
-        serverContent: { interactionStatus: "IDLE" },
-      });
-
       expect(await promise).toBe("Sure");
       expect(onInteractionStatus).toHaveBeenNthCalledWith(1, "IN_PROGRESS");
-      expect(onInteractionStatus).toHaveBeenNthCalledWith(2, "IDLE");
       expect(onTurnComplete).toHaveBeenCalledOnce();
     });
 

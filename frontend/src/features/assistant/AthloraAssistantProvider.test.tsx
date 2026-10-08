@@ -214,6 +214,7 @@ afterEach(() => {
 describe('AthloraAssistantProvider', () => {
   it('uses the exact greeting and keeps the fixed bottom-right trigger outside page content', async () => {
     const user = userEvent.setup();
+    geminiApi.sendText.mockResolvedValue('Good day coach, how can I help?');
     renderAssistant();
 
     const host = screen.getByTestId('athlora-assistant');
@@ -226,6 +227,24 @@ describe('AthloraAssistantProvider', () => {
     expect(within(dialog).getByText('Good day coach, how can I help?')).toBeInTheDocument();
     expect(geminiApi.sendText).toHaveBeenCalledWith('Greet the coach with exactly this sentence and nothing else: "Good day coach, how can I help?"');
     expect(geminiApi.sessionOptions).toMatchObject({ token: 'gemini-token', model: 'gemini-test-model' });
+  });
+
+  it('is ready after setup without waiting for the greeting turn to finish', async () => {
+    let resolveGreeting: (value: string) => void = () => undefined;
+    geminiApi.sendText.mockImplementation(() => new Promise<string>((resolve) => {
+      resolveGreeting = resolve;
+    }));
+    renderAssistant();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Athlora AI' }));
+
+    await waitFor(() => expect(geminiApi.sendText).toHaveBeenCalledOnce());
+    expect(screen.getByText('Good day coach, how can I help?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Message Athlora')).not.toBeDisabled();
+
+    await act(async () => {
+      resolveGreeting('Good day coach, how can I help?');
+    });
   });
 
   it('shows concise live-tool loading without changing Gemini send state', async () => {
