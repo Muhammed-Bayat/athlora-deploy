@@ -1,14 +1,22 @@
 import type { RequestHandler } from 'express';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
-export const DEFAULT_GEMINI_LIVE_MODEL = 'gemini-3.8-live-extended-thinking';
-export const ROLLBACK_GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+// Extended Thinking previously failed before emitting client tool calls. Keep
+// it available for explicit opt-in while that intermittent provider behavior is
+// investigated separately from the standard Live default.
+export const DEFAULT_GEMINI_LIVE_MODEL = 'gemini-3.8-live';
+export const FALLBACK_GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+export const EXTENDED_THINKING_GEMINI_LIVE_MODEL = 'gemini-3.8-live-extended-thinking';
 
 function configuredGeminiLiveModel(): string {
   const configured = process.env.GEMINI_LIVE_MODEL?.trim();
 
+  if (configured === 'extended-thinking') {
+    return EXTENDED_THINKING_GEMINI_LIVE_MODEL;
+  }
+
   if (configured === 'rollback') {
-    return ROLLBACK_GEMINI_LIVE_MODEL;
+    return FALLBACK_GEMINI_LIVE_MODEL;
   }
 
   return configured || DEFAULT_GEMINI_LIVE_MODEL;
@@ -30,20 +38,23 @@ export const createGeminiToken: RequestHandler = async (_req, res, next) => {
       Date.now() + 30 * 60 * 1000,
     ).toISOString();
     const model = configuredGeminiLiveModel();
+    const liveConfig = model === DEFAULT_GEMINI_LIVE_MODEL
+      ? {}
+      : {
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MEDIUM,
+          },
+        };
 
     const token = await client.authTokens.create({
       config: {
         uses: 1,
         expireTime,
-        // Extended Thinking requires this setting in the constrained setup,
-        // not only in the browser's subsequent Live connection.
+        // Standard Gemini 3.8 Live does not support thinkingConfig. The 3.1
+        // fallback and Extended Thinking require it in the constrained setup.
         liveConnectConstraints: {
           model,
-          config: {
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.MEDIUM,
-            },
-          },
+          config: liveConfig,
         },
       },
     });
