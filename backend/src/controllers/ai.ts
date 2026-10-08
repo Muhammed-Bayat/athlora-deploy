@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 export const DEFAULT_GEMINI_LIVE_MODEL = 'gemini-3.8-live-extended-thinking';
 export const ROLLBACK_GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
@@ -35,8 +35,16 @@ export const createGeminiToken: RequestHandler = async (_req, res, next) => {
       config: {
         uses: 1,
         expireTime,
-        // The browser receives a one-use token for this model only.
-        liveConnectConstraints: { model },
+        // Extended Thinking requires this setting in the constrained setup,
+        // not only in the browser's subsequent Live connection.
+        liveConnectConstraints: {
+          model,
+          config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MEDIUM,
+            },
+          },
+        },
       },
     });
 
