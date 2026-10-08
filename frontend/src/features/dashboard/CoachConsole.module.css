@@ -1128,7 +1128,7 @@
     left: 0;
     z-index: 50;
     display: flex;
-    min-height: var(--mobile-nav-block-size);
+    height: var(--mobile-nav-block-size);
     box-sizing: border-box;
     align-items: center;
     justify-content: space-around;
