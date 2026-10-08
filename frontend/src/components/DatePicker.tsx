@@ -157,7 +157,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
             options={years.map((year) => ({ value: String(year), label: String(year) }))}
           />
         </div>
-        <div><button type="button" aria-label="Previous month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div>
+        <div className={styles.monthControls}><button type="button" aria-label="Previous month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button type="button" aria-label="Next month" onClick={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div>
       </header>
       <div className={styles.weekdays}>{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div>
       <div className={styles.days}>
