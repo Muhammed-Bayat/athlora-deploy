@@ -154,6 +154,61 @@ describe('PublicStatsPage', () => {
     );
   });
 
+  it('lists athletes by name within each club while building an athlete comparison', async () => {
+    const ari = clubDetail.athletes[0];
+    const zoe = { ...ari, athlete: { id: '99999999-9999-4999-8999-999999999999', name: 'Zoe Power' } };
+    const harbourDetail = { ...clubDetail, club: { id: OTHER_CLUB_ID, name: 'Harbour Athletics' }, athletes: [{ ...ari, athlete: { id: OTHER_ATHLETE_ID, name: 'Bea Dash' } }] };
+    const openDetail = { ...clubDetail, athletes: [zoe, ari] };
+    mockListPublicClubs.mockResolvedValue({ data: [clubDetail.club, harbourDetail.club], meta: { count: 2 } });
+    mockGetPublicClubStatistics.mockImplementation((clubId: string) => Promise.resolve(clubId === CLUB_ID ? openDetail : harbourDetail));
+    mockGetPublicAthleteComparison.mockResolvedValue({ athletes: [
+      { ...harbourDetail.athletes[0], club: harbourDetail.club, progression: [{ date: '2026-01-20', result: 11.4 }] },
+      { ...zoe, club: clubDetail.club, progression: [{ date: '2026-01-10', result: 11.3 }] },
+      { ...ari, club: clubDetail.club, progression: [{ date: '2026-01-10', result: 11.2 }] },
+    ] });
+    render(<PublicStatsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Public statistics view' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Compare athletes' }));
+    for (const clubName of ['Open Track Club', 'Harbour Athletics']) {
+      await userEvent.click(screen.getByRole('button', { name: 'Add club to comparison' }));
+      await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: clubName }));
+    }
+    await waitFor(() => expect(mockGetPublicClubStatistics).toHaveBeenCalledTimes(2));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Add an athlete...',
+      'Ari Runner - Open Track Club',
+      'Zoe Power - Open Track Club',
+      'Bea Dash - Harbour Athletics',
+    ]);
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Zoe Power - Open Track Club' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Bea Dash - Harbour Athletics' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add athlete to comparison' }));
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Ari Runner - Open Track Club' }));
+
+    const roster = within(screen.getByRole('region', { name: 'Selected athletes' })).getAllByRole('listitem');
+    expect(roster.map((item) => item.textContent)).toEqual([
+      expect.stringContaining('Ari Runner'),
+      expect.stringContaining('Zoe Power'),
+      expect.stringContaining('Bea Dash'),
+    ]);
+
+    const table = await screen.findByRole('table', { name: '100m public athlete comparison' });
+    const athleteRows = within(table).getAllByRole('row').slice(1).map((row) => row.textContent ?? '');
+    expect(athleteRows[0]).toContain('Ari Runner');
+    expect(athleteRows[1]).toContain('Zoe Power');
+    expect(athleteRows[2]).toContain('Bea Dash');
+    expect(mockGetPublicAthleteComparison).toHaveBeenCalledWith(
+      [zoe.athlete.id, OTHER_ATHLETE_ID, ari.athlete.id],
+      expect.any(AbortSignal),
+      undefined,
+    );
+  });
+
   it('compares selected clubs by discipline', async () => {
     const relayAvailable = { discipline: '4x100m', label: '4 x 100m', unit: 'seconds', precision: 2, direction: 'lower' };
     const relayDisciplineRow = { ...relayAvailable, rosterAthleteCount: 4, activeAthleteCount: 4, inactiveAthleteCount: 0, archivedAthleteCount: 0, distinctAthletesWithValidResults: 3, totalResultCount: 3, validResultCount: 3, fastestValidResult: 55.26, latestValidResult: 56.4, averageValidResult: 55.9, medianValidResult: 55.9, populationStandardDeviation: null };
