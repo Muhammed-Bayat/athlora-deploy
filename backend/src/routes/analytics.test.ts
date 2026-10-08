@@ -147,13 +147,21 @@ describe('analytics routes', () => {
       selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
       lifecycleStatus: 'active',
       athletes: [],
-      comparison: {
-        methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.',
-        eligibleAthleteDisciplineCount: 0,
-        mostImproved: null,
-        mostDeclined: null,
-        insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
-      },
+        comparison: {
+          methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.',
+          eligibleAthleteDisciplineCount: 0,
+          mostImproved: null,
+          mostDeclined: null,
+          insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+          relativeImprovementRanking: {
+            methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.',
+            eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.',
+            limit: 50,
+            eligibleAthleteCount: 0,
+            entries: [],
+            insufficientDataReason: 'At least two valid normalized results with a positive first result are required for each athlete before descriptive relative-improvement ranking is available.',
+          },
+        },
     });
 
     const response = await request(app)

@@ -205,7 +205,7 @@ export class AthloraGeminiSession {
                   "Use the available tools for every platform-data question and action; treat tool results as authoritative. " +
                   "For registered-athlete counts, call get_workspace_roster_summary. " +
                   "For the fastest athlete in a discipline, call get_workspace_discipline_analysis; do not use promising-athlete rankings as a fastest-result answer. " +
-                  "For performance and injury questions, call the corresponding coach analytics tool. For charts or PDFs, call the corresponding report tool and report only its actual result. " +
+                    "For performance and injury questions, call the corresponding coach analytics tool. For a multi-athlete performance graph, first obtain the relevant performance analysis, then call show_coach_performance_comparison_chart. Only say that a chart is shown when that tool returns chart.status displayed. For charts or PDFs, call the corresponding chart or report tool and report only its actual result. " +
                   "Use get_current_page_context when a coach refers to this page or this athlete; it exposes only the current page and an authorised selected-athlete reference. " +
                   "For athlete creation, use prepare_athlete_draft only after resolving a real discipline, validating the name and discipline, and checking likely duplicates. " +
                   "prepare_athlete_draft never creates an athlete. The browser presents local Confirm and Cancel controls; you cannot confirm, cancel, or create an athlete. " +
@@ -213,7 +213,7 @@ export class AthloraGeminiSession {
                   "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one. Then call get_named_place_weather again with the original place and the selected venue option ID; never invent or repeat coordinates. " +
                   "Use get_current_location_weather only when the current coach message explicitly asks for weather at their current, device, or present location. " +
                   "Do not ask for or expose coordinates. Only describe analytics summaries and rankings supplied by analytics tools. " +
-                  "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. For questions about who improved or declined most over the last three months, call get_coach_performance_analysis with relativeRange last_three_months and use only its comparison leaders. For common injuries, body regions, or repeated injuries across the roster, call get_coach_injury_analysis and use only its rosterSummary. " +
+                    "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. For questions about who improved or declined most over the last three months, call get_coach_performance_analysis with relativeRange last_three_months. Use comparison.relativeImprovementRanking for descriptive cross-discipline athlete rankings, and explain that it is not an official athletics ranking. When a coach asks to update the displayed comparison chart to the last six weeks, call show_coach_performance_comparison_chart with relativeRange last_six_weeks and reuse its cached athletes and discipline. When a coach asks about injury concerns after a displayed comparison chart, call get_coach_injury_analysis without athlete IDs so Athlora checks that same cached cohort. For common injuries, body regions, or repeated injuries across the roster, call get_coach_injury_analysis and use only its rosterSummary. " +
                   "Use evidence first: give performance guidance only when tool results establish the direction of change. Explain the factual change versus its baseline, why it matters, and one concrete tactical action. " +
                   "When results contain no data or do not support a conclusion, explicitly state that there is no data or no conclusion. " +
                   "Treat injury tool signals as monitoring only, never as diagnoses or medical advice. Never claim or infer workload, wellness, or readiness. " +
@@ -358,7 +358,7 @@ export class AthloraGeminiSession {
                   behavior: Behavior.NON_BLOCKING,
 
                   description:
-                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range. The result includes direction-aware, percentage-normalized most-improved and most-declined leaders; use those leaders for cross-discipline comparisons.",
+                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range. The result includes direction-aware leaders and a descriptive, non-official cross-discipline relative-improvement ranking.",
 
                   parameters: {
                     type: Type.OBJECT,
@@ -386,12 +386,56 @@ export class AthloraGeminiSession {
                       relativeRange: {
                         type: Type.STRING,
                         description:
-                          "Use last_three_months only when the coach explicitly asks about the last three months. Do not combine with dateFrom or dateTo.",
+                          "Use last_three_months or last_six_weeks for the named relative period. Do not combine with dateFrom or dateTo.",
                       },
                       lifecycleStatus: {
                         type: Type.STRING,
                         description:
                           "Optional athlete lifecycle status filter.",
+                      },
+                      limit: {
+                        type: Type.INTEGER,
+                        description:
+                          "Optional maximum number of descriptive relative-improvement ranking entries to return.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "show_coach_performance_comparison_chart",
+
+                  behavior: Behavior.NON_BLOCKING,
+
+                  description:
+                    "Prepare and display one visible, same-discipline comparison chart for one to eight authorised athletes. Reuse the most recently displayed chart's athletes and discipline when only a new date range is supplied.",
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      athleteIds: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "One to eight authorised athlete IDs. Omit only to update the existing comparison chart.",
+                      },
+                      discipline: {
+                        type: Type.STRING,
+                        description: "A real discipline code or label. Omit only to update the existing comparison chart.",
+                      },
+                      dateFrom: {
+                        type: Type.STRING,
+                        description: "Optional inclusive start date in YYYY-MM-DD format.",
+                      },
+                      dateTo: {
+                        type: Type.STRING,
+                        description: "Optional inclusive end date in YYYY-MM-DD format.",
+                      },
+                      relativeRange: {
+                        type: Type.STRING,
+                        description: "Use last_three_months or last_six_weeks only. Do not combine with dateFrom or dateTo.",
+                      },
+                      lifecycleStatus: {
+                        type: Type.STRING,
+                        description: "Optional athlete lifecycle status filter.",
                       },
                     },
                   },

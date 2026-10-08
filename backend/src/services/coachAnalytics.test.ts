@@ -113,12 +113,49 @@ describe('coach analytics foundations', () => {
       },
     ];
 
-    expect(summarizeCoachPerformanceChanges(athletes)).toMatchObject({
+    const comparison = summarizeCoachPerformanceChanges(athletes, 2);
+
+    expect(comparison).toMatchObject({
       eligibleAthleteDisciplineCount: 3,
       mostImproved: { athlete: { name: 'Bea' }, discipline: { code: 'long_jump' }, improvement: 0.75, improvementPercent: 15 },
       mostDeclined: { athlete: { name: 'Cy' }, discipline: { code: '100m' }, improvement: -1, improvementPercent: -10 },
       insufficientDataReason: null,
     });
+    expect(comparison.relativeImprovementRanking).toMatchObject({
+      limit: 2,
+      eligibleAthleteCount: 3,
+      entries: [
+        { rank: 1, athlete: { name: 'Bea' }, discipline: { code: 'long_jump' }, improvementPercent: 15, classification: 'improved' },
+        { rank: 2, athlete: { name: 'Ari' }, discipline: { code: '100m' }, improvementPercent: 8.33, classification: 'improved' },
+      ],
+    });
+  });
+
+  it('ranks each athlete once by their strongest eligible discipline and excludes non-positive baselines', () => {
+    const athletes = [
+      {
+        athlete: { id: athleteId, name: 'Ari', status: 'active' as const },
+        disciplines: [
+          analyzeCoachPerformance(timed, [result(timed, 12, '2026-07-01'), result(timed, 11, '2026-09-01')], allDates, season),
+          analyzeCoachPerformance(measured, [result(measured, 5, '2026-07-01'), result(measured, 6, '2026-09-01')], allDates, season),
+        ],
+      },
+      {
+        athlete: { id: secondAthleteId, name: 'Bea', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 0, '2026-07-01', secondAthleteId),
+          result(timed, 10, '2026-09-01', secondAthleteId),
+        ], allDates, season)],
+      },
+    ];
+
+    const ranking = summarizeCoachPerformanceChanges(athletes).relativeImprovementRanking;
+
+    expect(ranking).toMatchObject({
+      eligibleAthleteCount: 1,
+      entries: [{ rank: 1, athlete: { name: 'Ari' }, discipline: { code: 'long_jump' }, improvementPercent: 20, classification: 'improved' }],
+    });
+    expect(ranking.insufficientDataReason).toBeNull();
   });
 
   it('returns an insufficient-data comparison when no athlete-discipline has two selected results', () => {
@@ -132,6 +169,11 @@ describe('coach analytics foundations', () => {
       mostImproved: null,
       mostDeclined: null,
       insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+      relativeImprovementRanking: {
+        eligibleAthleteCount: 0,
+        entries: [],
+        insufficientDataReason: 'At least two valid normalized results with a positive first result are required for each athlete before descriptive relative-improvement ranking is available.',
+      },
     });
   });
 

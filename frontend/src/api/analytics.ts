@@ -116,6 +116,7 @@ export interface CoachPerformanceAnalysisFilters {
   dateFrom?: string;
   dateTo?: string;
   lifecycleStatus?: CoachLifecycleStatus;
+  limit?: number;
 }
 
 export interface CoachInjuryAnalysisFilters {
@@ -195,6 +196,12 @@ export interface CoachPerformanceChangeLeader {
   improvementPercent: number;
 }
 
+export interface CoachRelativeImprovementEntry extends CoachPerformanceChangeLeader {
+  rank: number;
+  recordCount: number;
+  classification: 'improved' | 'unchanged' | 'declined';
+}
+
 export interface CoachPerformanceAnalysis {
   selectedRange: CoachDateRange;
   lifecycleStatus: CoachLifecycleStatus;
@@ -208,6 +215,14 @@ export interface CoachPerformanceAnalysis {
     mostImproved: CoachPerformanceChangeLeader | null;
     mostDeclined: CoachPerformanceChangeLeader | null;
     insufficientDataReason: string | null;
+    relativeImprovementRanking: {
+      methodology: string;
+      eligibility: string;
+      limit: number;
+      eligibleAthleteCount: number;
+      entries: CoachRelativeImprovementEntry[];
+      insufficientDataReason: string | null;
+    };
   };
 }
 

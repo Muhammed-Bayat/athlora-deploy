@@ -114,6 +114,14 @@ const coachPerformanceAnalysis = {
     mostImproved: null,
     mostDeclined: null,
     insufficientDataReason: null,
+    relativeImprovementRanking: {
+      methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.',
+      eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.',
+      limit: 50,
+      eligibleAthleteCount: 0,
+      entries: [],
+      insufficientDataReason: null,
+    },
   },
 };
 const coachInjuryAnalysis = {
@@ -523,6 +531,56 @@ describe('AthloraAssistantProvider', () => {
 
     expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenCalledWith({ dateFrom: '2026-07-08', dateTo: '2026-10-08' });
     expect(result).toMatchObject({ data: { comparison: { eligibleAthleteDisciplineCount: 1 } } });
+  });
+
+  it('keeps displayed comparison context for injury monitoring and six-week chart follow-ups', async () => {
+    const chartAnalysis = {
+      ...coachPerformanceAnalysis,
+      selectedRange: { dateFrom: '2026-07-01', dateTo: '2026-09-30' },
+      athletes: [{
+        athlete: { id: athlete.id, name: athlete.name, status: 'active' },
+        disciplines: [{
+          discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
+          recordCount: 2,
+          first: { date: '2026-07-01', time: null, value: 12.2, event: { id: 'event-1', title: 'Meet one', type: 'competition' } },
+          latest: { date: '2026-09-01', time: null, value: 12, event: { id: 'event-2', title: 'Meet two', type: 'competition' } },
+          best: { personalBest: 12, seasonBest: 12, selectedRangeBest: 12, season: { selected: 2026, startDate: '2026-01-01', endDate: '2027-01-01' } },
+          improvement: 0.2, improvementPercent: 1.64, recentTrend: null, consistency: null, plateau: null, sufficientData: true, insufficientDataReason: null,
+          history: [
+            { date: '2026-07-01', time: null, value: 12.2, event: { id: 'event-1', title: 'Meet one', type: 'competition' } },
+            { date: '2026-09-01', time: null, value: 12, event: { id: 'event-2', title: 'Meet two', type: 'competition' } },
+          ],
+        }],
+      }],
+    };
+    analyticsApi.getCoachPerformanceAnalysis.mockResolvedValue(chartAnalysis);
+    renderAssistant();
+    await openAssistant();
+
+    const displayed = await callTool('show_coach_performance_comparison_chart', { athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-07-01', dateTo: '2026-09-30' });
+
+    expect(displayed).toMatchObject({ chart: { status: 'displayed', discipline: '100m', athleteCount: 1 } });
+    expect(screen.getByTestId('coach-performance-comparison-chart')).toBeInTheDocument();
+    analyticsApi.getCoachInjuryAnalysis.mockResolvedValueOnce({ ...coachInjuryAnalysis, selectedRange: chartAnalysis.selectedRange });
+
+    const injuryResult = await callTool('get_coach_injury_analysis');
+
+    expect(analyticsApi.getCoachInjuryAnalysis).toHaveBeenLastCalledWith({
+      athleteIds: [athlete.id], dateFrom: '2026-07-01', dateTo: '2026-09-30',
+    });
+    expect(injuryResult).toMatchObject({ data: { athletes: [{ athlete: { id: athlete.id } }] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate comparison PDF' }));
+    await waitFor(() => expect(coachingReportsApi.coachPerformanceReportPdf).toHaveBeenLastCalledWith(
+      chartAnalysis,
+      expect.objectContaining({ selectedRange: chartAnalysis.selectedRange }),
+    ));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00.000Z'));
+
+    const refreshed = await callTool('show_coach_performance_comparison_chart', { relativeRange: 'last_six_weeks' });
+
+    expect(refreshed).toMatchObject({ chart: { status: 'displayed' } });
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenLastCalledWith({ athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-08-27', dateTo: '2026-10-08' });
   });
 
   it('preserves analytics HTTP diagnostics and Gemini function-call IDs instead of reporting a generic outage', async () => {

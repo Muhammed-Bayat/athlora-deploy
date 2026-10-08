@@ -152,6 +152,7 @@ describe("AthloraGeminiSession", () => {
         "get_athlete_discipline_analysis",
         "get_workspace_discipline_analysis",
         "get_coach_performance_analysis",
+        "show_coach_performance_comparison_chart",
         "get_coach_injury_analysis",
         "get_coach_rankings_analysis",
         "download_coach_performance_report",
@@ -248,6 +249,21 @@ describe("AthloraGeminiSession", () => {
       expect(performanceDeclaration?.parameters.properties).toEqual(
         expect.objectContaining({
           relativeRange: expect.objectContaining({ type: "STRING" }),
+          limit: expect.objectContaining({ type: "INTEGER" }),
+        }),
+      );
+
+      const comparisonChartDeclaration = declarations.find(
+        (candidate) => candidate.name === "show_coach_performance_comparison_chart",
+      );
+      expect(comparisonChartDeclaration?.parameters.properties).toEqual(
+        expect.objectContaining({
+          athleteIds: expect.any(Object),
+          discipline: expect.any(Object),
+          dateFrom: expect.any(Object),
+          dateTo: expect.any(Object),
+          relativeRange: expect.objectContaining({ type: "STRING" }),
+          lifecycleStatus: expect.any(Object),
         }),
       );
 
