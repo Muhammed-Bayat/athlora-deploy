@@ -312,6 +312,18 @@ describe('AthloraAssistantProvider', () => {
     expect(screen.queryByRole('dialog', { name: 'Athlora AI' })).not.toBeInTheDocument();
   });
 
+  it('sleeps immediately for an explicit voice command when Gemini does not call the sleep tool', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    act(() => geminiApi.sessionOptions?.onInputTranscript?.('Athlora, go to sleep'));
+
+    await waitFor(() => expect(geminiApi.close).toHaveBeenCalledOnce());
+    expect(geminiApi.microphoneStop).toHaveBeenCalledOnce();
+    expect(geminiApi.audioClose).toHaveBeenCalledOnce();
+    expect(screen.getByText('Athlora is sleeping.')).toBeInTheDocument();
+  });
+
   it('releases every live resource when the console unmounts', async () => {
     const { unmount } = renderAssistant();
     fireEvent.click(screen.getByRole('button', { name: 'Start Athlora AI' }));

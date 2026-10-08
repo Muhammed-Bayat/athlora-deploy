@@ -246,6 +246,15 @@ describe('CoachConsole dashboard navigation', () => {
     expect(menu).not.toHaveAttribute('open');
   });
 
+  it('uses visible names for compact header controls', () => {
+    renderConsole();
+
+    expect(screen.getByText('Alerts')).toBeInTheDocument();
+    expect(screen.getByText('Weather')).toBeInTheDocument();
+    expect(screen.getByText('Presets')).toBeInTheDocument();
+    expect(screen.getByText('Light')).toBeInTheDocument();
+  });
+
   it('returns roster and live logger detail routes through their tabs', async () => {
     const user = userEvent.setup();
     renderConsole('/console/athletes');

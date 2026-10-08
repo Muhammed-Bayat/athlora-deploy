@@ -26,6 +26,8 @@
   height: 18px;
 }
 
+.triggerLabel { display: none; }
+
 .notifications > summary:hover,
 .notifications[open] > summary {
   border-color: rgba(138, 233, 242, 0.28);
@@ -57,6 +59,22 @@
   font: 800 9px/13px var(--font-family-mono);
   text-align: center;
   box-shadow: 0 0 12px rgba(226, 102, 79, 0.42);
+}
+
+@media (max-width: 620px) {
+  .notifications { position: static; }
+
+  .notifications > summary {
+    display: flex;
+    width: auto;
+    height: 36px;
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+
+  .triggerLabel { display: inline; }
 }
 
 .panel {

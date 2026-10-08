@@ -267,6 +267,10 @@ function isExplicitDraftCancellation(message: string): boolean {
   return /^(no|no thanks|cancel|cancel it|cancel draft|never mind|nevermind|do not create|don't create|dont create|abort)$/.test(confirmationText(message));
 }
 
+function isExplicitSleepRequest(message: string): boolean {
+  return /^(?:athlora[\s,]+)?(?:please\s+)?(?:sleep|go\s+to\s+sleep|switch\s+off|deactivate|stop\s+listening|go\s+inactive)(?:\s+athlora)?$/.test(confirmationText(message));
+}
+
 function pendingAnalysisAction(message: string): 'tell' | 'pdf' | null {
   const text = confirmationText(message);
   if (/^(tell me|tell|read it out|read it|read|explain|show me)$/.test(text)) return 'tell';
@@ -1092,6 +1096,10 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
           if (!isCurrentLifecycle(generation)) return;
           const previous = voiceMessageRef.current;
           voiceMessageRef.current = text.startsWith(previous) ? text : `${previous}${text}`;
+          if (isExplicitSleepRequest(voiceMessageRef.current)) {
+            void stopAssistant(true, false);
+            return;
+          }
           currentLocationWeatherRequestedRef.current = isExplicitCurrentLocationWeatherRequest(voiceMessageRef.current);
         },
         onInterrupted: () => {
@@ -1177,6 +1185,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const sendGeminiMessage = async () => {
     const message = geminiMessage.trim();
     if (!message || geminiTesting) return;
+
+    if (isExplicitSleepRequest(message)) {
+      setGeminiMessage('');
+      await stopAssistant(true, false);
+      return;
+    }
 
     voiceMessageRef.current = '';
     currentLocationWeatherRequestedRef.current = isExplicitCurrentLocationWeatherRequest(message);
