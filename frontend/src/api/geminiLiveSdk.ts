@@ -5,6 +5,7 @@ import {
   Modality,
   ThinkingLevel,
   Type,
+  type LiveConnectConfig,
   type LiveServerMessage,
   type Session,
 } from "@google/genai";
@@ -170,10 +171,7 @@ export class AthloraGeminiSession {
           );
         }, GEMINI_SETUP_TIMEOUT_MS);
 
-        void ai.live.connect({
-        model,
-
-        config: {
+        const liveConfig: LiveConnectConfig = {
           responseModalities: [Modality.AUDIO],
 
           outputAudioTranscription: {},
@@ -202,13 +200,17 @@ export class AthloraGeminiSession {
                 text:
                   "You are Athlora, the Athlora voice assistant. " +
                   "You help authorised coaches with Athlora roster data, analytics, and weather. " +
+                  "You are connected to the coach's authenticated current workspace through the available tools. " +
                   "Never invent Athlora platform data, athletes, disciplines, rankings, results, places, or weather. " +
                   "Use the available tools for every platform-data question and action; treat tool results as authoritative. " +
+                  "For registered-athlete counts, call get_workspace_roster_summary. " +
+                  "For the fastest athlete in a discipline, call get_workspace_discipline_analysis; do not use promising-athlete rankings as a fastest-result answer. " +
+                  "For performance and injury questions, call the corresponding coach analytics tool. For charts or PDFs, call the corresponding report tool and report only its actual result. " +
                   "Use get_current_page_context when a coach refers to this page or this athlete; it exposes only the current page and an authorised selected-athlete reference. " +
                   "For athlete creation, use prepare_athlete_draft only after resolving a real discipline, validating the name and discipline, and checking likely duplicates. " +
                   "prepare_athlete_draft never creates an athlete. The browser presents local Confirm and Cancel controls; you cannot confirm, cancel, or create an athlete. " +
                   "For athlete analytics, search_athletes first and use an athlete returned by that tool. " +
-                  "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one and pass only its option ID; never invent or repeat coordinates. " +
+                  "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one. Then call get_named_place_weather again with the original place and the selected venue option ID; never invent or repeat coordinates. " +
                   "Use get_current_location_weather only when the current coach message explicitly asks for weather at their current, device, or present location. " +
                   "Do not ask for or expose coordinates. Only describe analytics summaries and rankings supplied by analytics tools. " +
                   "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. " +
@@ -265,6 +267,19 @@ export class AthloraGeminiSession {
                           "Optional discipline code or label to find.",
                       },
                     },
+                  },
+                },
+                {
+                  name: "get_workspace_roster_summary",
+
+                  behavior: Behavior.NON_BLOCKING,
+
+                  description:
+                    "Get the authoritative registered-athlete counts for the current Athlora workspace, including total, active, inactive, and archived counts.",
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {},
                   },
                 },
                 {
@@ -606,7 +621,7 @@ export class AthloraGeminiSession {
                   behavior: Behavior.NON_BLOCKING,
 
                   description:
-                    "Get current weather for a named place through Athlora. If venue choices are returned, ask the coach to choose an option ID before calling again.",
+                    "Get current weather for a named place through Athlora. If venue choices are returned, ask the coach to choose an option ID, then call again with the original place and that venueOptionId.",
 
                   parameters: {
                     type: Type.OBJECT,
@@ -653,7 +668,25 @@ export class AthloraGeminiSession {
               ],
             },
           ],
-        },
+        };
+
+        const functionNames = (liveConfig.tools ?? []).flatMap((tool) => {
+          if (!("functionDeclarations" in tool)) return [];
+          return (tool.functionDeclarations ?? [])
+            .map((declaration) => declaration.name)
+            .filter((name): name is string => typeof name === "string");
+        });
+        debugSession("Gemini tool inventory submitted", {
+          model,
+          functionCount: functionNames.length,
+          functionNames,
+          hasSystemInstruction: Boolean(liveConfig.systemInstruction),
+          thinkingConfigured: Boolean(liveConfig.thinkingConfig),
+        });
+
+        void ai.live.connect({
+        model,
+        config: liveConfig,
 
         callbacks: {
           onopen: () => {

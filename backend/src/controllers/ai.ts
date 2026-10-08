@@ -32,6 +32,9 @@ export const createGeminiToken: RequestHandler = async (_req, res, next) => {
 
     const client = new GoogleGenAI({
       apiKey,
+      // Ephemeral Live tokens are created through the v1alpha surface. The
+      // browser already connects with this version.
+      httpOptions: { apiVersion: 'v1alpha' },
     });
 
     const expireTime = new Date(
@@ -56,6 +59,10 @@ export const createGeminiToken: RequestHandler = async (_req, res, next) => {
           model,
           config: liveConfig,
         },
+        // Lock the provider-approved model configuration only. The browser
+        // must still submit its Live tools, audio configuration, and system
+        // instruction with this one-time token.
+        lockAdditionalFields: [],
       },
     });
 

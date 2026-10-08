@@ -16,7 +16,7 @@ import {
   type CoachRankingsAnalysisFilters,
   type WorkspaceDisciplineAnalysis,
 } from '../../api/analytics';
-import { createAthlete, getAthlete, listAthletes } from '../../api/athletes';
+import { createAthlete, getAthlete, getAthleteRosterSummary, listAthletes } from '../../api/athletes';
 import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { AthloraGeminiSession, type GeminiToolHandler } from '../../api/geminiLiveSdk';
 import { GeminiMicrophone } from '../../api/geminiMicrophone';
@@ -691,6 +691,17 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         || discipline.code.toLocaleLowerCase().includes(query)
         || discipline.label.toLocaleLowerCase().includes(query));
       return sourceResult('/api/v1/disciplines', data);
+    }
+
+    if (call.name === 'get_workspace_roster_summary') {
+      let summary: Awaited<ReturnType<typeof getAthleteRosterSummary>>;
+      try {
+        summary = await getAthleteRosterSummary();
+      } catch {
+        throw safeToolError('Roster summary');
+      }
+      ensureCurrentToolCall(generation, signal);
+      return sourceResult('/api/v1/athletes/summary', summary);
     }
 
     if (call.name === 'search_athletes') {

@@ -3,6 +3,7 @@ import { getApplicationUserContext } from '../middleware/auth.js';
 import {
   createAthlete as createAthleteRecord,
   getAthlete as getAthleteRecord,
+  getAthleteRosterSummary as getAthleteRosterSummaryRecord,
   listAthletes as listAthletesRecords,
   replaceAthlete,
   setAthleteStatus,
@@ -16,6 +17,16 @@ export const listAthletes: RequestHandler = async (req, res, next) => {
     const { workspaceId } = getApplicationUserContext(req);
     const athletes = await listAthletesRecords(workspaceId, query);
     res.json({ data: athletes, meta: { count: athletes.length } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAthleteRosterSummary: RequestHandler = async (req, res, next) => {
+  try {
+    const { workspaceId } = getApplicationUserContext(req);
+    const summary = await getAthleteRosterSummaryRecord(workspaceId);
+    res.json({ data: summary });
   } catch (error) {
     next(error);
   }

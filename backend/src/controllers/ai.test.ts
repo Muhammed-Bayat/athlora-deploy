@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { GoogleGenAI } from '@google/genai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createToken = vi.hoisted(() => vi.fn());
@@ -36,11 +37,16 @@ describe('createGeminiToken', () => {
     expect(createToken).toHaveBeenCalledWith({
       config: expect.objectContaining({
         uses: 1,
+        lockAdditionalFields: [],
         liveConnectConstraints: {
           model: DEFAULT_GEMINI_LIVE_MODEL,
           config: {},
         },
       }),
+    });
+    expect(GoogleGenAI).toHaveBeenCalledWith({
+      apiKey: 'test-key',
+      httpOptions: { apiVersion: 'v1alpha' },
     });
     expect(DEFAULT_GEMINI_LIVE_MODEL).toBe('gemini-3.8-live');
     expect(json).toHaveBeenCalledWith({

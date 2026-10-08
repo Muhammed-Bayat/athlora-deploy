@@ -50,6 +50,7 @@ router.use(apiLimiter);
 
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
+athletesRouter.get('/summary', athletes.getAthleteRosterSummary);
 athletesRouter.get('/injury-summaries', athletes.listAthleteInjurySummaries);
 athletesRouter.post('/', requireOperationalAccess(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);

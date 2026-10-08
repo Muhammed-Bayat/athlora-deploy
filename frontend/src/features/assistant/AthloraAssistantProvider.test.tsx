@@ -25,7 +25,7 @@ const geminiApi = vi.hoisted(() => ({
   },
 }));
 
-const athleteApi = vi.hoisted(() => ({ createAthlete: vi.fn(), listAthletes: vi.fn() }));
+const athleteApi = vi.hoisted(() => ({ createAthlete: vi.fn(), getAthleteRosterSummary: vi.fn(), listAthletes: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const analyticsApi = vi.hoisted(() => ({
   getAthleteDisciplineAnalysis: vi.fn(),
@@ -171,6 +171,7 @@ beforeEach(() => {
   geminiApi.sendText.mockImplementation(async (message: string) => `Athlora received: ${message}`);
   meetsApi.listDisciplines.mockResolvedValue({ data: [discipline], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
+  athleteApi.getAthleteRosterSummary.mockResolvedValue({ total: 4, active: 3, inactive: 1, archived: 2 });
   athleteApi.createAthlete.mockResolvedValue(athlete);
   analyticsApi.getAthleteDisciplineAnalysis.mockResolvedValue({
     athleteId: athlete.id, discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
@@ -427,6 +428,20 @@ describe('AthloraAssistantProvider', () => {
 
     expect(listed).toMatchObject({ data: [{ id: latestDiscipline.id, code: '100m' }] });
     expect(draft).toMatchObject({ data: { draft: { discipline: { id: latestDiscipline.id, code: '100m' } } } });
+  });
+
+  it('returns an authenticated workspace roster summary without exposing athlete records', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    const result = await callTool('get_workspace_roster_summary');
+
+    expect(athleteApi.getAthleteRosterSummary).toHaveBeenCalledOnce();
+    expect(result).toEqual(expect.objectContaining({
+      source: expect.objectContaining({ endpoint: '/api/v1/athletes/summary' }),
+      data: { total: 4, active: 3, inactive: 1, archived: 2 },
+    }));
+    expect(JSON.stringify(result)).not.toContain('Ari Runner');
   });
 
   it('returns source-backed analytics and generates both PDFs from the exact cached models', async () => {

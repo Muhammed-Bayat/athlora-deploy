@@ -6,6 +6,13 @@ import type {
 } from '../types';
 import { get, create, update, request } from './client';
 
+export interface AthleteRosterSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  archived: number;
+}
+
 export async function listAthletes(
   filters: AthleteListFilters = {},
   signal?: AbortSignal,
@@ -19,6 +26,11 @@ export async function listAthletes(
   if (filters.year) query.set('year', filters.year);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return request<ApiList<Athlete>>(`/api/v1/athletes${suffix}`, { signal });
+}
+
+export async function getAthleteRosterSummary(): Promise<AthleteRosterSummary> {
+  const response = await request<{ data: AthleteRosterSummary }>('/api/v1/athletes/summary');
+  return response.data;
 }
 
 export async function getAthlete(id: string): Promise<Athlete> {

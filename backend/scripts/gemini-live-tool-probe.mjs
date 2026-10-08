@@ -19,6 +19,7 @@ function argumentValue(name) {
 const model = argumentValue('--model') ?? DEFAULT_MODEL;
 const thinking = argumentValue('--thinking');
 const behavior = argumentValue('--behavior') ?? 'non-blocking';
+const useEphemeralToken = process.argv.includes('--ephemeral-token');
 
 if (thinking !== undefined && thinking !== 'medium') {
   throw new Error('--thinking must be omitted or set to medium');
@@ -32,10 +33,34 @@ if (!process.env.GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY is not configured');
 }
 
-const ai = new GoogleGenAI({
+const tokenClient = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
   httpOptions: { apiVersion: 'v1alpha' },
 });
+
+let ai = tokenClient;
+if (useEphemeralToken) {
+  const token = await tokenClient.authTokens.create({
+    config: {
+      uses: 1,
+      expireTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      liveConnectConstraints: {
+        model,
+        config: thinking === 'medium'
+          ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM } }
+          : {},
+      },
+      // Match the application broker: preserve the model constraint while
+      // allowing the browser's Live tools and instruction to reach Gemini.
+      lockAdditionalFields: [],
+    },
+  });
+  if (!token.name) throw new Error('Gemini did not return an ephemeral token');
+  ai = new GoogleGenAI({
+    apiKey: token.name,
+    httpOptions: { apiVersion: 'v1alpha' },
+  });
+}
 
 function isGeminiPcm24k(mimeType) {
   if (!mimeType) return false;
@@ -85,6 +110,9 @@ try {
       model,
       config: {
         responseModalities: [Modality.AUDIO],
+        systemInstruction: {
+          parts: [{ text: 'Call verification_ping exactly once before answering.' }],
+        },
         outputAudioTranscription: {},
         inputAudioTranscription: {},
         speechConfig: {
@@ -229,6 +257,7 @@ try {
   console.log(
     JSON.stringify({
       model,
+      ephemeralToken: useEphemeralToken,
       thinkingConfigured: thinking === 'medium',
       behavior,
       inputAudioSubmitted,

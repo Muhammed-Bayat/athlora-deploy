@@ -113,6 +113,12 @@ describe("AthloraGeminiSession", () => {
         "Athlora",
       );
       expect(config.config.systemInstruction.parts[0].text).toContain(
+        "connected to the coach's authenticated current workspace",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "get_workspace_roster_summary",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
         "slightly slower than normal",
       );
       expect(config.config.systemInstruction.parts[0].text).toContain(
@@ -141,6 +147,7 @@ describe("AthloraGeminiSession", () => {
       ).toEqual([
         "get_current_page_context",
         "list_disciplines",
+        "get_workspace_roster_summary",
         "search_athletes",
         "get_athlete_discipline_analysis",
         "get_workspace_discipline_analysis",
