@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createGeminiToken } from '../../api/ai';
+import { ApiError } from '../../api/client';
 import {
   getAthleteDisciplineAnalysis,
   getCoachInjuryAnalysis,
@@ -193,7 +194,28 @@ function optionalCoachDate(value: unknown, label: 'dateFrom' | 'dateTo'): string
   return value;
 }
 
+function lastThreeMonthsDateRange(now = new Date()): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = new Date(end);
+  const day = start.getUTCDate();
+  start.setUTCDate(1);
+  start.setUTCMonth(start.getUTCMonth() - 3);
+  const daysInMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+  start.setUTCDate(Math.min(day, daysInMonth));
+  return {
+    dateFrom: start.toISOString().slice(0, 10),
+    dateTo: end.toISOString().slice(0, 10),
+  };
+}
+
 function coachDateRangeFilters(args: Record<string, unknown>): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  if (args.relativeRange !== undefined && args.relativeRange !== null) {
+    if (args.relativeRange !== 'last_three_months') throw new Error('relativeRange must be last_three_months when provided.');
+    if (args.dateFrom !== undefined || args.dateTo !== undefined) {
+      throw new Error('relativeRange cannot be combined with dateFrom or dateTo.');
+    }
+    return lastThreeMonthsDateRange();
+  }
   const dateFrom = optionalCoachDate(args.dateFrom, 'dateFrom');
   const dateTo = optionalCoachDate(args.dateTo, 'dateTo');
   if (dateFrom && dateTo && dateFrom > dateTo) throw new Error('dateFrom must not be after dateTo.');
@@ -215,6 +237,7 @@ function optionalCoachRankingsLimit(value: unknown): number | undefined {
 }
 
 function safeCoachInjuryAnalysis(analysis: CoachInjuryAnalysis): CoachInjuryAnalysis {
+  if (!analysis.rosterSummary) throw new Error('Coach injury analytics response is missing rosterSummary. The frontend and backend deployments do not use matching analytics contracts.');
   return {
     selectedRange: { dateFrom: analysis.selectedRange.dateFrom, dateTo: analysis.selectedRange.dateTo },
     lifecycleStatus: analysis.lifecycleStatus,
@@ -246,6 +269,29 @@ function safeCoachInjuryAnalysis(analysis: CoachInjuryAnalysis): CoachInjuryAnal
         active: injury.active,
       })),
     })),
+    rosterSummary: {
+      injuryRecordCount: analysis.rosterSummary.injuryRecordCount,
+      athletesWithRecordedInjuries: analysis.rosterSummary.athletesWithRecordedInjuries,
+      mostCommonRecordedArea: analysis.rosterSummary.mostCommonRecordedArea && {
+        bodyRegion: analysis.rosterSummary.mostCommonRecordedArea.bodyRegion,
+        area: analysis.rosterSummary.mostCommonRecordedArea.area,
+        count: analysis.rosterSummary.mostCommonRecordedArea.count,
+      },
+      mostCommonBodyRegion: analysis.rosterSummary.mostCommonBodyRegion && {
+        bodyRegion: analysis.rosterSummary.mostCommonBodyRegion.bodyRegion,
+        count: analysis.rosterSummary.mostCommonBodyRegion.count,
+      },
+      athletesWithRepeatedInjuries: analysis.rosterSummary.athletesWithRepeatedInjuries.map((entry) => ({
+        athlete: { id: entry.athlete.id, name: entry.athlete.name, status: entry.athlete.status },
+        repeatedInjuries: entry.repeatedInjuries.map((injury) => ({
+          bodyRegion: injury.bodyRegion,
+          area: injury.area,
+          side: injury.side,
+          count: injury.count,
+        })),
+      })),
+      insufficientDataReason: analysis.rosterSummary.insufficientDataReason,
+    },
   };
 }
 
@@ -307,6 +353,16 @@ function normalizedWeather(weather: CurrentWeather) {
 
 function safeToolError(action: string): Error {
   return new Error(`${action} is temporarily unavailable. Please try again.`);
+}
+
+function analyticsToolError(action: string, call: Parameters<GeminiToolHandler>[0], error: unknown): Error {
+  const functionCallId = call.id ?? 'unknown';
+  if (error instanceof ApiError) {
+    const requestId = typeof error.details.requestId === 'string' ? ` Request ID: ${error.details.requestId}.` : '';
+    return new Error(`${action} failed during the API request for Gemini function call ${functionCallId}: HTTP ${error.status} (${error.code}).${requestId}`);
+  }
+  const reason = error instanceof Error ? error.message : 'Unknown client error.';
+  return new Error(`${action} failed before a usable API response for Gemini function call ${functionCallId}: ${reason}`);
 }
 
 function browserCoordinates(): Promise<{ latitude: number; longitude: number }> {
@@ -805,8 +861,9 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       let analysis: CoachPerformanceAnalysis;
       try {
         analysis = await getCoachPerformanceAnalysis(filters);
-      } catch {
-        throw safeToolError('Coach performance analytics');
+        if (!analysis.comparison) throw new Error('Coach performance analytics response is missing comparison. The frontend and backend deployments do not use matching analytics contracts.');
+      } catch (error) {
+        throw analyticsToolError('Coach performance analytics', call, error);
       }
       ensureCurrentToolCall(generation, signal);
       cacheCoachPerformanceAnalysis({ analysis });
@@ -820,8 +877,8 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       let analysis: CoachInjuryAnalysis;
       try {
         analysis = safeCoachInjuryAnalysis(await getCoachInjuryAnalysis(filters));
-      } catch {
-        throw safeToolError('Coach injury monitoring analytics');
+      } catch (error) {
+        throw analyticsToolError('Coach injury monitoring analytics', call, error);
       }
       ensureCurrentToolCall(generation, signal);
       cacheCoachInjuryAnalysis({ analysis });

@@ -65,6 +65,20 @@ const performanceAnalysis: CoachPerformanceAnalysis = {
       history: [point('2026-01-01', 12.4), point('2026-02-01', 12.3), point('2026-02-15', 12.2), point('2026-03-01', 12.1)],
     }],
   }],
+  comparison: {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.',
+    eligibleAthleteDisciplineCount: 1,
+    mostImproved: {
+      athlete: { id: 'athlete-1', name: 'Ari Runner', status: 'active' },
+      discipline: sprint,
+      first: point('2026-01-01', 12.4),
+      latest: point('2026-03-01', 12.1),
+      improvement: 0.3,
+      improvementPercent: 2.42,
+    },
+    mostDeclined: null,
+    insufficientDataReason: null,
+  },
 };
 
 const injuryAnalysis: CoachInjuryAnalysis = {
@@ -92,6 +106,14 @@ const injuryAnalysis: CoachInjuryAnalysis = {
       active: true,
     }],
   }],
+  rosterSummary: {
+    injuryRecordCount: 1,
+    athletesWithRecordedInjuries: 1,
+    mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 1 },
+    mostCommonBodyRegion: { bodyRegion: 'Leg', count: 1 },
+    athletesWithRepeatedInjuries: [],
+    insufficientDataReason: null,
+  },
 };
 
 const rankingsAnalysis: CoachRankingsAnalysis = {

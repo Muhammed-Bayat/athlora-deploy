@@ -242,6 +242,15 @@ describe("AthloraGeminiSession", () => {
         );
       }
 
+      const performanceDeclaration = declarations.find(
+        (candidate) => candidate.name === "get_coach_performance_analysis",
+      );
+      expect(performanceDeclaration?.parameters.properties).toEqual(
+        expect.objectContaining({
+          relativeRange: expect.objectContaining({ type: "STRING" }),
+        }),
+      );
+
       for (const name of [
         "get_coach_injury_analysis",
         "download_coach_injury_report",

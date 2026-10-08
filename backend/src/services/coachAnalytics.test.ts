@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeCoachPerformance,
   rankCoachAthletes,
+  summarizeCoachInjuryRoster,
   summarizeCoachInjuries,
+  summarizeCoachPerformanceChanges,
   type CoachDateRange,
 } from './coachAnalytics.js';
 import type { AnalyticsDiscipline, NormalizedAthleteResult } from './athleteAnalytics.js';
@@ -71,6 +73,72 @@ describe('coach analytics foundations', () => {
     expect(analysis.recentTrend).toMatchObject({ direction: 'declining', change: -0.5 });
   });
 
+  it('identifies cross-discipline change leaders using normalized direction-aware percentages', () => {
+    const athletes = [
+      {
+        athlete: { id: athleteId, name: 'Ari', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 12, '2026-07-01'),
+          result(timed, 11, '2026-09-01'),
+        ], allDates, season)],
+      },
+      {
+        athlete: { id: secondAthleteId, name: 'Bea', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(measured, [
+          result(measured, 5, '2026-07-01', secondAthleteId),
+          result(measured, 5.75, '2026-09-01', secondAthleteId),
+        ], allDates, season)],
+      },
+      {
+        athlete: { id: thirdAthleteId, name: 'Cy', status: 'inactive' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 10, '2026-07-01', thirdAthleteId),
+          result(timed, 11, '2026-09-01', thirdAthleteId),
+        ], allDates, season)],
+      },
+    ];
+
+    expect(summarizeCoachPerformanceChanges(athletes)).toMatchObject({
+      eligibleAthleteDisciplineCount: 3,
+      mostImproved: { athlete: { name: 'Bea' }, discipline: { code: 'long_jump' }, improvement: 0.75, improvementPercent: 15 },
+      mostDeclined: { athlete: { name: 'Cy' }, discipline: { code: '100m' }, improvement: -1, improvementPercent: -10 },
+      insufficientDataReason: null,
+    });
+  });
+
+  it('returns an insufficient-data comparison when no athlete-discipline has two selected results', () => {
+    const comparison = summarizeCoachPerformanceChanges([{
+      athlete: { id: athleteId, name: 'Ari', status: 'active' },
+      disciplines: [analyzeCoachPerformance(timed, [result(timed, 12, '2026-09-01')], allDates, season)],
+    }]);
+
+    expect(comparison).toMatchObject({
+      eligibleAthleteDisciplineCount: 0,
+      mostImproved: null,
+      mostDeclined: null,
+      insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+    });
+  });
+
+  it('excludes records outside the selected date range before calculating change', () => {
+    const selectedRange: CoachDateRange = { dateFrom: '2026-07-08', dateTo: '2026-10-08' };
+    const analysis = analyzeCoachPerformance(timed, [
+      result(timed, 12, '2026-07-01'),
+      result(timed, 11.5, '2026-08-01'),
+      result(timed, 11, '2026-11-01'),
+    ], selectedRange, season);
+
+    expect(analysis).toMatchObject({
+      recordCount: 1,
+      first: { value: 11.5 },
+      latest: { value: 11.5 },
+      improvement: null,
+      improvementPercent: null,
+      sufficientData: false,
+      insufficientDataReason: 'At least two valid normalized results in the selected range are required to compare change.',
+    });
+  });
+
   it('returns volatility only once there are enough samples and detects a plateau from four recent results', () => {
     const consistency = analyzeCoachPerformance(timed, [
       result(timed, 10, '2026-01-01'),
@@ -123,6 +191,29 @@ describe('coach analytics foundations', () => {
       },
     });
     expect(summaries[1]?.warning).toEqual({ level: 'high', reasons: ['active_severe_injury'] });
+    expect(summarizeCoachInjuryRoster(summaries)).toMatchObject({
+      injuryRecordCount: 3,
+      athletesWithRecordedInjuries: 2,
+      mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 2 },
+      mostCommonBodyRegion: { bodyRegion: 'Leg', count: 2 },
+      athletesWithRepeatedInjuries: [{ athlete: { name: 'Ari' }, repeatedInjuries: [{ area: 'Knee', count: 2 }] }],
+      insufficientDataReason: null,
+    });
+  });
+
+  it('reports no-recorded-injuries instead of an unavailable injury analysis', () => {
+    const empty = summarizeCoachInjuryRoster(summarizeCoachInjuries([
+      { id: athleteId, name: 'Ari', lifecycle_status: 'active' },
+    ], []));
+
+    expect(empty).toEqual({
+      injuryRecordCount: 0,
+      athletesWithRecordedInjuries: 0,
+      mostCommonRecordedArea: null,
+      mostCommonBodyRegion: null,
+      athletesWithRepeatedInjuries: [],
+      insufficientDataReason: 'No recorded injuries were found for the selected athletes and date range.',
+    });
   });
 
   it('ranks promising athletes within one discipline and flags a single incomparable athlete as insufficient', () => {
