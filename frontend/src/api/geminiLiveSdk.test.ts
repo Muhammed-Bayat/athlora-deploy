@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSession = {
   sendClientContent: vi.fn(),
@@ -13,22 +13,39 @@ function fireCallback(name: string, msg: Record<string, unknown>) {
   (capturedCallbacks[name] as (msg: Record<string, unknown>) => void)(msg);
 }
 
-const liveConnect = vi.fn().mockImplementation(async (config: Record<string, unknown>) => {
-  capturedCallbacks = (config.callbacks as Record<string, unknown>) ?? {};
-  return mockSession;
-});
+const liveConnect = vi
+  .fn()
+  .mockImplementation(async (config: Record<string, unknown>) => {
+    capturedCallbacks = (config.callbacks as Record<string, unknown>) ?? {};
+    return mockSession;
+  });
 
-vi.mock('@google/genai', () => ({
+vi.mock("@google/genai", () => ({
   GoogleGenAI: vi.fn(() => ({ live: { connect: liveConnect } })),
-  Modality: { AUDIO: 'AUDIO' },
-  Type: { OBJECT: 'OBJECT', STRING: 'STRING' },
+  Behavior: { NON_BLOCKING: "NON_BLOCKING" },
+  InteractionStatus: {
+    IN_PROGRESS: "IN_PROGRESS",
+    IDLE: "IDLE",
+  },
+  Modality: { AUDIO: "AUDIO" },
+  ThinkingLevel: { MEDIUM: "MEDIUM" },
+  Type: {
+    ARRAY: "ARRAY",
+    INTEGER: "INTEGER",
+    OBJECT: "OBJECT",
+    STRING: "STRING",
+  },
 }));
 
-import { AthloraGeminiSession } from './geminiLiveSdk';
+import {
+  AthloraGeminiSession,
+  GEMINI_LIVE_DEFAULT_MODEL,
+  GEMINI_LIVE_ROLLBACK_MODEL,
+} from "./geminiLiveSdk";
 
 function createSession(overrides = {}) {
   return new AthloraGeminiSession({
-    token: 'test-token',
+    token: "test-token",
     ...overrides,
   });
 }
@@ -47,14 +64,17 @@ beforeEach(() => {
   });
 });
 
-describe('AthloraGeminiSession', () => {
-  describe('connect', () => {
-    it('connects to the Gemini live API and fires onConnected', async () => {
-      liveConnect.mockImplementation(async (config: Record<string, unknown>) => {
-        capturedCallbacks = (config.callbacks as Record<string, unknown>) ?? {};
-        (capturedCallbacks.onopen as () => void)?.();
-        return mockSession;
-      });
+describe("AthloraGeminiSession", () => {
+  describe("connect", () => {
+    it("connects to the Gemini live API and fires onConnected", async () => {
+      liveConnect.mockImplementation(
+        async (config: Record<string, unknown>) => {
+          capturedCallbacks =
+            (config.callbacks as Record<string, unknown>) ?? {};
+          (capturedCallbacks.onopen as () => void)?.();
+          return mockSession;
+        },
+      );
 
       const onConnected = vi.fn();
       const session = createSession({ onConnected });
@@ -65,39 +85,177 @@ describe('AthloraGeminiSession', () => {
       expect(onConnected).toHaveBeenCalledOnce();
     });
 
-    it('sends correct model, tools, and system prompt', async () => {
+    it("sends the default model, thinking config, tools, and system prompt", async () => {
       await createSession().connect();
 
       const config = liveConnect.mock.calls[0][0];
-      expect(config.model).toBe('gemini-3.1-flash-live-preview');
-      expect(config.config.responseModalities).toEqual(['AUDIO']);
+      expect(config.model).toBe(GEMINI_LIVE_DEFAULT_MODEL);
+      expect(GEMINI_LIVE_DEFAULT_MODEL).toBe(
+        "gemini-3.8-live-extended-thinking",
+      );
+      expect(GEMINI_LIVE_ROLLBACK_MODEL).toBe("gemini-3.1-flash-live-preview");
+      expect(config.config.responseModalities).toEqual(["AUDIO"]);
+      expect(config.config.thinkingConfig).toEqual({
+        thinkingLevel: "MEDIUM",
+      });
       expect(config.config.speechConfig).toEqual({
         voiceConfig: {
           prebuiltVoiceConfig: {
-            voiceName: 'Sulafat',
+            voiceName: "Sulafat",
           },
         },
       });
-      expect(config.config.systemInstruction.parts[0].text).toContain('Athlora');
-      expect(config.config.systemInstruction.parts[0].text).toContain('slightly slower than normal');
-      expect(config.config.systemInstruction.parts[0].text).toContain('Never invent Athlora platform data');
-      expect(config.config.systemInstruction.parts[0].text).toContain('never creates an athlete');
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "Athlora",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "slightly slower than normal",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "Never invent Athlora platform data",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "never creates an athlete",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "Use evidence first",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "no data or no conclusion",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "Never claim or infer workload, wellness, or readiness",
+      );
+      expect(config.config.systemInstruction.parts[0].text).toContain(
+        "Reports require actual tool results",
+      );
       expect(config.config.inputAudioTranscription).toEqual({});
-      expect(config.config.tools[0].functionDeclarations.map((t: { name: string }) => t.name)).toEqual([
-        'get_current_page_context',
-        'list_disciplines',
-        'search_athletes',
-        'get_athlete_discipline_analysis',
-        'get_workspace_discipline_analysis',
-        'prepare_athlete_draft',
-        'get_named_place_weather',
-        'get_current_location_weather',
-        'sleep_assistant',
+      expect(
+        config.config.tools[0].functionDeclarations.map(
+          (t: { name: string }) => t.name,
+        ),
+      ).toEqual([
+        "get_current_page_context",
+        "list_disciplines",
+        "search_athletes",
+        "get_athlete_discipline_analysis",
+        "get_workspace_discipline_analysis",
+        "get_coach_performance_analysis",
+        "get_coach_injury_analysis",
+        "get_coach_rankings_analysis",
+        "download_coach_performance_report",
+        "download_coach_injury_report",
+        "download_coach_rankings_report",
+        "prepare_athlete_draft",
+        "get_named_place_weather",
+        "get_current_location_weather",
+        "sleep_assistant",
       ]);
-      expect(config.config.tools[0].functionDeclarations.map((t: { name: string }) => t.name)).not.toContain('create_athlete');
+      expect(
+        config.config.tools[0].functionDeclarations.map(
+          (t: { name: string }) => t.name,
+        ),
+      ).not.toContain("create_athlete");
     });
 
-    it('fires onReady only after the Live session resolves', async () => {
+    it("uses a caller-supplied model, including the exported rollback model", async () => {
+      await createSession({ model: GEMINI_LIVE_ROLLBACK_MODEL }).connect();
+
+      expect(liveConnect.mock.calls[0][0].model).toBe(
+        GEMINI_LIVE_ROLLBACK_MODEL,
+      );
+    });
+
+    it("sets every function declaration to non-blocking", async () => {
+      await createSession().connect();
+
+      const declarations =
+        liveConnect.mock.calls[0][0].config.tools[0].functionDeclarations;
+
+      expect(declarations).not.toHaveLength(0);
+      expect(declarations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "get_coach_rankings_analysis",
+            behavior: "NON_BLOCKING",
+          }),
+        ]),
+      );
+      expect(
+        declarations.every(
+          (declaration: { behavior?: string }) =>
+            declaration.behavior === "NON_BLOCKING",
+        ),
+      ).toBe(true);
+    });
+
+    it("declares filters for coach analytics and report tools", async () => {
+      await createSession().connect();
+
+      const declarations = liveConnect.mock.calls[0][0].config.tools[0]
+        .functionDeclarations as Array<{
+        name: string;
+        parameters: {
+          properties: Record<string, unknown>;
+        };
+      }>;
+      for (const name of [
+        "get_coach_performance_analysis",
+        "download_coach_performance_report",
+      ]) {
+        const declaration = declarations.find(
+          (candidate) => candidate.name === name,
+        );
+        expect(declaration?.parameters.properties).toEqual(
+          expect.objectContaining({
+            athleteIds: expect.any(Object),
+            discipline: expect.any(Object),
+            dateFrom: expect.any(Object),
+            dateTo: expect.any(Object),
+            lifecycleStatus: expect.any(Object),
+          }),
+        );
+      }
+
+      for (const name of [
+        "get_coach_injury_analysis",
+        "download_coach_injury_report",
+      ]) {
+        const declaration = declarations.find(
+          (candidate) => candidate.name === name,
+        );
+        expect(declaration?.parameters.properties).toEqual(
+          expect.objectContaining({
+            athleteIds: expect.any(Object),
+            dateFrom: expect.any(Object),
+            dateTo: expect.any(Object),
+            lifecycleStatus: expect.any(Object),
+          }),
+        );
+        expect(declaration?.parameters.properties).not.toHaveProperty("discipline");
+      }
+
+      for (const name of [
+        "get_coach_rankings_analysis",
+        "download_coach_rankings_report",
+      ]) {
+        const declaration = declarations.find(
+          (candidate) => candidate.name === name,
+        );
+        expect(declaration?.parameters.properties).toEqual(
+          expect.objectContaining({
+            discipline: expect.any(Object),
+            dateFrom: expect.any(Object),
+            dateTo: expect.any(Object),
+            lifecycleStatus: expect.any(Object),
+            limit: expect.objectContaining({ type: "INTEGER" }),
+          }),
+        );
+        expect(declaration?.parameters.properties).not.toHaveProperty("athleteIds");
+      }
+    });
+
+    it("fires onReady only after the Live session resolves", async () => {
       const onReady = vi.fn();
       const session = createSession({ onReady });
 
@@ -106,7 +264,7 @@ describe('AthloraGeminiSession', () => {
       expect(onReady).toHaveBeenCalledOnce();
     });
 
-    it('does nothing if already connected (idempotent)', async () => {
+    it("does nothing if already connected (idempotent)", async () => {
       const session = createSession();
       await session.connect();
       await session.connect();
@@ -114,7 +272,7 @@ describe('AthloraGeminiSession', () => {
       expect(liveConnect).toHaveBeenCalledOnce();
     });
 
-    it('fires onDisconnected on session close', async () => {
+    it("fires onDisconnected on session close", async () => {
       const onDisconnected = vi.fn();
       const session = createSession({ onDisconnected });
       await session.connect();
@@ -124,115 +282,134 @@ describe('AthloraGeminiSession', () => {
       expect(onDisconnected).toHaveBeenCalledOnce();
     });
 
-    it('fires onError on session error', async () => {
+    it("fires onError on session error", async () => {
       const onError = vi.fn();
       const session = createSession({ onError });
       await session.connect();
 
-      (capturedCallbacks.onerror as (e: unknown) => void)({ message: 'connection lost' });
+      (capturedCallbacks.onerror as (e: unknown) => void)({
+        message: "connection lost",
+      });
 
-      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'connection lost' }));
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "connection lost" }),
+      );
     });
 
-    it('uses fallback error message when event has no message', async () => {
+    it("uses fallback error message when event has no message", async () => {
       const onError = vi.fn();
       const session = createSession({ onError });
       await session.connect();
 
-      (capturedCallbacks.onerror as (e: unknown) => void)({ message: '' });
+      (capturedCallbacks.onerror as (e: unknown) => void)({ message: "" });
 
-      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Gemini Live connection error' }));
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Gemini Live connection error" }),
+      );
     });
 
-    it('rejects pending turn on error', async () => {
+    it("rejects pending turn on error", async () => {
       const session = createSession();
       await session.connect();
 
-      const sendPromise = session.sendText('hello');
+      const sendPromise = session.sendText("hello");
 
-      (capturedCallbacks.onerror as (e: unknown) => void)({ message: 'fail' });
+      (capturedCallbacks.onerror as (e: unknown) => void)({ message: "fail" });
 
-      await expect(sendPromise).rejects.toThrow('fail');
+      await expect(sendPromise).rejects.toThrow("fail");
     });
   });
 
-  describe('sendText', () => {
-    it('throws if session not connected', async () => {
-      await expect(createSession().sendText('hi')).rejects.toThrow('Gemini Live session is not connected');
+  describe("sendText", () => {
+    it("throws if session not connected", async () => {
+      await expect(createSession().sendText("hi")).rejects.toThrow(
+        "Gemini Live session is not connected",
+      );
     });
 
-    it('throws if already responding', async () => {
+    it("throws if already responding", async () => {
       const session = createSession();
       await session.connect();
 
-      const first = session.sendText('first');
-      await expect(session.sendText('second')).rejects.toThrow('Gemini is already responding');
+      const first = session.sendText("first");
+      await expect(session.sendText("second")).rejects.toThrow(
+        "Gemini is already responding",
+      );
 
       // Resolve the first turn so tests clean up
-      fireCallback('onmessage',{ serverContent: { turnComplete: true } });
+      fireCallback("onmessage", { serverContent: { turnComplete: true } });
       await first;
     });
 
-    it('sends client content and resolves on turnComplete', async () => {
+    it("sends client content and resolves on turnComplete", async () => {
       const session = createSession();
       await session.connect();
 
-      const responsePromise = session.sendText('add Bob');
+      const responsePromise = session.sendText("add Bob");
 
       expect(mockSession.sendClientContent).toHaveBeenCalledWith({
-        turns: [{ role: 'user', parts: [{ text: 'add Bob' }] }],
+        turns: [{ role: "user", parts: [{ text: "add Bob" }] }],
         turnComplete: true,
       });
 
-      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'Sure' }, turnComplete: true } });
+      fireCallback("onmessage", {
+        serverContent: {
+          outputTranscription: { text: "Sure" },
+          turnComplete: true,
+        },
+      });
 
-      expect(await responsePromise).toBe('Sure');
+      expect(await responsePromise).toBe("Sure");
     });
 
-    it('falls back to default text on empty transcript', async () => {
+    it("falls back to default text on empty transcript", async () => {
       const session = createSession();
       await session.connect();
 
-      const promise = session.sendText('hi');
-      fireCallback('onmessage',{ serverContent: { turnComplete: true } });
+      const promise = session.sendText("hi");
+      fireCallback("onmessage", { serverContent: { turnComplete: true } });
 
-      expect(await promise).toBe('Gemini completed the request.');
+      expect(await promise).toBe("Gemini completed the request.");
     });
   });
 
-  describe('sendAudio', () => {
-    it('throws if session not connected', () => {
-      expect(() => createSession().sendAudio('base64data')).toThrow('Gemini Live session is not connected');
+  describe("sendAudio", () => {
+    it("throws if session not connected", () => {
+      expect(() => createSession().sendAudio("base64data")).toThrow(
+        "Gemini Live session is not connected",
+      );
     });
 
-    it('sends realtime audio input', async () => {
+    it("sends realtime audio input", async () => {
       const session = createSession();
       await session.connect();
 
-      session.sendAudio('pcm-data');
+      session.sendAudio("pcm-data");
 
       expect(mockSession.sendRealtimeInput).toHaveBeenCalledWith({
-        audio: { data: 'pcm-data', mimeType: 'audio/pcm;rate=16000' },
+        audio: { data: "pcm-data", mimeType: "audio/pcm;rate=16000" },
       });
     });
   });
 
-  describe('endAudioStream', () => {
-    it('does nothing if session is null', () => {
+  describe("endAudioStream", () => {
+    it("does nothing if session is null", () => {
       createSession().endAudioStream(); // no throw
     });
 
-    it('sends audioStreamEnd signal', async () => {
+    it("sends audioStreamEnd signal", async () => {
       const session = createSession();
       await session.connect();
       session.endAudioStream();
 
-      expect(mockSession.sendRealtimeInput).toHaveBeenCalledWith({ audioStreamEnd: true });
+      expect(mockSession.sendRealtimeInput).toHaveBeenCalledWith({
+        audioStreamEnd: true,
+      });
     });
   });
 
-  describe('close', () => {
-    it('closes session and clears state', async () => {
+  describe("close", () => {
+    it("closes session and clears state", async () => {
       const onDisconnected = vi.fn();
       const session = createSession({ onDisconnected });
       await session.connect();
@@ -243,222 +420,426 @@ describe('AthloraGeminiSession', () => {
       expect(onDisconnected).not.toHaveBeenCalled(); // close() doesn't fire onDisconnected
     });
 
-    it('rejects a pending turn when explicitly closed', async () => {
+    it("rejects a pending turn when explicitly closed", async () => {
       const session = createSession();
       await session.connect();
-      const pending = session.sendText('Tell me about the roster.');
+      const pending = session.sendText("Tell me about the roster.");
       session.close();
 
-      await expect(pending).rejects.toThrow('Gemini Live session closed');
+      await expect(pending).rejects.toThrow("Gemini Live session closed");
     });
   });
 
-  describe('handleMessage', () => {
-    it('dispatches tool calls to onToolCall and sends responses', async () => {
-      const onToolCall = vi.fn().mockResolvedValue({ id: 'athlete-1' });
+  describe("handleMessage", () => {
+    it("dispatches tool calls to onToolCall and sends responses", async () => {
+      const onToolCall = vi.fn().mockResolvedValue({ id: "athlete-1" });
       const session = createSession({ onToolCall });
       await session.connect();
 
-      fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'list_disciplines', args: { query: '100m' } }] },
+      fireCallback("onmessage", {
+        toolCall: {
+          functionCalls: [
+            { id: "c1", name: "list_disciplines", args: { query: "100m" } },
+          ],
+        },
       });
 
-      await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledWith({
-        id: 'c1', name: 'list_disciplines', args: { query: '100m' },
-      }));
-      expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'list_disciplines', response: { result: { id: 'athlete-1' } } }],
-      });
+      await vi.waitFor(() =>
+        expect(onToolCall).toHaveBeenCalledWith(
+          { id: "c1", name: "list_disciplines", args: { query: "100m" } },
+          expect.anything(),
+        ),
+      );
+      await vi.waitFor(() =>
+        expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
+          functionResponses: [
+            {
+              id: "c1",
+              name: "list_disciplines",
+              response: { result: { id: "athlete-1" } },
+            },
+          ],
+        }),
+      );
     });
 
-    it('handles sleep_assistant tool call natively', async () => {
+    it("executes multiple tool calls concurrently and sends one combined response", async () => {
+      let resolveFirst: (value: unknown) => void = () => undefined;
+      let resolveSecond: (value: unknown) => void = () => undefined;
+      const first = new Promise<unknown>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const second = new Promise<unknown>((resolve) => {
+        resolveSecond = resolve;
+      });
+      const onToolCall = vi.fn((call: { id?: string }) =>
+        call.id === "c1" ? first : second,
+      );
+      const onToolCallStart = vi.fn();
+      const onToolCallEnd = vi.fn();
+      const session = createSession({
+        onToolCall,
+        onToolCallStart,
+        onToolCallEnd,
+      });
+      await session.connect();
+
+      fireCallback("onmessage", {
+        toolCall: {
+          functionCalls: [
+            { id: "c1", name: "search_athletes" },
+            { id: "c2", name: "list_disciplines" },
+          ],
+        },
+      });
+
+      await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledTimes(2));
+      expect(onToolCallStart).toHaveBeenCalledTimes(2);
+
+      resolveSecond({ second: true });
+      await Promise.resolve();
+      expect(mockSession.sendToolResponse).not.toHaveBeenCalled();
+
+      resolveFirst({ first: true });
+
+      await vi.waitFor(() =>
+        expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
+          functionResponses: [
+            {
+              id: "c1",
+              name: "search_athletes",
+              response: { result: { first: true } },
+            },
+            {
+              id: "c2",
+              name: "list_disciplines",
+              response: { result: { second: true } },
+            },
+          ],
+        }),
+      );
+      expect(onToolCallEnd).toHaveBeenCalledTimes(2);
+    });
+
+    it("handles sleep_assistant tool call natively", async () => {
       const onSleepRequested = vi.fn();
       const session = createSession({ onSleepRequested });
       await session.connect();
 
-      fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'sleep_assistant' }] },
+      fireCallback("onmessage", {
+        toolCall: { functionCalls: [{ id: "c1", name: "sleep_assistant" }] },
       });
 
-      await vi.waitFor(() => expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'sleep_assistant', response: { success: true } }],
-      }));
+      await vi.waitFor(() =>
+        expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
+          functionResponses: [
+            { id: "c1", name: "sleep_assistant", response: { success: true } },
+          ],
+        }),
+      );
       expect(onSleepRequested).toHaveBeenCalledOnce();
     });
 
-    it('sends error response when tool call throws', async () => {
-      const onToolCall = vi.fn().mockRejectedValue(new Error('DB error'));
+    it("sends error response when tool call throws", async () => {
+      const onToolCall = vi.fn().mockRejectedValue(new Error("DB error"));
       const session = createSession({ onToolCall });
       await session.connect();
 
-      fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'search_athletes' }] },
+      fireCallback("onmessage", {
+        toolCall: { functionCalls: [{ id: "c1", name: "search_athletes" }] },
       });
 
-      await vi.waitFor(() => expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'search_athletes', response: { error: 'DB error' } }],
-      }));
+      await vi.waitFor(() =>
+        expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
+          functionResponses: [
+            {
+              id: "c1",
+              name: "search_athletes",
+              response: { error: "DB error" },
+            },
+          ],
+        }),
+      );
     });
 
-    it('throws when tool call arrives but no onToolCall configured', async () => {
+    it("throws when tool call arrives but no onToolCall configured", async () => {
       const session = createSession();
       await session.connect();
 
-      fireCallback('onmessage',{
-        toolCall: { functionCalls: [{ id: 'c1', name: 'search_athletes' }] },
+      fireCallback("onmessage", {
+        toolCall: { functionCalls: [{ id: "c1", name: "search_athletes" }] },
       });
 
-      await vi.waitFor(() => expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
-        functionResponses: [{ id: 'c1', name: 'search_athletes', response: { error: 'No Gemini tool handler configured' } }],
-      }));
+      await vi.waitFor(() =>
+        expect(mockSession.sendToolResponse).toHaveBeenCalledWith({
+          functionResponses: [
+            {
+              id: "c1",
+              name: "search_athletes",
+              response: { error: "No Gemini tool handler configured" },
+            },
+          ],
+        }),
+      );
     });
 
-    it('accumulates audio and transcription during a turn', async () => {
+    it("aborts in-flight tool calls on interruption without sending stale responses", async () => {
+      let resolveTool: (value: unknown) => void = () => undefined;
+      let signal: AbortSignal | undefined;
+      const pendingTool = new Promise<unknown>((resolve) => {
+        resolveTool = resolve;
+      });
+      const onToolCall = vi.fn((_: unknown, toolSignal?: AbortSignal) => {
+        signal = toolSignal;
+        return pendingTool;
+      });
+      const onToolCallEnd = vi.fn();
+      const session = createSession({ onToolCall, onToolCallEnd });
+      await session.connect();
+
+      fireCallback("onmessage", {
+        toolCall: {
+          functionCalls: [{ id: "c1", name: "search_athletes" }],
+        },
+      });
+
+      await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledOnce());
+      expect(signal?.aborted).toBe(false);
+
+      fireCallback("onmessage", {
+        serverContent: { interrupted: true },
+      });
+      expect(signal?.aborted).toBe(true);
+
+      resolveTool({ stale: true });
+      await vi.waitFor(() => expect(onToolCallEnd).toHaveBeenCalledOnce());
+
+      expect(mockSession.sendToolResponse).not.toHaveBeenCalled();
+    });
+
+    it("aborts tool calls on close and suppresses stale responses after reconnect", async () => {
+      let resolveTool: (value: unknown) => void = () => undefined;
+      let signal: AbortSignal | undefined;
+      const pendingTool = new Promise<unknown>((resolve) => {
+        resolveTool = resolve;
+      });
+      const onToolCall = vi.fn((_: unknown, toolSignal?: AbortSignal) => {
+        signal = toolSignal;
+        return pendingTool;
+      });
+      const onToolCallEnd = vi.fn();
+      const session = createSession({ onToolCall, onToolCallEnd });
+      await session.connect();
+
+      fireCallback("onmessage", {
+        toolCall: {
+          functionCalls: [{ id: "c1", name: "search_athletes" }],
+        },
+      });
+      await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledOnce());
+
+      session.close();
+      expect(signal?.aborted).toBe(true);
+      await session.connect();
+      resolveTool({ stale: true });
+      await vi.waitFor(() => expect(onToolCallEnd).toHaveBeenCalledOnce());
+
+      expect(mockSession.sendToolResponse).not.toHaveBeenCalled();
+    });
+
+    it("accumulates audio and transcription during a turn", async () => {
       const onAudio = vi.fn();
       const onTranscript = vi.fn();
       const onTurnStart = vi.fn();
       const session = createSession({ onAudio, onTranscript, onTurnStart });
       await session.connect();
 
-      fireCallback('onmessage',{
+      fireCallback("onmessage", {
         serverContent: {
-          modelTurn: { parts: [{ inlineData: { data: 'audio1', mimeType: 'audio/pcm' } }] },
-          outputTranscription: { text: 'Hello' },
+          modelTurn: {
+            parts: [{ inlineData: { data: "audio1", mimeType: "audio/pcm" } }],
+          },
+          outputTranscription: { text: "Hello" },
         },
       });
 
       expect(onTurnStart).toHaveBeenCalledOnce();
-      expect(onAudio).toHaveBeenCalledWith('audio1');
-      expect(onTranscript).toHaveBeenCalledWith('Hello');
+      expect(onAudio).toHaveBeenCalledWith("audio1");
+      expect(onTranscript).toHaveBeenCalledWith("Hello");
     });
 
-    it('forwards input transcription separately from model output', async () => {
+    it("forwards input transcription separately from model output", async () => {
       const onInputTranscript = vi.fn();
       const onTranscript = vi.fn();
       const session = createSession({ onInputTranscript, onTranscript });
       await session.connect();
 
-      fireCallback('onmessage',{
+      fireCallback("onmessage", {
         serverContent: {
-          inputTranscription: { text: 'Yes please' },
-          outputTranscription: { text: 'I can help.' },
+          inputTranscription: { text: "Yes please" },
+          outputTranscription: { text: "I can help." },
         },
       });
 
-      expect(onInputTranscript).toHaveBeenCalledWith('Yes please');
-      expect(onTranscript).toHaveBeenCalledWith('I can help.');
+      expect(onInputTranscript).toHaveBeenCalledWith("Yes please");
+      expect(onTranscript).toHaveBeenCalledWith("I can help.");
     });
 
-    it('skips audio parts without audio mimeType', async () => {
+    it("skips audio parts without audio mimeType", async () => {
       const onAudio = vi.fn();
       const session = createSession({ onAudio });
       await session.connect();
 
-      fireCallback('onmessage',{
+      fireCallback("onmessage", {
         serverContent: {
-          modelTurn: { parts: [{ inlineData: { data: 'text', mimeType: 'text/plain' } }] },
+          modelTurn: {
+            parts: [{ inlineData: { data: "text", mimeType: "text/plain" } }],
+          },
         },
       });
 
       expect(onAudio).not.toHaveBeenCalled();
     });
 
-    it('forwards only Gemini 24kHz PCM audio', async () => {
+    it("forwards only Gemini 24kHz PCM audio", async () => {
       const onAudio = vi.fn();
       const session = createSession({ onAudio });
       await session.connect();
 
-      fireCallback('onmessage',{
+      fireCallback("onmessage", {
         serverContent: {
           modelTurn: {
             parts: [
-              { inlineData: { data: 'pcm-default-rate', mimeType: 'audio/pcm' } },
-              { inlineData: { data: 'pcm-24k', mimeType: 'audio/pcm;rate=24000' } },
-              { inlineData: { data: 'pcm-16k', mimeType: 'audio/pcm;rate=16000' } },
-              { inlineData: { data: 'wav', mimeType: 'audio/wav' } },
-              { inlineData: { data: 'unknown-rate' } },
+              {
+                inlineData: { data: "pcm-default-rate", mimeType: "audio/pcm" },
+              },
+              {
+                inlineData: {
+                  data: "pcm-24k",
+                  mimeType: "audio/pcm;rate=24000",
+                },
+              },
+              {
+                inlineData: {
+                  data: "pcm-16k",
+                  mimeType: "audio/pcm;rate=16000",
+                },
+              },
+              { inlineData: { data: "wav", mimeType: "audio/wav" } },
+              { inlineData: { data: "unknown-rate" } },
             ],
           },
         },
       });
 
       expect(onAudio).toHaveBeenCalledTimes(2);
-      expect(onAudio).toHaveBeenNthCalledWith(1, 'pcm-default-rate');
-      expect(onAudio).toHaveBeenNthCalledWith(2, 'pcm-24k');
+      expect(onAudio).toHaveBeenNthCalledWith(1, "pcm-default-rate");
+      expect(onAudio).toHaveBeenNthCalledWith(2, "pcm-24k");
     });
 
-    it('resolves pending turn on turnComplete', async () => {
+    it("resolves pending turn on interaction status IDLE", async () => {
       const onTurnComplete = vi.fn();
-      const session = createSession({ onTurnComplete });
+      const onInteractionStatus = vi.fn();
+      const session = createSession({
+        onInteractionStatus,
+        onTurnComplete,
+      });
       await session.connect();
 
-      const promise = session.sendText('hi');
-      fireCallback('onmessage',{
-        serverContent: { outputTranscription: { text: 'Sure' }, turnComplete: true },
+      const promise = session.sendText("hi");
+      fireCallback("onmessage", {
+        serverContent: {
+          interactionStatus: "IN_PROGRESS",
+          outputTranscription: { text: "Sure" },
+          turnComplete: true,
+        },
       });
 
-      expect(await promise).toBe('Sure');
+      await Promise.resolve();
+      expect(onTurnComplete).not.toHaveBeenCalled();
+      await expect(session.sendText("second")).rejects.toThrow(
+        "Gemini is already responding",
+      );
+
+      fireCallback("onmessage", {
+        serverContent: { interactionStatus: "IDLE" },
+      });
+
+      expect(await promise).toBe("Sure");
+      expect(onInteractionStatus).toHaveBeenNthCalledWith(1, "IN_PROGRESS");
+      expect(onInteractionStatus).toHaveBeenNthCalledWith(2, "IDLE");
       expect(onTurnComplete).toHaveBeenCalledOnce();
     });
 
-    it('handles interrupted response', async () => {
+    it("handles interrupted response", async () => {
       const onInterrupted = vi.fn();
       const session = createSession({ onInterrupted });
       await session.connect();
 
-      const promise = session.sendText('hi');
+      const promise = session.sendText("hi");
 
       // Start a turn, then interrupt
-      fireCallback('onmessage',{
-        serverContent: { outputTranscription: { text: 'Partial' } },
+      fireCallback("onmessage", {
+        serverContent: { outputTranscription: { text: "Partial" } },
       });
-      fireCallback('onmessage',{
+      fireCallback("onmessage", {
         serverContent: { interrupted: true },
       });
 
-      expect(await promise).toBe('Partial');
+      expect(await promise).toBe("Partial");
       expect(onInterrupted).toHaveBeenCalledOnce();
     });
 
-    it('falls back to default text on interrupt with empty transcript', async () => {
+    it("falls back to default text on interrupt with empty transcript", async () => {
       const session = createSession();
       await session.connect();
 
-      const promise = session.sendText('hi');
-      fireCallback('onmessage',{ serverContent: { interrupted: true } });
+      const promise = session.sendText("hi");
+      fireCallback("onmessage", { serverContent: { interrupted: true } });
 
-      expect(await promise).toBe('Gemini response interrupted.');
+      expect(await promise).toBe("Gemini response interrupted.");
     });
 
-    it('does not fire onTurnStart twice in same turn', async () => {
+    it("does not fire onTurnStart twice in same turn", async () => {
       const onTurnStart = vi.fn();
       const session = createSession({ onTurnStart });
       await session.connect();
 
-      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'a' } } });
-      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'b' } } });
+      fireCallback("onmessage", {
+        serverContent: { outputTranscription: { text: "a" } },
+      });
+      fireCallback("onmessage", {
+        serverContent: { outputTranscription: { text: "b" } },
+      });
 
       expect(onTurnStart).toHaveBeenCalledOnce();
     });
 
-    it('ignores messages without serverContent or toolCall', async () => {
+    it("ignores messages without serverContent or toolCall", async () => {
       const session = createSession();
       await session.connect();
 
-      fireCallback('onmessage',{});
-      fireCallback('onmessage',{ somethingElse: true });
+      fireCallback("onmessage", {});
+      fireCallback("onmessage", { somethingElse: true });
       // No throw
     });
 
-    it('resets receivingTurn after turnComplete', async () => {
+    it("resets receivingTurn after turnComplete", async () => {
       const onTurnStart = vi.fn();
       const session = createSession({ onTurnStart });
       await session.connect();
 
       // First turn
-      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'a' }, turnComplete: true } });
+      fireCallback("onmessage", {
+        serverContent: {
+          outputTranscription: { text: "a" },
+          turnComplete: true,
+        },
+      });
       // Second turn should fire onTurnStart again
-      fireCallback('onmessage',{ serverContent: { outputTranscription: { text: 'b' } } });
+      fireCallback("onmessage", {
+        serverContent: { outputTranscription: { text: "b" } },
+      });
 
       expect(onTurnStart).toHaveBeenCalledTimes(2);
     });

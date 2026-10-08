@@ -13,18 +13,32 @@ const geminiApi = vi.hoisted(() => ({
   microphoneStop: vi.fn(),
   audioClose: vi.fn(),
   sessionOptions: null as null | {
+    token?: string;
+    model?: string;
     onReady?: () => void;
-    onToolCall?: (call: { id?: string; name?: string; args?: Record<string, unknown> }) => Promise<unknown>;
+    onToolCall?: (call: { id?: string; name?: string; args?: Record<string, unknown> }, signal?: AbortSignal) => Promise<unknown>;
+    onToolCallStart?: (call: { id?: string; name?: string; args?: Record<string, unknown> }) => void;
+    onToolCallEnd?: (call: { id?: string; name?: string; args?: Record<string, unknown> }) => void;
     onInputTranscript?: (text: string) => void;
     onTurnStart?: () => void;
+    onTurnComplete?: () => void;
   },
 }));
 
 const athleteApi = vi.hoisted(() => ({ createAthlete: vi.fn(), listAthletes: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
-const analyticsApi = vi.hoisted(() => ({ getAthleteDisciplineAnalysis: vi.fn(), getWorkspaceDisciplineAnalysis: vi.fn() }));
+const analyticsApi = vi.hoisted(() => ({
+  getAthleteDisciplineAnalysis: vi.fn(),
+  getCoachInjuryAnalysis: vi.fn(),
+  getCoachPerformanceAnalysis: vi.fn(),
+  getCoachRankingsAnalysis: vi.fn(),
+  getWorkspaceDisciplineAnalysis: vi.fn(),
+}));
 const reportsApi = vi.hoisted(() => ({
   athleteAnalysisTellMe: vi.fn(), athletePerformanceReportPdf: vi.fn(), performanceReportFilename: vi.fn(), workspaceDisciplineReportPdf: vi.fn(), workspaceDisciplineTellMe: vi.fn(),
+}));
+const coachingReportsApi = vi.hoisted(() => ({
+  coachInjuryMonitoringReportPdf: vi.fn(), coachPerformanceReportPdf: vi.fn(), coachRankingsReportPdf: vi.fn(),
 }));
 const downloadApi = vi.hoisted(() => ({ downloadFile: vi.fn() }));
 const weatherApi = vi.hoisted(() => ({ getCurrentWeather: vi.fn() }));
@@ -35,6 +49,7 @@ vi.mock('../../api/athletes', () => athleteApi);
 vi.mock('../../api/meets', () => meetsApi);
 vi.mock('../../api/analytics', () => analyticsApi);
 vi.mock('../reports/performanceReport', () => reportsApi);
+vi.mock('../reports/coachingAnalyticsReport', () => coachingReportsApi);
 vi.mock('../../utils/downloadFile', () => downloadApi);
 vi.mock('../../api/weather', () => weatherApi);
 vi.mock('../../api/venues', () => venuesApi);
@@ -88,6 +103,44 @@ const weather = {
   timezone: 'Africa/Johannesburg', temperatureC: 24.8, apparentTemperatureC: 25.1, humidityPercent: 62, isDay: true,
   precipitationRateMmHr: 0, weatherCode: 'partly-cloudy-day', windSpeedKmh: 12.4,
 };
+const coachPerformanceAnalysis = {
+  selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+  lifecycleStatus: 'active',
+  athletes: [{ athlete: { id: athlete.id, name: athlete.name, status: 'active' }, disciplines: [] }],
+};
+const coachInjuryAnalysis = {
+  selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+  lifecycleStatus: 'active',
+  limitations: [
+    'Indicators summarize recorded injuries only; they are not medical diagnoses or probability estimates.',
+    'No workload, readiness, attendance, treatment, or recovery data is available to these indicators.',
+  ],
+  athletes: [{
+    athlete: { id: athlete.id, name: athlete.name, status: 'active' },
+    injuryCount: 1,
+    activeInjuryCount: 1,
+    mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 1 },
+    repeatedInjuries: [],
+    warning: { level: 'moderate', reasons: ['active_moderate_injury'] },
+    history: [{
+      bodyRegion: 'Leg', area: 'Knee', side: 'Left', severity: 'Moderate', occurrenceDate: '2026-03-01', expectedReturnDate: null, resolvedDate: null, active: true,
+      notes: 'private injury note',
+    }],
+  }],
+};
+const coachRankingsAnalysis = {
+  discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
+  selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+  lifecycleStatus: 'active',
+  limit: 50,
+  scoring: {
+    direction: 'lower',
+    weights: { standing: 0.45, improvementPercent: 0.25, consistency: 0.2, resultCount: 0.1 },
+    missingFactorHandling: 'Factors without enough athlete or comparison data are omitted from the weighted score.',
+    ordering: 'Higher score ranks first; ties use discipline standing, athlete name, then athlete ID.',
+  },
+  athletes: [{ athlete: { id: athlete.id, name: athlete.name, status: 'active' } }],
+};
 const originalGeolocation = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
 
 function renderAssistant(activeWorkspace = firstWorkspace) {
@@ -114,7 +167,7 @@ async function callTool(name: string, args: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   geminiApi.sessionOptions = null;
-  geminiApi.createToken.mockResolvedValue('gemini-token');
+  geminiApi.createToken.mockResolvedValue({ token: 'gemini-token', model: 'gemini-test-model' });
   geminiApi.sendText.mockImplementation(async (message: string) => `Athlora received: ${message}`);
   meetsApi.listDisciplines.mockResolvedValue({ data: [discipline], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
@@ -134,11 +187,17 @@ beforeEach(() => {
       average: 10.8, median: 10.8, improvement: null, recentTrend: null, resultCount: 1, recentResults: [], history: [],
     } }],
   });
+  analyticsApi.getCoachPerformanceAnalysis.mockResolvedValue(coachPerformanceAnalysis);
+  analyticsApi.getCoachInjuryAnalysis.mockResolvedValue(coachInjuryAnalysis);
+  analyticsApi.getCoachRankingsAnalysis.mockResolvedValue(coachRankingsAnalysis);
   reportsApi.athleteAnalysisTellMe.mockImplementation((name: string, data: { discipline: { label: string }; season: { selected: number | 'all' } }) => `${name}'s ${data.discipline.label} analysis for ${data.season.selected}`);
   reportsApi.workspaceDisciplineTellMe.mockImplementation((data: { discipline: { label: string }; season: { selected: number | 'all' } }) => `${data.discipline.label} analysis for ${data.season.selected}`);
   reportsApi.athletePerformanceReportPdf.mockResolvedValue(new Uint8Array([1, 2, 3]));
   reportsApi.workspaceDisciplineReportPdf.mockResolvedValue(new Uint8Array([4, 5, 6]));
   reportsApi.performanceReportFilename.mockImplementation((value: string) => value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'));
+  coachingReportsApi.coachPerformanceReportPdf.mockResolvedValue(new Uint8Array([7, 8, 9]));
+  coachingReportsApi.coachInjuryMonitoringReportPdf.mockResolvedValue(new Uint8Array([10, 11, 12]));
+  coachingReportsApi.coachRankingsReportPdf.mockResolvedValue(new Uint8Array([13, 14, 15]));
   venuesApi.searchVenues.mockResolvedValue({ data: [], meta: { count: 0 } });
   weatherApi.getCurrentWeather.mockResolvedValue(weather);
 });
@@ -166,6 +225,19 @@ describe('AthloraAssistantProvider', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Athlora AI' });
     expect(within(dialog).getByText('Good day coach, how can I help?')).toBeInTheDocument();
     expect(geminiApi.sendText).toHaveBeenCalledWith('Greet the coach with exactly this sentence and nothing else: "Good day coach, how can I help?"');
+    expect(geminiApi.sessionOptions).toMatchObject({ token: 'gemini-token', model: 'gemini-test-model' });
+  });
+
+  it('shows concise live-tool loading without changing Gemini send state', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    act(() => geminiApi.sessionOptions?.onToolCallStart?.({ name: 'get_coach_performance_analysis' }));
+    expect(screen.getByText('Athlora is working')).toBeInTheDocument();
+    expect(screen.getByText('Retrieving Athlora data...')).toBeInTheDocument();
+
+    act(() => geminiApi.sessionOptions?.onToolCallEnd?.({ name: 'get_coach_performance_analysis' }));
+    expect(screen.queryByText('Athlora is working')).not.toBeInTheDocument();
   });
 
   it('stops hands-free capture when the dialog closes without ending the active session', async () => {
@@ -358,6 +430,69 @@ describe('AthloraAssistantProvider', () => {
     expect(downloadApi.downloadFile).toHaveBeenCalledWith(new Uint8Array([4, 5, 6]), expect.stringContaining('promising-athlete-analysis'), 'application/pdf');
     expect(analyticsApi.getWorkspaceDisciplineAnalysis).toHaveBeenCalledOnce();
     expect(screen.getByText('Promising-athlete analysis PDF downloaded.')).toBeInTheDocument();
+  });
+
+  it('returns coach performance analytics from the authoritative coach endpoint and caches the report action', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    const result = await callTool('get_coach_performance_analysis', {
+      athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-01-01', dateTo: '2026-03-31', lifecycleStatus: 'active',
+    });
+
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenCalledWith({
+      athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-01-01', dateTo: '2026-03-31', lifecycleStatus: 'active',
+    });
+    expect(result).toMatchObject({
+      source: { endpoint: '/api/v1/analytics/coach/performance', data: coachPerformanceAnalysis },
+      data: coachPerformanceAnalysis,
+    });
+    expect(screen.getByRole('heading', { name: 'Coach performance analysis ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate coach performance PDF' })).toBeInTheDocument();
+  });
+
+  it('keeps injury monitoring results free of notes and describes the cached report as non-diagnostic', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    const result = await callTool('get_coach_injury_analysis', { athleteIds: [athlete.id], lifecycleStatus: 'active' });
+
+    expect(analyticsApi.getCoachInjuryAnalysis).toHaveBeenCalledWith({ athleteIds: [athlete.id], lifecycleStatus: 'active' });
+    expect(JSON.stringify(result)).not.toContain('private injury note');
+    expect(JSON.stringify(result)).not.toContain('"notes"');
+    expect(screen.getByText('Monitoring-only recorded injury indicators. This analysis is not a diagnosis or medical advice.')).toBeInTheDocument();
+    expect(screen.queryByText('private injury note')).not.toBeInTheDocument();
+    await expect(callTool('get_coach_injury_analysis', { discipline: '100m' })).rejects.toThrow('does not support a discipline filter');
+  });
+
+  it('validates rankings discipline and rejects athlete filters before coach analytics requests', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    await expect(callTool('get_coach_rankings_analysis')).rejects.toThrow('Discipline is required');
+    await expect(callTool('get_coach_rankings_analysis', { discipline: '100m', athleteIds: [athlete.id] })).rejects.toThrow('does not support athlete IDs');
+    expect(analyticsApi.getCoachRankingsAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('runs a fresh coach analytics query and downloads the real coach performance PDF for the report tool', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    const result = await callTool('download_coach_performance_report', { discipline: '100m', dateFrom: '2026-01-01', dateTo: '2026-03-31' });
+
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenCalledWith({ discipline: '100m', dateFrom: '2026-01-01', dateTo: '2026-03-31' });
+    expect(coachingReportsApi.coachPerformanceReportPdf).toHaveBeenCalledWith(coachPerformanceAnalysis);
+    expect(downloadApi.downloadFile).toHaveBeenCalledWith(new Uint8Array([7, 8, 9]), 'athlora-coach-performance-analysis.pdf', 'application/pdf');
+    expect(result).toMatchObject({
+      source: { endpoint: '/api/v1/analytics/coach/performance', data: coachPerformanceAnalysis },
+      report: {
+        status: 'downloaded',
+        filename: 'athlora-coach-performance-analysis.pdf',
+        selectedRange: coachPerformanceAnalysis.selectedRange,
+        athleteCount: 1,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('downloadUrl');
   });
 
   it('uses the venue proxy before named-place weather and never includes coordinates in Gemini results', async () => {

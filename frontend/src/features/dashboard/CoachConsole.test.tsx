@@ -130,7 +130,10 @@ describe('CoachConsole dashboard navigation', () => {
       value: { query: permissionsQuery },
     });
     brandingApi.getClubBranding.mockResolvedValue(null);
-    assistantApi.createToken.mockResolvedValue('gemini-token');
+    assistantApi.createToken.mockResolvedValue({
+      token: 'gemini-token',
+      model: 'gemini-3.8-live-extended-thinking',
+    });
     assistantApi.sendText.mockResolvedValue('Unexpected model wording');
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,

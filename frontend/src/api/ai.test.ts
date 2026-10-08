@@ -10,13 +10,16 @@ function response(data: unknown, status = 200) {
 describe('ai API', () => {
   it('creates a Gemini token via POST', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      response({ data: { token: 'gemini-token-abc' } }),
+      response({ data: { token: 'gemini-token-abc', model: 'gemini-3.8-live-extended-thinking' } }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const token = await createGeminiToken();
+    const session = await createGeminiToken();
 
-    expect(token).toBe('gemini-token-abc');
+    expect(session).toEqual({
+      token: 'gemini-token-abc',
+      model: 'gemini-3.8-live-extended-thinking',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/ai/gemini-token'),
       expect.objectContaining({ method: 'POST' }),

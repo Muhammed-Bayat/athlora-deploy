@@ -66,8 +66,230 @@ export interface WorkspaceDisciplineAnalysis {
   }>;
 }
 
+export type CoachLifecycleStatus = 'active' | 'inactive' | 'all';
+export type CoachAthleteLifecycleStatus = 'active' | 'inactive' | 'archived';
+export type CoachInjuryRegion = 'Head & Neck' | 'Torso' | 'Arm' | 'Leg';
+export type CoachInjuryArea =
+  | 'Head'
+  | 'Neck'
+  | 'Chest'
+  | 'Abdomen / core'
+  | 'Pelvis'
+  | 'Upper back'
+  | 'Lower back'
+  | 'Shoulder'
+  | 'Upper arm'
+  | 'Elbow'
+  | 'Forearm'
+  | 'Wrist'
+  | 'Hand'
+  | 'Hip'
+  | 'Thigh'
+  | 'Knee'
+  | 'Shin / calf'
+  | 'Ankle'
+  | 'Foot';
+export type CoachInjurySide = 'Left' | 'Right' | 'Both' | 'Center';
+export type CoachInjurySeverity = 'Minor' | 'Moderate' | 'Severe';
+export type CoachInjuryWarningLevel = 'low' | 'moderate' | 'high';
+export type CoachInjuryWarningReason =
+  | 'active_severe_injury'
+  | 'multiple_active_injuries'
+  | 'active_moderate_injury'
+  | 'overdue_expected_return'
+  | 'repeated_same_area'
+  | 'clustered_injuries'
+  | 'recent_recorded_injury'
+  | 'active_minor_injury'
+  | 'recorded_history_only'
+  | 'no_recorded_injuries';
+export type CoachRankingFactorName = 'standing' | 'improvementPercent' | 'consistency' | 'resultCount';
+
+export interface CoachDateRange {
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+export interface CoachPerformanceAnalysisFilters {
+  athleteIds?: readonly string[];
+  discipline?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  lifecycleStatus?: CoachLifecycleStatus;
+}
+
+export interface CoachInjuryAnalysisFilters {
+  athleteIds?: readonly string[];
+  dateFrom?: string;
+  dateTo?: string;
+  lifecycleStatus?: CoachLifecycleStatus;
+}
+
+export interface CoachRankingsAnalysisFilters {
+  discipline: string;
+  dateFrom?: string;
+  dateTo?: string;
+  lifecycleStatus?: CoachLifecycleStatus;
+  limit?: number;
+}
+
+export interface CoachPerformanceResultPoint {
+  date: string;
+  time: string | null;
+  value: number;
+  event: {
+    id: string;
+    title: string;
+    type: 'competition' | 'training';
+  };
+}
+
+export interface CoachRecentTrend {
+  direction: 'improving' | 'steady' | 'declining';
+  previousAverage: number;
+  recentAverage: number;
+  change: number;
+  samplesPerWindow: number;
+}
+
+export interface CoachConsistency {
+  sampleCount: number;
+  standardDeviation: number;
+  relativeVolatilityPercent: number | null;
+}
+
+export interface CoachPlateau {
+  status: 'plateaued' | 'not_plateaued';
+  reason: string;
+  change: number;
+  samplesPerWindow: number;
+}
+
+export interface CoachPerformanceDisciplineAnalysis {
+  discipline: AnalyticsDiscipline;
+  recordCount: number;
+  first: CoachPerformanceResultPoint | null;
+  latest: CoachPerformanceResultPoint | null;
+  best: {
+    personalBest: number | null;
+    seasonBest: number | null;
+    selectedRangeBest: number | null;
+    season: { selected: number | 'all'; startDate: string | null; endDate: string | null };
+  };
+  improvement: number | null;
+  improvementPercent: number | null;
+  recentTrend: CoachRecentTrend | null;
+  consistency: CoachConsistency | null;
+  plateau: CoachPlateau | null;
+  sufficientData: boolean;
+  insufficientDataReason: string | null;
+  history: CoachPerformanceResultPoint[];
+}
+
+export interface CoachPerformanceAnalysis {
+  selectedRange: CoachDateRange;
+  lifecycleStatus: CoachLifecycleStatus;
+  athletes: Array<{
+    athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
+    disciplines: CoachPerformanceDisciplineAnalysis[];
+  }>;
+}
+
+export interface CoachInjuryHistoryEntry {
+  bodyRegion: CoachInjuryRegion;
+  area: CoachInjuryArea;
+  side: CoachInjurySide;
+  severity: CoachInjurySeverity;
+  occurrenceDate: string | null;
+  expectedReturnDate: string | null;
+  resolvedDate: string | null;
+  active: boolean;
+}
+
+export interface CoachInjuryWarning {
+  level: CoachInjuryWarningLevel;
+  reasons: CoachInjuryWarningReason[];
+}
+
+export interface CoachInjuryAnalysis {
+  selectedRange: CoachDateRange;
+  lifecycleStatus: CoachLifecycleStatus;
+  limitations: readonly [
+    'Indicators summarize recorded injuries only; they are not medical diagnoses or probability estimates.',
+    'No workload, readiness, attendance, treatment, or recovery data is available to these indicators.',
+  ];
+  athletes: Array<{
+    athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
+    injuryCount: number;
+    activeInjuryCount: number;
+    mostCommonRecordedArea: { bodyRegion: CoachInjuryRegion; area: CoachInjuryArea; count: number } | null;
+    repeatedInjuries: Array<{ bodyRegion: CoachInjuryRegion; area: CoachInjuryArea; side: CoachInjurySide; count: number }>;
+    warning: CoachInjuryWarning;
+    history: CoachInjuryHistoryEntry[];
+  }>;
+}
+
+export interface CoachRankingFactor<T> {
+  value: T | null;
+  score: number | null;
+  includedInScore: boolean;
+  insufficientDataReason: string | null;
+}
+
+export interface CoachRankingEntry {
+  athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
+  rank: number | null;
+  score: number | null;
+  includedFactors: CoachRankingFactorName[];
+  sufficientData: boolean;
+  insufficientDataReason: string | null;
+  factors: {
+    standing: CoachRankingFactor<number> & {
+      personalBest: number | null;
+      current: number | null;
+      standingRank: number | null;
+    };
+    improvementPercent: CoachRankingFactor<number>;
+    consistency: CoachRankingFactor<CoachConsistency>;
+    resultCount: CoachRankingFactor<number>;
+  };
+}
+
+export interface CoachRankingsAnalysis {
+  discipline: AnalyticsDiscipline;
+  selectedRange: CoachDateRange;
+  lifecycleStatus: CoachLifecycleStatus;
+  limit: number;
+  scoring: {
+    direction: AnalyticsDiscipline['direction'];
+    weights: Readonly<Record<CoachRankingFactorName, number>>;
+    missingFactorHandling: 'Factors without enough athlete or comparison data are omitted from the weighted score.';
+    ordering: 'Higher score ranks first; ties use discipline standing, athlete name, then athlete ID.';
+  };
+  athletes: CoachRankingEntry[];
+}
+
 function seasonQuery(year?: string): string {
   return year ? `?year=${encodeURIComponent(year)}` : '';
+}
+
+function coachAnalyticsQuery(filters: {
+  athleteIds?: readonly string[];
+  discipline?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  lifecycleStatus?: CoachLifecycleStatus;
+  limit?: number;
+}): string {
+  const query = new URLSearchParams();
+  if (filters.athleteIds?.length) query.set('athleteIds', filters.athleteIds.join(','));
+  if (filters.discipline) query.set('discipline', filters.discipline);
+  if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) query.set('dateTo', filters.dateTo);
+  if (filters.lifecycleStatus) query.set('lifecycleStatus', filters.lifecycleStatus);
+  if (filters.limit !== undefined) query.set('limit', String(filters.limit));
+  const value = query.toString();
+  return value ? `?${value}` : '';
 }
 
 export async function getAthleteDisciplineAnalysis(
@@ -87,6 +309,33 @@ export async function getWorkspaceDisciplineAnalysis(
 ): Promise<WorkspaceDisciplineAnalysis> {
   const response = await request<{ data: WorkspaceDisciplineAnalysis }>(
     `/api/v1/analytics/disciplines/${encodeURIComponent(discipline)}/athletes${seasonQuery(year)}`,
+  );
+  return response.data;
+}
+
+export async function getCoachPerformanceAnalysis(
+  filters: CoachPerformanceAnalysisFilters = {},
+): Promise<CoachPerformanceAnalysis> {
+  const response = await request<{ data: CoachPerformanceAnalysis }>(
+    `/api/v1/analytics/coach/performance${coachAnalyticsQuery(filters)}`,
+  );
+  return response.data;
+}
+
+export async function getCoachInjuryAnalysis(
+  filters: CoachInjuryAnalysisFilters = {},
+): Promise<CoachInjuryAnalysis> {
+  const response = await request<{ data: CoachInjuryAnalysis }>(
+    `/api/v1/analytics/coach/injuries${coachAnalyticsQuery(filters)}`,
+  );
+  return response.data;
+}
+
+export async function getCoachRankingsAnalysis(
+  filters: CoachRankingsAnalysisFilters,
+): Promise<CoachRankingsAnalysis> {
+  const response = await request<{ data: CoachRankingsAnalysis }>(
+    `/api/v1/analytics/coach/rankings${coachAnalyticsQuery(filters)}`,
   );
   return response.data;
 }

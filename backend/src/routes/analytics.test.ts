@@ -7,12 +7,22 @@ import {
   getAthleteDisciplineAnalytics,
   getWorkspaceDisciplineAnalytics,
 } from '../services/athleteAnalytics.js';
+import {
+  getCoachInjuryAnalytics,
+  getCoachPerformanceAnalytics,
+  getCoachRankingsAnalytics,
+} from '../services/coachAnalytics.js';
 
 vi.mock('jose', () => ({ createRemoteJWKSet: vi.fn(() => 'keyset'), jwtVerify: vi.fn() }));
 vi.mock('../db/client.js', () => ({ getPool: vi.fn(), pool: null }));
 vi.mock('../services/athleteAnalytics.js', () => ({
   getAthleteDisciplineAnalytics: vi.fn(),
   getWorkspaceDisciplineAnalytics: vi.fn(),
+}));
+vi.mock('../services/coachAnalytics.js', () => ({
+  getCoachInjuryAnalytics: vi.fn(),
+  getCoachPerformanceAnalytics: vi.fn(),
+  getCoachRankingsAnalytics: vi.fn(),
 }));
 
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -115,6 +125,68 @@ describe('analytics routes', () => {
       workspaceId,
       '100m',
       { selected: 2026, startDate: '2026-01-01', endDate: '2027-01-01' },
+      expect.anything(),
+    );
+  });
+
+  it('validates coach analytics query values before invoking a service', async () => {
+    query.mockResolvedValueOnce(context());
+
+    const response = await request(app)
+      .get('/api/v1/analytics/coach/rankings?discipline=not-a-catalogue-code&limit=0')
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(getCoachRankingsAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('uses the authenticated workspace and normalized validated filters for coach performance', async () => {
+    query.mockResolvedValueOnce(context());
+    vi.mocked(getCoachPerformanceAnalytics).mockResolvedValue({
+      selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+      lifecycleStatus: 'active',
+      athletes: [],
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/analytics/coach/performance?athleteIds=${athleteId}&discipline=100m&dateFrom=2026-01-01&dateTo=2026-03-31&lifecycleStatus=active`)
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' } });
+    expect(getCoachPerformanceAnalytics).toHaveBeenCalledWith(
+      workspaceId,
+      {
+        athleteIds: [athleteId],
+        discipline: '100m',
+        dateRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+        lifecycleStatus: 'active',
+      },
+      expect.anything(),
+    );
+  });
+
+  it('routes coach injury analytics through the authenticated workspace', async () => {
+    query.mockResolvedValueOnce(context());
+    vi.mocked(getCoachInjuryAnalytics).mockResolvedValue({
+      selectedRange: { dateFrom: null, dateTo: null },
+      lifecycleStatus: 'all',
+      limitations: [
+        'Indicators summarize recorded injuries only; they are not medical diagnoses or probability estimates.',
+        'No workload, readiness, attendance, treatment, or recovery data is available to these indicators.',
+      ],
+      athletes: [],
+    });
+
+    const response = await request(app)
+      .get('/api/v1/analytics/coach/injuries')
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(getCoachInjuryAnalytics).toHaveBeenCalledWith(
+      workspaceId,
+      { dateRange: { dateFrom: null, dateTo: null }, lifecycleStatus: 'all' },
       expect.anything(),
     );
   });

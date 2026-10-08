@@ -2,177 +2,102 @@
 sidebar_position: 13
 ---
 
-# AI Voice Integration (Gemini)
+# AI Coaching Assistant
 
-Athlora integrates Google Gemini Live for voice-assisted athlete creation. A coach can speak to the assistant to add athletes to their roster without typing. The integration uses WebSocket-based streaming for real-time voice interaction and function-tool calling.
+Athlora's authenticated coaching assistant combines Gemini Live voice interaction with deterministic, workspace-scoped analytics. Gemini explains verified tool output; it does not calculate rankings, infer unavailable data, or make medical claims.
 
 ## Architecture
 
-```
-┌──────────────────────┐     HTTPS (token)      ┌──────────────────────┐
-│  Frontend (Browser)  │ ──────────────────────► │  Backend API         │
-│  GeminiMicrophone    │                         │  POST /ai/gemini-token│
-│  AthloraGeminiSession│ ◄──── API key ──────── │  (returns Gemini key)│
-│  GeminiAudioPlayer   │                         └──────────────────────┘
-└──────────┬───────────┘
-           │ WebSocket (wss://)
-           ▼
-┌──────────────────────┐
-│  Gemini Live API     │
-│  gemini-3.1-flash-   │
-│  live-preview        │
-└──────────────────────┘
+```text
+Browser (voice, tool UI, PDF) -- authenticated HTTPS --> Athlora API
+Browser -- one-use ephemeral token --> Gemini Live API
+Athlora API -- server-only GEMINI_API_KEY --> Gemini token service
+Athlora API -- workspace-scoped queries --> PostgreSQL
 ```
 
-## Backend
+The browser never receives the server API key. `POST /api/v1/ai/gemini-token` returns `{ data: { token, model } }` after Auth0 authentication and application-user resolution. The token is limited to one use, expires after 30 minutes, and is constrained to the returned Live model.
 
-### POST /api/v1/ai/gemini-token
+## Model Configuration
 
-Returns a Gemini API key for the authenticated user. This is a thin proxy that creates a short-lived token for the frontend to authenticate directly with the Gemini Live WebSocket API.
-
-| Field | Value |
-|---|---|
-| Authentication | Required (Auth0 JWT + synchronized user) |
-| Response | `{ data: { token: string } }` |
-
-The API key is never embedded in the frontend build — it is fetched on demand after authentication.
-
-## Voice and Output Audio
-
-Every Athlora Live session explicitly requests Gemini's **Sulafat** prebuilt voice:
+The default model is `gemini-3.8-live-extended-thinking`. Live connections use:
 
 ```ts
-speechConfig: {
-  voiceConfig: {
-    prebuiltVoiceConfig: {
-      voiceName: 'Sulafat',
-    },
-  },
-}
+thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM }
 ```
 
-The session instructions ask Sulafat for a warm, calm, friendly coach delivery at a natural pace that is slightly slower than normal. Athlora does not alter browser playback speed, so the model voice retains its native pitch and quality.
+Set `GEMINI_LIVE_MODEL=rollback` in the backend environment to use the previous `gemini-3.1-flash-live-preview` model. A named supported model can also be supplied through `GEMINI_LIVE_MODEL`. The token broker and browser use the same returned model, so a browser cannot switch models independently.
 
-Gemini output is accepted only as mono signed 16-bit little-endian PCM (`audio/pcm`, 24 kHz). The player decodes complete Base64 chunks into normalized `Float32` samples, queues them in arrival order, and schedules them against one stable audio context. A short gain envelope removes clicks at raw PCM chunk boundaries. Non-PCM, wrong-rate, empty, odd-length, or malformed data is discarded before playback.
+Before enabling a production key, an operator must confirm that its Gemini project has access to the selected model, sufficient quota, and the intended billing state. Athlora does not enable billing or paid services.
 
-## Frontend Modules
+## Live Behavior
 
-### AthloraGeminiSession (`geminiLiveSdk.ts`)
+`AthloraGeminiSession` in `frontend/src/api/geminiLiveSdk.ts` is the production wrapper around `@google/genai`.
 
-The primary SDK wrapper around `@google/genai`'s Live session. This is the recommended implementation for production use.
+- Sulafat is requested when supported by the model.
+- Every function declaration uses `Behavior.NON_BLOCKING`.
+- `InteractionStatus.IN_PROGRESS` and `InteractionStatus.IDLE` drive completion. `turnComplete` is only a compatibility fallback if no interaction status has been received.
+- Multiple calls in one tool request run concurrently and return together.
+- Interrupted, closed, or replaced sessions abort active tool calls and suppress stale responses.
+- Gemini audio is accepted only as PCM at 24 kHz; microphone input is PCM16 at 16 kHz.
+- The exact startup greeting is `Good day coach, how can I help?`
 
-**Constructor:** `new AthloraGeminiSession(options)`
+## Deterministic Analytics
 
-| Option | Type | Description |
+All endpoints are under `/api/v1/analytics`, require authentication, derive workspace identity from the request context, validate query parameters, and use parameterized SQL.
+
+| Endpoint | Purpose | Key filters |
 |---|---|---|
-| `token` | `string` | Gemini API key from `/ai/gemini-token` |
-| `onAudio` | `(base64: string) => void` | Receives PCM16 audio chunks from Gemini |
-| `onTranscript` | `(text: string) => void` | Receives text transcription of Gemini's speech |
-| `onTurnStart` | `() => void` | Gemini begins a response |
-| `onTurnComplete` | `() => void` | Gemini finishes a response |
-| `onInterrupted` | `() => void` | Gemini was interrupted by the user |
-| `onSleepRequested` | `() => void` | Gemini called the `sleep_assistant` tool |
-| `onConnected` | `() => void` | WebSocket connected |
-| `onReady` | `() => void` | Live session setup completed and text/audio can be sent |
-| `onDisconnected` | `() => void` | WebSocket closed |
-| `onError` | `(error: Error) => void` | Connection or response error |
-| `onToolCall` | `GeminiToolHandler` | Handles function-tool calls from Gemini |
+| `GET /coach/performance` | Multi-athlete performance facts and compact result history | `athleteIds`, `discipline`, `dateFrom`, `dateTo`, `lifecycleStatus` |
+| `GET /coach/injuries` | Recorded-injury monitoring indicators | `athleteIds`, `dateFrom`, `dateTo`, `lifecycleStatus` |
+| `GET /coach/rankings` | Discipline-specific promising-athlete ranking | `discipline`, `dateFrom`, `dateTo`, `lifecycleStatus`, `limit` |
 
-**Methods:**
+Performance analysis distinguishes direction-aware improvement for timed events (lower is better) and field events (higher is better). It reports all-time personal best, season best, selected-range best, recent trend, volatility, plateau status, result counts, lifecycle state, and explicit insufficient-data reasons.
 
-| Method | Returns | Description |
-|---|---|---|
-| `connect()` | `Promise<void>` | Opens the SDK Live session and resolves when its setup is ready |
-| `sendText(text)` | `Promise<string>` | Sends a text message; resolves with Gemini's transcript response |
-| `sendAudio(base64)` | `void` | Streams a PCM16 audio chunk to Gemini |
-| `endAudioStream()` | `void` | Signals end of an audio stream |
-| `close()` | `void` | Closes the session |
+Ranking weights are documented in every response: standing 45%, improvement percentage 25%, consistency 20%, and valid result count 10%. Factors lacking sufficient comparable data are omitted and remaining weights are normalized. Ties are resolved by standing, athlete name, then athlete ID.
 
-### GeminiLive (`geminiLive.ts`)
+## Injury Safety
 
-A lower-level raw WebSocket implementation of the same protocol. Exports `connectGeminiLive(token)` and `sendGeminiText(socket, text, handleToolCall?, handleAudio?)`. This module is used for testing and as a fallback; the SDK wrapper is preferred for production.
+Injury analytics returns only body region, area, side, severity, relevant dates, active state, and derived record-based warning reasons. Injury notes and free-text details are never returned to Gemini or the PDF tools.
 
-### GeminiAudioPlayer (`geminiAudio.ts`)
+The assistant must describe these signals as monitoring information only. It must not diagnose, estimate injury probability, or claim workload, wellness, readiness, attendance, treatment, sleep, heart-rate, RPE, or recovery facts because Athlora does not store those data.
 
-Queued PCM16 audio playback using the Web Audio API. Gemini outputs audio at 24kHz; the player decodes base64 PCM16 chunks, schedules them sequentially via `AudioBufferSourceNode`, and manages an internal playback queue.
+## Gemini Tools
 
-| Method | Description |
+Existing tools support page context, discipline lookup, athlete search, individual/discipline analytics, athlete-draft preparation, named/current-location weather, and sleep.
+
+Coaching tools are:
+
+| Tool | Purpose |
 |---|---|
-| `prepare()` | Creates/resumes `AudioContext` from the coach's user gesture |
-| `playPcm16(base64)` | Decodes and queues a PCM16 chunk for playback at 24kHz |
-| `waitUntilIdle()` | Resolves when all queued chunks have finished playing |
-| `clear()` | Stops and removes all queued sources |
-| `close()` | Clears playback and closes the `AudioContext` |
+| `get_coach_performance_analysis` | Retrieve factual direction-aware performance analysis. |
+| `get_coach_injury_analysis` | Retrieve non-diagnostic recorded-injury indicators. |
+| `get_coach_rankings_analysis` | Retrieve one-discipline deterministic rankings. |
+| `download_coach_performance_report` | Re-query filtered data and download a real performance PDF. |
+| `download_coach_injury_report` | Re-query filtered data and download a monitoring-only injury PDF. |
+| `download_coach_rankings_report` | Re-query filtered data and download a ranking-methodology PDF. |
 
-### GeminiMicrophone (`geminiMicrophone.ts`)
-
-Captures microphone audio via `getUserMedia`, resamples to 16kHz mono, converts Float32 samples to PCM16, and fires base64-encoded chunks via callback. Uses `ScriptProcessorNode` routed through a silent `GainNode` to prevent feedback.
-
-| Method | Description |
-|---|---|
-| `start(onChunk)` | Requests mic access, begins streaming PCM16 chunks at 16kHz |
-| `pause()` | Pauses forwarding audio (microphone stays open for echo cancellation) |
-| `resume()` | Resumes forwarding audio to Gemini |
-| `isPaused()` | Returns whether forwarding is paused |
-| `isActive()` | Returns whether the microphone stream is active |
-| `stop()` | Stops all tracks, disconnects nodes, closes `AudioContext` |
-
-## Function Tools
-
-Gemini is configured with two function tools:
-
-### create_athlete
-
-Creates a new athlete in the coach's roster after explicit user confirmation.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `name` | `string` | Yes | Athlete full name |
-| `dob` | `string` | No | Date of birth (`YYYY-MM-DD`) |
-| `gender` | `string` | No | Gender category |
-| `notes` | `string` | No | Coach notes |
-
-The assistant confirms details with the user before calling this tool. It is only invoked after explicit confirmation.
-
-### sleep_assistant
-
-Puts the assistant to sleep when the user asks it to deactivate. After success, the assistant says "Going to sleep." and stops listening. This tool is only triggered by commands directed at the assistant (e.g., "go to sleep", "deactivate"), not ordinary uses of the word "sleep".
-
-## System Instruction
-
-The Gemini model receives this system instruction:
-
-> You are Athlora, the Athlora voice assistant. Your current job is to help authorised users add athletes. Never invent missing information. Before creating an athlete, clearly confirm the details with the user. Only use create_athlete after the user explicitly confirms. Keep responses short and conversational.
-
-The SDK version adds: "If the user asks you to sleep, go to sleep, switch off, deactivate, stop listening, or otherwise go inactive, call sleep_assistant."
-
-## Audio Format
-
-| Direction | Format | Sample Rate | Encoding |
-|---|---|---|---|
-| Microphone → Gemini | Mono PCM16 | 16kHz | Base64 |
-| Gemini → Speaker | Mono PCM16 | 24kHz | Base64 |
+The system instruction requires evidence-first answers: use tools for Athlora facts, state no data or no conclusion when appropriate, explain the factual change and discipline direction, and offer one concrete non-medical coaching action. Reports require real tool results and are generated locally with `pdf-lib`.
 
 ## Session Lifecycle
 
-1. Coach opens the voice assistant panel
-2. The start-button user gesture creates and resumes the playback `AudioContext` before Gemini can produce greeting audio
-3. Frontend fetches a Gemini API key via `POST /ai/gemini-token`
-4. `AthloraGeminiSession.connect()` opens a WebSocket and completes the Live session setup (model, Sulafat voice, system instruction, tools)
-5. Once the session is ready, Athlora requests exactly one greeting for that session
-6. Gemini output is queued and plays through the prepared audio context; the microphone stays available for normal conversation afterwards
-7. Coach speaks — `GeminiMicrophone` captures and streams audio chunks
-8. Coach can also type text — `sendText()` sends it as `realtimeInput`
-9. Gemini responds with audio chunks (`onAudio`) and text transcription (`onTranscript`)
-10. When Gemini calls `create_athlete`, the frontend `onToolCall` handler calls `POST /api/v1/athletes` and returns the result
-11. A Gemini interruption clears scheduled and pending assistant audio before microphone forwarding resumes; sleep closes the session after its acknowledgement finishes
+1. The authenticated coach opens the assistant.
+2. The frontend requests a short-lived, model-constrained token.
+3. The browser opens Gemini Live with the returned model, Sulafat voice, tools, and system instruction.
+4. The coach speaks or types; the browser streams audio/transcripts and renders response status.
+5. Gemini asks for data through non-blocking tools; the browser calls Athlora's authenticated APIs and returns verified results.
+6. The assistant completes on `IDLE`, then microphone forwarding resumes after queued output finishes.
+7. A report tool generates a local PDF from the exact server response and downloads it.
 
-## Dependencies
+## Key Modules
 
-- `@google/genai` — Google Generative AI SDK (Live API support)
-- Web Audio API — PCM16 playback (browser built-in)
-- `getUserMedia` — Microphone capture (browser built-in)
+| Module | Responsibility |
+|---|---|
+| `backend/src/controllers/ai.ts` | Ephemeral token broker and model constraint. |
+| `backend/src/services/coachAnalytics.ts` | Direction-aware performance, ranking, and injury-monitoring calculations. |
+| `frontend/src/api/geminiLiveSdk.ts` | Live SDK, Extended Thinking, status/tool orchestration, and cancellation. |
+| `frontend/src/features/assistant/AthloraAssistantProvider.tsx` | Authenticated tool execution, UI state, downloads, microphone behavior. |
+| `frontend/src/features/reports/coachingAnalyticsReport.ts` | Evidence-only multi-athlete PDF generation. |
 
-## AI declaration
+## AI Declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was updated with the assistance of OpenCode[gpt-5.6-terra].
