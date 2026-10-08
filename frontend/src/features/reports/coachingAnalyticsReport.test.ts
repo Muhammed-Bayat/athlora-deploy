@@ -78,6 +78,24 @@ const performanceAnalysis: CoachPerformanceAnalysis = {
     },
     mostDeclined: null,
     insufficientDataReason: null,
+    relativeImprovementRanking: {
+      methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.',
+      eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.',
+      limit: 50,
+      eligibleAthleteCount: 1,
+      entries: [{
+        rank: 1,
+        athlete: { id: 'athlete-1', name: 'Ari Runner', status: 'active' },
+        discipline: sprint,
+        first: point('2026-01-01', 12.4),
+        latest: point('2026-03-01', 12.1),
+        improvement: 0.3,
+        improvementPercent: 2.42,
+        recordCount: 4,
+        classification: 'improved',
+      }],
+      insufficientDataReason: null,
+    },
   },
 };
 
@@ -166,7 +184,7 @@ describe('coaching analytics reports', () => {
       'Direction-aware first-to-latest change: +0.30 s (+2.42%); improvement.',
     ]));
 
-    const document = await PDFDocument.load(await coachPerformanceReportPdf(performanceAnalysis));
+    const document = await PDFDocument.load(await coachPerformanceReportPdf(performanceAnalysis, injuryAnalysis));
     expect(document.getPageCount()).toBeGreaterThan(0);
   });
 
@@ -187,4 +205,5 @@ describe('coaching analytics reports', () => {
     const document = await PDFDocument.load(await coachRankingsReportPdf(rankingsAnalysis));
     expect(document.getPageCount()).toBeGreaterThan(0);
   });
+
 });

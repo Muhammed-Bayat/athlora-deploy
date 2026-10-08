@@ -1,0 +1,17 @@
+.chart { display: grid; gap: var(--space-3); margin: 0; padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--cyan-300) 30%, var(--console-line)); border-radius: var(--radius-md); background: linear-gradient(135deg, color-mix(in srgb, var(--console-component-surface, var(--console-soft)) 86%, var(--cyan-400) 14%), color-mix(in srgb, var(--console-component-surface, var(--console-soft)) 93%, #a66cff 7%)); }
+.chart figcaption { display: grid; gap: 2px; color: var(--console-component-text, var(--console-ink)); }
+.chart figcaption strong { font-size: var(--font-size-sm); }
+.chart figcaption span, .empty { margin: 0; color: var(--console-teal); font-size: var(--font-size-xs); line-height: 1.45; }
+.chart svg { width: 100%; min-width: 0; overflow: visible; }
+.grid { stroke: color-mix(in srgb, var(--console-line) 74%, transparent); stroke-dasharray: 3 5; stroke-width: .8; }
+.axis { stroke: var(--console-teal); stroke-width: 1; }
+.axisLabel { fill: var(--console-teal); font: 9px var(--font-family-mono); }
+.axisTitle { fill: var(--console-component-text, var(--console-ink)); font: 10px var(--font-family-base); font-weight: var(--font-weight-bold); }
+.seriesLine { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.seriesPoint { stroke: var(--console-component-surface, var(--console-soft)); stroke-width: 1.6; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.legendItem { display: inline-flex; align-items: center; gap: 6px; color: var(--console-component-text, var(--console-ink)); font-size: var(--font-size-xs); }
+.legendItem i { display: block; width: 13px; height: 3px; border-radius: var(--radius-pill); }
+.empty { padding: var(--space-3); border: 1px dashed var(--console-line); border-radius: var(--radius-sm); }
+
+@media (max-width: 480px) { .chart { padding: var(--space-2); } .axisLabel { font-size: 8px; } }

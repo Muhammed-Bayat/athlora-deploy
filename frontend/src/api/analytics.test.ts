@@ -36,8 +36,9 @@ describe('analytics API', () => {
       dateFrom: '2026-01-01',
       dateTo: '2026-03-31',
       lifecycleStatus: 'active',
+      limit: 5,
     })).resolves.toEqual({ athletes: [] });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1/analytics/coach/performance?athleteIds=athlete-1%2Cathlete-2&discipline=100m&dateFrom=2026-01-01&dateTo=2026-03-31&lifecycleStatus=active`);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/v1/analytics/coach/performance?athleteIds=athlete-1%2Cathlete-2&discipline=100m&dateFrom=2026-01-01&dateTo=2026-03-31&lifecycleStatus=active&limit=5`);
   });
 
   it('loads filtered coach injury analysis using the injury endpoint', async () => {
