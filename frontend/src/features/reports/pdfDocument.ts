@@ -283,6 +283,7 @@ export function drawReportTable<Row>(report: ReportDocument, table: ReportTable<
       if (lineOffset < maxLines) startTablePage();
     }
   });
+  report.y -= 10;
 }
 
 export function drawReportFooter(report: ReportDocument, page: PDFPage, pageNumber: number, pageCount: number): void {
