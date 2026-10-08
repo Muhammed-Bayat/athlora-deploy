@@ -7,6 +7,13 @@
   flex-wrap: wrap;
 }
 
+.viewHeader > *,
+.controls,
+.calendarScope,
+.eventOpen {
+  min-width: 0;
+}
+
 .viewHeader h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -216,6 +223,8 @@
   background: var(--console-soft);
   color: var(--console-ink);
   font-size: var(--font-size-sm);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .selectedClubs li { border-color: color-mix(in srgb, var(--console-cyan) 40%, var(--console-line)); }
@@ -445,6 +454,7 @@
 
 .eventBody strong {
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .eventBody > span,
@@ -461,6 +471,8 @@
   font-style: normal;
   font-size: 0.68rem;
   font-weight: var(--font-weight-bold);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 [data-type='competition'] {
@@ -1330,6 +1342,10 @@
 }
 
 @media (max-width: 620px) {
+  .calendar {
+    padding: var(--space-3);
+  }
+
   .disciplinePanel { padding: var(--space-3); }
   .disciplineGrid { grid-template-columns: 1fr; }
   .disciplineHeader,

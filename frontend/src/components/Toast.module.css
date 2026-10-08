@@ -2,13 +2,19 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  width: min(100%, 420px);
+  min-width: min(280px, 100%);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   background-color: var(--console-component-surface, var(--white));
   box-shadow: var(--shadow-soft);
   color: var(--console-component-text, var(--ink-900));
-  min-width: 280px;
-  max-width: 420px;
+  max-width: 100%;
+}
+
+.toast > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .success {

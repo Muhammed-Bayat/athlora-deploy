@@ -52,6 +52,7 @@
   --mobile-nav-block-size: calc(64px + env(safe-area-inset-bottom));
   min-height: 100vh;
   min-height: 100svh;
+  overflow-x: clip;
   color: var(--ui-text);
 }
 
@@ -138,6 +139,7 @@
 .main {
   position: relative;
   z-index: 2;
+  min-width: 0;
   min-height: 100vh;
   min-height: 100svh;
   margin-left: 264px;
@@ -424,6 +426,7 @@
   top: 0;
   z-index: 30;
   display: flex;
+  min-width: 0;
   min-height: 76px;
   align-items: center;
   gap: 18px;
@@ -915,6 +918,7 @@
 
 .content {
   position: relative;
+  min-width: 0;
   padding: 34px 30px;
 }
 
@@ -1131,7 +1135,7 @@
     height: var(--mobile-nav-block-size);
     box-sizing: border-box;
     align-items: center;
-    justify-content: space-around;
+    justify-content: initial;
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
     background: rgba(0, 7, 13, 0.92);
     border-top: 1px solid rgba(138, 233, 242, 0.10);
@@ -1142,16 +1146,22 @@
 
   .mobileNav button {
     display: flex;
+    min-width: 0;
+    flex: 1 1 0;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 6px 12px;
+    padding: 6px 4px;
     border: 0;
     border-radius: 12px;
     background: transparent;
     color: #688591;
     font-size: 9.5px;
     font-weight: 700;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     cursor: pointer;
     transition: color 0.2s var(--ease), background 0.2s var(--ease);
   }
@@ -1177,6 +1187,19 @@
   .clock { display: none; }
   .title p { display: none; }
   .title h1 { font-size: 22px; }
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-inline: 12px;
+  }
+  .topControls {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
   .weatherReadout { display: none; }
   .weatherToggle .weatherToggleLabel { display: none; }
   .weatherToggle { padding: 4px 6px; height: 32px; }
