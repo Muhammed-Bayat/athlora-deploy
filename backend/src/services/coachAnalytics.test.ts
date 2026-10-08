@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   analyzeCoachPerformance,
+  getCoachInjuryAnalytics,
   rankCoachAthletes,
   summarizeCoachInjuryRoster,
   summarizeCoachInjuries,
@@ -49,6 +50,20 @@ function result(
 }
 
 describe('coach analytics foundations', () => {
+  it('orders distinct coach athletes by a selected case-insensitive name expression', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+
+    await getCoachInjuryAnalytics(
+      '11111111-1111-4111-8111-111111111111',
+      { dateRange: allDates, lifecycleStatus: 'all' },
+      { query },
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0]?.[0]).toContain('lower(a.name) AS name_sort');
+    expect(query.mock.calls[0]?.[0]).toContain('ORDER BY name_sort, a.id');
+  });
+
   it('makes timed and measured improvements positive in their respective better directions', () => {
     const timedAnalysis = analyzeCoachPerformance(timed, [
       result(timed, 12, '2026-01-01'),

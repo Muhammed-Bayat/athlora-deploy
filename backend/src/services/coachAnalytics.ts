@@ -422,11 +422,11 @@ async function listCoachAthletes(
   }
 
   const result = await executor.query<CoachAthlete>(
-    `SELECT DISTINCT a.id, a.name, a.lifecycle_status
+    `SELECT DISTINCT a.id, a.name, a.lifecycle_status, lower(a.name) AS name_sort
      FROM athletes a
      ${joins}
      WHERE ${conditions.join('\n       AND ')}
-     ORDER BY lower(a.name), a.id`,
+     ORDER BY name_sort, a.id`,
     parameters,
   );
   return result.rows;
