@@ -1,6 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createGeminiToken } from '../../api/ai';
-import { getAthleteDisciplineAnalysis, getWorkspaceDisciplineAnalysis, type AthleteDisciplineAnalysis, type WorkspaceDisciplineAnalysis } from '../../api/analytics';
+import {
+  getAthleteDisciplineAnalysis,
+  getCoachInjuryAnalysis,
+  getCoachPerformanceAnalysis,
+  getCoachRankingsAnalysis,
+  getWorkspaceDisciplineAnalysis,
+  type AthleteDisciplineAnalysis,
+  type CoachInjuryAnalysis,
+  type CoachInjuryAnalysisFilters,
+  type CoachLifecycleStatus,
+  type CoachPerformanceAnalysis,
+  type CoachPerformanceAnalysisFilters,
+  type CoachRankingsAnalysis,
+  type CoachRankingsAnalysisFilters,
+  type WorkspaceDisciplineAnalysis,
+} from '../../api/analytics';
 import { createAthlete, getAthlete, listAthletes } from '../../api/athletes';
 import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { AthloraGeminiSession, type GeminiToolHandler } from '../../api/geminiLiveSdk';
@@ -20,6 +35,11 @@ import {
   workspaceDisciplineReportPdf,
   workspaceDisciplineTellMe,
 } from '../reports/performanceReport';
+import {
+  coachInjuryMonitoringReportPdf,
+  coachPerformanceReportPdf,
+  coachRankingsReportPdf,
+} from '../reports/coachingAnalyticsReport';
 import styles from './AthloraAssistantProvider.module.css';
 
 const ASSISTANT_INACTIVITY_MS = 60_000;
@@ -68,6 +88,18 @@ interface CachedAthleteAnalysis {
   athleteName: string;
   analysis: AthleteDisciplineAnalysis;
   tellMe: string;
+}
+
+interface CachedCoachPerformanceAnalysis {
+  analysis: CoachPerformanceAnalysis;
+}
+
+interface CachedCoachInjuryAnalysis {
+  analysis: CoachInjuryAnalysis;
+}
+
+interface CachedCoachRankingsAnalysis {
+  analysis: CoachRankingsAnalysis;
 }
 
 interface AssistantPageContext {
@@ -128,6 +160,93 @@ function normalizeSeasonYear(value: unknown): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value === 'string' && (value === 'all' || /^\d{4}$/.test(value))) return value;
   throw new Error('Season must be a four-digit year or "all".');
+}
+
+const COACH_ANALYTICS_MAX_ATHLETE_IDS = 100;
+const COACH_ANALYTICS_MAX_RANKING_LIMIT = 100;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function optionalCoachAthleteIds(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('Athlete IDs must be a non-empty array of UUIDs when provided.');
+  }
+  if (value.length > COACH_ANALYTICS_MAX_ATHLETE_IDS) {
+    throw new Error(`Select at most ${COACH_ANALYTICS_MAX_ATHLETE_IDS} athlete IDs.`);
+  }
+  if (value.some((id) => typeof id !== 'string' || !UUID_PATTERN.test(id))) {
+    throw new Error('Each athlete ID must be a valid UUID.');
+  }
+  if (new Set(value).size !== value.length) throw new Error('Athlete IDs must be unique.');
+  return value;
+}
+
+function optionalCoachDate(value: unknown, label: 'dateFrom' | 'dateTo'): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must use YYYY-MM-DD format.`);
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} must be a real YYYY-MM-DD date.`);
+  }
+  return value;
+}
+
+function coachDateRangeFilters(args: Record<string, unknown>): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  const dateFrom = optionalCoachDate(args.dateFrom, 'dateFrom');
+  const dateTo = optionalCoachDate(args.dateTo, 'dateTo');
+  if (dateFrom && dateTo && dateFrom > dateTo) throw new Error('dateFrom must not be after dateTo.');
+  return { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) };
+}
+
+function optionalCoachLifecycleStatus(value: unknown): CoachLifecycleStatus | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value === 'active' || value === 'inactive' || value === 'all') return value;
+  throw new Error('Lifecycle status must be active, inactive, or all.');
+}
+
+function optionalCoachRankingsLimit(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > COACH_ANALYTICS_MAX_RANKING_LIMIT) {
+    throw new Error(`Rankings limit must be an integer from 1 to ${COACH_ANALYTICS_MAX_RANKING_LIMIT}.`);
+  }
+  return value;
+}
+
+function safeCoachInjuryAnalysis(analysis: CoachInjuryAnalysis): CoachInjuryAnalysis {
+  return {
+    selectedRange: { dateFrom: analysis.selectedRange.dateFrom, dateTo: analysis.selectedRange.dateTo },
+    lifecycleStatus: analysis.lifecycleStatus,
+    limitations: analysis.limitations,
+    athletes: analysis.athletes.map((entry) => ({
+      athlete: { id: entry.athlete.id, name: entry.athlete.name, status: entry.athlete.status },
+      injuryCount: entry.injuryCount,
+      activeInjuryCount: entry.activeInjuryCount,
+      mostCommonRecordedArea: entry.mostCommonRecordedArea && {
+        bodyRegion: entry.mostCommonRecordedArea.bodyRegion,
+        area: entry.mostCommonRecordedArea.area,
+        count: entry.mostCommonRecordedArea.count,
+      },
+      repeatedInjuries: entry.repeatedInjuries.map((injury) => ({
+        bodyRegion: injury.bodyRegion,
+        area: injury.area,
+        side: injury.side,
+        count: injury.count,
+      })),
+      warning: { level: entry.warning.level, reasons: [...entry.warning.reasons] },
+      history: entry.history.map((injury) => ({
+        bodyRegion: injury.bodyRegion,
+        area: injury.area,
+        side: injury.side,
+        severity: injury.severity,
+        occurrenceDate: injury.occurrenceDate,
+        expectedReturnDate: injury.expectedReturnDate,
+        resolvedDate: injury.resolvedDate,
+        active: injury.active,
+      })),
+    })),
+  };
 }
 
 function isExplicitCurrentLocationWeatherRequest(message: string): boolean {
@@ -229,8 +348,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const [pendingAthleteDraft, setPendingAthleteDraft] = useState<PendingAthleteDraft | null>(null);
   const [cachedAthleteAnalysis, setCachedAthleteAnalysis] = useState<CachedAthleteAnalysis | null>(null);
   const [cachedDisciplineAnalysis, setCachedDisciplineAnalysis] = useState<CachedDisciplineAnalysis | null>(null);
-  const [reporting, setReporting] = useState<'athlete' | 'discipline' | null>(null);
+  const [cachedCoachPerformanceAnalysis, setCachedCoachPerformanceAnalysis] = useState<CachedCoachPerformanceAnalysis | null>(null);
+  const [cachedCoachInjuryAnalysis, setCachedCoachInjuryAnalysis] = useState<CachedCoachInjuryAnalysis | null>(null);
+  const [cachedCoachRankingsAnalysis, setCachedCoachRankingsAnalysis] = useState<CachedCoachRankingsAnalysis | null>(null);
+  const [reporting, setReporting] = useState<'athlete' | 'discipline' | 'coachPerformance' | 'coachInjury' | 'coachRankings' | null>(null);
   const [reportStatus, setReportStatus] = useState<string | null>(null);
+  const [geminiToolLoading, setGeminiToolLoading] = useState(false);
   const geminiSessionRef = useRef<AthloraGeminiSession | null>(null);
   const geminiAudioPlayerRef = useRef<GeminiAudioPlayer | null>(null);
   const geminiMicrophoneRef = useRef<GeminiMicrophone | null>(null);
@@ -253,8 +376,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const voiceMessageRef = useRef('');
   const cachedAthleteAnalysisRef = useRef<CachedAthleteAnalysis | null>(null);
   const cachedDisciplineAnalysisRef = useRef<CachedDisciplineAnalysis | null>(null);
-  const pendingAnalysisKindRef = useRef<'athlete' | 'discipline' | null>(null);
+  const cachedCoachPerformanceAnalysisRef = useRef<CachedCoachPerformanceAnalysis | null>(null);
+  const cachedCoachInjuryAnalysisRef = useRef<CachedCoachInjuryAnalysis | null>(null);
+  const cachedCoachRankingsAnalysisRef = useRef<CachedCoachRankingsAnalysis | null>(null);
+  const pendingAnalysisKindRef = useRef<'athlete' | 'discipline' | 'coachPerformance' | 'coachInjury' | 'coachRankings' | null>(null);
   const reportingRef = useRef(false);
+  const activeToolCallCountRef = useRef(0);
 
   if (!geminiAudioPlayerRef.current) {
     geminiAudioPlayerRef.current = new GeminiAudioPlayer();
@@ -267,6 +394,14 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const isCurrentLifecycle = (generation: number) => (
     mountedRef.current && lifecycleGenerationRef.current === generation
   );
+
+  const isCurrentToolCall = (generation: number, signal?: AbortSignal) => (
+    !signal?.aborted && isCurrentLifecycle(generation)
+  );
+
+  const ensureCurrentToolCall = (generation: number, signal?: AbortSignal) => {
+    if (!isCurrentToolCall(generation, signal)) throw new Error('Athlora request was cancelled.');
+  };
 
   const clearAssistantInactivityTimer = useCallback(() => {
     assistantActivityGenerationRef.current += 1;
@@ -288,8 +423,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     pendingVenueSearchRef.current = null;
     cachedAthleteAnalysisRef.current = null;
     cachedDisciplineAnalysisRef.current = null;
+    cachedCoachPerformanceAnalysisRef.current = null;
+    cachedCoachInjuryAnalysisRef.current = null;
+    cachedCoachRankingsAnalysisRef.current = null;
     pendingAnalysisKindRef.current = null;
     reportingRef.current = false;
+    activeToolCallCountRef.current = 0;
     if (closeDialog) dialogOpenRef.current = false;
 
     const microphone = geminiMicrophoneRef.current;
@@ -310,8 +449,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       setGeminiTesting(false);
       setCachedAthleteAnalysis(null);
       setCachedDisciplineAnalysis(null);
+      setCachedCoachPerformanceAnalysis(null);
+      setCachedCoachInjuryAnalysis(null);
+      setCachedCoachRankingsAnalysis(null);
       setReporting(null);
       setReportStatus(null);
+      setGeminiToolLoading(false);
       if (closeDialog) setGeminiDialogOpen(false);
       if (sleepMessage) setGeminiResponse('Athlora is sleeping.');
     }
@@ -340,6 +483,24 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     cachedDisciplineAnalysisRef.current = cached;
     if (cached) pendingAnalysisKindRef.current = 'discipline';
     setCachedDisciplineAnalysis(cached);
+  };
+
+  const cacheCoachPerformanceAnalysis = (cached: CachedCoachPerformanceAnalysis | null) => {
+    cachedCoachPerformanceAnalysisRef.current = cached;
+    if (cached) pendingAnalysisKindRef.current = 'coachPerformance';
+    setCachedCoachPerformanceAnalysis(cached);
+  };
+
+  const cacheCoachInjuryAnalysis = (cached: CachedCoachInjuryAnalysis | null) => {
+    cachedCoachInjuryAnalysisRef.current = cached;
+    if (cached) pendingAnalysisKindRef.current = 'coachInjury';
+    setCachedCoachInjuryAnalysis(cached);
+  };
+
+  const cacheCoachRankingsAnalysis = (cached: CachedCoachRankingsAnalysis | null) => {
+    cachedCoachRankingsAnalysisRef.current = cached;
+    if (cached) pendingAnalysisKindRef.current = 'coachRankings';
+    setCachedCoachRankingsAnalysis(cached);
   };
 
   const cancelAthleteDraft = () => {
@@ -404,8 +565,94 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     };
   };
 
-  const handleGeminiToolCall = async (call: Parameters<GeminiToolHandler>[0], generation: number) => {
+  const coachPerformanceFilters = async (args: Record<string, unknown>) => {
+    const athleteIds = optionalCoachAthleteIds(args.athleteIds);
+    const dateRange = coachDateRangeFilters(args);
+    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus);
+    const filters: CoachPerformanceAnalysisFilters = {
+      ...(athleteIds ? { athleteIds } : {}),
+      ...dateRange,
+      ...(lifecycleStatus ? { lifecycleStatus } : {}),
+    };
+    let relatedSources: AssistantSource<unknown>[] | undefined;
+    if (args.discipline !== undefined && args.discipline !== null) {
+      const { discipline, source } = await loadResolvedDiscipline(args.discipline);
+      filters.discipline = discipline.code;
+      relatedSources = [source];
+    }
+    return { filters, relatedSources };
+  };
+
+  const coachInjuryFilters = (args: Record<string, unknown>): CoachInjuryAnalysisFilters => {
+    if (args.discipline !== undefined) throw new Error('Injury monitoring analysis does not support a discipline filter.');
+    const athleteIds = optionalCoachAthleteIds(args.athleteIds);
+    const dateRange = coachDateRangeFilters(args);
+    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus);
+    return {
+      ...(athleteIds ? { athleteIds } : {}),
+      ...dateRange,
+      ...(lifecycleStatus ? { lifecycleStatus } : {}),
+    };
+  };
+
+  const coachRankingsFilters = async (args: Record<string, unknown>) => {
+    if (args.athleteIds !== undefined) throw new Error('Rankings analysis covers the coach roster and does not support athlete IDs.');
+    const dateRange = coachDateRangeFilters(args);
+    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus);
+    const limit = optionalCoachRankingsLimit(args.limit);
+    const { discipline, source } = await loadResolvedDiscipline(args.discipline);
+    const filters: CoachRankingsAnalysisFilters = {
+      discipline: discipline.code,
+      ...dateRange,
+      ...(lifecycleStatus ? { lifecycleStatus } : {}),
+      ...(limit === undefined ? {} : { limit }),
+    };
+    return { filters, relatedSources: [source] };
+  };
+
+  const downloadCoachPerformancePdf = async (analysis: CoachPerformanceAnalysis, generation: number, signal?: AbortSignal) => {
+    ensureCurrentToolCall(generation, signal);
+    const bytes = await coachPerformanceReportPdf(analysis);
+    ensureCurrentToolCall(generation, signal);
+    const filename = `${performanceReportFilename('athlora-coach-performance-analysis')}.pdf`;
+    downloadFile(bytes, filename, 'application/pdf');
+    if (isCurrentToolCall(generation, signal)) {
+      cacheCoachPerformanceAnalysis({ analysis });
+      setReportStatus('Coach performance analysis PDF downloaded.');
+    }
+    return filename;
+  };
+
+  const downloadCoachInjuryPdf = async (analysis: CoachInjuryAnalysis, generation: number, signal?: AbortSignal) => {
+    ensureCurrentToolCall(generation, signal);
+    const bytes = await coachInjuryMonitoringReportPdf(analysis);
+    ensureCurrentToolCall(generation, signal);
+    const filename = `${performanceReportFilename('athlora-injury-monitoring-analysis')}.pdf`;
+    downloadFile(bytes, filename, 'application/pdf');
+    if (isCurrentToolCall(generation, signal)) {
+      cacheCoachInjuryAnalysis({ analysis });
+      setReportStatus('Injury monitoring PDF downloaded.');
+    }
+    return filename;
+  };
+
+  const downloadCoachRankingsPdf = async (analysis: CoachRankingsAnalysis, generation: number, signal?: AbortSignal) => {
+    ensureCurrentToolCall(generation, signal);
+    const bytes = await coachRankingsReportPdf(analysis);
+    ensureCurrentToolCall(generation, signal);
+    const filename = `${performanceReportFilename(`athlora-${analysis.discipline.label}-rankings-analysis`)}.pdf`;
+    downloadFile(bytes, filename, 'application/pdf');
+    if (isCurrentToolCall(generation, signal)) {
+      cacheCoachRankingsAnalysis({ analysis });
+      setReportStatus('Coach rankings PDF downloaded.');
+    }
+    return filename;
+  };
+
+  const handleGeminiToolCall = async (call: Parameters<GeminiToolHandler>[0], generation: number, signal?: AbortSignal) => {
     const args = call.args ?? {};
+
+    ensureCurrentToolCall(generation, signal);
 
     if (call.name === 'get_current_page_context') {
       const context = pageContext(window.location.pathname);
@@ -413,6 +660,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
 
       try {
         const athlete = await getAthlete(context.athleteId);
+        ensureCurrentToolCall(generation, signal);
         selectedAthleteIdsRef.current.add(athlete.id);
         selectedAthleteNamesRef.current.set(athlete.id, athlete.name);
         return sourceResult('console://current-page', {
@@ -420,6 +668,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
           athlete: { id: athlete.id, name: athlete.name },
         });
       } catch {
+        if (!isCurrentToolCall(generation, signal)) throw new Error('Athlora request was cancelled.');
         return sourceResult('console://current-page', context);
       }
     }
@@ -446,6 +695,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       } catch {
         throw safeToolError('Athlete search');
       }
+      ensureCurrentToolCall(generation, signal);
       const data = athletes.data.map((athlete) => ({
         id: athlete.id,
         name: athlete.name,
@@ -486,7 +736,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         recentTrend: analysis.recentTrend,
         resultCount: analysis.resultCount,
       };
-      if (isCurrentLifecycle(generation)) {
+      if (isCurrentToolCall(generation, signal)) {
         cacheAthleteAnalysis({ athleteName, analysis, tellMe: athleteAnalysisTellMe(athleteName, analysis) });
         setReportStatus(null);
       }
@@ -525,11 +775,140 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
           resultCount: factors.resultCount,
         })),
       };
-      if (isCurrentLifecycle(generation)) {
+      if (isCurrentToolCall(generation, signal)) {
         cacheDisciplineAnalysis({ analysis, tellMe: workspaceDisciplineTellMe(analysis) });
         setReportStatus(null);
       }
       return sourceResult('/api/v1/analytics/disciplines/:discipline/athletes', data, [source]);
+    }
+
+    if (call.name === 'get_coach_performance_analysis') {
+      const { filters, relatedSources } = await coachPerformanceFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachPerformanceAnalysis;
+      try {
+        analysis = await getCoachPerformanceAnalysis(filters);
+      } catch {
+        throw safeToolError('Coach performance analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      cacheCoachPerformanceAnalysis({ analysis });
+      setReportStatus(null);
+      return sourceResult('/api/v1/analytics/coach/performance', analysis, relatedSources);
+    }
+
+    if (call.name === 'get_coach_injury_analysis') {
+      const filters = coachInjuryFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachInjuryAnalysis;
+      try {
+        analysis = safeCoachInjuryAnalysis(await getCoachInjuryAnalysis(filters));
+      } catch {
+        throw safeToolError('Coach injury monitoring analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      cacheCoachInjuryAnalysis({ analysis });
+      setReportStatus(null);
+      return sourceResult('/api/v1/analytics/coach/injuries', analysis);
+    }
+
+    if (call.name === 'get_coach_rankings_analysis') {
+      const { filters, relatedSources } = await coachRankingsFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachRankingsAnalysis;
+      try {
+        analysis = await getCoachRankingsAnalysis(filters);
+      } catch {
+        throw safeToolError('Coach rankings analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      cacheCoachRankingsAnalysis({ analysis });
+      setReportStatus(null);
+      return sourceResult('/api/v1/analytics/coach/rankings', analysis, relatedSources);
+    }
+
+    if (call.name === 'download_coach_performance_report') {
+      const { filters, relatedSources } = await coachPerformanceFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachPerformanceAnalysis;
+      try {
+        analysis = await getCoachPerformanceAnalysis(filters);
+      } catch {
+        throw safeToolError('Coach performance analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      let filename: string;
+      try {
+        filename = await downloadCoachPerformancePdf(analysis, generation, signal);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Athlora request was cancelled.') throw error;
+        throw safeToolError('Coach performance report');
+      }
+      return {
+        ...sourceResult('/api/v1/analytics/coach/performance', analysis, relatedSources),
+        report: {
+          status: 'downloaded' as const,
+          filename,
+          selectedRange: analysis.selectedRange,
+          athleteCount: analysis.athletes.length,
+        },
+      };
+    }
+
+    if (call.name === 'download_coach_injury_report') {
+      const filters = coachInjuryFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachInjuryAnalysis;
+      try {
+        analysis = safeCoachInjuryAnalysis(await getCoachInjuryAnalysis(filters));
+      } catch {
+        throw safeToolError('Coach injury monitoring analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      let filename: string;
+      try {
+        filename = await downloadCoachInjuryPdf(analysis, generation, signal);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Athlora request was cancelled.') throw error;
+        throw safeToolError('Injury monitoring report');
+      }
+      return {
+        ...sourceResult('/api/v1/analytics/coach/injuries', analysis),
+        report: {
+          status: 'downloaded' as const,
+          filename,
+          selectedRange: analysis.selectedRange,
+          athleteCount: analysis.athletes.length,
+        },
+      };
+    }
+
+    if (call.name === 'download_coach_rankings_report') {
+      const { filters, relatedSources } = await coachRankingsFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachRankingsAnalysis;
+      try {
+        analysis = await getCoachRankingsAnalysis(filters);
+      } catch {
+        throw safeToolError('Coach rankings analytics');
+      }
+      ensureCurrentToolCall(generation, signal);
+      let filename: string;
+      try {
+        filename = await downloadCoachRankingsPdf(analysis, generation, signal);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Athlora request was cancelled.') throw error;
+        throw safeToolError('Coach rankings report');
+      }
+      return {
+        ...sourceResult('/api/v1/analytics/coach/rankings', analysis, relatedSources),
+        report: {
+          status: 'downloaded' as const,
+          filename,
+          selectedRange: analysis.selectedRange,
+          athleteCount: analysis.athletes.length,
+        },
+      };
     }
 
     if (call.name === 'prepare_athlete_draft') {
@@ -560,7 +939,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         gender: optionalToolString(args.gender),
         notes: optionalToolString(args.notes),
       };
-      if (isCurrentLifecycle(generation)) setLocalAthleteDraft(draft);
+      if (isCurrentToolCall(generation, signal)) setLocalAthleteDraft(draft);
       return sourceResult('/api/v1/disciplines', {
         status: 'draft_ready' as const,
         draft: { name: draft.name, discipline: draft.discipline, dob: draft.dob, gender: draft.gender, notes: draft.notes },
@@ -594,6 +973,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         const choices = venues.map((candidate, index) => ({ id: `venue-${index + 1}`, venue: candidate }));
         venueSource = sourceResult('/api/v1/venues/search', choices.map(({ id, venue: candidate }) => ({ id, displayName: candidate.displayName }))).source;
         if (choices.length > 1) {
+          ensureCurrentToolCall(generation, signal);
           pendingVenueSearchRef.current = { place, choices };
           return sourceResult('/api/v1/venues/search', {
             status: 'selection_required' as const,
@@ -681,12 +1061,13 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
 
     const generation = lifecycleGenerationRef.current;
     const starting = (async () => {
-      const token = await createGeminiToken();
+      const { token, model } = await createGeminiToken();
       if (!isCurrentLifecycle(generation)) throw new Error('Athlora assistant stopped.');
       if (!token) throw new Error('Gemini did not return a token');
 
       const session = new AthloraGeminiSession({
         token,
+        model,
         onTurnStart: () => {
           if (!isCurrentLifecycle(generation)) return;
           processVoiceMessage();
@@ -757,7 +1138,17 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
           clearAssistantInactivityTimer();
           setActionError(error.message);
         },
-        onToolCall: (call) => handleGeminiToolCall(call, generation),
+        onToolCall: (call, signal) => handleGeminiToolCall(call, generation, signal),
+        onToolCallStart: () => {
+          if (!isCurrentLifecycle(generation)) return;
+          activeToolCallCountRef.current += 1;
+          setGeminiToolLoading(true);
+        },
+        onToolCallEnd: () => {
+          if (!isCurrentLifecycle(generation)) return;
+          activeToolCallCountRef.current = Math.max(0, activeToolCallCountRef.current - 1);
+          if (activeToolCallCountRef.current === 0) setGeminiToolLoading(false);
+        },
       });
 
       await session.connect();
@@ -919,11 +1310,19 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     setLocalAthleteDraft(null);
     cachedAthleteAnalysisRef.current = null;
     cachedDisciplineAnalysisRef.current = null;
+    cachedCoachPerformanceAnalysisRef.current = null;
+    cachedCoachInjuryAnalysisRef.current = null;
+    cachedCoachRankingsAnalysisRef.current = null;
     pendingAnalysisKindRef.current = null;
     setCachedAthleteAnalysis(null);
     setCachedDisciplineAnalysis(null);
+    setCachedCoachPerformanceAnalysis(null);
+    setCachedCoachInjuryAnalysis(null);
+    setCachedCoachRankingsAnalysis(null);
     setReporting(null);
     setReportStatus(null);
+    setGeminiToolLoading(false);
+    activeToolCallCountRef.current = 0;
     selectedAthleteIdsRef.current.clear();
     selectedAthleteNamesRef.current.clear();
     pendingVenueSearchRef.current = null;
@@ -979,23 +1378,95 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     }
   };
 
+  const generateCoachPerformanceReport = async (cached = cachedCoachPerformanceAnalysisRef.current) => {
+    if (!cached || reportingRef.current) return;
+    const generation = lifecycleGenerationRef.current;
+    reportingRef.current = true;
+    setReporting('coachPerformance');
+    setReportStatus('Preparing coach performance analysis PDF...');
+    setActionError(null);
+    try {
+      await downloadCoachPerformancePdf(cached.analysis, generation);
+    } catch {
+      if (isCurrentLifecycle(generation)) {
+        setReportStatus(null);
+        setActionError('Athlora could not generate the coach performance analysis PDF. Please try again.');
+      }
+    } finally {
+      if (isCurrentLifecycle(generation)) {
+        reportingRef.current = false;
+        setReporting(null);
+      }
+    }
+  };
+
+  const generateCoachInjuryReport = async (cached = cachedCoachInjuryAnalysisRef.current) => {
+    if (!cached || reportingRef.current) return;
+    const generation = lifecycleGenerationRef.current;
+    reportingRef.current = true;
+    setReporting('coachInjury');
+    setReportStatus('Preparing injury monitoring PDF...');
+    setActionError(null);
+    try {
+      await downloadCoachInjuryPdf(cached.analysis, generation);
+    } catch {
+      if (isCurrentLifecycle(generation)) {
+        setReportStatus(null);
+        setActionError('Athlora could not generate the injury monitoring PDF. Please try again.');
+      }
+    } finally {
+      if (isCurrentLifecycle(generation)) {
+        reportingRef.current = false;
+        setReporting(null);
+      }
+    }
+  };
+
+  const generateCoachRankingsReport = async (cached = cachedCoachRankingsAnalysisRef.current) => {
+    if (!cached || reportingRef.current) return;
+    const generation = lifecycleGenerationRef.current;
+    reportingRef.current = true;
+    setReporting('coachRankings');
+    setReportStatus('Preparing coach rankings PDF...');
+    setActionError(null);
+    try {
+      await downloadCoachRankingsPdf(cached.analysis, generation);
+    } catch {
+      if (isCurrentLifecycle(generation)) {
+        setReportStatus(null);
+        setActionError('Athlora could not generate the coach rankings PDF. Please try again.');
+      }
+    } finally {
+      if (isCurrentLifecycle(generation)) {
+        reportingRef.current = false;
+        setReporting(null);
+      }
+    }
+  };
+
   const handlePendingAnalysisAction = async (message: string): Promise<boolean> => {
     const action = pendingAnalysisAction(message);
     const kind = pendingAnalysisKindRef.current;
     if (!action || !kind) return false;
 
-    const cached = kind === 'athlete'
-      ? cachedAthleteAnalysisRef.current
-      : cachedDisciplineAnalysisRef.current;
-    if (!cached) return false;
-
     if (action === 'tell') {
-      tellCachedAnalysis(cached.tellMe);
-      return true;
+      if (kind === 'athlete' && cachedAthleteAnalysisRef.current) {
+        tellCachedAnalysis(cachedAthleteAnalysisRef.current.tellMe);
+        return true;
+      }
+      if (kind === 'discipline' && cachedDisciplineAnalysisRef.current) {
+        tellCachedAnalysis(cachedDisciplineAnalysisRef.current.tellMe);
+        return true;
+      }
+      return false;
     }
 
-    if (kind === 'athlete') await generateAthleteReport(cachedAthleteAnalysisRef.current);
-    else await generateDisciplineReport(cachedDisciplineAnalysisRef.current);
+    if (kind === 'athlete' && cachedAthleteAnalysisRef.current) await generateAthleteReport(cachedAthleteAnalysisRef.current);
+    else if (kind === 'discipline' && cachedDisciplineAnalysisRef.current) await generateDisciplineReport(cachedDisciplineAnalysisRef.current);
+    else if (kind === 'coachPerformance' && cachedCoachPerformanceAnalysisRef.current) await generateCoachPerformanceReport(cachedCoachPerformanceAnalysisRef.current);
+    else if (kind === 'coachInjury' && cachedCoachInjuryAnalysisRef.current) await generateCoachInjuryReport(cachedCoachInjuryAnalysisRef.current);
+    else if (kind === 'coachRankings' && cachedCoachRankingsAnalysisRef.current) await generateCoachRankingsReport(cachedCoachRankingsAnalysisRef.current);
+    else return false;
     return true;
   };
 
@@ -1028,9 +1499,9 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
 
       <Modal open={geminiDialogOpen} title="Athlora AI" className={styles.aiModal} onClose={closeAthloraAssistantDialog}>
         <div className={styles.aiDialog}>
-          <section className={styles.aiResponse} aria-live="polite" aria-busy={geminiTesting}>
-            <p className={styles.aiResponseLabel}>{geminiListening ? 'Listening hands-free' : geminiTesting ? 'Athlora is responding' : 'Athlora'}</p>
-            <p>{geminiResponse || (geminiTesting ? 'Starting Athlora...' : 'Ask Athlora to add an athlete or help with the roster.')}</p>
+          <section className={styles.aiResponse} aria-live="polite" aria-busy={geminiTesting || geminiToolLoading}>
+            <p className={styles.aiResponseLabel}>{geminiListening ? 'Listening hands-free' : geminiToolLoading ? 'Athlora is working' : geminiTesting ? 'Athlora is responding' : 'Athlora'}</p>
+            <p>{geminiToolLoading ? 'Retrieving Athlora data...' : geminiResponse || (geminiTesting ? 'Starting Athlora...' : 'Ask Athlora to add an athlete or help with the roster.')}</p>
           </section>
 
           {pendingAthleteDraft && <section className={styles.draftConfirmation} aria-labelledby="athlora-draft-title">
@@ -1059,7 +1530,31 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
             </div>
           </section>}
 
-          {(cachedAthleteAnalysis || cachedDisciplineAnalysis) && <p id="athlora-report-status" role="status">{reportStatus ?? 'Reports use the exact cached analysis and do not request new analytics.'}</p>}
+          {cachedCoachPerformanceAnalysis && <section className={styles.analysisActions} aria-labelledby="athlora-coach-performance-title" aria-busy={reporting === 'coachPerformance'}>
+            <h3 id="athlora-coach-performance-title">Coach performance analysis ready</h3>
+            <p>{cachedCoachPerformanceAnalysis.analysis.athletes.length} athlete{cachedCoachPerformanceAnalysis.analysis.athletes.length === 1 ? '' : 's'} in the cached analysis.</p>
+            <div>
+              <Button onClick={() => void generateCoachPerformanceReport()} disabled={reporting !== null} aria-describedby="athlora-report-status">{reporting === 'coachPerformance' ? 'Preparing PDF...' : 'Generate coach performance PDF'}</Button>
+            </div>
+          </section>}
+
+          {cachedCoachInjuryAnalysis && <section className={styles.analysisActions} aria-labelledby="athlora-coach-injury-title" aria-busy={reporting === 'coachInjury'}>
+            <h3 id="athlora-coach-injury-title">Injury monitoring analysis ready</h3>
+            <p>Monitoring-only recorded injury indicators. This analysis is not a diagnosis or medical advice.</p>
+            <div>
+              <Button onClick={() => void generateCoachInjuryReport()} disabled={reporting !== null} aria-describedby="athlora-report-status">{reporting === 'coachInjury' ? 'Preparing PDF...' : 'Generate injury monitoring PDF'}</Button>
+            </div>
+          </section>}
+
+          {cachedCoachRankingsAnalysis && <section className={styles.analysisActions} aria-labelledby="athlora-coach-rankings-title" aria-busy={reporting === 'coachRankings'}>
+            <h3 id="athlora-coach-rankings-title">{cachedCoachRankingsAnalysis.analysis.discipline.label} rankings analysis ready</h3>
+            <p>{cachedCoachRankingsAnalysis.analysis.athletes.length} athlete{cachedCoachRankingsAnalysis.analysis.athletes.length === 1 ? '' : 's'} in the deterministic ranking.</p>
+            <div>
+              <Button onClick={() => void generateCoachRankingsReport()} disabled={reporting !== null} aria-describedby="athlora-report-status">{reporting === 'coachRankings' ? 'Preparing PDF...' : 'Generate rankings PDF'}</Button>
+            </div>
+          </section>}
+
+          {(cachedAthleteAnalysis || cachedDisciplineAnalysis || cachedCoachPerformanceAnalysis || cachedCoachInjuryAnalysis || cachedCoachRankingsAnalysis) && <p id="athlora-report-status" role="status">{reportStatus ?? 'Reports use the exact cached analysis and do not request new analytics.'}</p>}
 
           <div className={styles.aiActions}>
             {geminiConnected && !geminiListening && <Button variant="secondary" onClick={() => void startGeminiListening()}>Enable hands-free</Button>}

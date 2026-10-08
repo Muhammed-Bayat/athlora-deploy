@@ -5,7 +5,7 @@ import type { DisciplineDefinition } from '../types/meets.js';
 import { isCanonicalUuid } from '../validation/primitives.js';
 import { parseSeasonYear, type SeasonScope } from './seasons.js';
 import { NON_CANCELLED_EVENT_FILTER } from './disciplineStatistics.js';
-import { isSupportedDiscipline } from './disciplineCatalog.js';
+import { isSupportedDiscipline, SUPPORTED_DISCIPLINE_CODES } from './disciplineCatalog.js';
 
 const RECENT_RESULT_LIMIT = 5;
 
@@ -310,7 +310,7 @@ async function requireAthlete(workspaceId: string, athleteId: unknown, executor:
   return result.rows[0];
 }
 
-async function requireDiscipline(code: unknown, executor: DbExecutor): Promise<ResolvedDiscipline> {
+export async function resolveAnalyticsDiscipline(code: unknown, executor: DbExecutor): Promise<ResolvedDiscipline> {
   if (typeof code !== 'string' || !/^[a-z0-9][a-z0-9_]*$/.test(code) || !isSupportedDiscipline(code)) throw notFound();
   const result = await executor.query<ResolvedDisciplineRow>(
     `SELECT id, code, presentation->>'label' AS label, unit, precision, direction
@@ -322,6 +322,18 @@ async function requireDiscipline(code: unknown, executor: DbExecutor): Promise<R
   );
   if (!result.rows[0]) throw notFound();
   return { id: result.rows[0].id, ...toDiscipline(result.rows[0]) };
+}
+
+/** Returns the current supported catalogue definitions used by normalized analytics. */
+export async function listAnalyticsDisciplines(executor: DbExecutor): Promise<AnalyticsDiscipline[]> {
+  const result = await executor.query<DisciplineRow>(
+    `SELECT DISTINCT ON (code) code, presentation->>'label' AS label, unit, precision, direction
+     FROM discipline_definitions
+     WHERE code = ANY($1::text[])
+     ORDER BY code, version DESC`,
+    [SUPPORTED_DISCIPLINE_CODES],
+  );
+  return result.rows.map(toDiscipline);
 }
 
 function rankingPolicy(discipline: AnalyticsDiscipline): DisciplineAnalyticsRanking {
@@ -406,12 +418,17 @@ const NORMALIZED_RESULTS_QUERY = `
   ORDER BY event_date ASC, event_time ASC NULLS LAST, event_id ASC, source_result_id ASC
 `;
 
-async function listNormalizedResults(
+export async function listNormalizedAthleteResults(
   workspaceId: string,
   disciplineCode: string,
   athleteIds: string[],
   executor: DbExecutor,
 ): Promise<NormalizedAthleteResult[]> {
+  if (!isCanonicalUuid(workspaceId)
+    || !isSupportedDiscipline(disciplineCode)
+    || !athleteIds.every(isCanonicalUuid)) {
+    throw notFound();
+  }
   if (athleteIds.length === 0) return [];
   const result = await executor.query<NormalizedResultRow>(NORMALIZED_RESULTS_QUERY, [workspaceId, disciplineCode, athleteIds]);
   return result.rows.map(mapNormalizedResult);
@@ -425,9 +442,9 @@ export async function getAthleteDisciplineAnalytics(
   executor: DbExecutor = getPool(),
 ): Promise<AthleteDisciplineAnalytics> {
   const athlete = await requireAthlete(workspaceId, athleteId, executor);
-  const resolvedDiscipline = await requireDiscipline(disciplineCode, executor);
+  const resolvedDiscipline = await resolveAnalyticsDiscipline(disciplineCode, executor);
   const discipline = toDiscipline(resolvedDiscipline);
-  const results = await listNormalizedResults(workspaceId, discipline.code, [athlete.id], executor);
+  const results = await listNormalizedAthleteResults(workspaceId, discipline.code, [athlete.id], executor);
   return summarizeAthleteDisciplineResults(athlete.id, discipline, results, season);
 }
 
@@ -438,7 +455,7 @@ export async function getWorkspaceDisciplineAnalytics(
   executor: DbExecutor = getPool(),
 ): Promise<WorkspaceDisciplineAnalytics> {
   if (!isCanonicalUuid(workspaceId)) throw notFound();
-  const resolvedDiscipline = await requireDiscipline(disciplineCode, executor);
+  const resolvedDiscipline = await resolveAnalyticsDiscipline(disciplineCode, executor);
   const discipline = toDiscipline(resolvedDiscipline);
   const athletes = await executor.query<AnalyticsAthlete>(
     `SELECT a.id, a.name, a.lifecycle_status
@@ -452,7 +469,7 @@ export async function getWorkspaceDisciplineAnalytics(
      ORDER BY lower(a.name), a.id`,
     [workspaceId, discipline.code],
   );
-  const results = await listNormalizedResults(
+  const results = await listNormalizedAthleteResults(
     workspaceId,
     discipline.code,
     athletes.rows.map((athlete) => athlete.id),

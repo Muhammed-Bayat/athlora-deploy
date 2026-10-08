@@ -3,10 +3,16 @@ import { request } from './client';
 interface GeminiTokenResponse {
   data: {
     token: string;
+    model: string;
   };
 }
 
-export async function createGeminiToken(): Promise<string> {
+export interface GeminiToken {
+  token: string;
+  model: string;
+}
+
+export async function createGeminiToken(): Promise<GeminiToken> {
   const response = await request<GeminiTokenResponse>(
     '/api/v1/ai/gemini-token',
     {
@@ -14,5 +20,5 @@ export async function createGeminiToken(): Promise<string> {
     },
   );
 
-  return response.data.token;
+  return response.data;
 }
