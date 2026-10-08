@@ -1,8 +1,21 @@
+<p align="center">
+  <img src="docs/static/img/logo-removebg.png" width="180" alt="Athlora logo" />
+</p>
+
 # Athlora
 
-[![Deployed site](https://img.shields.io/badge/site-live-4C9F38)](https://athlora-deploy.vercel.app)
-[![Documentation](https://img.shields.io/badge/docs-Docusaurus-0077B6)](https://athlora-deploy.pages.dev)
-[![API health](https://img.shields.io/badge/API-health-orange)](https://athlora-deploy.onrender.com/health)
+<p align="center">
+  <a href="https://athlora-deploy.vercel.app"><img alt="Deployed site" src="https://img.shields.io/badge/site-live-4C9F38" /></a>
+  <a href="https://athlora-deploy.pages.dev"><img alt="Documentation" src="https://img.shields.io/badge/docs-Docusaurus-0077B6" /></a>
+  <a href="https://athlora-deploy.onrender.com/health"><img alt="API health" src="https://img.shields.io/badge/API-health-orange" /></a>
+</p>
+
+<p align="center">
+  <img alt="Node.js 22+" src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" />
+  <img alt="Express 5" src="https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white" />
+  <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=20232A" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-13%2B-316192?logo=postgresql&logoColor=white" />
+</p>
 
 Run the whole athletics season from one place.
 
@@ -14,17 +27,24 @@ Run the whole athletics season from one place.
 
 ### Short Description
 
-Athlora is a web application for athletics coaches who need one place to manage athletes, plan training and competitions, and record results at the track. The shipped vertical slice supports 100m timing, live corrections, derived results, PBs/SBs, athlete statistics, weather, and a coach dashboard; the roadmap expands this into a full athletics-meet system.
+Athlora is a web application for athletics coaches who need one place to
+manage athletes, plan training and competitions, and record results at the
+track. The shipped vertical slice supports 100m timing, live corrections,
+derived results, PBs/SBs, athlete statistics, weather, and a coach dashboard;
+the roadmap expands this into a full athletics-meet system.
 
 ### System Requirements
 
 - Node.js 22 LTS recommended; Node.js 20 or later supported.
 - npm 10 or later.
-- PostgreSQL 13 or later for local API features. Docker Desktop is recommended for local PostgreSQL and required for the documented E2E setup.
+- PostgreSQL 13 or later for local API features. Docker Desktop is
+  recommended for local PostgreSQL and required for the documented E2E setup.
 - An Auth0 SPA/API configuration for authenticated application features.
 - Chromium, installed by Playwright, for E2E tests.
 
-Tested development environment: Linux, macOS, or Windows with a current Node.js LTS release. The frontend requires a modern Chromium-, Firefox-, or Safari-based browser.
+Tested development environment: Linux, macOS, or Windows with a current
+Node.js LTS release. The frontend requires a modern Chromium-, Firefox-, or
+Safari-based browser.
 
 ### Architecture
 
@@ -35,7 +55,12 @@ Tested development environment: Linux, macOS, or Windows with a current Node.js 
 /e2e        Playwright browser tests
 ```
 
-The frontend and backend are independently deployed services communicating through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned data; GraySky provides keyless current/daily weather through a ten-minute server cache, and Nominatim/OpenStreetMap provides opt-in venue lookup through server-side proxies. Weather requires no provider account, key, or environment variable.
+The frontend and backend are independently deployed services communicating
+through HTTP/JSON. Auth0 provides identity; PostgreSQL stores coach-owned
+data; GraySky provides keyless current/daily weather through a ten-minute
+server cache, and Nominatim/OpenStreetMap provides opt-in venue lookup
+through server-side proxies. Weather requires no provider account, key, or
+environment variable.
 
 ## Installation Guide
 
@@ -52,15 +77,24 @@ npm ci --prefix e2e
 
 ### 2. Configure the API
 
-Create `backend/.env` from the example and supply your PostgreSQL and Auth0 values:
+Create `backend/.env` from the example and supply your PostgreSQL and Auth0
+values:
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-At minimum, set `DATABASE_URL`, `AUTH0_DOMAIN`, and `AUTH0_AUDIENCE`. Password-ticket creation and permanent account deletion also require the Auth0 Management API client variables. Never commit `.env` files.
+At minimum, set `DATABASE_URL`, `AUTH0_DOMAIN`, and `AUTH0_AUDIENCE`.
+Password-ticket creation and permanent account deletion also require the
+Auth0 Management API client variables. Never commit `.env` files.
 
-Venue lookup uses the public Nominatim service. Set `NOMINATIM_USER_AGENT` to an identifiable product/contact string before deployment; the backend defaults to Nominatim's public endpoint, caches identical searches for five minutes, and spaces provider requests by at least one second. Search is optional: coaches can always enter a location and coordinates manually. Provider data is not called by unit tests; mock `/api/v1/venues/search` in browser tests.
+Venue lookup uses the public Nominatim service. Set
+`NOMINATIM_USER_AGENT` to an identifiable product/contact string before
+deployment; the backend defaults to Nominatim's public endpoint, caches
+identical searches for five minutes, and spaces provider requests by at
+least one second. Search is optional: coaches can always enter a location and
+coordinates manually. Provider data is not called by unit tests; mock
+`/api/v1/venues/search` in browser tests.
 
 Run the migrations and API:
 
@@ -79,13 +113,15 @@ Create a local frontend environment file:
 cp frontend/.env.example frontend/.env.local
 ```
 
-For local API development, set `VITE_API_BASE_URL=http://localhost:4000` in `frontend/.env.local`, then start Vite:
+For local API development, set `VITE_API_BASE_URL=http://localhost:4000` in
+`frontend/.env.local`, then start Vite:
 
 ```bash
 npm run dev --prefix frontend
 ```
 
-Open `http://localhost:5173`. Register this URL as an Auth0 callback URL, logout URL, and web origin before signing in.
+Open `http://localhost:5173`. Register this URL as an Auth0 callback URL,
+logout URL, and web origin before signing in.
 
 ## Usage Examples
 
@@ -105,9 +141,13 @@ Expected response:
 
 1. Sign in through Auth0 and let Athlora synchronize the local coach profile.
 2. Create athletes from **Athletes**.
-3. Create a 100m competition or training event from **Events**. Optionally search and select an OpenStreetMap venue, or enter its name/coordinates manually; detail shows a read-only map and external OpenStreetMap link.
-4. Use **Live Logger** to record finishes or incidents; correct or undo entries if needed.
-5. Review derived results, manual corrections, PB/SB information, athlete history, and the dashboard summary.
+3. Create a 100m competition or training event from **Events**. Optionally
+   search and select an OpenStreetMap venue, or enter its name/coordinates
+   manually; detail shows a read-only map and external OpenStreetMap link.
+4. Use **Live Logger** to record finishes or incidents; correct or undo
+   entries if needed.
+5. Review derived results, manual corrections, PB/SB information, athlete
+   history, and the dashboard summary.
 
 ### Run quality checks
 
@@ -129,7 +169,11 @@ node scripts/generate-coverage-report.mjs
 npm run build --prefix docs
 ```
 
-See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The expanded E2E suite covers 15+ spec files including workspace switching, role enforcement, athlete lifecycle, injuries, event helpers, realtime, reminders, public logger, fixture notifications, authorization boundaries, migration verification, accessibility deep audit, routing, and analytics.
+See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup.
+The expanded E2E suite covers 15+ spec files including workspace switching,
+role enforcement, athlete lifecycle, injuries, event helpers, realtime,
+reminders, public logger, fixture notifications, authorization boundaries,
+migration verification, accessibility deep audit, routing, and analytics.
 
 ## Services and Documentation
 
@@ -146,8 +190,56 @@ See [`e2e/README.md`](e2e/README.md) for the authenticated Playwright setup. The
 
 ## AI Usage
 
-The global Athlora assistant, discipline analytics, shared PDF reports, tests, and documentation updates for retired athlete-group functionality were generated and edited with OpenCode[openai/gpt-5.6-terra]; the same tool/model performed targeted code review. No separate AI planning tool was used for this update.
+The global Athlora assistant, discipline analytics, shared PDF reports,
+tests, and documentation updates for retired athlete-group functionality were
+generated and edited with OpenCode[openai/gpt-5.6-terra]; the same tool/model
+performed targeted code review. No separate AI planning tool was used for
+this update.
 
 ### AI Declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and fixture repair code generation and inline editing used opencode[gpt-5.6-sol]; AI code review was not used for these updates. GraySky migration code/test generation, inline editing, and documentation editing used OpenCode[openai/gpt-6-astra]. Independent club publication flags, public schedule endpoints, coach toggles, tests, and related documentation were generated and edited with opencode[mimo-v2.6-flash-free]. User dashboard preferences (migration, API, customization UI, saved views, tests, docs) and the e2e CI provisioning fix were generated and edited with opencode[mimo-v2.6-flash-free]. Club branding (migration, S3-compatible media storage, WCAG contrast validation, branding/media routes and tests, `ClubBadge` UI, branded surface wiring, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. Authenticated offline batch sync (body-owned batch route, idempotent receipts, single-flight chunked drain, receipt-aware toast, unit/integration/e2e tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. Athlete preferred disciplines and private measurable season goals (catalogue validation, migration, protected profile flow, UI, tests, and docs) and generic multi-discipline meet setup were generated and edited with OpenCode[gpt-5.6-terra]. Relay team support (migration `0034`, selection-aware derivation and official-entry API, roster edit, session live logger with offline enqueue, public session standings, athlete relay history without PB impact, tests, e2e, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The public club schedule experience (public schedule API `disciplines` projection, unauthenticated `/schedule` and `/schedule/:clubId` pages, landing/public-stats cross-links, unit and e2e tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. Event archive/unarchive (migration `0042_event_archive.sql`, archive/unarchive API routes with guards, console Archive/Unarchive controls, the Archived status filter and badges, removal of shared results from the event fixture panel, unit/RTL tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. No separate AI code-review tool was used for these updates. Per-athlete relay split capture (migration `0043_relay_leg_results.sql`, relay derivation, `relayMemberId` entry validation, per-leg official selection, `RELAY_RESULTS_INCOMPLETE` finalize gate, `relayLegs[]` projections, coach and public logger split inputs, final-only team totals in standings/CSV, event final-results leg lines, unit/integration/RTL/e2e tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]; no separate AI code-review tool was used for this update. The README header badge row (deployed site, documentation site, and API health buttons) was generated and edited with opencode[mimo-v2.6-flash-free].
+This document was created with the assistance of
+opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with
+the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and
+fixture repair code generation and inline editing used opencode[gpt-5.6-sol];
+AI code review was not used for these updates. GraySky migration code/test
+generation, inline editing, and documentation editing used
+OpenCode[openai/gpt-6-astra]. Independent club publication flags, public
+schedule endpoints, coach toggles, tests, and related documentation were
+generated and edited with opencode[mimo-v2.6-flash-free]. User dashboard
+preferences (migration, API, customization UI, saved views, tests, docs) and
+the e2e CI provisioning fix were generated and edited with
+opencode[mimo-v2.6-flash-free]. Club branding (migration, S3-compatible media
+storage, WCAG contrast validation, branding/media routes and tests,
+`ClubBadge` UI, branded surface wiring, and related documentation) was
+generated and edited with opencode[mimo-v2.6-flash-free]. Authenticated
+offline batch sync (body-owned batch route, idempotent receipts, single-flight
+chunked drain, receipt-aware toast, unit/integration/e2e tests, and related
+documentation) was generated and edited with
+opencode[mimo-v2.6-flash-free]. Athlete preferred disciplines and private
+measurable season goals (catalogue validation, migration, protected profile
+flow, UI, tests, and docs) and generic multi-discipline meet setup were
+generated and edited with OpenCode[gpt-5.6-terra]. Relay team support
+(migration `0034`, selection-aware derivation and official-entry API, roster
+edit, session live logger with offline enqueue, public session standings,
+athlete relay history without PB impact, tests, e2e, and related documentation)
+was generated and edited with opencode[mimo-v2.6-flash-free]. The public club
+schedule experience (public schedule API `disciplines` projection,
+unauthenticated `/schedule` and `/schedule/:clubId` pages, landing/public-stats
+cross-links, unit and e2e tests, and related documentation) was generated and
+edited with opencode[mimo-v2.6-flash-free]. Event archive/unarchive (migration
+`0042_event_archive.sql`, archive/unarchive API routes with guards, console
+Archive/Unarchive controls, the Archived status filter and badges, removal of
+shared results from the event fixture panel, unit/RTL tests, and related
+documentation) was generated and edited with
+opencode[mimo-v2.6-flash-free]. No separate AI code-review tool was used for
+these updates. Per-athlete relay split capture (migration
+`0043_relay_leg_results.sql`, relay derivation, `relayMemberId` entry
+validation, per-leg official selection, `RELAY_RESULTS_INCOMPLETE` finalize
+gate, `relayLegs[]` projections, coach and public logger split inputs,
+final-only team totals in standings/CSV, event final-results leg lines,
+unit/integration/RTL/e2e tests, and related documentation) was generated and
+edited with opencode[mimo-v2.6-flash-free]; no separate AI code-review tool
+was used for this update. The README header badge row (deployed site,
+documentation site, and API health buttons) was generated and edited with
+opencode[mimo-v2.6-flash-free].
