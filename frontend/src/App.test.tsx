@@ -143,7 +143,7 @@ describe('App', () => {
     expect(consoleRoot).toHaveAttribute('data-weather', 'night');
     expect(consoleRoot).toHaveAttribute('data-weather-enabled', 'true');
 
-    await user.click(screen.getByRole('button', { name: 'Weather FX' }));
+    await user.click(screen.getByRole('button', { name: 'Weather' }));
     expect(consoleRoot).not.toHaveAttribute('data-weather');
     expect(consoleRoot).toHaveAttribute('data-weather-enabled', 'false');
   });
