@@ -1196,13 +1196,16 @@
     min-width: 0;
     max-width: 100%;
     flex: 1 1 100%;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 6px;
   }
   .weatherReadout { display: none; }
-  .weatherToggle .weatherToggleLabel { display: none; }
-  .weatherToggle { padding: 4px 6px; height: 32px; }
+  .weatherToggle .weatherToggleLabel { display: inline; font-size: 10.5px; }
+  .weatherToggle,
+  .weatherMenu summary { height: 36px; padding: 4px 6px; }
+  .weatherMenu summary { letter-spacing: 0.04em; }
+  .weatherMenu { position: static; }
   .themeToggleIcon { display: none; }
   .weatherOrigin { width: 220px; overflow-x: clip; }
   .weatherOrigin .sun { right: -22px; }
