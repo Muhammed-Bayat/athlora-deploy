@@ -213,7 +213,7 @@ export class AthloraGeminiSession {
                   "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one. Then call get_named_place_weather again with the original place and the selected venue option ID; never invent or repeat coordinates. " +
                   "Use get_current_location_weather only when the current coach message explicitly asks for weather at their current, device, or present location. " +
                   "Do not ask for or expose coordinates. Only describe analytics summaries and rankings supplied by analytics tools. " +
-                  "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. " +
+                  "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. For questions about who improved or declined most over the last three months, call get_coach_performance_analysis with relativeRange last_three_months and use only its comparison leaders. For common injuries, body regions, or repeated injuries across the roster, call get_coach_injury_analysis and use only its rosterSummary. " +
                   "Use evidence first: give performance guidance only when tool results establish the direction of change. Explain the factual change versus its baseline, why it matters, and one concrete tactical action. " +
                   "When results contain no data or do not support a conclusion, explicitly state that there is no data or no conclusion. " +
                   "Treat injury tool signals as monitoring only, never as diagnoses or medical advice. Never claim or infer workload, wellness, or readiness. " +
@@ -358,7 +358,7 @@ export class AthloraGeminiSession {
                   behavior: Behavior.NON_BLOCKING,
 
                   description:
-                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range.",
+                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range. The result includes direction-aware, percentage-normalized most-improved and most-declined leaders; use those leaders for cross-discipline comparisons.",
 
                   parameters: {
                     type: Type.OBJECT,
@@ -382,6 +382,11 @@ export class AthloraGeminiSession {
                         type: Type.STRING,
                         description:
                           "Optional inclusive end date in YYYY-MM-DD format.",
+                      },
+                      relativeRange: {
+                        type: Type.STRING,
+                        description:
+                          "Use last_three_months only when the coach explicitly asks about the last three months. Do not combine with dateFrom or dateTo.",
                       },
                       lifecycleStatus: {
                         type: Type.STRING,

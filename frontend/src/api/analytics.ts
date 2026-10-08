@@ -186,6 +186,15 @@ export interface CoachPerformanceDisciplineAnalysis {
   history: CoachPerformanceResultPoint[];
 }
 
+export interface CoachPerformanceChangeLeader {
+  athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
+  discipline: AnalyticsDiscipline;
+  first: CoachPerformanceResultPoint;
+  latest: CoachPerformanceResultPoint;
+  improvement: number;
+  improvementPercent: number;
+}
+
 export interface CoachPerformanceAnalysis {
   selectedRange: CoachDateRange;
   lifecycleStatus: CoachLifecycleStatus;
@@ -193,6 +202,13 @@ export interface CoachPerformanceAnalysis {
     athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
     disciplines: CoachPerformanceDisciplineAnalysis[];
   }>;
+  comparison: {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.';
+    eligibleAthleteDisciplineCount: number;
+    mostImproved: CoachPerformanceChangeLeader | null;
+    mostDeclined: CoachPerformanceChangeLeader | null;
+    insufficientDataReason: string | null;
+  };
 }
 
 export interface CoachInjuryHistoryEntry {
@@ -227,6 +243,17 @@ export interface CoachInjuryAnalysis {
     warning: CoachInjuryWarning;
     history: CoachInjuryHistoryEntry[];
   }>;
+  rosterSummary: {
+    injuryRecordCount: number;
+    athletesWithRecordedInjuries: number;
+    mostCommonRecordedArea: { bodyRegion: CoachInjuryRegion; area: CoachInjuryArea; count: number } | null;
+    mostCommonBodyRegion: { bodyRegion: CoachInjuryRegion; count: number } | null;
+    athletesWithRepeatedInjuries: Array<{
+      athlete: { id: string; name: string; status: CoachAthleteLifecycleStatus };
+      repeatedInjuries: Array<{ bodyRegion: CoachInjuryRegion; area: CoachInjuryArea; side: CoachInjurySide; count: number }>;
+    }>;
+    insufficientDataReason: string | null;
+  };
 }
 
 export interface CoachRankingFactor<T> {

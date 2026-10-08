@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AthloraAssistantProvider } from './AthloraAssistantProvider';
 import { WorkspaceContext } from '../auth/WorkspaceContext';
+import { ApiError } from '../../api/client';
 
 const geminiApi = vi.hoisted(() => ({
   createToken: vi.fn(),
@@ -107,6 +108,13 @@ const coachPerformanceAnalysis = {
   selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
   lifecycleStatus: 'active',
   athletes: [{ athlete: { id: athlete.id, name: athlete.name, status: 'active' }, disciplines: [] }],
+  comparison: {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.' as const,
+    eligibleAthleteDisciplineCount: 1,
+    mostImproved: null,
+    mostDeclined: null,
+    insufficientDataReason: null,
+  },
 };
 const coachInjuryAnalysis = {
   selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
@@ -127,6 +135,14 @@ const coachInjuryAnalysis = {
       notes: 'private injury note',
     }],
   }],
+  rosterSummary: {
+    injuryRecordCount: 1,
+    athletesWithRecordedInjuries: 1,
+    mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 1 },
+    mostCommonBodyRegion: { bodyRegion: 'Leg', count: 1 },
+    athletesWithRepeatedInjuries: [],
+    insufficientDataReason: null,
+  },
 };
 const coachRankingsAnalysis = {
   discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
@@ -497,6 +513,28 @@ describe('AthloraAssistantProvider', () => {
     expect(screen.getByRole('button', { name: 'Generate coach performance PDF' })).toBeInTheDocument();
   });
 
+  it('resolves last_three_months deterministically before requesting performance change leaders', async () => {
+    renderAssistant();
+    await openAssistant();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00.000Z'));
+
+    const result = await callTool('get_coach_performance_analysis', { relativeRange: 'last_three_months' });
+
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenCalledWith({ dateFrom: '2026-07-08', dateTo: '2026-10-08' });
+    expect(result).toMatchObject({ data: { comparison: { eligibleAthleteDisciplineCount: 1 } } });
+  });
+
+  it('preserves analytics HTTP diagnostics and Gemini function-call IDs instead of reporting a generic outage', async () => {
+    renderAssistant();
+    await openAssistant();
+    analyticsApi.getCoachPerformanceAnalysis.mockRejectedValueOnce(new ApiError(503, 'DATABASE_UNAVAILABLE', 'Database unavailable', { requestId: 'request-123' }));
+
+    await expect(callTool('get_coach_performance_analysis')).rejects.toThrow(
+      'Coach performance analytics failed during the API request for Gemini function call tool-1: HTTP 503 (DATABASE_UNAVAILABLE). Request ID: request-123.',
+    );
+  });
+
   it('keeps injury monitoring results free of notes and describes the cached report as non-diagnostic', async () => {
     renderAssistant();
     await openAssistant();
@@ -506,6 +544,7 @@ describe('AthloraAssistantProvider', () => {
     expect(analyticsApi.getCoachInjuryAnalysis).toHaveBeenCalledWith({ athleteIds: [athlete.id], lifecycleStatus: 'active' });
     expect(JSON.stringify(result)).not.toContain('private injury note');
     expect(JSON.stringify(result)).not.toContain('"notes"');
+    expect(result).toMatchObject({ data: { rosterSummary: { mostCommonRecordedArea: { area: 'Knee' }, insufficientDataReason: null } } });
     expect(screen.getByText('Monitoring-only recorded injury indicators. This analysis is not a diagnosis or medical advice.')).toBeInTheDocument();
     expect(screen.queryByText('private injury note')).not.toBeInTheDocument();
     await expect(callTool('get_coach_injury_analysis', { discipline: '100m' })).rejects.toThrow('does not support a discipline filter');

@@ -147,6 +147,13 @@ describe('analytics routes', () => {
       selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
       lifecycleStatus: 'active',
       athletes: [],
+      comparison: {
+        methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.',
+        eligibleAthleteDisciplineCount: 0,
+        mostImproved: null,
+        mostDeclined: null,
+        insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+      },
     });
 
     const response = await request(app)
@@ -154,7 +161,10 @@ describe('analytics routes', () => {
       .set('Authorization', 'Bearer valid');
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({ selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' } });
+    expect(response.body.data).toMatchObject({
+      selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+      comparison: { eligibleAthleteDisciplineCount: 0 },
+    });
     expect(getCoachPerformanceAnalytics).toHaveBeenCalledWith(
       workspaceId,
       {
@@ -177,6 +187,14 @@ describe('analytics routes', () => {
         'No workload, readiness, attendance, treatment, or recovery data is available to these indicators.',
       ],
       athletes: [],
+      rosterSummary: {
+        injuryRecordCount: 0,
+        athletesWithRecordedInjuries: 0,
+        mostCommonRecordedArea: null,
+        mostCommonBodyRegion: null,
+        athletesWithRepeatedInjuries: [],
+        insufficientDataReason: 'No recorded injuries were found for the selected athletes and date range.',
+      },
     });
 
     const response = await request(app)
@@ -184,6 +202,7 @@ describe('analytics routes', () => {
       .set('Authorization', 'Bearer valid');
 
     expect(response.status).toBe(200);
+    expect(response.body.data.rosterSummary).toMatchObject({ injuryRecordCount: 0, insufficientDataReason: expect.any(String) });
     expect(getCoachInjuryAnalytics).toHaveBeenCalledWith(
       workspaceId,
       { dateRange: { dateFrom: null, dateTo: null }, lifecycleStatus: 'all' },
