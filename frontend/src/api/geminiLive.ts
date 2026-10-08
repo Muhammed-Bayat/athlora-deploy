@@ -1,4 +1,4 @@
-const GEMINI_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+const GEMINI_LIVE_MODEL = 'gemini-3.8-live';
 const GEMINI_OUTPUT_SAMPLE_RATE = '24000';
 const DEV = import.meta.env.DEV;
 

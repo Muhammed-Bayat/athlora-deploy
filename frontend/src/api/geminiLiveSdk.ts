@@ -13,9 +13,12 @@ const DEV = import.meta.env.DEV;
 const GEMINI_OUTPUT_SAMPLE_RATE = "24000";
 const GEMINI_SETUP_TIMEOUT_MS = 15_000;
 
-export const GEMINI_LIVE_DEFAULT_MODEL = "gemini-3.8-live-extended-thinking";
+// Standard Gemini 3.8 Live supports Athlora's non-blocking tool calls without
+// thinkingConfig. The token broker normally supplies this value.
+export const GEMINI_LIVE_DEFAULT_MODEL = "gemini-3.8-live";
 
-export const GEMINI_LIVE_ROLLBACK_MODEL = "gemini-3.1-flash-live-preview";
+export const GEMINI_LIVE_FALLBACK_MODEL = "gemini-3.1-flash-live-preview";
+export const GEMINI_LIVE_EXTENDED_THINKING_MODEL = "gemini-3.8-live-extended-thinking";
 
 function debugSession(event: string, details?: Record<string, unknown>): void {
   if (DEV) {
@@ -143,6 +146,7 @@ export class AthloraGeminiSession {
           apiVersion: "v1alpha",
         },
       });
+      const model = this.options.model ?? GEMINI_LIVE_DEFAULT_MODEL;
 
       debugSession("Gemini connecting");
 
@@ -167,7 +171,7 @@ export class AthloraGeminiSession {
         }, GEMINI_SETUP_TIMEOUT_MS);
 
         void ai.live.connect({
-        model: this.options.model ?? GEMINI_LIVE_DEFAULT_MODEL,
+        model,
 
         config: {
           responseModalities: [Modality.AUDIO],
@@ -176,9 +180,13 @@ export class AthloraGeminiSession {
 
           inputAudioTranscription: {},
 
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.MEDIUM,
-          },
+          ...(model === GEMINI_LIVE_DEFAULT_MODEL
+            ? {}
+            : {
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.MEDIUM,
+                },
+              }),
 
           speechConfig: {
             voiceConfig: {
@@ -659,7 +667,21 @@ export class AthloraGeminiSession {
 
           onmessage: (message: LiveServerMessage) => {
             if (generation === this.connectionGeneration) {
-              void this.handleMessage(message);
+              void this.handleMessage(message).catch((error: unknown) => {
+                const messageError =
+                  error instanceof Error
+                    ? error
+                    : new Error("Failed to process a Gemini Live message");
+
+                debugSession("Gemini message processing failed", {
+                  message: messageError.message,
+                });
+
+                this.cancelActiveToolCalls();
+                this.interactionInProgress = false;
+                this.options.onError?.(messageError);
+                this.rejectPendingTurn(messageError);
+              });
             }
           },
 
@@ -891,18 +913,28 @@ export class AthloraGeminiSession {
     const generation = this.connectionGeneration;
     const controllers: AbortController[] = [];
     let sleepRequested = false;
+    const requestStartedAt = Date.now();
+
+    debugSession("Gemini tool calls received", {
+      count: calls.length,
+      names: calls.map((call) => call.name ?? "unknown"),
+      idsPresent: calls.filter((call) => Boolean(call.id)).length,
+    });
 
     try {
       const functionResponses = await Promise.all(
         calls.map(async (call) => {
+          const callStartedAt = Date.now();
           const controller = new AbortController();
           controllers.push(controller);
           this.activeToolCalls.set(controller, call.id);
           this.options.onToolCallStart?.(call);
+          let succeeded = false;
 
           try {
             if (call.name === "sleep_assistant") {
               sleepRequested = true;
+              succeeded = true;
 
               return {
                 id: call.id,
@@ -921,6 +953,7 @@ export class AthloraGeminiSession {
               call,
               controller.signal,
             );
+            succeeded = true;
 
             return {
               id: call.id,
@@ -942,6 +975,12 @@ export class AthloraGeminiSession {
               },
             };
           } finally {
+            debugSession("Gemini tool call completed", {
+              name: call.name ?? "unknown",
+              idPresent: Boolean(call.id),
+              succeeded,
+              elapsedMs: Date.now() - callStartedAt,
+            });
             this.options.onToolCallEnd?.(call);
           }
         }),
@@ -956,8 +995,26 @@ export class AthloraGeminiSession {
         return;
       }
 
-      session.sendToolResponse({
-        functionResponses,
+      debugSession("Gemini tool responses ready", {
+        count: functionResponses.length,
+        elapsedMs: Date.now() - requestStartedAt,
+      });
+
+      try {
+        session.sendToolResponse({
+          functionResponses,
+        });
+      } catch (error) {
+        debugSession("Gemini tool response send failed", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          count: functionResponses.length,
+        });
+        throw error;
+      }
+
+      debugSession("Gemini tool responses sent", {
+        count: functionResponses.length,
+        elapsedMs: Date.now() - requestStartedAt,
       });
 
       if (sleepRequested) {

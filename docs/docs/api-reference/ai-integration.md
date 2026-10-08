@@ -19,13 +19,23 @@ The browser never receives the server API key. `POST /api/v1/ai/gemini-token` re
 
 ## Model Configuration
 
-The default model is `gemini-3.8-live-extended-thinking`. Live connections use:
+The default model is `gemini-3.8-live`. It does not support `thinkingConfig`,
+so the token broker and browser omit that setting for standard 3.8 Live.
+`GEMINI_LIVE_MODEL=rollback` selects the temporary
+`gemini-3.1-flash-live-preview` fallback, which continues to use:
 
 ```ts
 thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM }
 ```
 
-Set `GEMINI_LIVE_MODEL=rollback` in the backend environment to use the previous `gemini-3.1-flash-live-preview` model. A named supported model can also be supplied through `GEMINI_LIVE_MODEL`. The token broker and browser use the same returned model, so a browser cannot switch models independently.
+Initial Gemini 3.8 Live Extended Thinking probes returned a generic system error before emitting a client tool call with `@google/genai` 2.28.0, `ThinkingLevel.MEDIUM`, and one non-blocking function declaration. Blocking calls closed with `1007: BLOCKING function calls are not supported for this model.` A subsequent non-blocking probe completed successfully, so the original failure is treated as intermittent and remains under investigation. Set `GEMINI_LIVE_MODEL=extended-thinking` only to explicitly opt into `gemini-3.8-live-extended-thinking`. A named supported model can also be supplied through `GEMINI_LIVE_MODEL`. The token broker and browser use the same returned model, so a browser cannot switch models independently.
+
+`backend/scripts/gemini-live-tool-probe.mjs` is the credentialed, data-free
+reproduction. Run it with no arguments for standard 3.8 Live, or use
+`--model gemini-3.8-live-extended-thinking --thinking medium` to probe the
+Extended Thinking configuration. Add `--behavior blocking` to reproduce the
+unsupported blocking-call configuration. It logs only model/configuration
+outcomes and never audio or tool payloads.
 
 Before enabling a production key, an operator must confirm that its Gemini project has access to the selected model, sufficient quota, and the intended billing state. Athlora does not enable billing or paid services.
 

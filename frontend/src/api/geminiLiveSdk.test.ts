@@ -40,7 +40,8 @@ vi.mock("@google/genai", () => ({
 import {
   AthloraGeminiSession,
   GEMINI_LIVE_DEFAULT_MODEL,
-  GEMINI_LIVE_ROLLBACK_MODEL,
+  GEMINI_LIVE_EXTENDED_THINKING_MODEL,
+  GEMINI_LIVE_FALLBACK_MODEL,
 } from "./geminiLiveSdk";
 
 function createSession(overrides = {}) {
@@ -85,19 +86,22 @@ describe("AthloraGeminiSession", () => {
       expect(onConnected).toHaveBeenCalledOnce();
     });
 
-    it("sends the default model, thinking config, tools, and system prompt", async () => {
+    it("sends the default model without thinking config, tools, and system prompt", async () => {
       await createSession().connect();
 
       const config = liveConnect.mock.calls[0][0];
       expect(config.model).toBe(GEMINI_LIVE_DEFAULT_MODEL);
       expect(GEMINI_LIVE_DEFAULT_MODEL).toBe(
+        "gemini-3.8-live",
+      );
+      expect(GEMINI_LIVE_FALLBACK_MODEL).toBe(
+        "gemini-3.1-flash-live-preview",
+      );
+      expect(GEMINI_LIVE_EXTENDED_THINKING_MODEL).toBe(
         "gemini-3.8-live-extended-thinking",
       );
-      expect(GEMINI_LIVE_ROLLBACK_MODEL).toBe("gemini-3.1-flash-live-preview");
       expect(config.config.responseModalities).toEqual(["AUDIO"]);
-      expect(config.config.thinkingConfig).toEqual({
-        thinkingLevel: "MEDIUM",
-      });
+      expect(config.config.thinkingConfig).toBeUndefined();
       expect(config.config.speechConfig).toEqual({
         voiceConfig: {
           prebuiltVoiceConfig: {
@@ -158,12 +162,26 @@ describe("AthloraGeminiSession", () => {
       ).not.toContain("create_athlete");
     });
 
-    it("uses a caller-supplied model, including the exported rollback model", async () => {
-      await createSession({ model: GEMINI_LIVE_ROLLBACK_MODEL }).connect();
+    it("uses a caller-supplied extended-thinking model with its required thinking config", async () => {
+      await createSession({ model: GEMINI_LIVE_EXTENDED_THINKING_MODEL }).connect();
 
       expect(liveConnect.mock.calls[0][0].model).toBe(
-        GEMINI_LIVE_ROLLBACK_MODEL,
+        GEMINI_LIVE_EXTENDED_THINKING_MODEL,
       );
+      expect(liveConnect.mock.calls[0][0].config.thinkingConfig).toEqual({
+        thinkingLevel: "MEDIUM",
+      });
+    });
+
+    it("uses the caller-supplied Gemini 3.1 fallback with its required thinking config", async () => {
+      await createSession({ model: GEMINI_LIVE_FALLBACK_MODEL }).connect();
+
+      expect(liveConnect.mock.calls[0][0].model).toBe(
+        GEMINI_LIVE_FALLBACK_MODEL,
+      );
+      expect(liveConnect.mock.calls[0][0].config.thinkingConfig).toEqual({
+        thinkingLevel: "MEDIUM",
+      });
     });
 
     it("sets every function declaration to non-blocking", async () => {
@@ -608,6 +626,28 @@ describe("AthloraGeminiSession", () => {
             },
           ],
         }),
+      );
+    });
+
+    it("surfaces tool response send failures", async () => {
+      const onError = vi.fn();
+      const session = createSession({
+        onError,
+        onToolCall: vi.fn().mockResolvedValue({ ok: true }),
+      });
+      mockSession.sendToolResponse.mockImplementationOnce(() => {
+        throw new Error("tool response rejected");
+      });
+      await session.connect();
+
+      fireCallback("onmessage", {
+        toolCall: { functionCalls: [{ id: "c1", name: "search_athletes" }] },
+      });
+
+      await vi.waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(
+          expect.objectContaining({ message: "tool response rejected" }),
+        ),
       );
     });
 
