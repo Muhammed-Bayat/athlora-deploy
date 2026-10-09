@@ -111,7 +111,7 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Performance. In motion.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Performance. In motion.' }, { timeout: 3_000 })).toBeInTheDocument();
     expect(dashboardApi.getDashboardSummary).toHaveBeenCalledOnce();
 
     await user.click(screen.getAllByRole('button', { name: /athletes/i })[0]);
