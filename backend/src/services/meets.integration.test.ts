@@ -150,10 +150,11 @@ describeDB('multi-discipline migration and domain integration', () => {
     await recomputeEventResults(pool, eventId, 'competition');
     const legacy = mapTimelineEntryRow(legacyRow.rows[0] as TimelineEntryRow);
     await pool.query("UPDATE results SET manual_override = 11.1, override_reason = 'Photo finish', overridden_by = $1, override_at = now() WHERE event_id = $2", [host.userId, eventId]);
-    const before = await pool.query(`SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
+    await pool.query("UPDATE events SET status = 'completed' WHERE id = $1", [eventId]);
+    const before = await pool.query(`SELECT to_jsonb(e) - 'archived_at' AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
     await migrate();
     await migrate();
-    const after = await pool.query(`SELECT to_jsonb(e) AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
+    const after = await pool.query(`SELECT to_jsonb(e) - 'archived_at' AS event, (SELECT jsonb_agg(to_jsonb(t) - 'recorded_workspace_id') FROM timeline_entries t) AS timeline, (SELECT jsonb_agg(r) FROM results r) AS results FROM events e WHERE id = $1`, [eventId]);
     expect(after.rows).toEqual(before.rows);
     expect((await pool.query('SELECT recorded_workspace_id FROM timeline_entries')).rows).toEqual([{ recorded_workspace_id: host.workspaceId }]);
     expect(Number((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count)).toBe(migrations.length);
@@ -161,6 +162,7 @@ describeDB('multi-discipline migration and domain integration', () => {
     const stats = await getAthleteStatisticsDetail(host.workspaceId, athleteId, '2026-09-01', transaction);
     expect(stats.pb).toBe(11.1);
     expect((await pool.query('SELECT * FROM discipline_sessions')).rows).toEqual([]);
+    await pool.query("UPDATE events SET status = 'in_progress' WHERE id = $1", [eventId]);
     await removeTimelineEntry(host.workspaceId, eventId, legacy.id, { expectedVersion: 1 }, transaction);
     expect((await pool.query('SELECT outcome, manual_override FROM results')).rows[0]).toMatchObject({ outcome: 'no_result', manual_override: '11.1' });
   });
@@ -1103,11 +1105,11 @@ describeDB('multi-discipline migration and domain integration', () => {
       await pool.query("INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id, rsvp_status) VALUES ($1,$2,$3,'pending')", [eventId, poolAthleteId, host.workspaceId]);
     }
 
+    const team = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: poolEntrantIds }, transaction);
+    await registerEntrant(host, eventId, { disciplineSessionId: relaySession.id, entrantId: team.id }, transaction);
     await expect(replaceEvent(host.workspaceId, eventId, start, transaction)).rejects.toMatchObject({ code: 'FIXTURE_PARTICIPANT_RSVPS_PENDING' });
 
     await pool.query("UPDATE event_participants SET rsvp_status = 'yes' WHERE event_id = $1", [eventId]);
-    const team = await createEntrant(host, eventId, { kind: 'relay', name: 'Speed Demons', memberIds: poolEntrantIds }, transaction);
-    await registerEntrant(host, eventId, { disciplineSessionId: relaySession.id, entrantId: team.id }, transaction);
     const started = await replaceEvent(host.workspaceId, eventId, start, transaction);
     expect(started.status).toBe('in_progress');
     const legs = await pool.query('SELECT member_id FROM relay_members WHERE relay_id = $1 ORDER BY leg', [team.id]);

@@ -43,6 +43,8 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55432/athlora_coverage
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,10 +54,41 @@ jobs:
         run: npm ci --prefix frontend
       - name: Install backend dependencies
         run: npm ci --prefix backend
+      - name: Provision PostgreSQL
+        run: |
+          # Integration suites reset the schema, so coverage uses an isolated database.
+          if [ "$(id -u)" -eq 0 ]; then
+            SUDO=""
+          elif command -v sudo >/dev/null 2>&1; then
+            SUDO="sudo"
+          else
+            echo "Neither root nor sudo is available to install PostgreSQL." >&2
+            exit 1
+          fi
+          $SUDO apt-get update
+          $SUDO apt-get install -y postgresql libpq-dev
+          PG_BINDIR="$(pg_config --bindir)"
+          $SUDO install -d -o postgres -g postgres /tmp/athlora-postgres
+          run_as_postgres() {
+            if [ "$(id -u)" -eq 0 ]; then
+              if command -v runuser >/dev/null 2>&1; then
+                runuser -u postgres -- "$@"
+              else
+                su -s /bin/sh postgres -c "$(printf '%q ' "$@")"
+              fi
+            else
+              $SUDO -u postgres "$@"
+            fi
+          }
+          run_as_postgres "$PG_BINDIR/initdb" -D /tmp/athlora-postgres --auth-local=trust --auth-host=scram-sha-256
+          run_as_postgres "$PG_BINDIR/pg_ctl" -D /tmp/athlora-postgres -l /tmp/athlora-postgres.log -o "-p 55432 -h 127.0.0.1 -k /tmp" -w start
+          run_as_postgres "$PG_BINDIR/createdb" -h /tmp -p 55432 athlora_coverage
+          run_as_postgres "$PG_BINDIR/psql" -h /tmp -p 55432 -d postgres -c "ALTER USER postgres PASSWORD 'postgres'"
+          "$PG_BINDIR/pg_isready" -h 127.0.0.1 -p 55432 -U postgres -d athlora_coverage
       - name: Generate frontend coverage
         run: npm run test:coverage --prefix frontend
       - name: Generate backend coverage
-        run: npm run test:coverage --prefix backend
+        run: npm run test:coverage:ci --prefix backend
       - name: Generate quality report
         run: node scripts/generate-coverage-report.mjs
 
