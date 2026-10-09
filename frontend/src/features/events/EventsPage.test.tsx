@@ -243,7 +243,7 @@ async function openDetail(user: ReturnType<typeof userEvent.setup>, title = 'Cit
 async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement, label: string, option: string | RegExp) {
   const trigger = await within(scope).findByRole('button', { name: label });
   await user.click(trigger);
-  const menu = trigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+  const menu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${trigger.id}"]`);
   expect(menu).toBeInTheDocument();
   await user.click(within(menu!).getByRole('option', { name: option }));
   return trigger;
@@ -651,8 +651,8 @@ describe('EventsPage', () => {
 
     expect(minute).toBeDisabled();
     await user.click(hour);
-    const hourMenu = hour.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
-    const minuteMenu = minute.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const hourMenu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${hour.id}"]`);
+    const minuteMenu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${minute.id}"]`);
     expect(within(hourMenu!).getByRole('option', { name: '23' })).toBeInTheDocument();
     expect(minuteMenu).not.toBeInTheDocument();
     await user.click(within(hourMenu!).getByRole('option', { name: '18' }));
@@ -844,7 +844,7 @@ describe('EventsPage', () => {
     resolveParticipants({ data: [ariParticipant], meta: { count: 1 } });
     await waitFor(() => expect(candidate).toBeEnabled());
     await user.click(candidate);
-    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const menu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${candidate.id}"]`);
     expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
     expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });
@@ -959,7 +959,7 @@ describe('EventsPage', () => {
     expect(await within(detail).findAllByText('Archived')).toHaveLength(2);
     const candidate = within(detail).getByRole('button', { name: 'Assign an active athlete' });
     await user.click(candidate);
-    const menu = candidate.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const menu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${candidate.id}"]`);
     expect(within(menu!).queryByRole('option', { name: /Ari Runner/ })).not.toBeInTheDocument();
     expect(within(menu!).getByRole('option', { name: /Bea Sprinter/ })).toBeInTheDocument();
   });

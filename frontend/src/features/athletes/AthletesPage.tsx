@@ -459,7 +459,7 @@ export function AthletesPage({ onActiveCountChange, onOpenAthlete, onBackToRoste
             <div className={styles.formActions}>
               <Button variant="secondary" onClick={() => setArchiveTarget(null)} disabled={pendingId === archiveTarget.id}>Cancel</Button>
               <Button variant="danger" onClick={() => void confirmArchive()} disabled={pendingId === archiveTarget.id}>
-                {pendingId === archiveTarget.id ? 'Archiving...' : 'Archive athlete'}
+                Archive athlete
               </Button>
             </div>
           </div>

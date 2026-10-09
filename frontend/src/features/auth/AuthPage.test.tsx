@@ -212,7 +212,7 @@ describe('AuthPage', () => {
 
     const roleTrigger = await screen.findByRole('button', { name: 'Role for Assistant Sam' });
     await user.click(roleTrigger);
-    const roleMenu = roleTrigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const roleMenu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${roleTrigger.id}"]`);
     expect(roleMenu).toBeInTheDocument();
     await user.click(within(roleMenu!).getByRole('option', { name: 'Coach' }));
 

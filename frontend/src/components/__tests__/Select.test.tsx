@@ -50,4 +50,41 @@ describe('Select', () => {
     expect(menu).toHaveAttribute('data-placement', 'up');
     expect(menu.style.maxHeight).toBe('680px');
   });
+
+  it('renders the open menu in a body portal so page boxes cannot clip it', async () => {
+    const user = userEvent.setup();
+    render(<Select aria-label="Select club" options={[{ value: 'a', label: 'Club A' }]} value="" onChange={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'Select club' });
+    await user.click(trigger);
+
+    const listbox = screen.getByRole('listbox');
+    expect(trigger.parentElement?.contains(listbox)).toBe(false);
+    expect(document.body.contains(listbox)).toBe(true);
+  });
+
+  it('still selects an option when the menu is portaled outside the wrapper', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Select aria-label="Select club" options={[{ value: 'a', label: 'Club A' }]} value="" onChange={onChange} />);
+    await user.click(screen.getByRole('button', { name: 'Select club' }));
+
+    await user.click(screen.getByRole('option', { name: 'Club A' }));
+    expect(onChange).toHaveBeenCalled();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('closes the portaled menu when pressing outside the control', async () => {
+    const user = userEvent.setup();
+    render(
+      <div>
+        <Select aria-label="Select club" options={[{ value: 'a', label: 'Club A' }]} value="" onChange={vi.fn()} />
+        <button type="button">Elsewhere</button>
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Select club' }));
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
 });

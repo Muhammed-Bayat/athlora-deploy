@@ -246,7 +246,7 @@ describe('AthletesPage', () => {
     await user.type(within(dialog).getByLabelText('Athlete name'), '  Casey Quick  ');
     const gender = within(dialog).getByRole('button', { name: 'Gender category' });
     await user.click(gender);
-    const genderMenu = gender.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+    const genderMenu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${gender.id}"]`);
     expect(within(genderMenu!).getAllByRole('option')).toHaveLength(2);
     await user.click(within(genderMenu!).getByRole('option', { name: 'Female' }));
     await user.click(await within(dialog).findByRole('checkbox', { name: /100m/ }));
@@ -372,6 +372,25 @@ describe('AthletesPage', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Archive failed');
     expect(screen.getByRole('heading', { name: 'Ari Runner' })).toBeInTheDocument();
     expect(dialog).toBeInTheDocument();
+  });
+
+  it('keeps the confirmation buttons steady while an archive is in flight', async () => {
+    let finishArchive!: (value: Athlete) => void;
+    athleteApi.archiveAthlete.mockReturnValue(new Promise<Athlete>((resolve) => { finishArchive = resolve; }));
+    const user = userEvent.setup();
+    render(<AthletesPage />);
+    await screen.findByRole('heading', { name: 'Ari Runner' });
+    await user.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
+    const dialog = screen.getByRole('dialog', { name: 'Archive athlete' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Archive athlete' }));
+    await waitFor(() => expect(athleteApi.archiveAthlete).toHaveBeenCalledWith(ARI_ID));
+
+    expect(within(dialog).getByRole('button', { name: 'Archive athlete' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    finishArchive(athlete({ archivedAt: '2026-08-16T12:00:00.000Z', status: 'archived' }));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Ari Runner' })).not.toBeInTheDocument());
   });
 
   it('restores an archived athlete and reports mutation failures without losing the list', async () => {
