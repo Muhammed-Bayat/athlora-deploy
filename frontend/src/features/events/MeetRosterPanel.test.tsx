@@ -47,7 +47,7 @@ async function selectRelayPoolAthletes(user: ReturnType<typeof userEvent.setup>,
 async function selectThemedOption(user: ReturnType<typeof userEvent.setup>, label: string, option: string | RegExp) {
   const trigger = screen.getByRole('button', { name: label });
   await user.click(trigger);
-  const menu = trigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+  const menu = document.querySelector<HTMLElement>(`[role="listbox"][aria-labelledby="${trigger.id}"]`);
   expect(menu).toBeInTheDocument();
   await user.click(within(menu!).getByRole('option', { name: option }));
 }

@@ -66,7 +66,14 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   useEffect(() => {
     if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as HTMLElement;
+      if (rootRef.current?.contains(target)) return;
+      // The year Select portals its menu to document.body; keep it open when the
+      // press lands in a menu that belongs to a trigger inside this picker.
+      const listbox = target.closest<HTMLElement>('[role="listbox"]');
+      const labelledBy = listbox?.getAttribute('aria-labelledby');
+      if (labelledBy && rootRef.current?.contains(document.getElementById(labelledBy))) return;
+      setOpen(false);
     };
     document.addEventListener('pointerdown', closeOnOutsidePointer);
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);

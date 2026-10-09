@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, SelectHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './Select.module.css';
 import { useFloatingPosition } from './useFloatingPosition';
 
@@ -70,7 +71,10 @@ export function Select({
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      const insideWrapper = wrapperRef.current?.contains(target) ?? false;
+      const insideMenu = menuRef.current?.contains(target) ?? false;
+      if (!insideWrapper && !insideMenu) setOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -227,7 +231,7 @@ export function Select({
       >
         <span className={styles.triggerLabel}>{selectedLabel}</span>
       </button>
-      {open && <div
+      {open && createPortal(<div
         ref={menuRef}
         className={[styles.menu, styles.menuOpen].join(' ')}
         data-placement={placement}
@@ -280,7 +284,7 @@ export function Select({
             <p className={styles.empty} role="status">{emptyMessage}</p>
           )}
         </div>
-      </div>}
+      </div>, document.body)}
     </div>
   );
 }
