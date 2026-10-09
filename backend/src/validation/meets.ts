@@ -1,6 +1,6 @@
 import { ApiError } from '../middleware/errors.js';
 import { ENTRY_TYPES, EVENT_STATUSES, INCIDENT_TYPES } from '../types/domain.js';
-import type { EntrantCreateInput, EntrantUpdateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionSelectionInput, SessionStateInput, SessionTarget } from '../types/meets.js';
+import type { BulkRosterAddInput, EntrantCreateInput, EntrantUpdateInput, SessionCreateInput, SessionEntryInput, SessionEntryReplacement, SessionOverrideInput, SessionSelectionInput, SessionStateInput, SessionTarget } from '../types/meets.js';
 import { isCanonicalUuid } from './primitives.js';
 import { parseVerticalConfig } from './verticalMeets.js';
 
@@ -35,6 +35,14 @@ export function parseVersion(value: unknown): number {
 export function parseSessionTarget(value: unknown): SessionTarget {
   const body = object(value, ['disciplineSessionId', 'entrantId']);
   return { disciplineSessionId: uuid(body.disciplineSessionId, 'disciplineSessionId'), entrantId: uuid(body.entrantId, 'entrantId') };
+}
+
+export function parseBulkRosterAdd(value: unknown): BulkRosterAddInput {
+  const body = object(value, ['athleteIds']);
+  if (!Array.isArray(body.athleteIds) || body.athleteIds.length === 0 || body.athleteIds.length > 100) invalid('athleteIds');
+  const athleteIds = body.athleteIds.map((id) => uuid(id, 'athleteIds'));
+  if (new Set(athleteIds).size !== athleteIds.length) invalid('athleteIds');
+  return { athleteIds };
 }
 
 export function parseSessionCreate(value: unknown): SessionCreateInput {

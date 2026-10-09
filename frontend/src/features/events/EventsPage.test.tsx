@@ -586,11 +586,9 @@ describe('EventsPage', () => {
       latitude: null,
       longitude: null,
       status: 'scheduled',
+      sessions: [{ disciplineDefinitionId: 'track-100', label: '100m' }],
     }));
-    await waitFor(() => expect(meetsApi.createSession).toHaveBeenCalledWith(created.id, {
-      disciplineDefinitionId: 'track-100',
-      label: '100m',
-    }));
+    expect(meetsApi.createSession).not.toHaveBeenCalled();
     expect(await screen.findByRole('button', { name: /County 100m/ })).toBeInTheDocument();
   });
 
@@ -614,11 +612,10 @@ describe('EventsPage', () => {
     await user.type(within(dialog).getByLabelText('Starting height (m)'), '1.5');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 
-    await waitFor(() => expect(meetsApi.createSession).toHaveBeenCalledWith(created.id, {
-      disciplineDefinitionId: 'vertical-high-jump',
-      label: 'High jump',
-      verticalConfig: { startingHeight: 1.5, heightIncrement: 0.02, failureLimit: 3, round: 'final' },
-    }));
+    await waitFor(() => expect(eventApi.createEvent).toHaveBeenCalledWith(expect.objectContaining({
+      sessions: [{ disciplineDefinitionId: 'vertical-high-jump', label: 'High jump', verticalConfig: { startingHeight: 1.5, heightIncrement: 0.02, failureLimit: 3, round: 'final' } }],
+    })));
+    expect(meetsApi.createSession).not.toHaveBeenCalled();
     expect(await screen.findByRole('button', { name: /County Jumps Meet/ })).toBeInTheDocument();
   });
 

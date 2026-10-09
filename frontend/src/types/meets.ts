@@ -34,6 +34,11 @@ export interface SessionRegistration extends SessionTarget {
   id: string; eventId: string; workspaceId: string; withdrawnAt: string | null;
   withdrawnBy: string | null; createdBy: string; createdAt: string;
 }
+export interface BulkRosterAddResult {
+  participants: Array<{ eventId: string; athleteId: string; rsvpStatus: RsvpStatus }>;
+  entrants: MeetEntrant[];
+  registrations: SessionRegistration[];
+}
 // Type alias (not interface) so the shape stays assignable to the offline
 // queue's Record<string, unknown> payload boundary.
 export type SessionEntryInput = {

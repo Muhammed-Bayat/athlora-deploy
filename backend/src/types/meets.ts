@@ -76,6 +76,12 @@ export interface SessionRegistration extends SessionTarget {
   createdBy: string;
   createdAt: string;
 }
+export interface BulkRosterAddInput { athleteIds: string[] }
+export interface BulkRosterAddResult {
+  participants: Array<{ eventId: string; athleteId: string; rsvpStatus: RsvpStatus }>;
+  entrants: MeetEntrant[];
+  registrations: SessionRegistration[];
+}
 
 export interface SessionEntry extends SessionTarget {
   verticalState?: VerticalState | null;

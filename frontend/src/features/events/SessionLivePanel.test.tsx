@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
   replaceSessionEntry: vi.fn(),
   selectSessionResultEntry: vi.fn(),
   changeSessionState: vi.fn(),
+  queueSessionFinalization: vi.fn(),
+  getSessionFinalizationStatus: vi.fn(),
 }));
 const offline = vi.hoisted(() => ({
   isOnline: true,
@@ -92,6 +94,10 @@ describe('SessionLivePanel', () => {
       sessionVersion += 1;
       return {};
     });
+    api.queueSessionFinalization.mockResolvedValue({
+      id: 'job-1', eventId: 'event-1', sessionId: 'session-1', status: 'pending', attempts: 0, errorMessage: null,
+    });
+    api.getSessionFinalizationStatus.mockResolvedValue({ data: null });
     api.listDisciplines.mockResolvedValue({ data: [{
       id: 'relay-100',
       code: '4x100m',
@@ -205,10 +211,8 @@ describe('SessionLivePanel', () => {
     expect(screen.getByRole('table')).toHaveTextContent('Speed Demons');
     expect(screen.getByRole('table')).toHaveTextContent('Ari Runner → Bea Dash');
     await user.click(screen.getByRole('button', { name: 'Finalize session' }));
-    expect(await screen.findByRole('heading', { name: 'Standings (final)' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Make official' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Reopen session' }));
-    expect(await screen.findByRole('heading', { name: 'Standings (reopened — provisional)' })).toBeInTheDocument();
+    expect(api.queueSessionFinalization).toHaveBeenCalledWith('event-1', 'session-1', 2);
+    expect(await screen.findByText('Calculating final results')).toBeInTheDocument();
   });
 
   it('lists relay legs in standings and defers the team total until results are final', async () => {
@@ -252,10 +256,8 @@ describe('SessionLivePanel', () => {
     expect(table).toHaveTextContent('—');
 
     await user.click(screen.getByRole('button', { name: 'Finalize session' }));
-    expect(await screen.findByRole('heading', { name: 'Standings (final)' })).toBeInTheDocument();
-    const finalTable = screen.getByRole('table');
-    expect(finalTable).toHaveTextContent('62.40 s');
-    expect(finalTable).toHaveTextContent('Ari Runner 62.40 PB SB · Bea Dash awaiting selection');
+    expect(api.queueSessionFinalization).toHaveBeenCalledWith('event-1', 'session-1', 1);
+    expect(await screen.findByText('Calculating final results')).toBeInTheDocument();
   });
 
   it('queues an offline attempt instead of calling the API', async () => {
@@ -381,10 +383,10 @@ describe('SessionLivePanel', () => {
     expect(within(foreignRow).queryByRole('button', { name: 'Clear official selection' })).not.toBeInTheDocument();
   });
 
-  it('renders nothing for a legacy 100m event', () => {
+  it('renders nothing for a legacy 100m event', async () => {
     const legacy: AthleticsEvent = { ...event, discipline: '100m' };
     const { container } = render(<SessionLivePanel event={legacy} canOperate isCoach />);
-    expect(container).toBeEmptyDOMElement();
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
   it('lets coaches select an official measured mark', async () => {
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'long-jump', kind: 'field', unit: 'metres', precision: 2, presentation: { label: 'Long Jump' }, defaultRules: { aggregation: 'best', entrantType: 'individual' } }] });

@@ -14,6 +14,23 @@ export function createApp() {
   app.use(helmet());
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
+  if (process.env.REQUEST_TIMING_LOG === 'true') {
+    app.use((req, res, next) => {
+      const startedAt = process.hrtime.bigint();
+      res.on('finish', () => {
+        const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        const contentLength = res.getHeader('content-length');
+        console.info(JSON.stringify({
+          type: 'request_timing',
+          route: req.originalUrl,
+          status: res.statusCode,
+          durationMs: Number(durationMs.toFixed(2)),
+          responseBytes: typeof contentLength === 'string' || typeof contentLength === 'number' ? Number(contentLength) : null,
+        }));
+      });
+      next();
+    });
+  }
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

@@ -39,6 +39,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [cacheFreshness, setCacheFreshness] = useState<number | null>(null);
   const [offlineDesignation, setOfflineDesignation] = useState<OfflineLoggerDesignation | null>(null);
   const [registrations, setRegistrations] = useState<{ sessionId: string; rows: SessionRegistration[] }>({ sessionId: '', rows: [] });
+  const [finalization, setFinalization] = useState<meets.SessionFinalizationJob | null>(null);
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -53,6 +54,20 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const vertical = definition?.kind === 'vertical';
   const relay = definition?.defaultRules.entrantType === 'relay';
   const selectable = definition?.defaultRules.aggregation === 'timed' || definition?.defaultRules.aggregation === 'best';
+
+  useEffect(() => {
+    if (!sessionId) return;
+    let active = true;
+    const refresh = async () => {
+      const response = await meets.getSessionFinalizationStatus(event.id, sessionId);
+      if (!active) return;
+      setFinalization(response.data);
+      if (response.data?.status === 'completed') setReloadKey((key) => key + 1);
+    };
+    void refresh().catch(() => undefined);
+    const timer = window.setInterval(() => void refresh().catch(() => undefined), 3_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [event.id, sessionId]);
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
   const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
   const registeredEntrantIds = new Set(sessionRegistrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId));
@@ -255,7 +270,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   });
 
   const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
-  const completeSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'completed', session!.version));
+  const completeSession = () => run(async () => {
+    const job = await meets.queueSessionFinalization(event.id, sessionId, session!.version);
+    setFinalization(job);
+  });
 
   const recoveryActions = (offline.queueActions ?? []).map((action) => {
     const targetEntrant = action.target?.entrantId ? entrants.find((entrant) => entrant.id === action.target?.entrantId) : null;
@@ -403,6 +421,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       {session && definition && (
         <div className={styles.sessionPanel} role="tabpanel" id={`live-session-${session.id}-panel`} aria-labelledby={`live-session-${session.id}-tab`} tabIndex={0}>
           <p>{definition.presentation.label}: {session.status} — {session.resultState ?? 'provisional'}</p>
+          {finalization?.status === 'pending' || finalization?.status === 'running' ? <p role="status">Calculating final results</p> : null}
+          {finalization?.status === 'completed' ? <p role="status">Final results ready</p> : null}
+          {finalization?.status === 'failed' ? <p role="alert">Finalization failed: {finalization.errorMessage ?? 'Correct entries and try again.'}</p> : null}
           {canFinalize && session.status === 'scheduled' && event.status === 'in_progress' && (
             <Button onClick={() => void startSession()} disabled={busy}>Start session</Button>
           )}

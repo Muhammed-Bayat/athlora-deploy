@@ -1,22 +1,33 @@
 import { request } from './client';
 import type { ApiList, EventStatus } from '../types';
-import type { DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetEntrant, SessionEntry, SessionEntryInput, SessionOverrideInput, SessionRegistration, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets';
+import type { BulkRosterAddResult, DisciplineDefinition, DisciplineSession, EntrantCreateInput, EntrantUpdateInput, EventFinalResult, MeetEntrant, SessionEntry, SessionEntryInput, SessionOverrideInput, SessionRegistration, SessionResult, SessionSelectionInput, SessionStatistics, SessionTarget } from '../types/meets';
 
 const eventPath = (eventId: string) => `/api/v1/events/${encodeURIComponent(eventId)}`;
 const sessionPath = (eventId: string, sessionId: string) => `${eventPath(eventId)}/sessions/${encodeURIComponent(sessionId)}`;
 const targetPath = (eventId: string, target: SessionTarget) => `${sessionPath(eventId, target.disciplineSessionId)}/entrants/${encodeURIComponent(target.entrantId)}`;
+let disciplineCatalogue: Promise<ApiList<DisciplineDefinition>> | null = null;
 async function mutate<T>(path: string, method: string, body: unknown): Promise<T> {
   return (await request<{ data: T }>(path, { method, body: JSON.stringify(body) })).data;
 }
-export const listDisciplines = () => request<ApiList<DisciplineDefinition>>('/api/v1/disciplines');
+export const listDisciplines = () => {
+  disciplineCatalogue ??= request<ApiList<DisciplineDefinition>>('/api/v1/disciplines').catch((error: unknown) => {
+    disciplineCatalogue = null;
+    throw error;
+  });
+  return disciplineCatalogue;
+};
 export const listSessions = (eventId: string) => request<ApiList<DisciplineSession>>(`${eventPath(eventId)}/sessions`);
 export const createSession = (eventId: string, body: { disciplineDefinitionId: string; label: string; verticalConfig?: import('../types/meets').VerticalConfig }) => mutate<DisciplineSession>(`${eventPath(eventId)}/sessions`, 'POST', body);
 export const changeSessionState = (eventId: string, sessionId: string, status: EventStatus, expectedVersion: number) => mutate<DisciplineSession>(sessionPath(eventId, sessionId), 'PATCH', { status, expectedVersion });
+export interface SessionFinalizationJob { id: string; eventId: string; sessionId: string; status: 'pending' | 'running' | 'completed' | 'failed'; attempts: number; errorMessage: string | null }
+export const queueSessionFinalization = (eventId: string, sessionId: string, expectedVersion: number) => mutate<SessionFinalizationJob>(`${sessionPath(eventId, sessionId)}/finalization`, 'POST', { expectedVersion });
+export const getSessionFinalizationStatus = (eventId: string, sessionId: string) => request<{ data: SessionFinalizationJob | null }>(`${sessionPath(eventId, sessionId)}/finalization`);
 export const listEntrants = (eventId: string) => request<ApiList<MeetEntrant>>(`${eventPath(eventId)}/entrants`);
 export const listEventFinalResults = (eventId: string) => request<ApiList<EventFinalResult>>(`${eventPath(eventId)}/final-results`);
 export const createEntrant = (eventId: string, body: EntrantCreateInput) => mutate<MeetEntrant>(`${eventPath(eventId)}/entrants`, 'POST', body);
 export const updateEntrant = (eventId: string, entrantId: string, body: EntrantUpdateInput) => mutate<MeetEntrant>(`${eventPath(eventId)}/entrants/${encodeURIComponent(entrantId)}`, 'PATCH', body);
 export const listRegistrations = (eventId: string, sessionId: string) => request<ApiList<SessionRegistration>>(`${sessionPath(eventId, sessionId)}/entrants`);
+export const bulkAddRoster = (eventId: string, sessionId: string, athleteIds: string[]) => mutate<BulkRosterAddResult>(`${sessionPath(eventId, sessionId)}/roster/bulk`, 'POST', { athleteIds });
 export const registerEntrant = (eventId: string, target: SessionTarget) => mutate<SessionRegistration>(targetPath(eventId, target), 'POST', {});
 export const withdrawEntrant = (eventId: string, target: SessionTarget) => request<void>(targetPath(eventId, target), { method: 'DELETE' });
 export const listSessionEntries = (eventId: string, sessionId: string, entrantId?: string) => request<ApiList<SessionEntry>>(`${sessionPath(eventId, sessionId)}/entries${entrantId ? `?entrantId=${encodeURIComponent(entrantId)}` : ''}`);

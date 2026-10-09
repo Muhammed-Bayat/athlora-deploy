@@ -167,6 +167,8 @@ function EventTimePicker({ value, disabled, invalid, describedBy, onChange }: {
   </div>;
 }
 
+// Exported for lifecycle tests without coupling them to the page component.
+// eslint-disable-next-line react-refresh/only-export-components
 export function replacement(event: AthleticsEvent, status: EventStatus): EventMutationPayload {
   return {
     type: event.type,
@@ -181,6 +183,7 @@ export function replacement(event: AthleticsEvent, status: EventStatus): EventMu
   };
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'NETWORK_ERROR') return 'Could not reach Athlora. Check your connection and try again.';
@@ -210,10 +213,12 @@ function validationErrors(error: unknown): FieldErrors {
   return fields;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formattedStatus(status: EventListStatus): string {
   return status.replace('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formattedType(type: EventType): string {
   return type === 'competition' ? 'Competition' : 'Training';
 }
@@ -226,6 +231,7 @@ function formattedAthleteStatus(status: Athlete['status']): string {
   return status[0].toUpperCase() + status.slice(1);
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formattedDate(date: string, long = false): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -948,12 +954,20 @@ export function EventsPage({ onUpcomingCountChange, onOpenEvent, today = localTo
   const pending = editorBusy;
 
   const saveEditor = async (payload: EventMutationPayload, sessionDefinitions: SessionDefinitionSelection[] = []) => {
-    const event = editor === 'new' ? await createEvent(payload) : await updateEvent(editor!.id, payload);
+    const definitions = payload.discipline === null && editor === 'new' ? (await listDisciplines()).data : [];
+    const mutation = editor === 'new' && payload.discipline === null
+      ? { ...payload, sessions: sessionDefinitions.map((selection) => ({
+        disciplineDefinitionId: selection.definitionId,
+        label: definitions.find((definition) => definition.id === selection.definitionId)?.presentation.label ?? 'Catalogue session',
+        ...(selection.verticalConfig ? { verticalConfig: selection.verticalConfig } : {}),
+      })) }
+      : payload;
+    const event = editor === 'new' ? await createEvent(mutation) : await updateEvent(editor!.id, mutation);
     if (payload.discipline === null) {
-      const existing = editor === 'new' ? [] : (await listSessions(event.id)).data.map((session) => session.disciplineDefinitionId);
-      const definitions = (await listDisciplines()).data;
+      const existing = editor === 'new' ? sessionDefinitions.map((item) => item.definitionId) : (await listSessions(event.id)).data.map((session) => session.disciplineDefinitionId);
+      const allDefinitions = definitions.length ? definitions : (await listDisciplines()).data;
       for (const selection of sessionDefinitions.filter((item) => !existing.includes(item.definitionId))) {
-        const label = definitions.find((definition) => definition.id === selection.definitionId)?.presentation.label ?? 'Catalogue session';
+        const label = allDefinitions.find((definition) => definition.id === selection.definitionId)?.presentation.label ?? 'Catalogue session';
         await createSession(event.id, { disciplineDefinitionId: selection.definitionId, label, ...(selection.verticalConfig ? { verticalConfig: selection.verticalConfig } : {}) });
       }
     }

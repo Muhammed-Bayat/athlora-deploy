@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent, RsvpStatus } from '../../types';
 import { MeetRosterPanel } from './MeetRosterPanel';
 
-const api = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), createEntrant: vi.fn(), updateEntrant: vi.fn(), registerEntrant: vi.fn(), withdrawEntrant: vi.fn(), changeSessionState: vi.fn() }));
+const api = vi.hoisted(() => ({ listDisciplines: vi.fn(), listSessions: vi.fn(), listEntrants: vi.fn(), listRegistrations: vi.fn(), createEntrant: vi.fn(), updateEntrant: vi.fn(), registerEntrant: vi.fn(), withdrawEntrant: vi.fn(), bulkAddRoster: vi.fn(), changeSessionState: vi.fn(), queueSessionFinalization: vi.fn() }));
 const athletes = vi.hoisted(() => ({ listAthletes: vi.fn() }));
 const participants = vi.hoisted(() => ({ listEventParticipants: vi.fn(), addEventParticipant: vi.fn(), updateEventParticipant: vi.fn() }));
 const fixturesApi = vi.hoisted(() => ({ listGuestFixtureParticipants: vi.fn(), addGuestFixtureParticipant: vi.fn(), updateGuestFixtureParticipant: vi.fn() }));

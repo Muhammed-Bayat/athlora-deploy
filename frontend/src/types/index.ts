@@ -382,6 +382,7 @@ export interface EventMutationPayload {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  sessions?: Array<{ disciplineDefinitionId: string; label: string; verticalConfig?: import('./meets').VerticalConfig }>;
 }
 
 export interface EventListFilters {
