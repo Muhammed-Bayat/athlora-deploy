@@ -281,6 +281,23 @@ describe('SessionLivePanel', () => {
     expect(api.createSessionEntry).not.toHaveBeenCalled();
   });
 
+  it('keeps finalized sessions read-only and lets a coach reopen them', async () => {
+    sessionStatus = 'completed';
+    resultState = 'final';
+    const user = userEvent.setup();
+    render(<SessionLivePanel event={event} canOperate isCoach />);
+
+    expect(await screen.findByRole('button', { name: 'Reopen session' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Record' })[0]).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Finalize session' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Reopen session' }));
+
+    await waitFor(() => expect(api.changeSessionState).toHaveBeenCalledWith('event-1', 'session-1', 'in_progress', 1));
+    expect(await screen.findByRole('button', { name: 'Finalize session' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Relay splits for Ari Runner (leg 1)')).not.toBeDisabled();
+  });
+
   it('hides athletes who are not attending from the logging list', async () => {
     const user = userEvent.setup();
     api.listDisciplines.mockResolvedValue({ data: [{ id: 'track-200', code: '200m', kind: 'track', unit: 'seconds', precision: 2, presentation: { label: '200m' }, defaultRules: { aggregation: 'timed', entrantType: 'individual' } }] });

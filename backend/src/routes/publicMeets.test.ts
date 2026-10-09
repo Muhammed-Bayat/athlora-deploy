@@ -65,6 +65,17 @@ describe('public meet routes', () => {
     expect(services.resolvePublicMeetActor).toHaveBeenCalledWith('public-session', EVENT_ID);
   });
 
+  it('returns just one discipline session for targeted logger refreshes', async () => {
+    const response = await request(app)
+      .get(`/api/v1/public/logger/events/${EVENT_ID}/discipline-sessions/${SESSION_ID}`)
+      .set('X-Public-Logger-Session', 'public-session');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ id: SESSION_ID, entrantIds: [ENTRANT_ID], entries: [], results: [] });
+    expect(services.listDisciplines).not.toHaveBeenCalled();
+    expect(services.listEntrants).not.toHaveBeenCalled();
+  });
+
   it('normalizes direct public session writes and keeps their target scoped to the selected entrant', async () => {
     const response = await request(app)
       .post(`/api/v1/public/logger/events/${EVENT_ID}/discipline-sessions/${SESSION_ID}/entrants/${ENTRANT_ID}/entries`)

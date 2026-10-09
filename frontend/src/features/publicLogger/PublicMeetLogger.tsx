@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createPublicMeetLoggerEntry,
+  getPublicMeetLoggerSession,
   getPublicMeetLoggerSnapshot,
   removePublicMeetLoggerEntry,
 } from '../../api/publicLoggers';
@@ -88,6 +89,19 @@ export function PublicMeetLogger({
     }
   }, [event.id, sessionToken]);
 
+  const loadSession = useCallback(async (nextSessionId = sessionId) => {
+    if (!nextSessionId) return;
+    const fresh = await getPublicMeetLoggerSession(sessionToken, event.id, nextSessionId);
+    if (!fresh) {
+      await load();
+      return;
+    }
+    setSnapshot((current) => current ? {
+      ...current,
+      sessions: current.sessions.map((item) => item.id === fresh.id ? fresh : item),
+    } : current);
+  }, [event.id, load, sessionId, sessionToken]);
+
   useEffect(() => {
     void load().catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : 'Unable to load this meet logger.');
@@ -95,12 +109,12 @@ export function PublicMeetLogger({
   }, [load]);
 
   useEffect(() => {
-    if (!offlineSync.isOnline) return;
+    if (!offlineSync.isOnline || !sessionId) return;
     const timer = window.setInterval(() => {
-      void load().catch(() => undefined);
+      void loadSession().catch(() => undefined);
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [load, offlineSync.isOnline]);
+  }, [loadSession, offlineSync.isOnline, sessionId]);
 
   const definitions = snapshot?.disciplines ?? [];
   const sessions = snapshot?.sessions ?? [];
@@ -158,6 +172,7 @@ export function PublicMeetLogger({
     setValues({});
     setFouls({});
     setHeights({});
+    void loadSession(nextSessionId).catch((reason: unknown) => showError(reason, 'Unable to load this discipline session.'));
     if (focus) window.requestAnimationFrame(() => sessionTabRefs.current.get(nextSessionId)?.focus());
   };
 
@@ -167,12 +182,13 @@ export function PublicMeetLogger({
     if (next) selectSession(next.id, true);
   };
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async <T,>(action: () => Promise<T>, refreshAfter = true): Promise<T | undefined> => {
     setBusy(true);
     setError(null);
     try {
-      await action();
-      if (offlineSync.isOnline) await load();
+      const value = await action();
+      if (offlineSync.isOnline && refreshAfter) void loadSession().catch(() => undefined);
+      return value;
     } catch (reason) {
       showError(reason, 'Unable to save this entry.');
     } finally {
@@ -183,8 +199,19 @@ export function PublicMeetLogger({
   const targetFor = (entrantId: string): SessionTarget => ({ disciplineSessionId: sessionId, entrantId });
 
   const submitEntry = async (target: SessionTarget, payload: SessionEntryInput) => {
-    if (!offlineSync.isOnline) await offlineSync.enqueue({ target, actionType: 'create_entry', payload: { ...payload } });
-    else await createPublicMeetLoggerEntry(sessionToken, event.id, target, payload);
+    if (!offlineSync.isOnline) {
+      await offlineSync.enqueue({ target, actionType: 'create_entry', payload: { ...payload } });
+      return null;
+    }
+    return createPublicMeetLoggerEntry(sessionToken, event.id, target, payload);
+  };
+
+  const addEntry = (entry: PublicSessionEntry) => {
+    setSnapshot((current) => current ? {
+      ...current,
+      sessions: current.sessions.map((item) => item.id === sessionId ? { ...item, entries: [...item.entries, entry] } : item),
+    } : current);
+    void loadSession().catch(() => undefined);
   };
 
   const splitKey = (entrantId: string, relayMemberId?: string | null) => (relayMemberId ? `${entrantId}:${relayMemberId}` : entrantId);
@@ -197,7 +224,7 @@ export function PublicMeetLogger({
       setError(`Enter a valid ${definition.unit === 'seconds' ? 'time' : 'measurement'} before recording.`);
       return;
     }
-    await submitEntry(targetFor(entrantId), {
+    const entry = await submitEntry(targetFor(entrantId), {
       entryType: 'attempt', value: numeric, unit: definition.unit,
       isFoul: relay ? false : (fouls[entrantId] ?? false),
       incidentType: null, noteText: null, deviceId: null,
@@ -205,15 +232,16 @@ export function PublicMeetLogger({
     });
     setValues((prev) => ({ ...prev, [splitKey(entrantId, relayMemberId)]: '' }));
     if (!relay) setFouls((prev) => ({ ...prev, [entrantId]: false }));
-  });
+    return entry;
+  }, false).then((entry) => { if (entry) addEntry(entry); });
 
   const logIncident = (entrantId: string, incidentType: IncidentType) => run(async () => {
     if (!sessionId || !entrantId) return;
-    await submitEntry(targetFor(entrantId), {
+    return submitEntry(targetFor(entrantId), {
       entryType: 'penalty', value: null, unit: null, isFoul: false,
       incidentType, noteText: null, deviceId: null,
     });
-  });
+  }, false).then((entry) => { if (entry) addEntry(entry); });
 
   const logVerticalAttempt = (entrantId: string, verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
     if (!sessionId || !entrantId || !definition) return;
@@ -223,11 +251,11 @@ export function PublicMeetLogger({
       setError('Enter a valid height before recording.');
       return;
     }
-    await submitEntry(targetFor(entrantId), {
+    return submitEntry(targetFor(entrantId), {
       entryType: 'attempt', value: numeric, unit: definition.unit, verticalState,
       isFoul: false, incidentType: null, noteText: null, deviceId: null,
     });
-  });
+  }, false).then((entry) => { if (entry) addEntry(entry); });
 
   const undoEntry = (entrantId: string, entry: PublicSessionEntry) => run(async () => {
     if (!sessionId) return;
@@ -235,6 +263,11 @@ export function PublicMeetLogger({
     const payload = { expectedVersion: entry.version };
     if (!offlineSync.isOnline) await offlineSync.enqueue({ target, actionType: 'undo_entry', payload, entryId: entry.id, expectedVersion: entry.version });
     else await removePublicMeetLoggerEntry(sessionToken, event.id, target, entry.id, payload);
+    return true;
+  }, false).then((completed) => {
+    if (!completed) return;
+    setSnapshot((current) => current ? { ...current, sessions: current.sessions.map((item) => item.id === sessionId ? { ...item, entries: item.entries.filter((candidate) => candidate.id !== entry.id) } : item) } : current);
+    void loadSession().catch(() => undefined);
   });
 
   if (!snapshot) {

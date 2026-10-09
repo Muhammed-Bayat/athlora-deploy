@@ -43,6 +43,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
   const baseSnapshotRef = useRef<{ eventId: string; definitions: DisciplineDefinition[]; sessions: DisciplineSession[]; entrants: MeetEntrant[] } | null>(null);
+  const sessionDataCacheRef = useRef(new Map<string, { entries: SessionEntry[]; results: SessionResult[]; registrations: SessionRegistration[] }>());
+  const registrationCacheRef = useRef(new Map<string, SessionRegistration[]>());
+  const completedFinalizationRef = useRef<string | null>(null);
+  const refreshBaseRef = useRef(false);
 
   const timedSessions = sortDisciplines(
     sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId)),
@@ -50,7 +54,8 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   );
   const session = sessions.find((item) => item.id === sessionId);
   const definition = definitions.find((item) => item.id === session?.disciplineDefinitionId);
-  const live = canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
+  const finalizing = finalization?.status === 'pending' || finalization?.status === 'running';
+  const live = !finalizing && canOperate && session?.status === 'in_progress' && (event.status === 'in_progress' || (isCoach && session.resultState === 'reopened' && event.status === 'completed'));
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
   const relay = definition?.defaultRules.entrantType === 'relay';
@@ -63,7 +68,11 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       const response = await meets.getSessionFinalizationStatus(event.id, sessionId);
       if (!active) return;
       setFinalization(response.data);
-      if (response.data?.status === 'completed') setReloadKey((key) => key + 1);
+      if (response.data?.status === 'completed' && completedFinalizationRef.current !== response.data.id) {
+        completedFinalizationRef.current = response.data.id;
+        refreshBaseRef.current = true;
+        setReloadKey((key) => key + 1);
+      }
     };
     void refresh().catch(() => undefined);
     const timer = window.setInterval(() => void refresh().catch(() => undefined), 3_000);
@@ -102,6 +111,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
         setDefinitions(base.definitions);
         setSessions(base.sessions);
         setEntrants(base.entrants);
+        // Registration lists are small and let a new tab show its assigned athletes immediately.
+        void Promise.all(base.sessions.map(async (item) => [item.id, (await meets.listRegistrations(event.id, item.id)).data] as const))
+          .then((registrations) => registrations.forEach(([id, rows]) => registrationCacheRef.current.set(id, rows)))
+          .catch(() => undefined);
       }
       if (sessionId) {
         const [history, board, registrationList] = await Promise.all([
@@ -110,8 +123,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           meets.listRegistrations(event.id, sessionId),
         ]);
         setRegistrations({ sessionId, rows: registrationList.data });
+        registrationCacheRef.current.set(sessionId, registrationList.data);
         setEntries(history.data);
         setResults(board.data);
+        sessionDataCacheRef.current.set(sessionId, { entries: history.data, results: board.data, registrations: registrationList.data });
         void cacheSession(currentUser?.id ?? 'anonymous', activeWorkspace.id, event.id, sessionId, {
           definitions: base.definitions,
           sessions: base.sessions,
@@ -145,7 +160,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   }, [activeWorkspace.id, currentUser?.id, event.id, sessionId]);
 
   useEffect(() => {
-    void reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load session logging'));
+    const refreshBase = refreshBaseRef.current;
+    refreshBaseRef.current = false;
+    void reload(refreshBase).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load session logging'));
   }, [reload, event.status, reloadKey]);
 
   useEffect(() => {
@@ -174,7 +191,17 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   }, [sessionId, timedSessions]);
 
   const selectSession = (nextSessionId: string, focus = false) => {
+    const cached = sessionDataCacheRef.current.get(nextSessionId);
     setSessionId(nextSessionId);
+    if (cached) {
+      setEntries(cached.entries);
+      setResults(cached.results);
+      setRegistrations({ sessionId: nextSessionId, rows: cached.registrations });
+    } else {
+      setEntries([]);
+      setResults([]);
+      setRegistrations({ sessionId: nextSessionId, rows: registrationCacheRef.current.get(nextSessionId) ?? [] });
+    }
     setValues({});
     setFouls({});
     setHeights({});
@@ -187,13 +214,14 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     if (next) selectSession(next.id, true);
   };
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async <T,>(action: () => Promise<T>, refreshAfter = true): Promise<T | undefined> => {
     setBusy(true);
     setError('');
     try {
-      await action();
+      const value = await action();
       await offline.refreshQueueStatus(event.id);
-      await reload(true);
+      if (refreshAfter) void reload().catch(() => undefined);
+      return value;
     } catch (reason) {
       if (offline.isOnline) setError(reason instanceof Error ? reason.message : 'Unable to save entry');
     } finally {
@@ -218,9 +246,14 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     };
     const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueCreateEntry(event.id, activeWorkspace.id, target, payload);
-    if (!queued) await meets.createSessionEntry(event.id, target, payload);
+    const entry = queued ? null : await meets.createSessionEntry(event.id, target, payload);
     setValues((prev) => ({ ...prev, [splitKey(entrantId, relayMemberId)]: '' }));
     if (!relay) setFouls((prev) => ({ ...prev, [entrantId]: false }));
+    return entry;
+  }, false).then((entry) => {
+    if (!entry) return;
+    setEntries((current) => [...current, entry]);
+    void reload().catch(() => undefined);
   });
 
   const logIncident = (entrantId: string, incidentType: IncidentType) => run(async () => {
@@ -236,14 +269,22 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     };
     const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueCreateEntry(event.id, activeWorkspace.id, target, payload);
-    if (!queued) await meets.createSessionEntry(event.id, target, payload);
+    return queued ? null : meets.createSessionEntry(event.id, target, payload);
+  }, false).then((entry) => {
+    if (!entry) return;
+    setEntries((current) => [...current, entry]);
+    void reload().catch(() => undefined);
   });
 
   const selectOfficial = (entrantId: string, entryId: string | null, relayMemberId: string | null = null) => run(async () => {
     const result = results.find((row) => row.entrantId === entrantId);
     if (!sessionId || !result) return;
-    await meets.selectSessionResultEntry(event.id, { disciplineSessionId: sessionId, entrantId },
+    return meets.selectSessionResultEntry(event.id, { disciplineSessionId: sessionId, entrantId },
       { entryId, expectedVersion: result.version, ...(relayMemberId ? { relayMemberId } : {}) });
+  }, false).then((updated) => {
+    if (!updated) return;
+    setResults((current) => current.map((result) => result.entrantId === updated.entrantId ? updated : result));
+    void reload().catch(() => undefined);
   });
 
   const undoEntry = (entrantId: string, entry: SessionEntry) => run(async () => {
@@ -251,6 +292,11 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const target = { disciplineSessionId: sessionId, entrantId };
     const queued = await offline.enqueueUndoEntry(event.id, activeWorkspace.id, target, entry.id, entry.version);
     if (!queued) await meets.undoSessionEntry(event.id, target, entry.id, entry.version);
+    return true;
+  }, false).then((completed) => {
+    if (!completed) return;
+    setEntries((current) => current.filter((item) => item.id !== entry.id));
+    void reload().catch(() => undefined);
   });
 
   const logVerticalAttempt = (entrantId: string, verticalState: 'clearance' | 'failure' | 'pass') => run(async () => {
@@ -258,7 +304,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     const height = heights[entrantId] ?? String(session?.verticalConfig?.startingHeight ?? '');
     if (height === '') return;
     const target = { disciplineSessionId: sessionId, entrantId };
-    await meets.createSessionEntry(event.id, target, {
+    return meets.createSessionEntry(event.id, target, {
       entryType: 'attempt',
       value: Number(height),
       unit: definition.unit,
@@ -268,6 +314,10 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       noteText: null,
       deviceId: null,
     });
+  }, false).then((entry) => {
+    if (!entry) return;
+    setEntries((current) => [...current, entry]);
+    void reload().catch(() => undefined);
   });
 
   const voidEntry = (entrantId: string, entry: SessionEntry) => run(async () => {
@@ -285,9 +335,19 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     });
   });
 
-  const startSession = () => run(() => meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version));
+  const startSession = () => run(async () => {
+    const updated = await meets.changeSessionState(event.id, sessionId, 'in_progress', session!.version);
+    const nextSessions = updated.id ? null : (await meets.listSessions(event.id)).data;
+    const nextSession = updated.id ? updated : nextSessions!.find((item) => item.id === sessionId)!;
+    setSessions((current) => nextSessions ?? current.map((item) => item.id === nextSession.id ? nextSession : item));
+    if (baseSnapshotRef.current) {
+      baseSnapshotRef.current = { ...baseSnapshotRef.current, sessions: nextSessions ?? baseSnapshotRef.current.sessions.map((item) => item.id === nextSession.id ? nextSession : item) };
+    }
+    setFinalization(null);
+  });
   const completeSession = () => run(async () => {
     const job = await meets.queueSessionFinalization(event.id, sessionId, session!.version);
+    if (job.status === 'pending' || job.status === 'running') completedFinalizationRef.current = null;
     setFinalization(job);
   });
 
@@ -444,7 +504,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
             <Button onClick={() => void startSession()} disabled={busy}>Start session</Button>
           )}
           {canFinalize && session.status === 'in_progress' && (
-            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || !offline.isOnline || offline.queueStatus.pending > 0}>{vertical ? 'Make results official' : 'Finalize session'}</Button>
+            <Button variant="secondary" onClick={() => void completeSession()} disabled={busy || finalizing || !offline.isOnline || offline.queueStatus.pending > 0}>{vertical ? 'Make results official' : 'Finalize session'}</Button>
           )}
           {canFinalize && session.status === 'completed' && event.status !== 'cancelled' && <Button onClick={() => void startSession()} disabled={busy || !offline.isOnline}>Reopen session</Button>}
           {vertical && session.verticalConfig && (

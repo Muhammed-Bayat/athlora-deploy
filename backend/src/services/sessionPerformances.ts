@@ -30,6 +30,8 @@ async function loggingTarget(db: DbExecutor, actor: MeetActor, eventId: string, 
   const session = await getSession(db, eventId, target.disciplineSessionId);
   const entrant = await registration(db, actor, access, eventId, target, true);
   if ((access.event.status !== 'in_progress' && !(access.event.status === 'completed' && session.resultState === 'reopened' && 'userId' in actor && actor.role === 'coach' && !access.helper)) || session.status !== 'in_progress' || session.resultState === 'final') meetConflict('SESSION_NOT_IN_PROGRESS', 'Event and discipline session must be in progress, or reopened by a coach');
+  const finalization = await db.query("SELECT 1 FROM session_finalization_jobs WHERE session_id = $1 AND status IN ('pending', 'running')", [target.disciplineSessionId]);
+  if (finalization.rows[0]) meetConflict('SESSION_FINALIZATION_PENDING', 'Wait for session finalization to finish or fail');
   const definition = await getDefinition(db, session.disciplineDefinitionId);
   return { access, session, entrant, definition };
 }
@@ -379,6 +381,8 @@ export async function selectSessionResultEntry(actor: MeetActor, eventId: string
     const session = await getSession(db, eventId, target.disciplineSessionId);
     const definition = await getDefinition(db, session.disciplineDefinitionId);
     if (session.status !== 'in_progress' || session.resultState === 'final' || access.event.status === 'cancelled') meetConflict('SESSION_NOT_IN_PROGRESS', 'Reopen the session before selecting results');
+    const finalization = await db.query("SELECT 1 FROM session_finalization_jobs WHERE session_id = $1 AND status IN ('pending', 'running')", [target.disciplineSessionId]);
+    if (finalization.rows[0]) meetConflict('SESSION_FINALIZATION_PENDING', 'Wait for session finalization to finish or fail');
     if (definition.defaultRules.aggregation === 'vertical') meetConflict('DERIVED_RESULT_ONLY', 'Vertical results are derived from the full attempt sequence');
     const entrant = await registration(db, actor, access, eventId, target, true);
     if (!canOfficializeEntrant(actor, entrant.workspace_id)) {

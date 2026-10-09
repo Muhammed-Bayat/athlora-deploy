@@ -17,30 +17,58 @@ function publicEntry(entry: SessionEntry, canEdit: boolean, canUndo: boolean) {
     canEdit, canUndo };
 }
 
+async function publicSession(actor: Awaited<ReturnType<typeof resolvePublicMeetActor>>, eventId: string, session: Awaited<ReturnType<typeof listSessions>>[number]) {
+  const [results, registrations, entries] = await Promise.all([
+    listSessionResults(actor, eventId, session.id),
+    listRegistrations(actor, eventId, session.id),
+    listSessionEntries(actor, eventId, session.id),
+  ]);
+  return {
+    id: session.id,
+    label: session.label,
+    disciplineDefinitionId: session.disciplineDefinitionId,
+    status: session.status,
+    resultState: session.resultState,
+    version: session.version,
+    verticalConfig: session.verticalConfig,
+    results: results.map((result) => ({ entrantId: result.entrantId, value: result.effectiveResult, outcome: result.effectiveOutcome, placing: result.placing, vertical: result.vertical, selectedEntryId: result.selectedEntryId, relayLegs: result.relayLegs ?? null })),
+    entrantIds: registrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
+    entries: entries.map((entry) => publicEntry(entry, entry.canEdit === true, entry.canUndo === true)),
+  };
+}
+
 const snapshot: RequestHandler = async (req, res, next) => {
   try {
     const eventId = String(req.params.eventId);
     const token = req.header('X-Public-Logger-Session');
     if (!token) throw new ApiError(401, 'PUBLIC_LOGGER_SESSION_INVALID', 'Public logger access is unavailable');
     const actor = await resolvePublicMeetActor(token, eventId);
-    const sessions = await listSessions(actor, eventId);
-    const entrants = await listEntrants(actor, eventId);
+    const [sessions, entrants, disciplines] = await Promise.all([listSessions(actor, eventId), listEntrants(actor, eventId), listDisciplines()]);
     const safeEntrants = await Promise.all(entrants.map(async (entrant) => ({
       id: entrant.id, name: entrant.name, kind: entrant.kind,
       workspaceName: entrant.workspaceName ?? null,
       clubName: entrant.clubName ?? null,
       attending: entrant.kind === 'relay' || !entrant.athleteId || entrant.rsvpStatus === 'yes',
-      members: entrant.kind === 'relay' ? await listSafeRelayMembers(eventId, entrant.id) : [],
+      // listEntrants already includes the safe member projection, avoiding one query per relay.
+      members: entrant.kind === 'relay' ? entrant.members ?? await listSafeRelayMembers(eventId, entrant.id) : [],
     })));
-    res.json({ data: { disciplines: await listDisciplines(),
+    res.json({ data: { disciplines,
       entrants: safeEntrants,
-      sessions: await Promise.all(sessions.map(async ({ id, label, disciplineDefinitionId, status, resultState, version, verticalConfig }) => ({
-        id, label, disciplineDefinitionId, status, resultState, version, verticalConfig,
-        results: (await listSessionResults(actor, eventId, id)).map(r => ({ entrantId: r.entrantId, value: r.effectiveResult, outcome: r.effectiveOutcome, placing: r.placing, vertical: r.vertical, selectedEntryId: r.selectedEntryId, relayLegs: r.relayLegs ?? null })),
-        entrantIds: (await listRegistrations(actor, eventId, id)).filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId),
-        entries: (await listSessionEntries(actor, eventId, id)).map((entry) => publicEntry(entry, entry.canEdit === true, entry.canUndo === true)),
-      }))),
+      sessions: await Promise.all(sessions.map((session) => publicSession(actor, eventId, session))),
     } });
+  } catch (error) { next(error); }
+};
+
+const sessionSnapshot: RequestHandler = async (req, res, next) => {
+  try {
+    const eventId = String(req.params.eventId);
+    const sessionId = String(req.params.disciplineSessionId);
+    const token = req.header('X-Public-Logger-Session');
+    if (!token) throw new ApiError(401, 'PUBLIC_LOGGER_SESSION_INVALID', 'Public logger access is unavailable');
+    const actor = await resolvePublicMeetActor(token, eventId);
+    const session = (await listSessions(actor, eventId)).find((item) => item.id === sessionId);
+    if (!session) throw new ApiError(404, 'NOT_FOUND', 'Discipline session not found');
+    res.json({ data: await publicSession(actor, eventId, session) });
   } catch (error) { next(error); }
 };
 
@@ -74,6 +102,7 @@ function publicEntryInput<T extends SessionEntryInput>(input: T): T {
 
 const router = Router();
 router.get('/events/:eventId/discipline-sessions', snapshot);
+router.get('/events/:eventId/discipline-sessions/:disciplineSessionId', sessionSnapshot);
 const entries = '/events/:eventId/discipline-sessions/:disciplineSessionId/entrants/:entrantId/entries';
 router.post(entries, mutation('create'));
 router.put(`${entries}/:entryId`, mutation('replace'));

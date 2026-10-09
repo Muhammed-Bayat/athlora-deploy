@@ -35,9 +35,10 @@ export async function queueSessionFinalization(actor: MeetActor, eventId: string
     const result = await db.query(
       `INSERT INTO session_finalization_jobs (event_id, session_id, workspace_id, requested_by, expected_version)
        VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (session_id) DO UPDATE SET status = 'pending', expected_version = EXCLUDED.expected_version,
-         requested_by = EXCLUDED.requested_by, error_message = NULL, updated_at = now()
-       WHERE session_finalization_jobs.status = 'failed'
+        ON CONFLICT (session_id) DO UPDATE SET status = 'pending', expected_version = EXCLUDED.expected_version,
+          requested_by = EXCLUDED.requested_by, error_message = NULL, started_at = NULL, completed_at = NULL,
+          attempts = 0, updated_at = now()
+        WHERE session_finalization_jobs.status IN ('failed', 'completed')
        RETURNING *`,
       [eventId, sessionId, access.event.workspace_id, actor.userId, expectedVersion],
     );

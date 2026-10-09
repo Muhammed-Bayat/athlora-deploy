@@ -185,6 +185,19 @@ describe('PublicMeetLogger', () => {
     expect(screen.getAllByText('Casey Guest')).toHaveLength(1);
   });
 
+  it('keeps finalized public sessions read-only', async () => {
+    vi.mocked(publicLoggerApi.getPublicMeetLoggerSnapshot).mockResolvedValue({
+      ...snapshot,
+      sessions: snapshot.sessions.map((item) => item.id === FIELD_SESSION_ID ? { ...item, status: 'completed', resultState: 'final' } : item),
+    });
+    const user = userEvent.setup();
+    render(<PublicMeetLogger event={{ id: EVENT_ID, title: 'City Combined Meet', status: 'in_progress', discipline: null }} sessionToken="public-session" offlineSync={offlineSync()} />);
+
+    await user.click(await screen.findByRole('tab', { name: /Long Jump Final/ }));
+    expect(screen.getByRole('button', { name: 'Record' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
   it('shows an own incident entry and lets the official undo it', async () => {
     const incidentSnapshot: PublicMeetLoggerSnapshot = {
       ...snapshot,
