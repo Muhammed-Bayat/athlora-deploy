@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import * as meets from '../../api/meets';
 import { listAthletes } from '../../api/athletes';
 import { addEventParticipant, listEventParticipants, updateEventParticipant } from '../../api/participants';
@@ -44,38 +44,50 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
-  const reloadRequestRef = useRef(0);
+  const baseRequestRef = useRef(0);
+  const registrationRequestRef = useRef(0);
   const selected = sessions.find((session) => session.id === sessionId);
   const definition = definitions.find((item) => item.id === selected?.disciplineDefinitionId);
   const relaySession = definition?.defaultRules.entrantType === 'relay';
   const canAddToRoster = isCoach && event.status === 'scheduled' && selected?.status === 'scheduled';
   const canUpdateRsvp = isCoach && event.status !== 'cancelled' && Boolean(selected) && !['completed', 'cancelled'].includes(selected?.status ?? 'cancelled');
 
-  const reload = useCallback(async () => {
-    const request = ++reloadRequestRef.current;
+  const loadBase = useCallback(async () => {
+    const request = ++baseRequestRef.current;
     const [catalogue, nextSessions, nextEntrants, roster, eventParticipants] = await Promise.all([
       meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id), listAthletes({ status: 'active' }), isGuest ? listGuestFixtureParticipants(event.id) : listEventParticipants(event.id),
     ]);
-    if (request !== reloadRequestRef.current) return;
+    if (request !== baseRequestRef.current) return;
     setDefinitions(catalogue.data);
     setSessions(sortDisciplines(nextSessions.data, (session) => catalogue.data.find((item) => item.id === session.disciplineDefinitionId)?.code ?? session.disciplineDefinitionId));
     setEntrants(nextEntrants.data);
     setAthletes(roster.data);
     setParticipants(eventParticipants.data);
-    if (!sessionId) {
+  }, [event.id, isGuest]);
+
+  const loadRegistrations = useCallback(async (nextSessionId = sessionId) => {
+    if (!nextSessionId) {
       setRegistrations([]);
       return;
     }
-    const nextRegistrations = await meets.listRegistrations(event.id, sessionId);
-    if (request === reloadRequestRef.current) setRegistrations(nextRegistrations.data);
-  }, [event.id, isGuest, sessionId]);
+    const request = ++registrationRequestRef.current;
+    const nextRegistrations = await meets.listRegistrations(event.id, nextSessionId);
+    if (request === registrationRequestRef.current) setRegistrations(nextRegistrations.data);
+  }, [event.id, sessionId]);
 
-  useEffect(() => { void reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load the event roster')); }, [reload]);
+  const reload = useCallback(async () => {
+    await loadBase();
+    await loadRegistrations();
+  }, [loadBase, loadRegistrations]);
+
+  useEffect(() => { void loadBase().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load the event roster')); }, [loadBase]);
 
   useEffect(() => {
     if (sessions.some((session) => session.id === sessionId)) return;
     setSessionId(sessions[0]?.id ?? '');
   }, [sessionId, sessions]);
+
+  useEffect(() => { void loadRegistrations().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to load the session roster')); }, [loadRegistrations]);
 
   const run = async (action: () => Promise<void>, reloadAfter = true) => {
     setBusy(true);
@@ -104,34 +116,38 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
     if (next) selectSession(next.id, true);
   };
 
-  const participantFor = (entrant: MeetEntrant) => entrant.athleteId ? participants.find((participant) => participant.athleteId === entrant.athleteId) : undefined;
+  const entrantById = useMemo(() => new Map(entrants.map((entrant) => [entrant.id, entrant])), [entrants]);
+  const entrantByAthleteId = useMemo(() => new Map(entrants.flatMap((entrant) => entrant.athleteId ? [[entrant.athleteId, entrant] as const] : [])), [entrants]);
+  const athleteById = useMemo(() => new Map(athletes.map((athlete) => [athlete.id, athlete])), [athletes]);
+  const participantByAthleteId = useMemo(() => new Map(participants.map((participant) => [participant.athleteId, participant])), [participants]);
+  const participantFor = (entrant: MeetEntrant) => entrant.athleteId ? participantByAthleteId.get(entrant.athleteId) : undefined;
   const rsvpFor = (entrant: MeetEntrant | undefined): RsvpStatus | null => entrant?.athleteId ? participantFor(entrant)?.rsvpStatus ?? 'pending' : null;
   const ownsEntrant = (entrant: MeetEntrant) => entrant.workspaceId === activeWorkspaceId;
   const activeRegistrations = registrations.filter((registration) => {
-    const entrant = entrants.find((item) => item.id === registration.entrantId);
+    const entrant = entrantById.get(registration.entrantId);
     return !registration.withdrawnAt && Boolean(entrant && ownsEntrant(entrant));
   });
   const visibleRegistrations = activeRegistrations.filter((registration) => {
     if (relaySession || rsvpFilter === 'all') return true;
-    const entrant = entrants.find((item) => item.id === registration.entrantId);
+    const entrant = entrantById.get(registration.entrantId);
     return rsvpFor(entrant) === rsvpFilter;
   });
   const rsvpCounts = activeRegistrations.reduce<Record<RsvpStatus, number>>((counts, registration) => {
-    const entrant = entrants.find((item) => item.id === registration.entrantId);
+    const entrant = entrantById.get(registration.entrantId);
     const rsvpStatus = rsvpFor(entrant);
     return rsvpStatus ? { ...counts, [rsvpStatus]: counts[rsvpStatus] + 1 } : counts;
   }, { pending: 0, yes: 0, no: 0, maybe: 0 });
   const registeredEntrantIds = new Set(activeRegistrations.map((registration) => registration.entrantId));
   const athleteMatchesSession = (athlete: Athlete | undefined) => Boolean(athlete && selected?.disciplineDefinitionId && athlete.preferredDisciplineIds.includes(selected.disciplineDefinitionId));
   const availableAthletes = athletes.filter((athlete) => {
-    const entrant = entrants.find((item) => item.athleteId === athlete.id);
+    const entrant = entrantByAthleteId.get(athlete.id);
     return athleteMatchesSession(athlete) && (relaySession ? !entrant : !entrant || !registeredEntrantIds.has(entrant.id));
   });
-  const athleteEntrants = entrants.filter((entrant) => entrant.kind === 'athlete' && ownsEntrant(entrant) && athleteMatchesSession(athletes.find((athlete) => athlete.id === entrant.athleteId)));
+  const athleteEntrants = entrants.filter((entrant) => entrant.kind === 'athlete' && ownsEntrant(entrant) && athleteMatchesSession(athleteById.get(entrant.athleteId ?? '')));
   const relaySize = definition?.defaultRules.teamSize ?? 2;
   const canManageEntrant = (entrant: MeetEntrant) => isCoach && canUpdateRsvp && ownsEntrant(entrant);
   const relayReadiness = (ids: string[]) => {
-    const members = ids.map((id) => athleteEntrants.find((item) => item.id === id)).filter((item): item is MeetEntrant => Boolean(item));
+    const members = ids.map((id) => entrantById.get(id)).filter((item): item is MeetEntrant => Boolean(item));
     const declined = members.filter((item) => rsvpFor(item) === 'no').map((item) => item.name);
     const allAttending = members.length === relaySize && members.every((item) => rsvpFor(item) === 'yes');
     const message = declined.length > 0
@@ -165,14 +181,27 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   const addSelectedAthletes = () => run(async () => {
     if (!selected) return;
     if (isGuest) {
-      for (const athleteId of selectedAthleteIds) {
-        const entrant = entrants.find((item) => item.athleteId === athleteId) ?? await meets.createEntrant(event.id, { kind: 'athlete', athleteId });
-        if (!participants.some((participant) => participant.athleteId === athleteId)) await addGuestFixtureParticipant(event.id, athleteId);
-        if (!relaySession && !registeredEntrantIds.has(entrant.id)) await meets.registerEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id });
-      }
+      const additions = await Promise.all(selectedAthleteIds.map(async (athleteId) => {
+        const existingEntrant = entrantByAthleteId.get(athleteId);
+        const entrant = existingEntrant ?? await meets.createEntrant(event.id, { kind: 'athlete', athleteId });
+        const addedParticipant = !participantByAthleteId.has(athleteId);
+        if (addedParticipant) await addGuestFixtureParticipant(event.id, athleteId);
+        const registration = !relaySession && !registeredEntrantIds.has(entrant.id)
+          ? await meets.registerEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id })
+          : null;
+        return { entrant, createdEntrant: !existingEntrant, athleteId, addedParticipant, registration };
+      }));
+      setEntrants((current) => [...current, ...additions.filter((item) => item.createdEntrant).map((item) => item.entrant)]);
+      setParticipants((current) => [...current, ...additions.filter((item) => item.addedParticipant).map((item) => ({
+        eventId: event.id,
+        athleteId: item.athleteId,
+        rsvpStatus: 'pending' as const,
+        athlete: athleteById.get(item.athleteId)!,
+        statusReviewRequired: false,
+      }))]);
+      setRegistrations((current) => [...current, ...additions.flatMap((item) => item.registration ? [item.registration] : [])]);
       setSelectedAthleteIds([]);
       setAthletePickerOpen(false);
-      await reload();
       return;
     }
     const added = await meets.bulkAddRoster(event.id, selected.id, selectedAthleteIds);
@@ -181,7 +210,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       const existing = new Set(current.map((participant) => participant.athleteId));
       return [...current, ...added.participants.filter((participant) => !existing.has(participant.athleteId)).map((participant) => ({
         ...participant,
-        athlete: athletes.find((athlete) => athlete.id === participant.athleteId)!,
+        athlete: athleteById.get(participant.athleteId)!,
         statusReviewRequired: false,
       }))];
     });
@@ -273,9 +302,9 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
 
       {activeRegistrations.length === 0 && <p className={styles.empty}>No {relaySession ? 'teams' : 'athletes'} are assigned to this session yet.</p>}
       {activeRegistrations.length > 0 && <ul className={styles.registrationList} aria-label="Session roster">{visibleRegistrations.map((registration) => {
-        const entrant = entrants.find((item) => item.id === registration.entrantId);
+        const entrant = entrantById.get(registration.entrantId);
         if (!entrant) return null;
-        const athlete = entrant.athleteId ? athletes.find((item) => item.id === entrant.athleteId) : undefined;
+        const athlete = entrant.athleteId ? athleteById.get(entrant.athleteId) : undefined;
         return <li key={registration.id}>
           <span className={styles.entrantIdentity}><strong>{entrant.name}</strong><small>{entrantDescription(entrant, entrants)}{athlete && <i data-status={athlete.status}>{athlete.status[0].toUpperCase() + athlete.status.slice(1)}</i>}</small></span>
           <div className={styles.entrantActions}>{canManageEntrant(entrant) && !relaySession && entrant.athleteId && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
@@ -293,7 +322,7 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       {relaySession && athleteEntrants.length > 0 && <div className={styles.rsvpSummary}><strong>RSVP</strong><span>Pending {poolCounts.pending} · Yes {poolCounts.yes} · No {poolCounts.no} · Maybe {poolCounts.maybe}</span></div>}
 
       {relaySession && editingRelayId && (() => {
-        const relay = entrants.find((item) => item.id === editingRelayId);
+        const relay = entrantById.get(editingRelayId);
         if (!relay) return null;
         const editReadiness = relayReadiness(editMemberIds);
         return <fieldset className={styles.relayBuilder} disabled={busy}>

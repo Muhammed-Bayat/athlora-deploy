@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPool } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
 import { changeSessionState } from './meets.js';
-import { processSessionFinalizationJobs } from './sessionFinalizationJobs.js';
+import { processSessionFinalizationJobs, queueSessionFinalization } from './sessionFinalizationJobs.js';
 
 vi.mock('../db/client.js', () => ({ getPool: vi.fn() }));
 vi.mock('../db/transaction.js', () => ({ withTransaction: vi.fn() }));
 vi.mock('./meets.js', () => ({ changeSessionState: vi.fn(), getSession: vi.fn() }));
+vi.mock('./meetAccess.js', () => ({ meetAccess: vi.fn(), meetConflict: vi.fn(), meetIds: vi.fn(), meetNotFound: vi.fn() }));
 
 const query = vi.fn();
 const job = {
@@ -47,5 +48,18 @@ describe('processSessionFinalizationJobs', () => {
     vi.mocked(changeSessionState).mockRejectedValueOnce(new Error('Version conflict'));
 
     await expect(processSessionFinalizationJobs()).resolves.toMatchObject({ status: 'failed', errorMessage: 'Version conflict' });
+  });
+});
+
+describe('queueSessionFinalization', () => {
+  it('requeues a completed job after its session has been reopened', async () => {
+    const { meetAccess } = await import('./meetAccess.js');
+    const { getSession } = await import('./meets.js');
+    vi.mocked(meetAccess).mockResolvedValue({ host: true, event: { status: 'in_progress', workspace_id: 'workspace-1' } } as never);
+    vi.mocked(getSession).mockResolvedValue({ status: 'in_progress', version: 4 } as never);
+    query.mockResolvedValue({ rows: [{ ...job, status: 'pending', attempts: 0, expected_version: 4 }] });
+
+    await expect(queueSessionFinalization({ userId: 'coach-1', workspaceId: 'workspace-1', role: 'coach' }, 'event-1', 'session-1', 4)).resolves.toMatchObject({ status: 'pending', attempts: 0 });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("status IN ('failed', 'completed')"), ['event-1', 'session-1', 'workspace-1', 'coach-1', 4]);
   });
 });

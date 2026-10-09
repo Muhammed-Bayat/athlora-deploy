@@ -1,5 +1,5 @@
 import type { ApiList, PublicLoggerLink, PublicLoggerSnapshot, PublicTimelineEntry, TimelineEntryCreatePayload, TimelineEntryDeletePayload, TimelineEntryPatchPayload } from '../types';
-import type { PublicMeetLoggerSnapshot, PublicSessionEntry, SessionEntryInput, SessionEntryReplacement, SessionTarget } from '../types/meets';
+import type { PublicMeetLoggerSnapshot, PublicMeetSession, PublicSessionEntry, SessionEntryInput, SessionEntryReplacement, SessionTarget } from '../types/meets';
 import { ApiError, request } from './client';
 import { isDeviceOnline, recordNetworkFailure, recordNetworkSuccess } from '../offline/networkStatus';
 
@@ -77,6 +77,13 @@ export function removePublicLoggerEntry(sessionToken: string, eventId: string, e
 
 export async function getPublicMeetLoggerSnapshot(sessionToken: string, eventId: string): Promise<PublicMeetLoggerSnapshot> {
   const response = await publicRequest<{ data: PublicMeetLoggerSnapshot }>(`/events/${eventId}/discipline-sessions`, {
+    headers: { 'X-Public-Logger-Session': sessionToken },
+  });
+  return response.data;
+}
+
+export async function getPublicMeetLoggerSession(sessionToken: string, eventId: string, disciplineSessionId: string): Promise<PublicMeetSession> {
+  const response = await publicRequest<{ data: PublicMeetSession }>(`/events/${eventId}/discipline-sessions/${disciplineSessionId}`, {
     headers: { 'X-Public-Logger-Session': sessionToken },
   });
   return response.data;
