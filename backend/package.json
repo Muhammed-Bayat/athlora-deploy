@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --reporter=dot",
+    "test:coverage:ci": "vitest run --coverage --reporter=dot --maxWorkers=1 --exclude=src/db/migrate.integration.test.ts --exclude=src/services/accounts.integration.test.ts --exclude=src/services/aggregates.integration.test.ts --exclude=src/services/athletes.integration.test.ts --exclude=src/services/authorization.integration.test.ts --exclude=src/services/events.integration.test.ts --exclude=src/services/injuries.integration.test.ts --exclude=src/services/participants.integration.test.ts --exclude=src/services/sync.integration.test.ts --exclude=src/services/timeline.integration.test.ts",
     "lint": "eslint ."
   },
   "dependencies": {
