@@ -2,13 +2,14 @@ import { Router } from 'express';
 import { createPasswordTicket, deleteCurrentAccount, syncCurrentUser, acceptConsent } from '../controllers/auth.js';
 import { resolveApplicationUser, verifyAuth0Token } from '../middleware/auth.js';
 import { notImplemented } from '../middleware/notImplemented.js';
+import { authSyncLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
 router.get('/login', notImplemented);
 router.get('/callback', notImplemented);
 router.get('/logout', notImplemented);
-router.put('/me', verifyAuth0Token, syncCurrentUser);
+router.put('/me', verifyAuth0Token, authSyncLimiter, syncCurrentUser);
 router.post('/me/password-ticket', verifyAuth0Token, resolveApplicationUser, createPasswordTicket);
 router.post('/me/consent', verifyAuth0Token, acceptConsent);
 router.delete('/me', verifyAuth0Token, deleteCurrentAccount);

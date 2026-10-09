@@ -267,7 +267,7 @@ Gemini Live provides real-time voice interaction with function-calling capabilit
 
 | Package | Version | Used in |
 |---------|---------|---------|
-| `@google/genai` | ^2.21.0 | Frontend + Backend |
+| `@google/genai` | ^2.28.0 | Frontend + Backend |
 
 ### Backend: Token broker
 
@@ -283,30 +283,26 @@ const token = await client.authTokens.create({
 
 The API key never leaves the server. The frontend receives the token name and authenticates directly with Gemini's WebSocket endpoint.
 
-### Frontend: Two transport implementations
+### Frontend: Live transport
 
 **1. SDK-based (primary)** — `frontend/src/api/geminiLiveSdk.ts`:
 
 - `AthloraGeminiSession` class wraps `@google/genai`'s `ai.live.connect()`.
-- Model: `gemini-3.1-flash-live-preview`, voice: `Sulafat`.
-- Configures `responseModalities: [Modality.AUDIO]`, `outputAudioTranscription`, and function tools.
+- Default model: `gemini-3.8-live`, voice: `Sulafat`.
+- Configures `responseModalities: [Modality.AUDIO]`, audio transcription, and function tools. Standard 3.8 Live omits unsupported `thinkingConfig`; `GEMINI_LIVE_MODEL=rollback` selects the temporary 3.1 fallback.
 - Methods: `connect()`, `sendText()`, `sendAudio()`, `endAudioStream()`, `close()`.
 - Callbacks: `onAudio`, `onTranscript`, `onTurnStart`, `onTurnComplete`, `onInterrupted`, `onSleepRequested`, `onToolCall`.
 
-**2. WebSocket-based (legacy/fallback)** — `frontend/src/api/geminiLive.ts`:
-
-- Raw WebSocket to `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained`.
-- Manual setup message, `setupComplete` handshake, and `realtimeInput` text streaming.
-- Same voice and tool configuration as the SDK version.
+`frontend/src/api/geminiLive.ts` is an unused legacy WebSocket transport retained
+for compatibility testing. It also requests `gemini-3.8-live` and Sulafat; the
+SDK wrapper is the production implementation.
 
 ### Function tools
 
-Both transports declare two tools:
-
-| Tool | Parameters | Purpose |
-|------|-----------|---------|
-| `create_athlete` | `name` (required), `dob`, `gender`, `notes` | Creates an athlete after explicit user confirmation |
-| `sleep_assistant` | none | Puts the assistant to sleep when asked to deactivate |
+The production SDK declares 15 non-blocking, read-only or confirmation-gated
+tools for page context, disciplines, athlete and coach analytics, weather,
+reports, athlete-draft preparation, and sleep. It never declares direct athlete
+creation: draft preparation requires an explicit local coach confirmation.
 
 ### Audio pipeline
 
@@ -328,10 +324,9 @@ Both transports declare two tools:
 
 ```
 You are Athlora, the Athlora voice assistant.
-Your current job is to help authorised users add athletes.
-Never invent missing information.
-Before creating an athlete, clearly confirm the details with the user.
-Only use create_athlete after the user explicitly confirms.
+Use the available tools for every Athlora data question and action.
+Never invent platform data, weather, analytics, or reports.
+Prepare athlete drafts only after validation; local coach confirmation performs creation.
 ```
 
 ### Audio format

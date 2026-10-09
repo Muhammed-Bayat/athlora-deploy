@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AthloraAssistantProvider } from './AthloraAssistantProvider';
 import { WorkspaceContext } from '../auth/WorkspaceContext';
+import { ApiError } from '../../api/client';
 
 const geminiApi = vi.hoisted(() => ({
   createToken: vi.fn(),
@@ -25,7 +26,7 @@ const geminiApi = vi.hoisted(() => ({
   },
 }));
 
-const athleteApi = vi.hoisted(() => ({ createAthlete: vi.fn(), listAthletes: vi.fn() }));
+const athleteApi = vi.hoisted(() => ({ createAthlete: vi.fn(), getAthleteRosterSummary: vi.fn(), listAthletes: vi.fn() }));
 const meetsApi = vi.hoisted(() => ({ listDisciplines: vi.fn() }));
 const analyticsApi = vi.hoisted(() => ({
   getAthleteDisciplineAnalysis: vi.fn(),
@@ -107,6 +108,21 @@ const coachPerformanceAnalysis = {
   selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
   lifecycleStatus: 'active',
   athletes: [{ athlete: { id: athlete.id, name: athlete.name, status: 'active' }, disciplines: [] }],
+  comparison: {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.' as const,
+    eligibleAthleteDisciplineCount: 1,
+    mostImproved: null,
+    mostDeclined: null,
+    insufficientDataReason: null,
+    relativeImprovementRanking: {
+      methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.',
+      eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.',
+      limit: 50,
+      eligibleAthleteCount: 0,
+      entries: [],
+      insufficientDataReason: null,
+    },
+  },
 };
 const coachInjuryAnalysis = {
   selectedRange: { dateFrom: '2026-01-01', dateTo: '2026-03-31' },
@@ -127,6 +143,14 @@ const coachInjuryAnalysis = {
       notes: 'private injury note',
     }],
   }],
+  rosterSummary: {
+    injuryRecordCount: 1,
+    athletesWithRecordedInjuries: 1,
+    mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 1 },
+    mostCommonBodyRegion: { bodyRegion: 'Leg', count: 1 },
+    athletesWithRepeatedInjuries: [],
+    insufficientDataReason: null,
+  },
 };
 const coachRankingsAnalysis = {
   discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
@@ -171,6 +195,7 @@ beforeEach(() => {
   geminiApi.sendText.mockImplementation(async (message: string) => `Athlora received: ${message}`);
   meetsApi.listDisciplines.mockResolvedValue({ data: [discipline], meta: { count: 1 } });
   athleteApi.listAthletes.mockResolvedValue({ data: [], meta: { count: 0 } });
+  athleteApi.getAthleteRosterSummary.mockResolvedValue({ total: 4, active: 3, inactive: 1, archived: 2 });
   athleteApi.createAthlete.mockResolvedValue(athlete);
   analyticsApi.getAthleteDisciplineAnalysis.mockResolvedValue({
     athleteId: athlete.id, discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
@@ -429,6 +454,20 @@ describe('AthloraAssistantProvider', () => {
     expect(draft).toMatchObject({ data: { draft: { discipline: { id: latestDiscipline.id, code: '100m' } } } });
   });
 
+  it('returns an authenticated workspace roster summary without exposing athlete records', async () => {
+    renderAssistant();
+    await openAssistant();
+
+    const result = await callTool('get_workspace_roster_summary');
+
+    expect(athleteApi.getAthleteRosterSummary).toHaveBeenCalledOnce();
+    expect(result).toEqual(expect.objectContaining({
+      source: expect.objectContaining({ endpoint: '/api/v1/athletes/summary' }),
+      data: { total: 4, active: 3, inactive: 1, archived: 2 },
+    }));
+    expect(JSON.stringify(result)).not.toContain('Ari Runner');
+  });
+
   it('returns source-backed analytics and generates both PDFs from the exact cached models', async () => {
     const user = userEvent.setup();
     renderAssistant();
@@ -482,6 +521,78 @@ describe('AthloraAssistantProvider', () => {
     expect(screen.getByRole('button', { name: 'Generate coach performance PDF' })).toBeInTheDocument();
   });
 
+  it('resolves last_three_months deterministically before requesting performance change leaders', async () => {
+    renderAssistant();
+    await openAssistant();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00.000Z'));
+
+    const result = await callTool('get_coach_performance_analysis', { relativeRange: 'last_three_months' });
+
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenCalledWith({ dateFrom: '2026-07-08', dateTo: '2026-10-08' });
+    expect(result).toMatchObject({ data: { comparison: { eligibleAthleteDisciplineCount: 1 } } });
+  });
+
+  it('keeps displayed comparison context for injury monitoring and six-week chart follow-ups', async () => {
+    const chartAnalysis = {
+      ...coachPerformanceAnalysis,
+      selectedRange: { dateFrom: '2026-07-01', dateTo: '2026-09-30' },
+      athletes: [{
+        athlete: { id: athlete.id, name: athlete.name, status: 'active' },
+        disciplines: [{
+          discipline: { code: '100m', label: '100m', unit: 'seconds', precision: 2, direction: 'lower' },
+          recordCount: 2,
+          first: { date: '2026-07-01', time: null, value: 12.2, event: { id: 'event-1', title: 'Meet one', type: 'competition' } },
+          latest: { date: '2026-09-01', time: null, value: 12, event: { id: 'event-2', title: 'Meet two', type: 'competition' } },
+          best: { personalBest: 12, seasonBest: 12, selectedRangeBest: 12, season: { selected: 2026, startDate: '2026-01-01', endDate: '2027-01-01' } },
+          improvement: 0.2, improvementPercent: 1.64, recentTrend: null, consistency: null, plateau: null, sufficientData: true, insufficientDataReason: null,
+          history: [
+            { date: '2026-07-01', time: null, value: 12.2, event: { id: 'event-1', title: 'Meet one', type: 'competition' } },
+            { date: '2026-09-01', time: null, value: 12, event: { id: 'event-2', title: 'Meet two', type: 'competition' } },
+          ],
+        }],
+      }],
+    };
+    analyticsApi.getCoachPerformanceAnalysis.mockResolvedValue(chartAnalysis);
+    renderAssistant();
+    await openAssistant();
+
+    const displayed = await callTool('show_coach_performance_comparison_chart', { athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-07-01', dateTo: '2026-09-30' });
+
+    expect(displayed).toMatchObject({ chart: { status: 'displayed', discipline: '100m', athleteCount: 1 } });
+    expect(screen.getByTestId('coach-performance-comparison-chart')).toBeInTheDocument();
+    analyticsApi.getCoachInjuryAnalysis.mockResolvedValueOnce({ ...coachInjuryAnalysis, selectedRange: chartAnalysis.selectedRange });
+
+    const injuryResult = await callTool('get_coach_injury_analysis');
+
+    expect(analyticsApi.getCoachInjuryAnalysis).toHaveBeenLastCalledWith({
+      athleteIds: [athlete.id], dateFrom: '2026-07-01', dateTo: '2026-09-30',
+    });
+    expect(injuryResult).toMatchObject({ data: { athletes: [{ athlete: { id: athlete.id } }] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate comparison PDF' }));
+    await waitFor(() => expect(coachingReportsApi.coachPerformanceReportPdf).toHaveBeenLastCalledWith(
+      chartAnalysis,
+      expect.objectContaining({ selectedRange: chartAnalysis.selectedRange }),
+    ));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00.000Z'));
+
+    const refreshed = await callTool('show_coach_performance_comparison_chart', { relativeRange: 'last_six_weeks' });
+
+    expect(refreshed).toMatchObject({ chart: { status: 'displayed' } });
+    expect(analyticsApi.getCoachPerformanceAnalysis).toHaveBeenLastCalledWith({ athleteIds: [athlete.id], discipline: '100m', dateFrom: '2026-08-27', dateTo: '2026-10-08' });
+  });
+
+  it('preserves analytics HTTP diagnostics and Gemini function-call IDs instead of reporting a generic outage', async () => {
+    renderAssistant();
+    await openAssistant();
+    analyticsApi.getCoachPerformanceAnalysis.mockRejectedValueOnce(new ApiError(503, 'DATABASE_UNAVAILABLE', 'Database unavailable', { requestId: 'request-123' }));
+
+    await expect(callTool('get_coach_performance_analysis')).rejects.toThrow(
+      'Coach performance analytics failed during the API request for Gemini function call tool-1: HTTP 503 (DATABASE_UNAVAILABLE). Request ID: request-123.',
+    );
+  });
+
   it('keeps injury monitoring results free of notes and describes the cached report as non-diagnostic', async () => {
     renderAssistant();
     await openAssistant();
@@ -491,6 +602,7 @@ describe('AthloraAssistantProvider', () => {
     expect(analyticsApi.getCoachInjuryAnalysis).toHaveBeenCalledWith({ athleteIds: [athlete.id], lifecycleStatus: 'active' });
     expect(JSON.stringify(result)).not.toContain('private injury note');
     expect(JSON.stringify(result)).not.toContain('"notes"');
+    expect(result).toMatchObject({ data: { rosterSummary: { mostCommonRecordedArea: { area: 'Knee' }, insufficientDataReason: null } } });
     expect(screen.getByText('Monitoring-only recorded injury indicators. This analysis is not a diagnosis or medical advice.')).toBeInTheDocument();
     expect(screen.queryByText('private injury note')).not.toBeInTheDocument();
     await expect(callTool('get_coach_injury_analysis', { discipline: '100m' })).rejects.toThrow('does not support a discipline filter');

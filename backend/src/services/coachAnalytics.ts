@@ -36,6 +36,7 @@ export interface CoachDateRange {
 export interface CoachPerformanceQuery {
   athleteIds?: string[];
   discipline?: string;
+  limit?: number;
   dateRange: CoachDateRange;
   lifecycleStatus: CoachLifecycleStatus;
 }
@@ -102,6 +103,30 @@ export interface CoachPerformanceDisciplineAnalysis {
   history: CoachPerformanceResultPoint[];
 }
 
+export interface CoachPerformanceChangeLeader {
+  athlete: { id: string; name: string; status: AthleteLifecycleStatus };
+  discipline: AnalyticsDiscipline;
+  first: CoachPerformanceResultPoint;
+  latest: CoachPerformanceResultPoint;
+  improvement: number;
+  improvementPercent: number;
+}
+
+export interface CoachRelativeImprovementEntry extends CoachPerformanceChangeLeader {
+  rank: number;
+  recordCount: number;
+  classification: 'improved' | 'unchanged' | 'declined';
+}
+
+export interface CoachRelativeImprovementRanking {
+  methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.';
+  eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.';
+  limit: number;
+  eligibleAthleteCount: number;
+  entries: CoachRelativeImprovementEntry[];
+  insufficientDataReason: string | null;
+}
+
 export interface CoachPerformanceAnalytics {
   selectedRange: CoachDateRange;
   lifecycleStatus: CoachLifecycleStatus;
@@ -109,6 +134,14 @@ export interface CoachPerformanceAnalytics {
     athlete: { id: string; name: string; status: AthleteLifecycleStatus };
     disciplines: CoachPerformanceDisciplineAnalysis[];
   }>;
+  comparison: {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.';
+    eligibleAthleteDisciplineCount: number;
+    mostImproved: CoachPerformanceChangeLeader | null;
+    mostDeclined: CoachPerformanceChangeLeader | null;
+    insufficientDataReason: string | null;
+    relativeImprovementRanking: CoachRelativeImprovementRanking;
+  };
 }
 
 export interface CoachInjuryHistoryEntry {
@@ -154,6 +187,17 @@ export interface CoachInjuryAnalytics {
     warning: CoachInjuryWarning;
     history: CoachInjuryHistoryEntry[];
   }>;
+  rosterSummary: {
+    injuryRecordCount: number;
+    athletesWithRecordedInjuries: number;
+    mostCommonRecordedArea: { bodyRegion: InjuryRegion; area: string; count: number } | null;
+    mostCommonBodyRegion: { bodyRegion: InjuryRegion; count: number } | null;
+    athletesWithRepeatedInjuries: Array<{
+      athlete: { id: string; name: string; status: AthleteLifecycleStatus };
+      repeatedInjuries: Array<{ bodyRegion: InjuryRegion; area: string; side: InjurySide; count: number }>;
+    }>;
+    insufficientDataReason: string | null;
+  };
 }
 
 interface RankingFactor<T> {
@@ -395,11 +439,11 @@ async function listCoachAthletes(
   }
 
   const result = await executor.query<CoachAthlete>(
-    `SELECT DISTINCT a.id, a.name, a.lifecycle_status
+    `SELECT DISTINCT a.id, a.name, a.lifecycle_status, lower(a.name) AS name_sort
      FROM athletes a
      ${joins}
      WHERE ${conditions.join('\n       AND ')}
-     ORDER BY lower(a.name), a.id`,
+     ORDER BY name_sort, a.id`,
     parameters,
   );
   return result.rows;
@@ -415,6 +459,98 @@ function groupResultsByAthlete(
     grouped.set(result.athleteId, athleteResults);
   }
   return grouped;
+}
+
+function compareChangeLeaders(left: CoachPerformanceChangeLeader, right: CoachPerformanceChangeLeader): number {
+  return left.athlete.name.localeCompare(right.athlete.name)
+    || left.athlete.id.localeCompare(right.athlete.id)
+    || left.discipline.label.localeCompare(right.discipline.label)
+    || left.discipline.code.localeCompare(right.discipline.code);
+}
+
+function relativeImprovementClassification(improvementPercent: number): CoachRelativeImprovementEntry['classification'] {
+  return improvementPercent > 0 ? 'improved' : improvementPercent < 0 ? 'declined' : 'unchanged';
+}
+
+function relativeImprovementLimit(limit: number | undefined): number {
+  if (limit === undefined) return 50;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_COACH_RANKING_LIMIT) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed');
+  }
+  return limit;
+}
+
+/**
+ * Compares normalized percentage changes, never raw values, so time and field
+ * disciplines can be considered together without treating seconds as metres.
+ */
+export function summarizeCoachPerformanceChanges(
+  athletes: readonly CoachPerformanceAnalytics['athletes'][number][],
+  requestedLimit?: number,
+): CoachPerformanceAnalytics['comparison'] {
+  const limit = relativeImprovementLimit(requestedLimit);
+  const eligible = athletes.flatMap(({ athlete, disciplines }) => disciplines.flatMap((analysis) => (
+    analysis.improvement === null
+    || analysis.improvementPercent === null
+    || analysis.first === null
+    || analysis.latest === null
+      ? []
+      : [{
+        athlete,
+        discipline: analysis.discipline,
+        first: analysis.first,
+        latest: analysis.latest,
+        improvement: analysis.improvement,
+        improvementPercent: analysis.improvementPercent,
+        recordCount: analysis.recordCount,
+      }]
+  )));
+  const byGreatestImprovement = [...eligible].sort((left, right) => (
+    right.improvementPercent - left.improvementPercent || compareChangeLeaders(left, right)
+  ));
+  const byGreatestDecline = [...eligible].sort((left, right) => (
+    left.improvementPercent - right.improvementPercent || compareChangeLeaders(left, right)
+  ));
+  const relativeCandidates = eligible.flatMap((entry) => {
+    if (entry.first.value <= 0 || entry.recordCount < 2) return [];
+    const rawImprovement = entry.discipline.direction === 'lower'
+      ? entry.first.value - entry.latest.value
+      : entry.latest.value - entry.first.value;
+    const rawImprovementPercent = rawImprovement / entry.first.value * 100;
+    return [{ entry, rawImprovementPercent }];
+  }).sort((left, right) => (
+    right.rawImprovementPercent - left.rawImprovementPercent || compareChangeLeaders(left.entry, right.entry)
+  ));
+  const strongestByAthlete = new Map<string, { entry: typeof eligible[number]; rawImprovementPercent: number }>();
+  for (const candidate of relativeCandidates) {
+    if (!strongestByAthlete.has(candidate.entry.athlete.id)) strongestByAthlete.set(candidate.entry.athlete.id, candidate);
+  }
+  const relativeEntries = [...strongestByAthlete.values()].slice(0, limit).map(({ entry }, index) => ({
+    ...entry,
+    rank: index + 1,
+    recordCount: entry.recordCount,
+    classification: relativeImprovementClassification(entry.improvementPercent),
+  }));
+
+  return {
+    methodology: 'Eligible athlete-discipline changes are ranked by direction-aware percentage change from the first to latest valid result in the selected range; times improve when lower, while distances and heights improve when higher. Raw values from different disciplines are not compared directly.',
+    eligibleAthleteDisciplineCount: eligible.length,
+    mostImproved: byGreatestImprovement.find((entry) => entry.improvementPercent > 0) ?? null,
+    mostDeclined: byGreatestDecline.find((entry) => entry.improvementPercent < 0) ?? null,
+    insufficientDataReason: eligible.length > 0
+      ? null
+      : 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+    relativeImprovementRanking: {
+      methodology: 'Athletes are ranked descriptively by their strongest eligible direction-aware first-to-latest percentage change in the selected range. Timed events improve when lower, while distances and heights improve when higher. Each athlete appears once with the discipline that produced that relative change; this is not an official athletics ranking or a comparison of raw performances across disciplines.',
+      eligibility: 'At least two distinct valid normalized results with a positive first result are required for an athlete-discipline comparison.',
+      limit,
+      eligibleAthleteCount: strongestByAthlete.size,
+      entries: relativeEntries,
+      insufficientDataReason: strongestByAthlete.size > 0
+        ? null
+        : 'At least two valid normalized results with a positive first result are required for each athlete before descriptive relative-improvement ranking is available.',
+    },
+  };
 }
 
 export async function getCoachPerformanceAnalytics(
@@ -436,20 +572,23 @@ export async function getCoachPerformanceAnalytics(
     resultsByDiscipline.set(discipline.code, groupResultsByAthlete(results));
   }
 
+  const analysisAthletes = athletes.map((athlete) => {
+    const analyses = disciplines.flatMap((discipline) => {
+      const results = resultsByDiscipline.get(discipline.code)?.get(athlete.id) ?? [];
+      if (!query.discipline && results.length === 0) return [];
+      return [analyzeCoachPerformance(discipline, results, query.dateRange, season)];
+    });
+    return {
+      athlete: { id: athlete.id, name: athlete.name, status: athlete.lifecycle_status },
+      disciplines: analyses,
+    };
+  });
+
   return {
     selectedRange: query.dateRange,
     lifecycleStatus: query.lifecycleStatus,
-    athletes: athletes.map((athlete) => {
-      const analyses = disciplines.flatMap((discipline) => {
-        const results = resultsByDiscipline.get(discipline.code)?.get(athlete.id) ?? [];
-        if (!query.discipline && results.length === 0) return [];
-        return [analyzeCoachPerformance(discipline, results, query.dateRange, season)];
-      });
-      return {
-        athlete: { id: athlete.id, name: athlete.name, status: athlete.lifecycle_status },
-        disciplines: analyses,
-      };
-    }),
+    athletes: analysisAthletes,
+    comparison: summarizeCoachPerformanceChanges(analysisAthletes, query.limit),
   };
 }
 
@@ -784,6 +923,49 @@ export function summarizeCoachInjuries(
   });
 }
 
+/** Aggregates only recorded injury fields; it intentionally makes no medical inference. */
+export function summarizeCoachInjuryRoster(
+  athletes: readonly CoachInjuryAnalytics['athletes'][number][],
+): CoachInjuryAnalytics['rosterSummary'] {
+  const areas = new Map<string, { bodyRegion: InjuryRegion; area: string; count: number }>();
+  const regions = new Map<InjuryRegion, { bodyRegion: InjuryRegion; count: number }>();
+  let injuryRecordCount = 0;
+
+  for (const athlete of athletes) {
+    for (const injury of athlete.history) {
+      injuryRecordCount += 1;
+      const areaKey = `${injury.bodyRegion}\u0000${injury.area}`;
+      const area = areas.get(areaKey);
+      if (area) area.count += 1;
+      else areas.set(areaKey, { bodyRegion: injury.bodyRegion, area: injury.area, count: 1 });
+
+      const region = regions.get(injury.bodyRegion);
+      if (region) region.count += 1;
+      else regions.set(injury.bodyRegion, { bodyRegion: injury.bodyRegion, count: 1 });
+    }
+  }
+
+  const orderAreas = (left: { bodyRegion: InjuryRegion; area: string; count: number }, right: { bodyRegion: InjuryRegion; area: string; count: number }) => (
+    right.count - left.count || left.bodyRegion.localeCompare(right.bodyRegion) || left.area.localeCompare(right.area)
+  );
+  const orderRegions = (left: { bodyRegion: InjuryRegion; count: number }, right: { bodyRegion: InjuryRegion; count: number }) => (
+    right.count - left.count || left.bodyRegion.localeCompare(right.bodyRegion)
+  );
+
+  return {
+    injuryRecordCount,
+    athletesWithRecordedInjuries: athletes.filter((athlete) => athlete.injuryCount > 0).length,
+    mostCommonRecordedArea: [...areas.values()].sort(orderAreas)[0] ?? null,
+    mostCommonBodyRegion: [...regions.values()].sort(orderRegions)[0] ?? null,
+    athletesWithRepeatedInjuries: athletes
+      .filter((athlete) => athlete.repeatedInjuries.length > 0)
+      .map((athlete) => ({ athlete: athlete.athlete, repeatedInjuries: athlete.repeatedInjuries })),
+    insufficientDataReason: injuryRecordCount === 0
+      ? 'No recorded injuries were found for the selected athletes and date range.'
+      : null,
+  };
+}
+
 export async function getCoachInjuryAnalytics(
   workspaceId: string,
   query: CoachInjuryQuery,
@@ -826,6 +1008,7 @@ export async function getCoachInjuryAnalytics(
     active: row.resolved_date === null,
   }));
 
+  const analysisAthletes = summarizeCoachInjuries(athletes, injuries, now);
   return {
     selectedRange: query.dateRange,
     lifecycleStatus: query.lifecycleStatus,
@@ -833,6 +1016,7 @@ export async function getCoachInjuryAnalytics(
       'Indicators summarize recorded injuries only; they are not medical diagnoses or probability estimates.',
       'No workload, readiness, attendance, treatment, or recovery data is available to these indicators.',
     ],
-    athletes: summarizeCoachInjuries(athletes, injuries, now),
+    athletes: analysisAthletes,
+    rosterSummary: summarizeCoachInjuryRoster(analysisAthletes),
   };
 }

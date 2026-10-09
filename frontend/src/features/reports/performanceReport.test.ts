@@ -103,7 +103,8 @@ describe('performance reports', () => {
     expect(athletePerformanceInsights(empty)).toContain('Insufficient data: no normalized 100m history is available for this report.');
 
     const bytes = await athletePerformanceReportPdf({ athleteName: 'Ari Runner', analysis: empty });
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+    // The shared Aurora report cover precedes the single content page.
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
   });
 
   it('safely renders single-point and large-history athlete reports with a chart and multipage table', async () => {

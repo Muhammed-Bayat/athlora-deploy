@@ -5,6 +5,7 @@ import type { Athlete } from '../types/domain.js';
 import {
   createAthlete,
   getAthlete,
+  getAthleteRosterSummary,
   listAthletes,
   replaceAthlete,
   setAthleteArchived,
@@ -111,6 +112,29 @@ describe('listAthletes', () => {
     await expect(listAthletes('not-a-uuid', { includeArchived: false })).rejects.toMatchObject(
       genericNotFound,
     );
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('getAthleteRosterSummary', () => {
+  it('returns workspace-scoped lifecycle counts without loading athlete records', async () => {
+    query.mockResolvedValue({ rows: [{ total: 8, active: 5, inactive: 2, archived: 1 }] });
+
+    await expect(getAthleteRosterSummary(USER_ID)).resolves.toEqual({
+      total: 8,
+      active: 5,
+      inactive: 2,
+      archived: 1,
+    });
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("COUNT(*) FILTER (WHERE lifecycle_status = 'active')");
+    expect(sql).toContain('workspace_id = $1');
+    expect(parameters).toEqual([USER_ID]);
+  });
+
+  it('rejects a malformed workspace id without querying', async () => {
+    await expect(getAthleteRosterSummary('not-a-uuid')).rejects.toMatchObject(genericNotFound);
     expect(query).not.toHaveBeenCalled();
   });
 });

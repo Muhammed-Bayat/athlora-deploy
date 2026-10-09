@@ -17,6 +17,7 @@ import {
 } from './performanceReport';
 import {
   REPORT_MARGINS,
+  REPORT_AURORA_COLORS,
   createReportDocument,
   drawReportSection,
   drawReportStatCards,
@@ -24,15 +25,27 @@ import {
   ensureReportSpace,
   formatReportDate,
   saveReportDocument,
+  safeReportText,
   wrapReportText,
   type ReportDocument,
 } from './pdfDocument';
 import { rgb } from 'pdf-lib';
 
 const REPORT_COLORS = {
-  ink: rgb(0.02, 0.11, 0.18),
-  brand: rgb(0, 0.57, 0.74),
+  ink: REPORT_AURORA_COLORS.ink,
+  brand: REPORT_AURORA_COLORS.brand,
 };
+
+const COMPARISON_SERIES_COLORS = [
+  REPORT_AURORA_COLORS.cyan,
+  REPORT_AURORA_COLORS.blue,
+  REPORT_AURORA_COLORS.violet,
+  rgb(0.02, 0.62, 0.45),
+  rgb(0.9, 0.42, 0.12),
+  rgb(0.78, 0.2, 0.52),
+  rgb(0.52, 0.45, 0.08),
+  rgb(0.08, 0.48, 0.58),
+] as const;
 
 function signed(value: number): string {
   return value > 0 ? '+' : '';
@@ -196,8 +209,90 @@ function performanceResultsTable(report: ReportDocument, analysis: CoachPerforma
   });
 }
 
+function drawCenteredReportText(report: ReportDocument, text: string, x: number, y: number, size: number, color: ReturnType<typeof rgb>): void {
+  const safeText = safeReportText(text);
+  report.page.drawText(safeText, { x: x - report.regular.widthOfTextAtSize(safeText, size) / 2, y, size, font: report.regular, color });
+}
+
+/** Draws an honest same-discipline comparison only; incompatible units never share an axis. */
+function drawCoachComparisonChart(report: ReportDocument, analysis: CoachPerformanceAnalysis, disciplineCode: string): boolean {
+  const rows = analysis.athletes.flatMap((entry) => {
+    const discipline = entry.disciplines.find((candidate) => candidate.discipline.code === disciplineCode);
+    return discipline && discipline.history.length > 0 ? [{ athlete: entry.athlete, discipline }] : [];
+  });
+  if (rows.length === 0 || rows.length > 8) return false;
+
+  const discipline = rows[0]!.discipline.discipline;
+  const points = rows.flatMap((row) => row.discipline.history.map((point) => ({ ...point, athlete: row.athlete })));
+  const values = points.map((point) => point.value);
+  const timestamps = points.map((point) => Date.parse(`${point.date}T00:00:00.000Z`));
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const minimumPadding = discipline.unit === 'seconds' ? 0.05 : discipline.unit === 'metres' ? 0.1 : 5;
+  const padding = Math.max((maximum - minimum) * 0.12, minimumPadding);
+  const axisMinimum = Math.max(0, minimum - padding);
+  const axisMaximum = maximum + padding;
+  const axisRange = Math.max(axisMaximum - axisMinimum, Number.EPSILON);
+  const earliest = Math.min(...timestamps);
+  const latest = Math.max(...timestamps);
+
+  const height = 246;
+  ensureReportSpace(report, height + 12);
+  const width = report.page.getWidth() - REPORT_MARGINS.left - REPORT_MARGINS.right;
+  const top = report.y;
+  const bottom = top - height;
+  const plot = { left: REPORT_MARGINS.left + 54, right: REPORT_MARGINS.left + width - 10, top: top - 40, bottom: bottom + 42 };
+  const x = (date: string) => plot.left + (Date.parse(`${date}T00:00:00.000Z`) - earliest) / Math.max(latest - earliest, 1) * (plot.right - plot.left);
+  const y = (value: number) => plot.bottom + (value - axisMinimum) / axisRange * (plot.top - plot.bottom);
+  const unit = discipline.unit === 'seconds' ? 's' : discipline.unit === 'metres' ? 'm' : 'cm';
+
+  report.page.drawText(`${discipline.label} comparison | raw performance (${unit})`, { x: REPORT_MARGINS.left, y: top - 8, size: 8, font: report.bold, color: REPORT_COLORS.ink });
+  report.page.drawText(discipline.direction === 'lower' ? 'Lower values are better' : 'Higher values are better', { x: plot.right - report.regular.widthOfTextAtSize(discipline.direction === 'lower' ? 'Lower values are better' : 'Higher values are better', 7), y: top - 8, size: 7, font: report.regular, color: REPORT_AURORA_COLORS.muted });
+  Array.from({ length: 5 }, (_, index) => axisMinimum + index / 4 * axisRange).forEach((tick) => {
+    const tickY = y(tick);
+    report.page.drawLine({ start: { x: plot.left, y: tickY }, end: { x: plot.right, y: tickY }, thickness: 0.4, color: REPORT_AURORA_COLORS.line });
+    const label = formatPerformanceValue(tick, discipline);
+    report.page.drawText(label, { x: plot.left - 7 - report.regular.widthOfTextAtSize(label, 6.5), y: tickY - 2.5, size: 6.5, font: report.regular, color: REPORT_AURORA_COLORS.muted });
+  });
+  report.page.drawLine({ start: { x: plot.left, y: plot.bottom }, end: { x: plot.right, y: plot.bottom }, thickness: 0.7, color: REPORT_AURORA_COLORS.muted });
+  report.page.drawLine({ start: { x: plot.left, y: plot.bottom }, end: { x: plot.left, y: plot.top }, thickness: 0.7, color: REPORT_AURORA_COLORS.muted });
+  rows.forEach((row, index) => {
+    const color = COMPARISON_SERIES_COLORS[index % COMPARISON_SERIES_COLORS.length]!;
+    const history = row.discipline.history;
+    for (let pointIndex = 1; pointIndex < history.length; pointIndex += 1) {
+      report.page.drawLine({ start: { x: x(history[pointIndex - 1]!.date), y: y(history[pointIndex - 1]!.value) }, end: { x: x(history[pointIndex]!.date), y: y(history[pointIndex]!.value) }, thickness: 1.7, color });
+    }
+    history.forEach((point) => report.page.drawCircle({ x: x(point.date), y: y(point.value), size: 2.8, color, borderColor: REPORT_AURORA_COLORS.white, borderWidth: 0.7 }));
+    const legendY = top - 22 - Math.floor(index / 3) * 11;
+    const legendX = REPORT_MARGINS.left + index % 3 * (width / 3);
+    report.page.drawLine({ start: { x: legendX, y: legendY + 3 }, end: { x: legendX + 12, y: legendY + 3 }, thickness: 2, color });
+    const label = safeReportText(row.athlete.name);
+    report.page.drawText(label, { x: legendX + 16, y: legendY, size: 6.6, font: report.regular, color: REPORT_AURORA_COLORS.ink });
+  });
+  [earliest, earliest + (latest - earliest) / 2, latest].forEach((timestamp, index) => {
+    const xPosition = plot.left + index / 2 * (plot.right - plot.left);
+    drawCenteredReportText(report, formatReportDate(new Date(timestamp)), xPosition, bottom + 21, 6.5, REPORT_AURORA_COLORS.muted);
+  });
+  drawCenteredReportText(report, 'Performance date', (plot.left + plot.right) / 2, bottom + 8, 7, REPORT_AURORA_COLORS.muted);
+  report.y = bottom - 8;
+  return true;
+}
+
+function comparisonDisciplineCodes(analysis: CoachPerformanceAnalysis): string[] {
+  const counts = new Map<string, number>();
+  for (const entry of analysis.athletes) {
+    for (const discipline of entry.disciplines) {
+      if (discipline.history.length > 0) counts.set(discipline.discipline.code, (counts.get(discipline.discipline.code) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count >= 1 && count <= 8)
+    .map(([code]) => code)
+    .sort();
+}
+
 /** Creates a multi-athlete, selected-range performance PDF from coach analytics only. */
-export async function buildCoachPerformanceReport(analysis: CoachPerformanceAnalysis): Promise<Uint8Array> {
+export async function buildCoachPerformanceReport(analysis: CoachPerformanceAnalysis, injuryAnalysis?: CoachInjuryAnalysis): Promise<Uint8Array> {
   const disciplineCount = analysis.athletes.reduce((total, entry) => total + entry.disciplines.length, 0);
   const resultCount = analysis.athletes.reduce(
     (total, entry) => total + entry.disciplines.reduce((disciplineTotal, discipline) => disciplineTotal + discipline.recordCount, 0),
@@ -220,6 +315,51 @@ export async function buildCoachPerformanceReport(analysis: CoachPerformanceAnal
   drawReportSection(report, 'Scope');
   drawParagraph(report, 'All figures and charts use server-returned normalized results within the selected date range. Positive directional change means improvement for the discipline; chart axes retain the original raw measurement values.');
 
+  drawReportSection(report, 'Descriptive relative-improvement ranking');
+  drawParagraph(report, analysis.comparison.relativeImprovementRanking.methodology);
+  drawParagraph(report, analysis.comparison.relativeImprovementRanking.eligibility);
+  const relativeRanking = analysis.comparison.relativeImprovementRanking;
+  if (relativeRanking.entries.length === 0) {
+    drawParagraph(report, relativeRanking.insufficientDataReason ?? 'No eligible athletes are available for descriptive relative-improvement ranking.');
+  } else {
+    drawReportTable(report, {
+      columns: [
+        { header: 'Rank', flex: 0.45, value: (entry) => entry.rank, align: 'center' },
+        { header: 'Athlete', flex: 1.3, value: (entry) => entry.athlete.name },
+        { header: 'Discipline', flex: 1, value: (entry) => entry.discipline.label },
+        { header: 'First', flex: 1, value: (entry) => formatPerformanceValue(entry.first.value, entry.discipline), align: 'right' },
+        { header: 'Latest', flex: 1, value: (entry) => formatPerformanceValue(entry.latest.value, entry.discipline), align: 'right' },
+        { header: 'Directional change', flex: 1.25, value: (entry) => `${signed(entry.improvement)}${formatPerformanceValue(entry.improvement, entry.discipline)}`, align: 'right' },
+        { header: 'Relative change', flex: 1.05, value: (entry) => formatPercent(entry.improvementPercent), align: 'right' },
+        { header: 'Results', flex: 0.65, value: (entry) => entry.recordCount, align: 'center' },
+      ],
+      rows: relativeRanking.entries,
+    });
+  }
+
+  const sharedDisciplines = comparisonDisciplineCodes(analysis);
+  if (sharedDisciplines.length > 0) {
+    drawReportSection(report, 'Same-discipline performance comparison charts');
+    drawParagraph(report, 'Each chart uses one discipline and its original unit only. Lines connect recorded performance dates without fabricating missing results.');
+    for (const disciplineCode of sharedDisciplines) drawCoachComparisonChart(report, analysis, disciplineCode);
+  }
+
+  if (injuryAnalysis) {
+    drawReportSection(report, 'Recorded injury-monitoring context');
+    drawParagraph(report, 'These monitoring-only indicators apply to the same selected comparison cohort and are not medical assessments or readiness recommendations.');
+    drawReportTable(report, {
+      columns: [
+        { header: 'Athlete', flex: 1.25, value: (entry) => entry.athlete.name },
+        { header: 'Indicator level', flex: 0.85, value: (entry) => entry.warning.level },
+        { header: 'Server warning reasons', flex: 2.15, value: (entry) => coachInjuryWarningReasons(entry.warning) },
+        { header: 'Recorded', flex: 0.65, value: (entry) => entry.injuryCount, align: 'center' },
+        { header: 'Active', flex: 0.55, value: (entry) => entry.activeInjuryCount, align: 'center' },
+      ],
+      rows: injuryAnalysis.athletes,
+    });
+    drawFactList(report, injuryAnalysis.limitations);
+  }
+
   for (const entry of analysis.athletes) {
     drawReportSection(report, `${entry.athlete.name} (${entry.athlete.status})`);
     if (entry.disciplines.length === 0) {
@@ -237,6 +377,7 @@ export async function buildCoachPerformanceReport(analysis: CoachPerformanceAnal
       drawFactList(report, coachPerformanceFacts(discipline));
       drawReportSection(report, 'Selected normalized performance history');
       drawPerformanceChart(report, chartAnalysis(entry.athlete.id, discipline));
+      ensureReportSpace(report, discipline.history.length === 0 ? 50 : 120);
       drawReportSection(report, 'Selected normalized results');
       performanceResultsTable(report, discipline);
     }

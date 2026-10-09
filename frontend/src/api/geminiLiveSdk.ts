@@ -5,6 +5,7 @@ import {
   Modality,
   ThinkingLevel,
   Type,
+  type LiveConnectConfig,
   type LiveServerMessage,
   type Session,
 } from "@google/genai";
@@ -13,9 +14,12 @@ const DEV = import.meta.env.DEV;
 const GEMINI_OUTPUT_SAMPLE_RATE = "24000";
 const GEMINI_SETUP_TIMEOUT_MS = 15_000;
 
-export const GEMINI_LIVE_DEFAULT_MODEL = "gemini-3.8-live-extended-thinking";
+// Standard Gemini 3.8 Live supports Athlora's non-blocking tool calls without
+// thinkingConfig. The token broker normally supplies this value.
+export const GEMINI_LIVE_DEFAULT_MODEL = "gemini-3.8-live";
 
-export const GEMINI_LIVE_ROLLBACK_MODEL = "gemini-3.1-flash-live-preview";
+export const GEMINI_LIVE_FALLBACK_MODEL = "gemini-3.1-flash-live-preview";
+export const GEMINI_LIVE_EXTENDED_THINKING_MODEL = "gemini-3.8-live-extended-thinking";
 
 function debugSession(event: string, details?: Record<string, unknown>): void {
   if (DEV) {
@@ -143,6 +147,7 @@ export class AthloraGeminiSession {
           apiVersion: "v1alpha",
         },
       });
+      const model = this.options.model ?? GEMINI_LIVE_DEFAULT_MODEL;
 
       debugSession("Gemini connecting");
 
@@ -166,19 +171,20 @@ export class AthloraGeminiSession {
           );
         }, GEMINI_SETUP_TIMEOUT_MS);
 
-        void ai.live.connect({
-        model: this.options.model ?? GEMINI_LIVE_DEFAULT_MODEL,
-
-        config: {
+        const liveConfig: LiveConnectConfig = {
           responseModalities: [Modality.AUDIO],
 
           outputAudioTranscription: {},
 
           inputAudioTranscription: {},
 
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.MEDIUM,
-          },
+          ...(model === GEMINI_LIVE_DEFAULT_MODEL
+            ? {}
+            : {
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.MEDIUM,
+                },
+              }),
 
           speechConfig: {
             voiceConfig: {
@@ -194,16 +200,20 @@ export class AthloraGeminiSession {
                 text:
                   "You are Athlora, the Athlora voice assistant. " +
                   "You help authorised coaches with Athlora roster data, analytics, and weather. " +
+                  "You are connected to the coach's authenticated current workspace through the available tools. " +
                   "Never invent Athlora platform data, athletes, disciplines, rankings, results, places, or weather. " +
                   "Use the available tools for every platform-data question and action; treat tool results as authoritative. " +
+                  "For registered-athlete counts, call get_workspace_roster_summary. " +
+                  "For the fastest athlete in a discipline, call get_workspace_discipline_analysis; do not use promising-athlete rankings as a fastest-result answer. " +
+                    "For performance and injury questions, call the corresponding coach analytics tool. For a multi-athlete performance graph, first obtain the relevant performance analysis, then call show_coach_performance_comparison_chart. Only say that a chart is shown when that tool returns chart.status displayed. For charts or PDFs, call the corresponding chart or report tool and report only its actual result. " +
                   "Use get_current_page_context when a coach refers to this page or this athlete; it exposes only the current page and an authorised selected-athlete reference. " +
                   "For athlete creation, use prepare_athlete_draft only after resolving a real discipline, validating the name and discipline, and checking likely duplicates. " +
                   "prepare_athlete_draft never creates an athlete. The browser presents local Confirm and Cancel controls; you cannot confirm, cancel, or create an athlete. " +
                   "For athlete analytics, search_athletes first and use an athlete returned by that tool. " +
-                  "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one and pass only its option ID; never invent or repeat coordinates. " +
+                  "For named-place weather, use get_named_place_weather. If it returns choices, ask the coach to choose one. Then call get_named_place_weather again with the original place and the selected venue option ID; never invent or repeat coordinates. " +
                   "Use get_current_location_weather only when the current coach message explicitly asks for weather at their current, device, or present location. " +
                   "Do not ask for or expose coordinates. Only describe analytics summaries and rankings supplied by analytics tools. " +
-                  "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. " +
+                    "For every date-range, coach-wide, or roster-wide analytics query, use the applicable analytics tool before answering. For questions about who improved or declined most over the last three months, call get_coach_performance_analysis with relativeRange last_three_months. Use comparison.relativeImprovementRanking for descriptive cross-discipline athlete rankings, and explain that it is not an official athletics ranking. When a coach asks to update the displayed comparison chart to the last six weeks, call show_coach_performance_comparison_chart with relativeRange last_six_weeks and reuse its cached athletes and discipline. When a coach asks about injury concerns after a displayed comparison chart, call get_coach_injury_analysis without athlete IDs so Athlora checks that same cached cohort. For common injuries, body regions, or repeated injuries across the roster, call get_coach_injury_analysis and use only its rosterSummary. " +
                   "Use evidence first: give performance guidance only when tool results establish the direction of change. Explain the factual change versus its baseline, why it matters, and one concrete tactical action. " +
                   "When results contain no data or do not support a conclusion, explicitly state that there is no data or no conclusion. " +
                   "Treat injury tool signals as monitoring only, never as diagnoses or medical advice. Never claim or infer workload, wellness, or readiness. " +
@@ -257,6 +267,19 @@ export class AthloraGeminiSession {
                           "Optional discipline code or label to find.",
                       },
                     },
+                  },
+                },
+                {
+                  name: "get_workspace_roster_summary",
+
+                  behavior: Behavior.NON_BLOCKING,
+
+                  description:
+                    "Get the authoritative registered-athlete counts for the current Athlora workspace, including total, active, inactive, and archived counts.",
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {},
                   },
                 },
                 {
@@ -335,7 +358,7 @@ export class AthloraGeminiSession {
                   behavior: Behavior.NON_BLOCKING,
 
                   description:
-                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range.",
+                    "Retrieve authoritative coach performance analysis for selected athletes or the coach roster over an optional discipline and date range. The result includes direction-aware leaders and a descriptive, non-official cross-discipline relative-improvement ranking.",
 
                   parameters: {
                     type: Type.OBJECT,
@@ -360,10 +383,59 @@ export class AthloraGeminiSession {
                         description:
                           "Optional inclusive end date in YYYY-MM-DD format.",
                       },
+                      relativeRange: {
+                        type: Type.STRING,
+                        description:
+                          "Use last_three_months or last_six_weeks for the named relative period. Do not combine with dateFrom or dateTo.",
+                      },
                       lifecycleStatus: {
                         type: Type.STRING,
                         description:
                           "Optional athlete lifecycle status filter.",
+                      },
+                      limit: {
+                        type: Type.INTEGER,
+                        description:
+                          "Optional maximum number of descriptive relative-improvement ranking entries to return.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "show_coach_performance_comparison_chart",
+
+                  behavior: Behavior.NON_BLOCKING,
+
+                  description:
+                    "Prepare and display one visible, same-discipline comparison chart for one to eight authorised athletes. Reuse the most recently displayed chart's athletes and discipline when only a new date range is supplied.",
+
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      athleteIds: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "One to eight authorised athlete IDs. Omit only to update the existing comparison chart.",
+                      },
+                      discipline: {
+                        type: Type.STRING,
+                        description: "A real discipline code or label. Omit only to update the existing comparison chart.",
+                      },
+                      dateFrom: {
+                        type: Type.STRING,
+                        description: "Optional inclusive start date in YYYY-MM-DD format.",
+                      },
+                      dateTo: {
+                        type: Type.STRING,
+                        description: "Optional inclusive end date in YYYY-MM-DD format.",
+                      },
+                      relativeRange: {
+                        type: Type.STRING,
+                        description: "Use last_three_months or last_six_weeks only. Do not combine with dateFrom or dateTo.",
+                      },
+                      lifecycleStatus: {
+                        type: Type.STRING,
+                        description: "Optional athlete lifecycle status filter.",
                       },
                     },
                   },
@@ -598,7 +670,7 @@ export class AthloraGeminiSession {
                   behavior: Behavior.NON_BLOCKING,
 
                   description:
-                    "Get current weather for a named place through Athlora. If venue choices are returned, ask the coach to choose an option ID before calling again.",
+                    "Get current weather for a named place through Athlora. If venue choices are returned, ask the coach to choose an option ID, then call again with the original place and that venueOptionId.",
 
                   parameters: {
                     type: Type.OBJECT,
@@ -645,7 +717,25 @@ export class AthloraGeminiSession {
               ],
             },
           ],
-        },
+        };
+
+        const functionNames = (liveConfig.tools ?? []).flatMap((tool) => {
+          if (!("functionDeclarations" in tool)) return [];
+          return (tool.functionDeclarations ?? [])
+            .map((declaration) => declaration.name)
+            .filter((name): name is string => typeof name === "string");
+        });
+        debugSession("Gemini tool inventory submitted", {
+          model,
+          functionCount: functionNames.length,
+          functionNames,
+          hasSystemInstruction: Boolean(liveConfig.systemInstruction),
+          thinkingConfigured: Boolean(liveConfig.thinkingConfig),
+        });
+
+        void ai.live.connect({
+        model,
+        config: liveConfig,
 
         callbacks: {
           onopen: () => {
@@ -659,7 +749,21 @@ export class AthloraGeminiSession {
 
           onmessage: (message: LiveServerMessage) => {
             if (generation === this.connectionGeneration) {
-              void this.handleMessage(message);
+              void this.handleMessage(message).catch((error: unknown) => {
+                const messageError =
+                  error instanceof Error
+                    ? error
+                    : new Error("Failed to process a Gemini Live message");
+
+                debugSession("Gemini message processing failed", {
+                  message: messageError.message,
+                });
+
+                this.cancelActiveToolCalls();
+                this.interactionInProgress = false;
+                this.options.onError?.(messageError);
+                this.rejectPendingTurn(messageError);
+              });
             }
           },
 
@@ -891,18 +995,28 @@ export class AthloraGeminiSession {
     const generation = this.connectionGeneration;
     const controllers: AbortController[] = [];
     let sleepRequested = false;
+    const requestStartedAt = Date.now();
+
+    debugSession("Gemini tool calls received", {
+      count: calls.length,
+      names: calls.map((call) => call.name ?? "unknown"),
+      idsPresent: calls.filter((call) => Boolean(call.id)).length,
+    });
 
     try {
       const functionResponses = await Promise.all(
         calls.map(async (call) => {
+          const callStartedAt = Date.now();
           const controller = new AbortController();
           controllers.push(controller);
           this.activeToolCalls.set(controller, call.id);
           this.options.onToolCallStart?.(call);
+          let succeeded = false;
 
           try {
             if (call.name === "sleep_assistant") {
               sleepRequested = true;
+              succeeded = true;
 
               return {
                 id: call.id,
@@ -921,6 +1035,7 @@ export class AthloraGeminiSession {
               call,
               controller.signal,
             );
+            succeeded = true;
 
             return {
               id: call.id,
@@ -942,6 +1057,12 @@ export class AthloraGeminiSession {
               },
             };
           } finally {
+            debugSession("Gemini tool call completed", {
+              name: call.name ?? "unknown",
+              idPresent: Boolean(call.id),
+              succeeded,
+              elapsedMs: Date.now() - callStartedAt,
+            });
             this.options.onToolCallEnd?.(call);
           }
         }),
@@ -956,8 +1077,26 @@ export class AthloraGeminiSession {
         return;
       }
 
-      session.sendToolResponse({
-        functionResponses,
+      debugSession("Gemini tool responses ready", {
+        count: functionResponses.length,
+        elapsedMs: Date.now() - requestStartedAt,
+      });
+
+      try {
+        session.sendToolResponse({
+          functionResponses,
+        });
+      } catch (error) {
+        debugSession("Gemini tool response send failed", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          count: functionResponses.length,
+        });
+        throw error;
+      }
+
+      debugSession("Gemini tool responses sent", {
+        count: functionResponses.length,
+        elapsedMs: Date.now() - requestStartedAt,
       });
 
       if (sleepRequested) {

@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { createGeminiToken } from '../../api/ai';
+import { ApiError } from '../../api/client';
 import {
   getAthleteDisciplineAnalysis,
   getCoachInjuryAnalysis,
@@ -16,7 +18,7 @@ import {
   type CoachRankingsAnalysisFilters,
   type WorkspaceDisciplineAnalysis,
 } from '../../api/analytics';
-import { createAthlete, getAthlete, listAthletes } from '../../api/athletes';
+import { createAthlete, getAthlete, getAthleteRosterSummary, listAthletes } from '../../api/athletes';
 import { GeminiAudioPlayer } from '../../api/geminiAudio';
 import { AthloraGeminiSession, type GeminiToolHandler } from '../../api/geminiLiveSdk';
 import { GeminiMicrophone } from '../../api/geminiMicrophone';
@@ -41,6 +43,7 @@ import {
   coachRankingsReportPdf,
 } from '../reports/coachingAnalyticsReport';
 import styles from './AthloraAssistantProvider.module.css';
+import { CoachPerformanceComparisonChart } from './CoachPerformanceComparisonChart';
 
 const ASSISTANT_INACTIVITY_MS = 60_000;
 const START_GREETING = 'Good day coach, how can I help?';
@@ -94,8 +97,14 @@ interface CachedCoachPerformanceAnalysis {
   analysis: CoachPerformanceAnalysis;
 }
 
+interface CachedCoachComparisonChart {
+  analysis: CoachPerformanceAnalysis;
+  filters: CoachPerformanceAnalysisFilters & { athleteIds: string[]; discipline: string };
+}
+
 interface CachedCoachInjuryAnalysis {
   analysis: CoachInjuryAnalysis;
+  filters: CoachInjuryAnalysisFilters;
 }
 
 interface CachedCoachRankingsAnalysis {
@@ -163,6 +172,7 @@ function normalizeSeasonYear(value: unknown): string | undefined {
 }
 
 const COACH_ANALYTICS_MAX_ATHLETE_IDS = 100;
+const COACH_COMPARISON_CHART_MAX_ATHLETES = 8;
 const COACH_ANALYTICS_MAX_RANKING_LIMIT = 100;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -193,7 +203,40 @@ function optionalCoachDate(value: unknown, label: 'dateFrom' | 'dateTo'): string
   return value;
 }
 
+function lastThreeMonthsDateRange(now = new Date()): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = new Date(end);
+  const day = start.getUTCDate();
+  start.setUTCDate(1);
+  start.setUTCMonth(start.getUTCMonth() - 3);
+  const daysInMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+  start.setUTCDate(Math.min(day, daysInMonth));
+  return {
+    dateFrom: start.toISOString().slice(0, 10),
+    dateTo: end.toISOString().slice(0, 10),
+  };
+}
+
+function lastSixWeeksDateRange(now = new Date()): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 42);
+  return {
+    dateFrom: start.toISOString().slice(0, 10),
+    dateTo: end.toISOString().slice(0, 10),
+  };
+}
+
 function coachDateRangeFilters(args: Record<string, unknown>): Pick<CoachPerformanceAnalysisFilters, 'dateFrom' | 'dateTo'> {
+  if (args.relativeRange !== undefined && args.relativeRange !== null) {
+    if (args.relativeRange !== 'last_three_months' && args.relativeRange !== 'last_six_weeks') {
+      throw new Error('relativeRange must be last_three_months or last_six_weeks when provided.');
+    }
+    if (args.dateFrom !== undefined || args.dateTo !== undefined) {
+      throw new Error('relativeRange cannot be combined with dateFrom or dateTo.');
+    }
+    return args.relativeRange === 'last_three_months' ? lastThreeMonthsDateRange() : lastSixWeeksDateRange();
+  }
   const dateFrom = optionalCoachDate(args.dateFrom, 'dateFrom');
   const dateTo = optionalCoachDate(args.dateTo, 'dateTo');
   if (dateFrom && dateTo && dateFrom > dateTo) throw new Error('dateFrom must not be after dateTo.');
@@ -215,6 +258,7 @@ function optionalCoachRankingsLimit(value: unknown): number | undefined {
 }
 
 function safeCoachInjuryAnalysis(analysis: CoachInjuryAnalysis): CoachInjuryAnalysis {
+  if (!analysis.rosterSummary) throw new Error('Coach injury analytics response is missing rosterSummary. The frontend and backend deployments do not use matching analytics contracts.');
   return {
     selectedRange: { dateFrom: analysis.selectedRange.dateFrom, dateTo: analysis.selectedRange.dateTo },
     lifecycleStatus: analysis.lifecycleStatus,
@@ -246,6 +290,29 @@ function safeCoachInjuryAnalysis(analysis: CoachInjuryAnalysis): CoachInjuryAnal
         active: injury.active,
       })),
     })),
+    rosterSummary: {
+      injuryRecordCount: analysis.rosterSummary.injuryRecordCount,
+      athletesWithRecordedInjuries: analysis.rosterSummary.athletesWithRecordedInjuries,
+      mostCommonRecordedArea: analysis.rosterSummary.mostCommonRecordedArea && {
+        bodyRegion: analysis.rosterSummary.mostCommonRecordedArea.bodyRegion,
+        area: analysis.rosterSummary.mostCommonRecordedArea.area,
+        count: analysis.rosterSummary.mostCommonRecordedArea.count,
+      },
+      mostCommonBodyRegion: analysis.rosterSummary.mostCommonBodyRegion && {
+        bodyRegion: analysis.rosterSummary.mostCommonBodyRegion.bodyRegion,
+        count: analysis.rosterSummary.mostCommonBodyRegion.count,
+      },
+      athletesWithRepeatedInjuries: analysis.rosterSummary.athletesWithRepeatedInjuries.map((entry) => ({
+        athlete: { id: entry.athlete.id, name: entry.athlete.name, status: entry.athlete.status },
+        repeatedInjuries: entry.repeatedInjuries.map((injury) => ({
+          bodyRegion: injury.bodyRegion,
+          area: injury.area,
+          side: injury.side,
+          count: injury.count,
+        })),
+      })),
+      insufficientDataReason: analysis.rosterSummary.insufficientDataReason,
+    },
   };
 }
 
@@ -309,6 +376,16 @@ function safeToolError(action: string): Error {
   return new Error(`${action} is temporarily unavailable. Please try again.`);
 }
 
+function analyticsToolError(action: string, call: Parameters<GeminiToolHandler>[0], error: unknown): Error {
+  const functionCallId = call.id ?? 'unknown';
+  if (error instanceof ApiError) {
+    const requestId = typeof error.details.requestId === 'string' ? ` Request ID: ${error.details.requestId}.` : '';
+    return new Error(`${action} failed during the API request for Gemini function call ${functionCallId}: HTTP ${error.status} (${error.code}).${requestId}`);
+  }
+  const reason = error instanceof Error ? error.message : 'Unknown client error.';
+  return new Error(`${action} failed before a usable API response for Gemini function call ${functionCallId}: ${reason}`);
+}
+
 function browserCoordinates(): Promise<{ latitude: number; longitude: number }> {
   if (!navigator.geolocation) {
     return Promise.reject(new Error('Location access is unavailable in this browser.'));
@@ -355,6 +432,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const [cachedAthleteAnalysis, setCachedAthleteAnalysis] = useState<CachedAthleteAnalysis | null>(null);
   const [cachedDisciplineAnalysis, setCachedDisciplineAnalysis] = useState<CachedDisciplineAnalysis | null>(null);
   const [cachedCoachPerformanceAnalysis, setCachedCoachPerformanceAnalysis] = useState<CachedCoachPerformanceAnalysis | null>(null);
+  const [cachedCoachComparisonChart, setCachedCoachComparisonChart] = useState<CachedCoachComparisonChart | null>(null);
   const [cachedCoachInjuryAnalysis, setCachedCoachInjuryAnalysis] = useState<CachedCoachInjuryAnalysis | null>(null);
   const [cachedCoachRankingsAnalysis, setCachedCoachRankingsAnalysis] = useState<CachedCoachRankingsAnalysis | null>(null);
   const [reporting, setReporting] = useState<'athlete' | 'discipline' | 'coachPerformance' | 'coachInjury' | 'coachRankings' | null>(null);
@@ -384,6 +462,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
   const cachedAthleteAnalysisRef = useRef<CachedAthleteAnalysis | null>(null);
   const cachedDisciplineAnalysisRef = useRef<CachedDisciplineAnalysis | null>(null);
   const cachedCoachPerformanceAnalysisRef = useRef<CachedCoachPerformanceAnalysis | null>(null);
+  const cachedCoachComparisonChartRef = useRef<CachedCoachComparisonChart | null>(null);
   const cachedCoachInjuryAnalysisRef = useRef<CachedCoachInjuryAnalysis | null>(null);
   const cachedCoachRankingsAnalysisRef = useRef<CachedCoachRankingsAnalysis | null>(null);
   const pendingAnalysisKindRef = useRef<'athlete' | 'discipline' | 'coachPerformance' | 'coachInjury' | 'coachRankings' | null>(null);
@@ -431,6 +510,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     cachedAthleteAnalysisRef.current = null;
     cachedDisciplineAnalysisRef.current = null;
     cachedCoachPerformanceAnalysisRef.current = null;
+    cachedCoachComparisonChartRef.current = null;
     cachedCoachInjuryAnalysisRef.current = null;
     cachedCoachRankingsAnalysisRef.current = null;
     pendingAnalysisKindRef.current = null;
@@ -458,6 +538,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       setCachedAthleteAnalysis(null);
       setCachedDisciplineAnalysis(null);
       setCachedCoachPerformanceAnalysis(null);
+      setCachedCoachComparisonChart(null);
       setCachedCoachInjuryAnalysis(null);
       setCachedCoachRankingsAnalysis(null);
       setReporting(null);
@@ -499,9 +580,14 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     setCachedCoachPerformanceAnalysis(cached);
   };
 
-  const cacheCoachInjuryAnalysis = (cached: CachedCoachInjuryAnalysis | null) => {
+  const cacheCoachComparisonChart = (cached: CachedCoachComparisonChart | null) => {
+    cachedCoachComparisonChartRef.current = cached;
+    setCachedCoachComparisonChart(cached);
+  };
+
+  const cacheCoachInjuryAnalysis = (cached: CachedCoachInjuryAnalysis | null, setPendingAnalysis = true) => {
     cachedCoachInjuryAnalysisRef.current = cached;
-    if (cached) pendingAnalysisKindRef.current = 'coachInjury';
+    if (cached && setPendingAnalysis) pendingAnalysisKindRef.current = 'coachInjury';
     setCachedCoachInjuryAnalysis(cached);
   };
 
@@ -577,10 +663,12 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     const athleteIds = optionalCoachAthleteIds(args.athleteIds);
     const dateRange = coachDateRangeFilters(args);
     const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus);
+    const limit = optionalCoachRankingsLimit(args.limit);
     const filters: CoachPerformanceAnalysisFilters = {
       ...(athleteIds ? { athleteIds } : {}),
       ...dateRange,
       ...(lifecycleStatus ? { lifecycleStatus } : {}),
+      ...(limit === undefined ? {} : { limit }),
     };
     let relatedSources: AssistantSource<unknown>[] | undefined;
     if (args.discipline !== undefined && args.discipline !== null) {
@@ -591,15 +679,64 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     return { filters, relatedSources };
   };
 
-  const coachInjuryFilters = (args: Record<string, unknown>): CoachInjuryAnalysisFilters => {
-    if (args.discipline !== undefined) throw new Error('Injury monitoring analysis does not support a discipline filter.');
-    const athleteIds = optionalCoachAthleteIds(args.athleteIds);
-    const dateRange = coachDateRangeFilters(args);
-    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus);
+  const coachComparisonChartFilters = async (args: Record<string, unknown>) => {
+    const existing = cachedCoachComparisonChartRef.current;
+    const requestedAthleteIds = optionalCoachAthleteIds(args.athleteIds);
+    const athleteIds = requestedAthleteIds ?? existing?.filters.athleteIds;
+    if (!athleteIds) throw new Error('Select one or more athletes before requesting a comparison chart.');
+    if (athleteIds.length > COACH_COMPARISON_CHART_MAX_ATHLETES) {
+      throw new Error(`Comparison charts support at most ${COACH_COMPARISON_CHART_MAX_ATHLETES} athletes at once.`);
+    }
+
+    let discipline = existing?.filters.discipline;
+    let relatedSources: AssistantSource<unknown>[] | undefined;
+    if (args.discipline !== undefined && args.discipline !== null) {
+      const resolved = await loadResolvedDiscipline(args.discipline);
+      discipline = resolved.discipline.code;
+      relatedSources = [resolved.source];
+    }
+    if (!discipline) throw new Error('A discipline is required before Athlora can display a comparison chart.');
+
+    const hasRequestedRange = args.relativeRange !== undefined || args.dateFrom !== undefined || args.dateTo !== undefined;
+    const dateRange = hasRequestedRange
+      ? coachDateRangeFilters(args)
+      : {
+          ...(existing?.filters.dateFrom ? { dateFrom: existing.filters.dateFrom } : {}),
+          ...(existing?.filters.dateTo ? { dateTo: existing.filters.dateTo } : {}),
+        };
+    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus) ?? existing?.filters.lifecycleStatus;
     return {
-      ...(athleteIds ? { athleteIds } : {}),
-      ...dateRange,
-      ...(lifecycleStatus ? { lifecycleStatus } : {}),
+      filters: {
+        athleteIds: [...athleteIds],
+        discipline,
+        ...dateRange,
+        ...(lifecycleStatus ? { lifecycleStatus } : {}),
+      },
+      relatedSources,
+    };
+  };
+
+  const coachInjuryFilters = (args: Record<string, unknown>) => {
+    if (args.discipline !== undefined) throw new Error('Injury monitoring analysis does not support a discipline filter.');
+    const comparison = cachedCoachComparisonChartRef.current;
+    const requestedAthleteIds = optionalCoachAthleteIds(args.athleteIds);
+    const followsDisplayedComparison = !requestedAthleteIds && Boolean(comparison);
+    const athleteIds = requestedAthleteIds ?? comparison?.filters.athleteIds;
+    const hasRequestedRange = args.relativeRange !== undefined || args.dateFrom !== undefined || args.dateTo !== undefined;
+    const dateRange = hasRequestedRange
+      ? coachDateRangeFilters(args)
+      : {
+          ...(comparison?.filters.dateFrom ? { dateFrom: comparison.filters.dateFrom } : {}),
+          ...(comparison?.filters.dateTo ? { dateTo: comparison.filters.dateTo } : {}),
+        };
+    const lifecycleStatus = optionalCoachLifecycleStatus(args.lifecycleStatus) ?? comparison?.filters.lifecycleStatus;
+    return {
+      filters: {
+        ...(athleteIds ? { athleteIds } : {}),
+        ...dateRange,
+        ...(lifecycleStatus ? { lifecycleStatus } : {}),
+      },
+      followsDisplayedComparison,
     };
   };
 
@@ -618,9 +755,11 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     return { filters, relatedSources: [source] };
   };
 
-  const downloadCoachPerformancePdf = async (analysis: CoachPerformanceAnalysis, generation: number, signal?: AbortSignal) => {
+  const downloadCoachPerformancePdf = async (analysis: CoachPerformanceAnalysis, generation: number, signal?: AbortSignal, injuryAnalysis?: CoachInjuryAnalysis) => {
     ensureCurrentToolCall(generation, signal);
-    const bytes = await coachPerformanceReportPdf(analysis);
+    const bytes = injuryAnalysis
+      ? await coachPerformanceReportPdf(analysis, injuryAnalysis)
+      : await coachPerformanceReportPdf(analysis);
     ensureCurrentToolCall(generation, signal);
     const filename = `${performanceReportFilename('athlora-coach-performance-analysis')}.pdf`;
     downloadFile(bytes, filename, 'application/pdf');
@@ -631,14 +770,20 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     return filename;
   };
 
-  const downloadCoachInjuryPdf = async (analysis: CoachInjuryAnalysis, generation: number, signal?: AbortSignal) => {
+  const downloadCoachInjuryPdf = async (
+    analysis: CoachInjuryAnalysis,
+    filters: CoachInjuryAnalysisFilters,
+    generation: number,
+    signal?: AbortSignal,
+    preservePendingAnalysis = false,
+  ) => {
     ensureCurrentToolCall(generation, signal);
     const bytes = await coachInjuryMonitoringReportPdf(analysis);
     ensureCurrentToolCall(generation, signal);
     const filename = `${performanceReportFilename('athlora-injury-monitoring-analysis')}.pdf`;
     downloadFile(bytes, filename, 'application/pdf');
     if (isCurrentToolCall(generation, signal)) {
-      cacheCoachInjuryAnalysis({ analysis });
+      cacheCoachInjuryAnalysis({ analysis, filters }, !preservePendingAnalysis);
       setReportStatus('Injury monitoring PDF downloaded.');
     }
     return filename;
@@ -693,6 +838,17 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
         || discipline.code.toLocaleLowerCase().includes(query)
         || discipline.label.toLocaleLowerCase().includes(query));
       return sourceResult('/api/v1/disciplines', data);
+    }
+
+    if (call.name === 'get_workspace_roster_summary') {
+      let summary: Awaited<ReturnType<typeof getAthleteRosterSummary>>;
+      try {
+        summary = await getAthleteRosterSummary();
+      } catch {
+        throw safeToolError('Roster summary');
+      }
+      ensureCurrentToolCall(generation, signal);
+      return sourceResult('/api/v1/athletes/summary', summary);
     }
 
     if (call.name === 'search_athletes') {
@@ -796,8 +952,9 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       let analysis: CoachPerformanceAnalysis;
       try {
         analysis = await getCoachPerformanceAnalysis(filters);
-      } catch {
-        throw safeToolError('Coach performance analytics');
+        if (!analysis.comparison) throw new Error('Coach performance analytics response is missing comparison. The frontend and backend deployments do not use matching analytics contracts.');
+      } catch (error) {
+        throw analyticsToolError('Coach performance analytics', call, error);
       }
       ensureCurrentToolCall(generation, signal);
       cacheCoachPerformanceAnalysis({ analysis });
@@ -805,17 +962,57 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       return sourceResult('/api/v1/analytics/coach/performance', analysis, relatedSources);
     }
 
+    if (call.name === 'show_coach_performance_comparison_chart') {
+      const { filters, relatedSources } = await coachComparisonChartFilters(args);
+      ensureCurrentToolCall(generation, signal);
+      let analysis: CoachPerformanceAnalysis;
+      try {
+        analysis = await getCoachPerformanceAnalysis(filters);
+      } catch (error) {
+        throw analyticsToolError('Coach performance comparison chart', call, error);
+      }
+      ensureCurrentToolCall(generation, signal);
+      const chartableAthleteCount = analysis.athletes.filter((entry) => (
+        entry.disciplines.some((discipline) => discipline.discipline.code === filters.discipline && discipline.history.length > 0)
+      )).length;
+      if (chartableAthleteCount === 0) {
+        return {
+          ...sourceResult('/api/v1/analytics/coach/performance', analysis, relatedSources),
+          chart: {
+            status: 'unavailable' as const,
+            reason: `No recorded ${filters.discipline} performances are available for the selected athletes and date range.`,
+          },
+        };
+      }
+      // Commit the chart before reporting success so the Live response cannot outrun the visible surface.
+      flushSync(() => {
+        cacheCoachComparisonChart({ analysis, filters });
+        cacheCoachPerformanceAnalysis({ analysis });
+        setReportStatus('Comparison chart displayed.');
+      });
+      return {
+        ...sourceResult('/api/v1/analytics/coach/performance', analysis, relatedSources),
+        chart: {
+          status: 'displayed' as const,
+          athleteCount: analysis.athletes.length,
+          athletesWithRecordedPerformances: chartableAthleteCount,
+          discipline: filters.discipline,
+          selectedRange: analysis.selectedRange,
+        },
+      };
+    }
+
     if (call.name === 'get_coach_injury_analysis') {
-      const filters = coachInjuryFilters(args);
+      const { filters, followsDisplayedComparison } = coachInjuryFilters(args);
       ensureCurrentToolCall(generation, signal);
       let analysis: CoachInjuryAnalysis;
       try {
         analysis = safeCoachInjuryAnalysis(await getCoachInjuryAnalysis(filters));
-      } catch {
-        throw safeToolError('Coach injury monitoring analytics');
+      } catch (error) {
+        throw analyticsToolError('Coach injury monitoring analytics', call, error);
       }
       ensureCurrentToolCall(generation, signal);
-      cacheCoachInjuryAnalysis({ analysis });
+      cacheCoachInjuryAnalysis({ analysis, filters }, !followsDisplayedComparison);
       setReportStatus(null);
       return sourceResult('/api/v1/analytics/coach/injuries', analysis);
     }
@@ -864,7 +1061,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     }
 
     if (call.name === 'download_coach_injury_report') {
-      const filters = coachInjuryFilters(args);
+      const { filters, followsDisplayedComparison } = coachInjuryFilters(args);
       ensureCurrentToolCall(generation, signal);
       let analysis: CoachInjuryAnalysis;
       try {
@@ -875,7 +1072,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
       ensureCurrentToolCall(generation, signal);
       let filename: string;
       try {
-        filename = await downloadCoachInjuryPdf(analysis, generation, signal);
+        filename = await downloadCoachInjuryPdf(analysis, filters, generation, signal, followsDisplayedComparison);
       } catch (error) {
         if (error instanceof Error && error.message === 'Athlora request was cancelled.') throw error;
         throw safeToolError('Injury monitoring report');
@@ -1343,12 +1540,14 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     cachedAthleteAnalysisRef.current = null;
     cachedDisciplineAnalysisRef.current = null;
     cachedCoachPerformanceAnalysisRef.current = null;
+    cachedCoachComparisonChartRef.current = null;
     cachedCoachInjuryAnalysisRef.current = null;
     cachedCoachRankingsAnalysisRef.current = null;
     pendingAnalysisKindRef.current = null;
     setCachedAthleteAnalysis(null);
     setCachedDisciplineAnalysis(null);
     setCachedCoachPerformanceAnalysis(null);
+    setCachedCoachComparisonChart(null);
     setCachedCoachInjuryAnalysis(null);
     setCachedCoachRankingsAnalysis(null);
     setReporting(null);
@@ -1410,6 +1609,22 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     }
   };
 
+  const comparisonInjuryContext = (analysis: CoachPerformanceAnalysis): CoachInjuryAnalysis | undefined => {
+    const comparison = cachedCoachComparisonChartRef.current;
+    const injury = cachedCoachInjuryAnalysisRef.current;
+    if (!comparison || !injury || comparison.analysis !== analysis) return undefined;
+
+    const comparisonAthleteIds = [...comparison.filters.athleteIds].sort();
+    const injuryAthleteIds = [...(injury.filters.athleteIds ?? [])].sort();
+    const rangesMatch = comparison.analysis.selectedRange.dateFrom === injury.analysis.selectedRange.dateFrom
+      && comparison.analysis.selectedRange.dateTo === injury.analysis.selectedRange.dateTo;
+    if (comparisonAthleteIds.length !== injuryAthleteIds.length
+      || comparisonAthleteIds.some((id, index) => id !== injuryAthleteIds[index])
+      || comparison.filters.lifecycleStatus !== injury.filters.lifecycleStatus
+      || !rangesMatch) return undefined;
+    return injury.analysis;
+  };
+
   const generateCoachPerformanceReport = async (cached = cachedCoachPerformanceAnalysisRef.current) => {
     if (!cached || reportingRef.current) return;
     const generation = lifecycleGenerationRef.current;
@@ -1418,7 +1633,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     setReportStatus('Preparing coach performance analysis PDF...');
     setActionError(null);
     try {
-      await downloadCoachPerformancePdf(cached.analysis, generation);
+      await downloadCoachPerformancePdf(cached.analysis, generation, undefined, comparisonInjuryContext(cached.analysis));
     } catch {
       if (isCurrentLifecycle(generation)) {
         setReportStatus(null);
@@ -1440,7 +1655,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
     setReportStatus('Preparing injury monitoring PDF...');
     setActionError(null);
     try {
-      await downloadCoachInjuryPdf(cached.analysis, generation);
+      await downloadCoachInjuryPdf(cached.analysis, cached.filters, generation);
     } catch {
       if (isCurrentLifecycle(generation)) {
         setReportStatus(null);
@@ -1562,6 +1777,14 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
             </div>
           </section>}
 
+          {cachedCoachComparisonChart && <section className={styles.analysisActions} aria-labelledby="athlora-comparison-chart-title" aria-busy={reporting === 'coachPerformance'}>
+            <h3 id="athlora-comparison-chart-title">Performance comparison chart displayed</h3>
+            <CoachPerformanceComparisonChart analysis={cachedCoachComparisonChart.analysis} disciplineCode={cachedCoachComparisonChart.filters.discipline} />
+            <div>
+              <Button onClick={() => void generateCoachPerformanceReport({ analysis: cachedCoachComparisonChart.analysis })} disabled={reporting !== null} aria-describedby="athlora-report-status">{reporting === 'coachPerformance' ? 'Preparing PDF...' : 'Generate comparison PDF'}</Button>
+            </div>
+          </section>}
+
           {cachedCoachPerformanceAnalysis && <section className={styles.analysisActions} aria-labelledby="athlora-coach-performance-title" aria-busy={reporting === 'coachPerformance'}>
             <h3 id="athlora-coach-performance-title">Coach performance analysis ready</h3>
             <p>{cachedCoachPerformanceAnalysis.analysis.athletes.length} athlete{cachedCoachPerformanceAnalysis.analysis.athletes.length === 1 ? '' : 's'} in the cached analysis.</p>
@@ -1586,7 +1809,7 @@ export function AthloraAssistantProvider({ children }: { children: ReactNode }) 
             </div>
           </section>}
 
-          {(cachedAthleteAnalysis || cachedDisciplineAnalysis || cachedCoachPerformanceAnalysis || cachedCoachInjuryAnalysis || cachedCoachRankingsAnalysis) && <p id="athlora-report-status" role="status">{reportStatus ?? 'Reports use the exact cached analysis and do not request new analytics.'}</p>}
+          {(cachedAthleteAnalysis || cachedDisciplineAnalysis || cachedCoachComparisonChart || cachedCoachPerformanceAnalysis || cachedCoachInjuryAnalysis || cachedCoachRankingsAnalysis) && <p id="athlora-report-status" role="status">{reportStatus ?? 'Reports use the exact cached analysis and do not request new analytics.'}</p>}
 
           <div className={styles.aiActions}>
             {geminiConnected && !geminiListening && <Button variant="secondary" onClick={() => void startGeminiListening()}>Enable hands-free</Button>}

@@ -79,7 +79,7 @@ describe('connectGeminiLive', () => {
 
     expect(mockSocket.send).toHaveBeenCalledOnce();
     const sent = JSON.parse(mockSocket.send.mock.calls[0][0] as string);
-    expect(sent.setup.model).toBe('models/gemini-3.1-flash-live-preview');
+    expect(sent.setup.model).toBe('models/gemini-3.8-live');
     expect(sent.setup.generationConfig.responseModalities).toEqual(['AUDIO']);
     expect(sent.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Sulafat');
     expect(sent.setup.systemInstruction.parts[0].text).toContain('slightly slower than normal');

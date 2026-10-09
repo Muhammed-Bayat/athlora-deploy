@@ -187,6 +187,25 @@ describe('GET /api/v1/athletes', () => {
   });
 });
 
+describe('GET /api/v1/athletes/summary', () => {
+  it('returns aggregate roster counts scoped to the authenticated workspace', async () => {
+    configureAuth();
+    query
+      .mockResolvedValueOnce(synchronizedUser())
+      .mockResolvedValueOnce({ rows: [{ total: 8, active: 5, inactive: 2, archived: 1 }] });
+
+    const response = await request(app)
+      .get('/api/v1/athletes/summary')
+      .set('Authorization', 'Bearer valid');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ data: { total: 8, active: 5, inactive: 2, archived: 1 } });
+    const [sql, parameters] = query.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain('workspace_id = $1');
+    expect(parameters).toEqual([USER_ID]);
+  });
+});
+
 describe('POST /api/v1/athletes', () => {
   it('creates an athlete scoped to the requesting coach', async () => {
     configureAuth();

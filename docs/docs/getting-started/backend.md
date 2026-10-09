@@ -39,6 +39,8 @@ PORT=4000
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 NOMINATIM_USER_AGENT=Athlora/0.2 (https://example.com/contact)
 GEMINI_API_KEY=
+# Defaults to gemini-3.8-live; set rollback for the temporary 3.1 fallback.
+GEMINI_LIVE_MODEL=
 S3_ENDPOINT=
 S3_REGION=auto
 S3_BUCKET=
@@ -51,7 +53,7 @@ DB_POOL_IDLE_TIMEOUT_MS=
 DB_POOL_CONNECTION_TIMEOUT_MS=
 ```
 
-The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint. `PUBLIC_LOGGER_SESSION_TTL_MINUTES` is optional: it overrides the lifetime of public logger session links in minutes (default `120`, clamped between `15` and `240`); leave it unset to use the default.
+The Management API variables are required only for password-ticket creation and permanent account deletion. Keep `.env` private. `CORS_ORIGINS` accepts a comma-separated allow-list for both HTTP and Socket.IO. `NOMINATIM_BASE_URL` is server-only and normally remains the public default. Set `NOMINATIM_USER_AGENT` to an identifiable application/contact string before deployment, as required by the Nominatim public usage policy. `GEMINI_API_KEY` is required for the AI voice assistant token endpoint. `GEMINI_LIVE_MODEL=extended-thinking` explicitly opts into Gemini 3.8 Live Extended Thinking, whose earlier client-tool failure remains under investigation. `PUBLIC_LOGGER_SESSION_TTL_MINUTES` is optional: it overrides the lifetime of public logger session links in minutes (default `120`, clamped between `15` and `240`); leave it unset to use the default.
 
 Club branding uploads require an S3-compatible object store (`S3_*`). When `S3_PUBLIC_BASE_URL` is unset, media is served from the API at `/api/v1/media/clubs/{workspaceId}/{filename}`. Local development can use any S3-compatible endpoint (for example MinIO).
 

@@ -112,13 +112,28 @@ function parseDiscipline(
 
 function parseCoachPerformanceQuery(input: Record<string, unknown>): CoachPerformanceQuery {
   const issues: QueryIssue[] = [];
-  rejectUnknownQueryFields(input, ['athleteIds', 'discipline', 'dateFrom', 'dateTo', 'lifecycleStatus'], issues);
+  rejectUnknownQueryFields(input, ['athleteIds', 'discipline', 'dateFrom', 'dateTo', 'lifecycleStatus', 'limit'], issues);
   const athleteIds = parseAthleteIds(input, issues);
   const discipline = parseDiscipline(input, issues, false);
   const dateRange = parseDateRange(input, issues);
   const lifecycleStatus = parseLifecycleStatus(input, issues);
+  const limitValue = optionalQueryString(input, 'limit', issues);
+  let limit: number | undefined;
+  if (limitValue !== undefined) {
+    if (!/^\d+$/.test(limitValue) || Number(limitValue) < 1 || Number(limitValue) > MAX_COACH_RANKING_LIMIT) {
+      issues.push({ path: 'limit', code: 'invalid_value', message: `Expected an integer from 1 to ${MAX_COACH_RANKING_LIMIT}` });
+    } else {
+      limit = Number(limitValue);
+    }
+  }
   if (issues.length > 0) invalidQuery(issues);
-  return { ...(athleteIds === undefined ? {} : { athleteIds }), ...(discipline === undefined ? {} : { discipline }), dateRange, lifecycleStatus };
+  return {
+    ...(athleteIds === undefined ? {} : { athleteIds }),
+    ...(discipline === undefined ? {} : { discipline }),
+    ...(limit === undefined ? {} : { limit }),
+    dateRange,
+    lifecycleStatus,
+  };
 }
 
 function parseCoachInjuryQuery(input: Record<string, unknown>): CoachInjuryQuery {

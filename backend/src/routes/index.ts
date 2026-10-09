@@ -35,6 +35,7 @@ import { listAccessibleWorkspaces } from '../controllers/workspaces.js';
 import { requireAthleteOwnership, requireEventHostOwnership, requireEventOwnership } from '../middleware/ownership.js';
 import { validateBody } from '../middleware/validation.js';
 import { requireOperationalAccess } from '../middleware/capabilities.js';
+import { apiLimiter, publicApiLimiter } from '../middleware/rateLimit.js';
 import {
   parseAthleteCreatePayload,
   parseAthleteReplacementPayload,
@@ -45,8 +46,11 @@ import {
 
 const router = Router();
 
+router.use(apiLimiter);
+
 const athletesRouter = Router();
 athletesRouter.get('/', athletes.listAthletes);
+athletesRouter.get('/summary', athletes.getAthleteRosterSummary);
 athletesRouter.get('/injury-summaries', athletes.listAthleteInjurySummaries);
 athletesRouter.post('/', requireOperationalAccess(), validateBody(parseAthleteCreatePayload), athletes.createAthlete);
 athletesRouter.get('/:id', requireAthleteOwnership, athletes.getAthlete);
@@ -82,11 +86,11 @@ eventsRouter.post('/:id/unarchive', requireOperationalAccess(), requireEventHost
 eventsRouter.get('/:id/weather', requireEventOwnership(), events.getWeather);
 
 router.use('/auth', authRouter);
-router.use('/public/logger', publicLoggerRouter);
-router.use('/public/logger', publicMeetsRouter);
-router.use('/public/statistics', publicStatisticsRouter);
-router.use('/public/schedule', publicScheduleRouter);
-router.use('/public/logger/sync', publicSyncRouter);
+router.use('/public/logger', publicApiLimiter, publicLoggerRouter);
+router.use('/public/logger', publicApiLimiter, publicMeetsRouter);
+router.use('/public/statistics', publicApiLimiter, publicStatisticsRouter);
+router.use('/public/schedule', publicApiLimiter, publicScheduleRouter);
+router.use('/public/logger/sync', publicApiLimiter, publicSyncRouter);
 // Acceptance cannot require an existing workspace membership.
 router.post('/workspaces/invitations/:token/accept', verifyAuth0Token, acceptWorkspaceInvitation);
 // Listing is used to decide whether a synchronized user needs Club onboarding.

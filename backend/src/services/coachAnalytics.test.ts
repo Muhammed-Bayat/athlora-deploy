@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   analyzeCoachPerformance,
+  getCoachInjuryAnalytics,
   rankCoachAthletes,
+  summarizeCoachInjuryRoster,
   summarizeCoachInjuries,
+  summarizeCoachPerformanceChanges,
   type CoachDateRange,
 } from './coachAnalytics.js';
 import type { AnalyticsDiscipline, NormalizedAthleteResult } from './athleteAnalytics.js';
@@ -47,6 +50,20 @@ function result(
 }
 
 describe('coach analytics foundations', () => {
+  it('orders distinct coach athletes by a selected case-insensitive name expression', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+
+    await getCoachInjuryAnalytics(
+      '11111111-1111-4111-8111-111111111111',
+      { dateRange: allDates, lifecycleStatus: 'all' },
+      { query },
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0]?.[0]).toContain('lower(a.name) AS name_sort');
+    expect(query.mock.calls[0]?.[0]).toContain('ORDER BY name_sort, a.id');
+  });
+
   it('makes timed and measured improvements positive in their respective better directions', () => {
     const timedAnalysis = analyzeCoachPerformance(timed, [
       result(timed, 12, '2026-01-01'),
@@ -69,6 +86,114 @@ describe('coach analytics foundations', () => {
 
     expect(analysis).toMatchObject({ improvement: -0.5, improvementPercent: -5 });
     expect(analysis.recentTrend).toMatchObject({ direction: 'declining', change: -0.5 });
+  });
+
+  it('identifies cross-discipline change leaders using normalized direction-aware percentages', () => {
+    const athletes = [
+      {
+        athlete: { id: athleteId, name: 'Ari', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 12, '2026-07-01'),
+          result(timed, 11, '2026-09-01'),
+        ], allDates, season)],
+      },
+      {
+        athlete: { id: secondAthleteId, name: 'Bea', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(measured, [
+          result(measured, 5, '2026-07-01', secondAthleteId),
+          result(measured, 5.75, '2026-09-01', secondAthleteId),
+        ], allDates, season)],
+      },
+      {
+        athlete: { id: thirdAthleteId, name: 'Cy', status: 'inactive' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 10, '2026-07-01', thirdAthleteId),
+          result(timed, 11, '2026-09-01', thirdAthleteId),
+        ], allDates, season)],
+      },
+    ];
+
+    const comparison = summarizeCoachPerformanceChanges(athletes, 2);
+
+    expect(comparison).toMatchObject({
+      eligibleAthleteDisciplineCount: 3,
+      mostImproved: { athlete: { name: 'Bea' }, discipline: { code: 'long_jump' }, improvement: 0.75, improvementPercent: 15 },
+      mostDeclined: { athlete: { name: 'Cy' }, discipline: { code: '100m' }, improvement: -1, improvementPercent: -10 },
+      insufficientDataReason: null,
+    });
+    expect(comparison.relativeImprovementRanking).toMatchObject({
+      limit: 2,
+      eligibleAthleteCount: 3,
+      entries: [
+        { rank: 1, athlete: { name: 'Bea' }, discipline: { code: 'long_jump' }, improvementPercent: 15, classification: 'improved' },
+        { rank: 2, athlete: { name: 'Ari' }, discipline: { code: '100m' }, improvementPercent: 8.33, classification: 'improved' },
+      ],
+    });
+  });
+
+  it('ranks each athlete once by their strongest eligible discipline and excludes non-positive baselines', () => {
+    const athletes = [
+      {
+        athlete: { id: athleteId, name: 'Ari', status: 'active' as const },
+        disciplines: [
+          analyzeCoachPerformance(timed, [result(timed, 12, '2026-07-01'), result(timed, 11, '2026-09-01')], allDates, season),
+          analyzeCoachPerformance(measured, [result(measured, 5, '2026-07-01'), result(measured, 6, '2026-09-01')], allDates, season),
+        ],
+      },
+      {
+        athlete: { id: secondAthleteId, name: 'Bea', status: 'active' as const },
+        disciplines: [analyzeCoachPerformance(timed, [
+          result(timed, 0, '2026-07-01', secondAthleteId),
+          result(timed, 10, '2026-09-01', secondAthleteId),
+        ], allDates, season)],
+      },
+    ];
+
+    const ranking = summarizeCoachPerformanceChanges(athletes).relativeImprovementRanking;
+
+    expect(ranking).toMatchObject({
+      eligibleAthleteCount: 1,
+      entries: [{ rank: 1, athlete: { name: 'Ari' }, discipline: { code: 'long_jump' }, improvementPercent: 20, classification: 'improved' }],
+    });
+    expect(ranking.insufficientDataReason).toBeNull();
+  });
+
+  it('returns an insufficient-data comparison when no athlete-discipline has two selected results', () => {
+    const comparison = summarizeCoachPerformanceChanges([{
+      athlete: { id: athleteId, name: 'Ari', status: 'active' },
+      disciplines: [analyzeCoachPerformance(timed, [result(timed, 12, '2026-09-01')], allDates, season)],
+    }]);
+
+    expect(comparison).toMatchObject({
+      eligibleAthleteDisciplineCount: 0,
+      mostImproved: null,
+      mostDeclined: null,
+      insufficientDataReason: 'At least two valid normalized results in the selected range are required for each athlete-discipline comparison.',
+      relativeImprovementRanking: {
+        eligibleAthleteCount: 0,
+        entries: [],
+        insufficientDataReason: 'At least two valid normalized results with a positive first result are required for each athlete before descriptive relative-improvement ranking is available.',
+      },
+    });
+  });
+
+  it('excludes records outside the selected date range before calculating change', () => {
+    const selectedRange: CoachDateRange = { dateFrom: '2026-07-08', dateTo: '2026-10-08' };
+    const analysis = analyzeCoachPerformance(timed, [
+      result(timed, 12, '2026-07-01'),
+      result(timed, 11.5, '2026-08-01'),
+      result(timed, 11, '2026-11-01'),
+    ], selectedRange, season);
+
+    expect(analysis).toMatchObject({
+      recordCount: 1,
+      first: { value: 11.5 },
+      latest: { value: 11.5 },
+      improvement: null,
+      improvementPercent: null,
+      sufficientData: false,
+      insufficientDataReason: 'At least two valid normalized results in the selected range are required to compare change.',
+    });
   });
 
   it('returns volatility only once there are enough samples and detects a plateau from four recent results', () => {
@@ -123,6 +248,29 @@ describe('coach analytics foundations', () => {
       },
     });
     expect(summaries[1]?.warning).toEqual({ level: 'high', reasons: ['active_severe_injury'] });
+    expect(summarizeCoachInjuryRoster(summaries)).toMatchObject({
+      injuryRecordCount: 3,
+      athletesWithRecordedInjuries: 2,
+      mostCommonRecordedArea: { bodyRegion: 'Leg', area: 'Knee', count: 2 },
+      mostCommonBodyRegion: { bodyRegion: 'Leg', count: 2 },
+      athletesWithRepeatedInjuries: [{ athlete: { name: 'Ari' }, repeatedInjuries: [{ area: 'Knee', count: 2 }] }],
+      insufficientDataReason: null,
+    });
+  });
+
+  it('reports no-recorded-injuries instead of an unavailable injury analysis', () => {
+    const empty = summarizeCoachInjuryRoster(summarizeCoachInjuries([
+      { id: athleteId, name: 'Ari', lifecycle_status: 'active' },
+    ], []));
+
+    expect(empty).toEqual({
+      injuryRecordCount: 0,
+      athletesWithRecordedInjuries: 0,
+      mostCommonRecordedArea: null,
+      mostCommonBodyRegion: null,
+      athletesWithRepeatedInjuries: [],
+      insufficientDataReason: 'No recorded injuries were found for the selected athletes and date range.',
+    });
   });
 
   it('ranks promising athletes within one discipline and flags a single incomparable athlete as insufficient', () => {

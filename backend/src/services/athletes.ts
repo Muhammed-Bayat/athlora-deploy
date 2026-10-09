@@ -16,6 +16,13 @@ const ATHLETE_COLUMNS = `a.id, a.coach_id, a.name, a.dob, a.gender, a.notes, a.a
   COALESCE((SELECT json_agg(hh.discipline_definition_id ORDER BY hh.discipline_definition_id) FROM athlete_discipline_assignments hh JOIN discipline_definitions d ON d.id = hh.discipline_definition_id WHERE hh.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS assigned_discipline_history_ids,
   COALESCE((SELECT json_agg(json_build_object('id', g.id, 'disciplineDefinitionId', g.discipline_definition_id, 'targetValue', g.target_value::float8, 'targetUnit', g.target_unit, 'targetDate', g.target_date, 'status', g.status, 'createdAt', g.created_at, 'updatedAt', g.updated_at) ORDER BY g.created_at, g.id) FROM athlete_season_goals g JOIN discipline_definitions d ON d.id = g.discipline_definition_id WHERE g.athlete_id = a.id AND d.code IN (${SUPPORTED_DISCIPLINE_SQL_LIST})), '[]'::json) AS season_goals`;
 
+export interface AthleteRosterSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  archived: number;
+}
+
 function notFound(): ApiError {
   return new ApiError(404, 'NOT_FOUND', 'Resource not found');
 }
@@ -60,6 +67,26 @@ export async function listAthletes(
     parameters,
   );
   return result.rows.map(mapAthleteRow);
+}
+
+export async function getAthleteRosterSummary(
+  workspaceId: string,
+  executor: DbExecutor = getPool(),
+): Promise<AthleteRosterSummary> {
+  if (!isCanonicalUuid(workspaceId)) {
+    throw notFound();
+  }
+
+  const result = await executor.query<AthleteRosterSummary>(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE lifecycle_status = 'active')::int AS active,
+            COUNT(*) FILTER (WHERE lifecycle_status = 'inactive')::int AS inactive,
+            COUNT(*) FILTER (WHERE lifecycle_status = 'archived')::int AS archived
+     FROM athletes
+     WHERE workspace_id = $1`,
+    [workspaceId],
+  );
+  return result.rows[0] ?? { total: 0, active: 0, inactive: 0, archived: 0 };
 }
 
 export async function getAthlete(
