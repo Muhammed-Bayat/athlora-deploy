@@ -437,22 +437,24 @@ export async function bulkAddRoster(
       [input.athleteIds, session.disciplineDefinitionId, actor.workspaceId],
     );
     if (athletes.rows.length !== input.athleteIds.length) meetConflict('ATHLETE_DISCIPLINE_MISMATCH', 'Every athlete must be active and have this discipline selected');
-    const athleteById = new Map(athletes.rows.map((athlete) => [athlete.id, athlete]));
     const existingEntrants = await db.query('SELECT * FROM meet_entrants WHERE event_id = $1 AND athlete_id = ANY($2::uuid[])', [eventId, input.athleteIds]);
     const entrantByAthlete = new Map(existingEntrants.rows.map((row) => [row.athlete_id as string, row]));
-    const createdEntrants: MeetEntrant[] = [];
-    for (const athleteId of input.athleteIds) {
-      if (entrantByAthlete.has(athleteId)) continue;
-      const row = (await db.query(
-        `INSERT INTO meet_entrants (event_id, workspace_id, kind, athlete_id, name, created_by)
-         VALUES ($1,$2,'athlete',$3,$4,$5) RETURNING *`,
-        [eventId, actor.workspaceId, athleteId, athleteById.get(athleteId)!.name, actor.userId],
-      )).rows[0];
+    const missingAthleteIds = input.athleteIds.filter((athleteId) => !entrantByAthlete.has(athleteId));
+    const createdRows = missingAthleteIds.length === 0 ? [] : (await db.query(
+      `INSERT INTO meet_entrants (event_id, workspace_id, kind, athlete_id, name, created_by)
+       SELECT $1, $2, 'athlete', athlete.id, athlete.name, $3
+       FROM athletes athlete
+       WHERE athlete.id = ANY($4::uuid[])
+       RETURNING *`,
+      [eventId, actor.workspaceId, actor.userId, missingAthleteIds],
+    )).rows;
+    const createdEntrants = createdRows.map((row) => {
+      const athleteId = row.athlete_id as string;
       entrantByAthlete.set(athleteId, row);
       const entrant = mapMeetRow<MeetEntrant>({ ...row, member_ids: [], members: [], workspace_name: null, rsvp_status: null });
-      createdEntrants.push(entrant);
-      await meetAudit(db, actor, eventId, actor.workspaceId, 'entrant', entrant.id, 'created', null, entrant);
-    }
+      return entrant;
+    });
+    await Promise.all(createdEntrants.map((entrant) => meetAudit(db, actor, eventId, actor.workspaceId, 'entrant', entrant.id, 'created', null, entrant)));
     await db.query(
       `INSERT INTO event_participants (event_id, athlete_id, participant_workspace_id)
        SELECT $1, athlete_id, $2 FROM unnest($3::uuid[]) AS athlete_id
@@ -463,22 +465,15 @@ export async function bulkAddRoster(
       'SELECT event_id, athlete_id, rsvp_status FROM event_participants WHERE event_id = $1 AND athlete_id = ANY($2::uuid[])',
       [eventId, input.athleteIds],
     );
-    const registrations: SessionRegistration[] = [];
-    if (definition.defaultRules.entrantType !== 'relay') {
-      for (const athleteId of input.athleteIds) {
-        const entrant = entrantByAthlete.get(athleteId)!;
-        const row = (await db.query(
-          `INSERT INTO session_entrants (event_id, session_id, entrant_id, workspace_id, created_by)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT (session_id, entrant_id) DO UPDATE SET withdrawn_at = NULL, withdrawn_by = NULL
-           RETURNING *`,
-          [eventId, sessionId, entrant.id, actor.workspaceId, actor.userId],
-        )).rows[0];
-        const registration = mapMeetRow<SessionRegistration>(row);
-        registrations.push(registration);
-        await meetAudit(db, actor, eventId, actor.workspaceId, 'registration', registration.id, 'created', null, registration);
-      }
-    }
+    const registrationRows = definition.defaultRules.entrantType === 'relay' ? [] : (await db.query(
+      `INSERT INTO session_entrants (event_id, session_id, entrant_id, workspace_id, created_by)
+       SELECT $1, $2, entrant_id, $3, $4 FROM unnest($5::uuid[]) AS entrant_id
+       ON CONFLICT (session_id, entrant_id) DO UPDATE SET withdrawn_at = NULL, withdrawn_by = NULL
+       RETURNING *`,
+      [eventId, sessionId, actor.workspaceId, actor.userId, input.athleteIds.map((athleteId) => entrantByAthlete.get(athleteId)!.id)],
+    )).rows;
+    const registrations = registrationRows.map((row) => mapMeetRow<SessionRegistration>(row));
+    await Promise.all(registrations.map((registration) => meetAudit(db, actor, eventId, actor.workspaceId, 'registration', registration.id, 'created', null, registration)));
     return {
       participants: participantRows.rows.map((row) => ({ eventId: row.event_id, athleteId: row.athlete_id, rsvpStatus: row.rsvp_status })),
       entrants: createdEntrants,

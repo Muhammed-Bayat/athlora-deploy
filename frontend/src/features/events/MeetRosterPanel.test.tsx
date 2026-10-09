@@ -109,6 +109,24 @@ describe('MeetRosterPanel', () => {
     await waitFor(() => expect(relayTab).toHaveFocus());
   });
 
+  it('loads only the selected registration list when switching discipline tabs', async () => {
+    const user = userEvent.setup();
+    render(<MeetRosterPanel event={event} canOperate isCoach activeWorkspaceId="host-workspace" isGuest={false} />);
+
+    await screen.findByRole('tab', { name: /200m/i, selected: true });
+    await waitFor(() => expect(api.listRegistrations).toHaveBeenCalledWith('event-1', 'session-track'));
+    vi.clearAllMocks();
+
+    await user.click(screen.getByRole('tab', { name: /4 x 100m relay/i }));
+
+    await waitFor(() => expect(api.listRegistrations).toHaveBeenCalledWith('event-1', 'session-relay'));
+    expect(api.listDisciplines).not.toHaveBeenCalled();
+    expect(api.listSessions).not.toHaveBeenCalled();
+    expect(api.listEntrants).not.toHaveBeenCalled();
+    expect(athletes.listAthletes).not.toHaveBeenCalled();
+    expect(participants.listEventParticipants).not.toHaveBeenCalled();
+  });
+
   it('orders session tabs by the canonical discipline order', async () => {
     api.listSessions.mockResolvedValue({ data: [
       { id: 'session-relay', disciplineDefinitionId: 'relay', label: '4 x 100m relay', status: 'scheduled', version: 1 },

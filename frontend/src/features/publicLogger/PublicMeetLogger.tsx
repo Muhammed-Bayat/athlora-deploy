@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createPublicMeetLoggerEntry,
   getPublicMeetLoggerSnapshot,
@@ -72,11 +72,10 @@ export function PublicMeetLogger({
       setSessionId((current) => current && fresh.sessions.some((item) => item.id === current)
         ? current
         : fresh.sessions.find((item) => item.status === 'in_progress')?.id ?? '');
-      await Promise.all([
-        cachePublicSession(sessionToken, event.id, DEFAULT_SESSION_CACHE_KEY, fresh as unknown as Record<string, unknown>),
-        ...fresh.sessions.map((item) => cachePublicSession(sessionToken, event.id, item.id, fresh as unknown as Record<string, unknown>)),
-      ]);
-      setCacheFreshness(Date.now());
+      // Persist one event snapshot after rendering instead of duplicating it per tab.
+      void cachePublicSession(sessionToken, event.id, DEFAULT_SESSION_CACHE_KEY, fresh as unknown as Record<string, unknown>)
+        .then(() => setCacheFreshness(Date.now()))
+        .catch(() => undefined);
     } catch (reason) {
       const cached = await getCachedPublicSession(sessionToken, event.id, DEFAULT_SESSION_CACHE_KEY);
       if (!cached) throw reason;
@@ -116,8 +115,14 @@ export function PublicMeetLogger({
   const timed = definition?.defaultRules.aggregation === 'timed';
   const vertical = definition?.kind === 'vertical';
   const relay = definition?.defaultRules.entrantType === 'relay';
-  const entries = session?.entries ?? [];
-  const results = session?.results ?? [];
+  const entries = useMemo(() => session?.entries ?? [], [session]);
+  const results = useMemo(() => session?.results ?? [], [session]);
+  const resultByEntrantId = useMemo(() => new Map(results.map((result) => [result.entrantId, result])), [results]);
+  const entriesByEntrantId = useMemo(() => {
+    const grouped = new Map<string, PublicSessionEntry[]>();
+    for (const entry of entries) grouped.set(entry.entrantId, [...(grouped.get(entry.entrantId) ?? []), entry]);
+    return grouped;
+  }, [entries]);
   const registeredEntrantIds = new Set(session?.entrantIds ?? []);
   const loggableEntrants = definition
     ? entrants
@@ -320,10 +325,10 @@ export function PublicMeetLogger({
             {loggableEntrants.length > 0 && (
               <div className={styles.athleteList} tabIndex={0} aria-label={definition.defaultRules.entrantType === 'relay' ? 'Scrollable relay teams' : 'Scrollable athletes'}>
                 {loggableEntrants.map((entrant) => {
-                  const result = results.find((row) => row.entrantId === entrant.id);
+                  const result = resultByEntrantId.get(entrant.id);
                   const eliminated = Boolean(result?.vertical?.eliminated);
                   const controlsDisabled = busy || !live || (vertical && eliminated);
-                  const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty'));
+                  const entrantEntries = (entriesByEntrantId.get(entrant.id) ?? []).filter((entry) => entry.entryType === 'attempt' || entry.entryType === 'penalty');
                   const relayMembers = relay ? relayMembersOf(entrant, result?.relayLegs ?? null) : [];
                   const teamEntries = relay ? entrantEntries.filter((entry) => !entry.relayMemberId) : entrantEntries;
                   const currentRecord = !result

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as meets from '../../api/meets';
 import { Button, Input, OfflineRecoverySurface } from '../../components';
 import { useWorkspace } from '../auth/WorkspaceContext';
@@ -42,6 +42,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const [finalization, setFinalization] = useState<meets.SessionFinalizationJob | null>(null);
   const offline = useSessionOffline(currentUser?.id ?? 'anonymous', event.id, activeWorkspace.id);
   const sessionTabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const baseSnapshotRef = useRef<{ eventId: string; definitions: DisciplineDefinition[]; sessions: DisciplineSession[]; entrants: MeetEntrant[] } | null>(null);
 
   const timedSessions = sortDisciplines(
     sessions.filter((item) => definitions.some((candidate) => candidate.id === item.disciplineDefinitionId)),
@@ -71,6 +72,12 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
   const canFinalize = isCoach && canOperate && session?.workspaceId === activeWorkspace.id;
   const sessionRegistrations = registrations.sessionId === sessionId ? registrations.rows : [];
   const registeredEntrantIds = new Set(sessionRegistrations.filter((registration) => !registration.withdrawnAt).map((registration) => registration.entrantId));
+  const resultByEntrantId = useMemo(() => new Map(results.map((result) => [result.entrantId, result])), [results]);
+  const entriesByEntrantId = useMemo(() => {
+    const grouped = new Map<string, SessionEntry[]>();
+    for (const entry of entries) grouped.set(entry.entrantId, [...(grouped.get(entry.entrantId) ?? []), entry]);
+    return grouped;
+  }, [entries]);
   const loggableEntrants = definition
     ? entrants
       .filter((item) => (item.kind === 'relay') === (definition.defaultRules.entrantType === 'relay'))
@@ -78,15 +85,24 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
       .filter((item) => registeredEntrantIds.has(item.id))
     : [];
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (refreshBase = false) => {
     try {
-      const [catalogue, nextSessions, nextEntrants] = await Promise.all([
-        meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
-      ]);
-      setDefinitions(catalogue.data);
-      setSessions(nextSessions.data);
-      const normalizedEntrants = nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] }));
-      setEntrants(normalizedEntrants);
+      let base = baseSnapshotRef.current;
+      if (refreshBase || base?.eventId !== event.id) {
+        const [catalogue, nextSessions, nextEntrants] = await Promise.all([
+          meets.listDisciplines(), meets.listSessions(event.id), meets.listEntrants(event.id),
+        ]);
+        base = {
+          eventId: event.id,
+          definitions: catalogue.data,
+          sessions: nextSessions.data,
+          entrants: nextEntrants.data.map((item) => ({ ...item, memberIds: item.memberIds ?? [] })),
+        };
+        baseSnapshotRef.current = base;
+        setDefinitions(base.definitions);
+        setSessions(base.sessions);
+        setEntrants(base.entrants);
+      }
       if (sessionId) {
         const [history, board, registrationList] = await Promise.all([
           meets.listSessionEntries(event.id, sessionId),
@@ -97,9 +113,9 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
         setEntries(history.data);
         setResults(board.data);
         void cacheSession(currentUser?.id ?? 'anonymous', activeWorkspace.id, event.id, sessionId, {
-          definitions: catalogue.data,
-          sessions: nextSessions.data,
-          entrants: normalizedEntrants,
+          definitions: base.definitions,
+          sessions: base.sessions,
+          entrants: base.entrants,
           entries: history.data,
           results: board.data,
         }).then(() => {
@@ -177,7 +193,7 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
     try {
       await action();
       await offline.refreshQueueStatus(event.id);
-      await reload();
+      await reload(true);
     } catch (reason) {
       if (offline.isOnline) setError(reason instanceof Error ? reason.message : 'Unable to save entry');
     } finally {
@@ -439,11 +455,11 @@ export function SessionLivePanel({ event, canOperate, isCoach }: { event: Athlet
           {loggableEntrants.length > 0 && (
             <div className={styles.athleteList} tabIndex={0} aria-label={definition.defaultRules.entrantType === 'relay' ? 'Scrollable relay teams' : 'Scrollable athletes'}>
               {loggableEntrants.map((entrant) => {
-                const result = results.find((row) => row.entrantId === entrant.id);
+                const result = resultByEntrantId.get(entrant.id);
                 const ownsEntrant = entrant.workspaceId === activeWorkspace.id;
                 const eliminated = Boolean(result?.vertical?.eliminated);
                 const controlsDisabled = busy || !live || (vertical && eliminated);
-                const entrantEntries = entries.filter((entry) => entry.entrantId === entrant.id && (entry.entryType === 'attempt' || entry.entryType === 'penalty') && !entry.deletedAt);
+                const entrantEntries = (entriesByEntrantId.get(entrant.id) ?? []).filter((entry) => (entry.entryType === 'attempt' || entry.entryType === 'penalty') && !entry.deletedAt);
                 const relayMembers = relay ? relayMembersOf(entrant, result?.relayLegs) : [];
                 const teamEntries = relay ? entrantEntries.filter((entry) => !entry.relayMemberId) : entrantEntries;
                 const currentRecord = !result

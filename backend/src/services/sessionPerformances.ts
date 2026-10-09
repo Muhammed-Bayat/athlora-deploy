@@ -276,10 +276,12 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
   const relay = definition.defaultRules.entrantType === 'relay';
   const relayMembers = relay ? await loadRelayMembers(db, result.rows.map(row => row.entrant_id)) : new Map();
   const relaySelections = relay ? await loadRelaySelections(db, sessionId) : new Map();
+  const entriesByEntrant = new Map<string, SessionEntry[]>();
+  for (const entry of entries) entriesByEntrant.set(entry.entrantId, [...(entriesByEntrant.get(entry.entrantId) ?? []), entry]);
   // Rank the whole session, then filter visibility; guest ranks must not change with the viewer.
   const rows = result.rows.map((row) => {
     const mapped = mapMeetRow<SessionResult>(row);
-    const entrantEntries = entries.filter(entry => entry.entrantId === mapped.entrantId);
+    const entrantEntries = entriesByEntrant.get(mapped.entrantId) ?? [];
     const legs = relay
       ? relayLegResults(relayMembers.get(mapped.entrantId) ?? [], entrantEntries, relaySelections.get(mapped.entrantId) ?? new Map<string, string>(), definition.precision)
       : undefined;
@@ -292,20 +294,33 @@ export async function listSessionResults(actor: MeetActor, eventId: string, sess
     return { ...mapped, ...(vertical ? { vertical } : {}), ...(legs ? { relayLegs: legs } : {}), effectiveResult: effective.value, effectiveOutcome: effective.outcome,
       countsTowardsStatistics: eligible && effective.outcome === 'valid' && session.resultState === 'final' && row.entrant_kind === 'athlete' && definition.defaultRules.entrantType === 'individual', placing: null as number | null, attending };
   });
-  const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entries.filter(e => e.entrantId === row.entrantId), eligible: row.attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
+  const places = sessionPlaces(definition, rows.map((row, index) => ({ entrantId: row.entrantId, score: { ...row.vertical, value: row.effectiveResult, outcome: row.effectiveOutcome, incident: null }, entries: entriesByEntrant.get(row.entrantId) ?? [], eligible: row.attending && access.event.status !== 'cancelled' && session.status !== 'cancelled' && result.rows[index].withdrawn_at === null })));
   rows.forEach(row => { row.placing = access.event.status === 'cancelled' || session.status === 'cancelled' ? null : session.resultState === 'final' ? row.finalPlace ?? null : places.get(row.entrantId) ?? null; });
   {
+    const eventDate = (await db.query<{ date: string }>("SELECT to_char(e.date, 'YYYY-MM-DD') AS date FROM events e WHERE e.id = $1", [eventId])).rows[0]?.date ?? '';
+    const athleteIds = result.rows.map((row) => row.athlete_id).filter((id): id is string => id !== null);
+    const workspaceIds = [...new Set(rows.map((row) => row.workspaceId))];
+    const historyByAthlete = new Map<string, PriorPerformance[]>();
+    if (athleteIds.length > 0) {
+      const histories = await db.query<{ workspace_id: string; athlete_id: string; final_result: string; event_date: string }>(`WITH performances AS (${FINAL_PERFORMANCES})
+        SELECT workspace_id, athlete_id, final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
+        WHERE counts_for_best AND workspace_id = ANY($1::uuid[]) AND code = $2 AND athlete_id = ANY($3::uuid[])
+          AND (session_id IS NULL OR session_id <> $4)`, [workspaceIds, definition.code, athleteIds, sessionId]);
+      for (const history of histories.rows) {
+        const key = `${history.workspace_id}:${history.athlete_id}`;
+        const records = historyByAthlete.get(key) ?? [];
+        records.push({ value: Number(history.final_result), date: history.event_date });
+        historyByAthlete.set(key, records);
+      }
+    }
     for (const [index, row] of rows.entries()) {
-      const history = await db.query<{ final_result: string; event_date: string }>(`WITH performances AS (${FINAL_PERFORMANCES})
-        SELECT final_result, to_char(event_date, 'YYYY-MM-DD') AS event_date FROM performances
-        WHERE counts_for_best AND workspace_id = $1 AND code = $2 AND athlete_id = (SELECT athlete_id FROM meet_entrants WHERE id = $3) AND (session_id IS NULL OR session_id <> $4)`, [row.workspaceId, definition.code, row.entrantId, sessionId]);
-      const date = await db.query<{ date: string; athlete_id: string | null }>("SELECT to_char(e.date, 'YYYY-MM-DD') AS date, en.athlete_id FROM events e JOIN meet_entrants en ON en.event_id = e.id WHERE e.id = $1 AND en.id = $2", [eventId, row.entrantId]);
-      const eligible = row.countsTowardsStatistics && access.event.status === 'completed' && !!date.rows[0]?.athlete_id && row.effectiveResult !== null;
-      const prior = history.rows.filter(h => h.event_date <= (date.rows[0]?.date ?? ''));
-      const better = (h: { final_result: string }) => definition.direction === 'lower' ? row.effectiveResult! < Number(h.final_result) : row.effectiveResult! > Number(h.final_result);
-      Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter(h => h.event_date.slice(0, 4) === date.rows[0]?.date.slice(0, 4)).every(better) });
+      const athleteId = result.rows[index].athlete_id;
+      const history = athleteId ? historyByAthlete.get(`${row.workspaceId}:${athleteId}`) ?? [] : [];
+      const eligible = row.countsTowardsStatistics && access.event.status === 'completed' && athleteId !== null && row.effectiveResult !== null;
+      const prior = history.filter((record) => record.date <= eventDate);
+      const better = (record: PriorPerformance) => definition.direction === 'lower' ? row.effectiveResult! < record.value : row.effectiveResult! > record.value;
+      Object.assign(row, { isPb: eligible && prior.every(better), isSb: eligible && prior.filter((record) => record.date.slice(0, 4) === eventDate.slice(0, 4)).every(better) });
       if (!relay || !row.relayLegs?.length) continue;
-      const eventDate = date.rows[0]?.date ?? '';
       const legBase = session.resultState === 'final' && access.event.status === 'completed' && session.status !== 'cancelled' && row.attending && result.rows[index].withdrawn_at === null && eventDate !== '';
       const memberRows: RelayMemberRow[] = relayMembers.get(row.entrantId) ?? [];
       const athleteIds = memberRows.map((member) => member.athleteId).filter((id): id is string => id !== null && id !== undefined);
