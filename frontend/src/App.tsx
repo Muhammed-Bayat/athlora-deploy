@@ -1,11 +1,12 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import styles from './App.module.css';
-import { CoachConsole } from './features/dashboard/CoachConsole';
 import { LandingPage } from './features/landing/LandingPage';
 import { acceptWorkspaceInvitation } from './api/workspaces';
 import { useWorkspace } from './features/auth/WorkspaceContext';
+
+const CoachConsole = lazy(async () => ({ default: (await import('./features/dashboard/CoachConsole')).CoachConsole }));
 
 export default function App() {
   return <BrowserRouter><AppRoutes /></BrowserRouter>;
@@ -41,7 +42,7 @@ function AppRoutes() {
     <Route path="/" element={<Navigate to="/console" replace />} />
     <Route path="/invitations/:token" element={<InvitationAcceptance />} />
     <Route path="/console/fixtures" element={<Navigate to="/console/events" replace />} />
-    <Route path="/console/*" element={<CoachConsole />} />
+    <Route path="/console/*" element={<Suspense fallback={<main className={styles.loading} aria-busy="true" aria-label="Loading Athlora"><img src="/logo-removebg.png" alt="" /><p>Preparing your season...</p></main>}><CoachConsole /></Suspense>} />
     <Route path="*" element={<Navigate to="/console" replace />} />
   </Routes>;
 }

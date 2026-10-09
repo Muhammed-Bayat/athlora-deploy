@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getMultiAthleteComparison, getTwoAthleteComparison } from '../../api/comparison';
 import {
@@ -186,7 +186,7 @@ function CrossClubAthleteAdder({ clubs, selectedAthleteIds, onAthleteChange }: {
       .catch(() => { if (!controller.signal.aborted) setAthletes([]); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [clubs.map((club) => club.id).join(',')]);
+  }, [clubs]);
   const athleteLabel = 'Search athletes from selected clubs';
   return <div className={styles.selector}>
     <label htmlFor="cross-athlete-add-select">Add athletes from selected clubs (up to 5)</label>
@@ -204,8 +204,8 @@ export function ComparisonPage() {
   const athlete2Id = searchParams.get('athlete2Id') ?? '';
   const club1Id = searchParams.get('club1Id') ?? '';
   const club2Id = searchParams.get('club2Id') ?? '';
-  const athleteIds = Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`athlete${index + 1}Id`) ?? '').filter(Boolean);
-  const clubIds = Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`club${index + 1}Id`) ?? '').filter(Boolean);
+  const athleteIds = useMemo(() => Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`athlete${index + 1}Id`) ?? '').filter(Boolean), [searchParams]);
+  const clubIds = useMemo(() => Array.from({ length: MAX_COMPARISON_ITEMS }, (_, index) => searchParams.get(`club${index + 1}Id`) ?? '').filter(Boolean), [searchParams]);
   void athlete1Id;
   void athlete2Id;
   const [athletes, setAthletes] = useState<Athlete[]>([]);
@@ -328,7 +328,7 @@ export function ComparisonPage() {
         if (current) setAthleteComparisonLoading(false);
       });
     return () => { current = false; };
-  }, [athleteIds.join(','), athleteSelectionValid, mode, season]);
+  }, [athleteIds, athleteSelectionValid, mode, season]);
 
   useEffect(() => {
     if (mode !== 'club-statistics' || !club1Id) {
@@ -385,7 +385,7 @@ export function ComparisonPage() {
         if (current) setClubComparisonLoading(false);
       });
     return () => { current = false; };
-  }, [clubIds.join(','), clubSelectionValid, mode, season]);
+  }, [clubIds, clubSelectionValid, mode, season]);
 
   const updateParam = useCallback((key: string, value: string) => {
     setSearchParams((previous) => {

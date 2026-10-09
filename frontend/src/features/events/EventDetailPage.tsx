@@ -74,7 +74,7 @@ export function EventDetailPage({ eventId, onBack, initialEvent, onEventUpdated,
     let current = true;
     void getGuestFixture(event.id).then(() => { if (current) setIsGuest(true); }).catch(() => { if (current) setIsGuest(false); });
     return () => { current = false; };
-  }, [event?.id, event?.type, activeWorkspace.id]);
+  }, [event, activeWorkspace.id]);
 
   useRealtimeRoom({
     workspaceId: activeWorkspace.id,

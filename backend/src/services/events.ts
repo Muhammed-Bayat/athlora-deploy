@@ -142,7 +142,8 @@ export async function createEvent(
     throw notFound();
   }
 
-  const result = await executor.query<EventRow>(
+  const create = async (db: DbExecutor): Promise<AthleticsEvent> => {
+  const result = await db.query<EventRow>(
     `INSERT INTO events (workspace_id, created_by, type, discipline, title, date, time, location_name, latitude, longitude, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${EVENT_COLUMNS}`,
@@ -161,8 +162,28 @@ export async function createEvent(
     ],
   );
   const event = mapEventRow(result.rows[0]);
-  await notifyEventComingUp(executor, event.id, workspaceId);
+  if (payload.sessions?.length) {
+    const definitions = await db.query<{ id: string; kind: string }>(
+      'SELECT id, kind FROM discipline_definitions WHERE id = ANY($1::uuid[])',
+      [payload.sessions.map((session) => session.disciplineDefinitionId)],
+    );
+    if (definitions.rows.length !== payload.sessions.length) throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed');
+    for (const session of payload.sessions) {
+      const definition = definitions.rows.find((item) => item.id === session.disciplineDefinitionId)!;
+      if ((definition.kind === 'vertical') !== Boolean(session.verticalConfig)) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed');
+      }
+      await db.query(
+        `INSERT INTO discipline_sessions (event_id, workspace_id, discipline_definition_id, label, created_by, updated_by, vertical_config)
+         VALUES ($1,$2,$3,$4,$5,$5,$6)`,
+        [event.id, workspaceId, session.disciplineDefinitionId, session.label, userId, session.verticalConfig ?? null],
+      );
+    }
+  }
+  await notifyEventComingUp(db, event.id, workspaceId);
   return event;
+  };
+  return payload.sessions?.length ? withTransaction(create) : create(executor);
 }
 
 type TransactionRunner = <T>(operation: (client: DbExecutor) => Promise<T>) => Promise<T>;

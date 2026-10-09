@@ -557,26 +557,41 @@ export async function assertFixtureReadyToStart(
     throw new ApiError(409, 'FIXTURE_REACCEPTANCE_REQUIRED', 'Every participating team must accept the current fixture details before it starts');
   }
 
-  const unresolvedRsvps = await client.query<{ workspace_name: string }>(
-    `SELECT w.name AS workspace_name
-     FROM event_participants ep
-     LEFT JOIN event_fixture_workspaces fw
-       ON fw.event_id = ep.event_id AND fw.workspace_id = ep.participant_workspace_id AND fw.role = 'guest'
-     JOIN workspaces w ON w.id = ep.participant_workspace_id
-     WHERE ep.event_id = $1
-       AND ep.rsvp_status IN ('pending', 'maybe')
-       AND (fw.event_id IS NULL OR fw.status <> 'withdrawn')
-     GROUP BY w.name, w.id
-     ORDER BY lower(w.name), w.id`,
+  const unresolvedRsvps = await client.query<{ workspace_name: string; athlete_name: string; rsvp_status: string; sessions: string[] }>(
+    `SELECT w.name AS workspace_name, a.name AS athlete_name, ep.rsvp_status,
+            array_agg(DISTINCT s.label ORDER BY s.label) AS sessions
+      FROM event_participants ep
+      LEFT JOIN event_fixture_workspaces fw
+        ON fw.event_id = ep.event_id AND fw.workspace_id = ep.participant_workspace_id AND fw.role = 'guest'
+      JOIN workspaces w ON w.id = ep.participant_workspace_id
+      JOIN athletes a ON a.id = ep.athlete_id
+      JOIN events e ON e.id = ep.event_id
+      LEFT JOIN meet_entrants individual ON individual.event_id = ep.event_id AND individual.athlete_id = ep.athlete_id
+      LEFT JOIN session_entrants individual_registration ON individual_registration.entrant_id = individual.id AND individual_registration.withdrawn_at IS NULL
+      LEFT JOIN relay_members relay_member ON relay_member.event_id = ep.event_id AND relay_member.member_id = individual.id
+      LEFT JOIN session_entrants relay_registration ON relay_registration.entrant_id = relay_member.relay_id AND relay_registration.withdrawn_at IS NULL
+      LEFT JOIN discipline_sessions s ON s.id = COALESCE(individual_registration.session_id, relay_registration.session_id)
+      WHERE ep.event_id = $1
+        AND ep.rsvp_status IN ('pending', 'maybe')
+        AND (fw.event_id IS NULL OR fw.status <> 'withdrawn')
+        AND (e.discipline IS NOT NULL OR individual_registration.id IS NOT NULL OR relay_registration.id IS NOT NULL)
+      GROUP BY w.name, w.id, a.name, a.id, ep.rsvp_status
+      ORDER BY lower(w.name), w.id, lower(a.name), a.id`,
     [eventId],
   );
   if (unresolvedRsvps.rows.length > 0) {
-    const teams = unresolvedRsvps.rows.map((row) => row.workspace_name);
+    const teams = [...new Set(unresolvedRsvps.rows.map((row) => row.workspace_name))];
+    const blockers = unresolvedRsvps.rows.map((row) => ({
+      athlete: row.athlete_name,
+      team: row.workspace_name,
+      status: row.rsvp_status,
+      sessions: (row.sessions ?? []).filter(Boolean),
+    }));
     throw new ApiError(
       409,
       'FIXTURE_PARTICIPANT_RSVPS_PENDING',
       `Athletes in ${teams.join(', ')} still have pending or maybe RSVPs`,
-      { teams },
+      { teams, blockers },
     );
   }
 }

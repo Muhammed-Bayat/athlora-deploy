@@ -77,12 +77,12 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
     setSessionId(sessions[0]?.id ?? '');
   }, [sessionId, sessions]);
 
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, reloadAfter = true) => {
     setBusy(true);
     setError('');
     try {
       await action();
-      await reload();
+      if (reloadAfter) await reload();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to update the event roster');
     } finally {
@@ -163,19 +163,32 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
   });
 
   const addSelectedAthletes = () => run(async () => {
-    for (const athleteId of selectedAthleteIds) {
-      const entrant = entrants.find((item) => item.athleteId === athleteId) ?? await meets.createEntrant(event.id, { kind: 'athlete', athleteId });
-      if (!participants.some((participant) => participant.athleteId === athleteId)) {
-        if (isGuest) await addGuestFixtureParticipant(event.id, athleteId);
-        else await addEventParticipant(event.id, athleteId);
+    if (!selected) return;
+    if (isGuest) {
+      for (const athleteId of selectedAthleteIds) {
+        const entrant = entrants.find((item) => item.athleteId === athleteId) ?? await meets.createEntrant(event.id, { kind: 'athlete', athleteId });
+        if (!participants.some((participant) => participant.athleteId === athleteId)) await addGuestFixtureParticipant(event.id, athleteId);
+        if (!relaySession && !registeredEntrantIds.has(entrant.id)) await meets.registerEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id });
       }
-      if (!relaySession && selected && !registeredEntrantIds.has(entrant.id)) {
-        await meets.registerEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id });
-      }
+      setSelectedAthleteIds([]);
+      setAthletePickerOpen(false);
+      await reload();
+      return;
     }
+    const added = await meets.bulkAddRoster(event.id, selected.id, selectedAthleteIds);
+    setEntrants((current) => [...current, ...added.entrants]);
+    setParticipants((current) => {
+      const existing = new Set(current.map((participant) => participant.athleteId));
+      return [...current, ...added.participants.filter((participant) => !existing.has(participant.athleteId)).map((participant) => ({
+        ...participant,
+        athlete: athletes.find((athlete) => athlete.id === participant.athleteId)!,
+        statusReviewRequired: false,
+      }))];
+    });
+    setRegistrations((current) => [...current.filter((registration) => !added.registrations.some((next) => next.id === registration.id)), ...added.registrations]);
     setSelectedAthleteIds([]);
     setAthletePickerOpen(false);
-  });
+  }, false);
 
   const addRelay = () => run(async () => {
     if (!selected) return;
@@ -233,7 +246,9 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
       </header>
 
       {!isGuest && canOperate && selected.status === 'scheduled' && event.status === 'in_progress' && <Button className={styles.sessionAction} onClick={() => void run(async () => { await meets.changeSessionState(event.id, selected.id, 'in_progress', selected.version); })} disabled={busy}>Start session</Button>}
-      {!isGuest && canOperate && selected.status === 'in_progress' && event.status === 'in_progress' && <Button className={styles.sessionAction} variant="secondary" onClick={() => void run(async () => { await meets.changeSessionState(event.id, selected.id, 'completed', selected.version); })} disabled={busy}>Complete session</Button>}
+      {!isGuest && canOperate && selected.status === 'in_progress' && event.status === 'in_progress' && <Button className={styles.sessionAction} variant="secondary" onClick={() => void run(async () => {
+        await meets.queueSessionFinalization(event.id, selected.id, selected.version);
+      })} disabled={busy}>Complete session</Button>}
 
       {canAddToRoster && <div className={styles.addAthletes}>
         <div><strong>{relaySession ? 'Build a relay team' : 'Add athletes'}</strong><p>{relaySession ? 'Add athletes with this relay discipline to the event pool, then choose their relay legs below.' : `Add athletes with ${definition?.presentation.label ?? 'this discipline'} selected to the roster.`}</p></div>
@@ -265,7 +280,10 @@ export function MeetRosterPanel({ event, canOperate, isCoach, activeWorkspaceId,
           <span className={styles.entrantIdentity}><strong>{entrant.name}</strong><small>{entrantDescription(entrant, entrants)}{athlete && <i data-status={athlete.status}>{athlete.status[0].toUpperCase() + athlete.status.slice(1)}</i>}</small></span>
           <div className={styles.entrantActions}>{canManageEntrant(entrant) && !relaySession && entrant.athleteId && <Select aria-label={`RSVP for ${entrant.name}`} value={rsvpFor(entrant) ?? 'pending'} onChange={(input) => void updateRsvp(entrant, input.target.value as RsvpStatus)} options={RSVP_OPTIONS} disabled={busy} />}
             {canAddToRoster && canManageEntrant(entrant) && entrant.kind === 'relay' && relaySession && editingRelayId !== entrant.id && <Button variant="secondary" onClick={() => beginEditRelay(entrant)} disabled={busy}>Edit team</Button>}
-            {canManageEntrant(entrant) && <Button variant="ghost" aria-label={`Remove ${entrant.name} from session`} onClick={() => void run(async () => { await meets.withdrawEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id }); })} disabled={busy}>Remove</Button>}
+            {canManageEntrant(entrant) && <Button variant="ghost" aria-label={`Remove ${entrant.name} from session`} onClick={() => void run(async () => {
+              await meets.withdrawEntrant(event.id, { disciplineSessionId: selected.id, entrantId: entrant.id });
+              setRegistrations((current) => current.map((item) => item.id === registration.id ? { ...item, withdrawnAt: new Date().toISOString(), withdrawnBy: null } : item));
+            }, false)} disabled={busy}>Remove</Button>}
           </div>
         </li>;
       })}</ul>}

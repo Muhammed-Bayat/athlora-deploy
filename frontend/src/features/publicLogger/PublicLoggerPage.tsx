@@ -101,7 +101,7 @@ export function PublicLoggerPage() {
       offlineSync.clearSessionExpired();
       setError('Your session has expired. Please open the logger link again.');
     }
-  }, [offlineSync.sessionExpired, keys, offlineSync.clearSessionExpired, session]);
+  }, [offlineSync, keys, session]);
 
   const handleError = (requestError: unknown, fallback: string) => {
     if (requestError instanceof ApiError && requestError.code === 'PUBLIC_LOGGER_SESSION_INVALID') {

@@ -412,6 +412,8 @@ const defaultAssistantContext: AthloraAssistantContextValue = {
 
 const AthloraAssistantContext = createContext<AthloraAssistantContextValue>(defaultAssistantContext);
 
+// This hook shares the provider's intentionally file-local context.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAthloraAssistant(): AthloraAssistantContextValue {
   return useContext(AthloraAssistantContext);
 }

@@ -320,7 +320,7 @@ export function PublicStatsPage() {
       .catch((error: unknown) => { if (current && !controller.signal.aborted) setAthleteComparisonError(error instanceof Error ? error.message : 'Could not compare public athletes'); })
       .finally(() => { if (current && !controller.signal.aborted) setAthleteComparisonLoading(false); });
     return () => { current = false; controller.abort(); };
-  }, [comparisonAthleteIds.join(','), mode, season]);
+  }, [comparisonAthleteIds, mode, season]);
 
   const club1 = details[`${club1Id}:${season}`];
   const clubDisciplines = club1?.availableDisciplines ?? [];

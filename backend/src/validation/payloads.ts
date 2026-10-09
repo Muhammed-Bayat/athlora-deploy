@@ -44,6 +44,8 @@ import {
   normalizeRequiredString,
 } from './primitives.js';
 import { hasAccessibleForeground, isHexColor } from '../services/colorContrast.js';
+import { parseSessionCreate } from './meets.js';
+import type { SessionCreateInput } from '../types/meets.js';
 
 export interface ValidationIssue {
   path: string;
@@ -108,6 +110,7 @@ export interface EventCreatePayload {
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
+  sessions?: SessionCreateInput[];
 }
 
 export interface EventReplacementPayload {
@@ -212,6 +215,7 @@ const EVENT_FIELDS = [
   'latitude',
   'longitude',
   'status',
+  'sessions',
 ] as const;
 const EVENT_PARTICIPANT_CREATE_FIELDS = ['athleteId'] as const;
 const EVENT_PARTICIPANT_REPLACEMENT_FIELDS = ['rsvpStatus'] as const;
@@ -920,6 +924,21 @@ function parseEvent(input: unknown, requireStatus: boolean): EventCreatePayload 
     longitude: nullableCoordinate(payload, 'longitude', issues),
     status,
   };
+
+  if (hasOwn(payload, 'sessions')) {
+    if (requireStatus || discipline !== null || !Array.isArray(payload.sessions) || payload.sessions.length === 0 || payload.sessions.length > 30) {
+      issues.push(issue('sessions', 'invalid_value', 'Sessions are available only when creating a multi-discipline event'));
+    } else {
+      try {
+        result.sessions = payload.sessions.map((session) => parseSessionCreate(session));
+        if (new Set(result.sessions.map((session) => session.disciplineDefinitionId)).size !== result.sessions.length) {
+          issues.push(issue('sessions', 'invalid_value', 'Each discipline may be selected once'));
+        }
+      } catch {
+        issues.push(issue('sessions', 'invalid_value', 'Invalid session definition'));
+      }
+    }
+  }
 
   if (issues.length > 0) throwValidation(issues);
   return result;

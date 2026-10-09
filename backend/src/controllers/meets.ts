@@ -4,8 +4,9 @@ import { notifyEventInvalidated, notifySessionInvalidated } from '../realtime/in
 import * as meets from '../services/meets.js';
 import * as performances from '../services/sessionPerformances.js';
 import type { MeetActor, SessionTarget } from '../types/meets.js';
-import { object, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
+import { object, parseBulkRosterAdd, parseEntrantCreate, parseEntrantUpdate, parseSessionCreate, parseSessionEntry, parseSessionEntryReplacement, parseSessionOverride, parseSessionSelection, parseSessionState, parseVersion } from '../validation/meets.js';
 import { meetIds } from '../services/meetAccess.js';
+import * as finalizationJobs from '../services/sessionFinalizationJobs.js';
 
 function actor(req: Request): MeetActor {
   const context = getApplicationUserContext(req);
@@ -50,6 +51,17 @@ export const changeSession = handler(async (req) => {
   notifySessionInvalidated(eventId, session.id);
   return session;
 });
+export const queueFinalization: RequestHandler = async (req, res, next) => {
+  try {
+    const eventId = parameter(req, 'eventId');
+    const sessionId = parameter(req, 'disciplineSessionId');
+    const body = object(req.body, ['expectedVersion']);
+    const job = await finalizationJobs.queueSessionFinalization(actor(req), eventId, sessionId, parseVersion(body.expectedVersion));
+    notifySessionInvalidated(eventId, sessionId);
+    res.status(202).json({ data: job });
+  } catch (error) { next(error); }
+};
+export const finalizationStatus = handler((req) => finalizationJobs.getSessionFinalizationJob(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId')));
 export const createEntrant = handler(async (req) => {
   const eventId = parameter(req, 'eventId');
   const entrant = await meets.createEntrant(actor(req), eventId, parseEntrantCreate(req.body));
@@ -63,6 +75,13 @@ export const updateEntrant = handler(async (req) => {
   return entrant;
 });
 export const registrations = handler((req) => meets.listRegistrations(actor(req), parameter(req, 'eventId'), parameter(req, 'disciplineSessionId')));
+export const bulkAddRoster = handler(async (req) => {
+  const eventId = parameter(req, 'eventId');
+  const sessionId = parameter(req, 'disciplineSessionId');
+  const result = await meets.bulkAddRoster(actor(req), eventId, sessionId, parseBulkRosterAdd(req.body));
+  notifySessionInvalidated(eventId, sessionId);
+  return result;
+}, 201);
 export const registerEntrant = handler(async (req) => {
   object(req.body ?? {}, []);
   const eventId = parameter(req, 'eventId');
