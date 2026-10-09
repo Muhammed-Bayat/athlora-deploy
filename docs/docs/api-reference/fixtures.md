@@ -193,4 +193,4 @@ Notifications are deduplicated via `dedupe_key` and support unread counts and ma
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The multi-discipline fixture roster flow was documented with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

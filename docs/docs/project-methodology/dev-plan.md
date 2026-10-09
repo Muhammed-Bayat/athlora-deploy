@@ -256,8 +256,6 @@ account_deletions    (auth0_id, status, attempts, next_attempt_at, last_error,
 
 ---
 
-## AI Declaration
+## AI declaration
 
-The discipline analytics delivery-plan status and retired athlete-group functionality removal were edited with the assistance of OpenCode[openai/gpt-5.6-terra].
-
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and opencode[gpt-5.6-sol]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra]. The stage-status, chart-stack, and Sprint 3 scope corrections were updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

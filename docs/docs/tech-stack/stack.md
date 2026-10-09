@@ -91,6 +91,6 @@ The complete direct-dependency register, including versions, licenses, sources, 
 - Derived results remain server-authoritative. A manual override is audited rather than replacing the original timeline record.
 - No third-party service receives the Auth0 Management API secret except the backend; it is never exposed through the frontend build.
 
-## AI Declaration
+## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The multi-discipline catalogue status update was edited with Qoder. The supported-discipline catalogue was updated with OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

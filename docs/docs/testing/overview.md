@@ -185,7 +185,7 @@ Set `TEST_DATABASE_URL` to enable them. Use a **disposable database** because th
 
 ### What is tested
 
-The backend has **12 integration test files** covering:
+The backend integration inventory is `TEST_DATABASE_URL`-gated and kept next to the source. The following table names the covered areas rather than a volatile file count:
 
 | File | Coverage |
 |---|---|
@@ -295,7 +295,7 @@ The E2E suite has **23 spec files** covering:
 
 Before any tests run, `global-setup.ts`:
 1. Runs `npm run db:migrate` against the E2E database
-2. Truncates its 30-entry `APP_TABLES` list with `CASCADE` for a clean slate (the live schema has 44 tables; catalogue and session tables are migration-seeded and left in place)
+2. Truncates its application-table list with `CASCADE` for a clean slate (catalogue data seeded by migrations is left in place)
 
 ### Auth setup
 
@@ -400,18 +400,18 @@ coverage: {
 }
 ```
 
-Running coverage:
+Running coverage locally:
 
 ```bash
 npm run test:coverage --prefix frontend   # → frontend/coverage/coverage-summary.json
-npm run test:coverage --prefix backend    # → backend/coverage/coverage-summary.json
+npm run test:coverage:ci --prefix backend # → backend/coverage/coverage-summary.json
 ```
 
 ### Combined report
 
 The `scripts/generate-coverage-report.mjs` script reads both JSON summaries and generates a Markdown table combining frontend and backend **line**, **branch**, and **function** coverage. In CI it writes to `GITEA_STEP_SUMMARY` (or `GITHUB_STEP_SUMMARY`), printing a short Markdown table visible in the job summary.
 
-Coverage is **informational** — it makes gaps visible but does not enforce a threshold. A coverage report is reviewed as part of the author's documented pre-merge self-review for source-code changes.
+Coverage is **informational** — it makes gaps visible but does not enforce a threshold. The CI backend coverage command excludes database-gated integration suites; it is a consistent source-coverage signal, not a substitute for running integration tests against a disposable database. A coverage report is reviewed as part of the author's documented pre-merge self-review for source-code changes.
 
 ---
 
@@ -478,7 +478,7 @@ npm run typecheck --prefix backend
 
 # Coverage
 npm run test:coverage --prefix frontend
-npm run test:coverage --prefix backend
+npm run test:coverage:ci --prefix backend
 node scripts/generate-coverage-report.mjs
 ```
 
@@ -546,4 +546,4 @@ The submitted response evidence and form links are retained in [Stakeholder Feed
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[openai/gpt-5.6-terra]. The e2e CI provisioning/skip-condition fix was documented with the assistance of opencode[mimo-v2.6-flash-free]. The frontend coverage `testTimeout` raise to 30 seconds was documented with the assistance of opencode[mimo-v2.6-flash-free]. Sprint 3 feedback evidence and the retired E2E spec removal were documented with the assistance of OpenCode[openai/gpt-5.6-terra]. The live-schema table-count update for per-athlete relay split results was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public logger link authorization suite, own-club official selection cases, and the matching frontend permission-state tests (#313, #314) were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay leg PB/SB integration cases and frontend marker assertions (#346) were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay-surface roster/progression/comparison integration cases, the preference-hiding and prune cases, and the public Stats relay session-results rendering test were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team-row report/leaderboard/club-statistics integration cases and the public report/leaderboard/stats relay rendering tests were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

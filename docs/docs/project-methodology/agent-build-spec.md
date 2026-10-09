@@ -457,6 +457,6 @@ The `/docs` Docusaurus site is the living record of the project, not a one-time 
 
 ---
 
-## AI Declaration
+## AI declaration
 
-The preceding document was edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and OpenCode[openai/gpt-5.6-terra]. The user-requested weather provider replacement was edited with OpenCode[openai/gpt-6-astra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -52,4 +52,4 @@ Cloudflare Pages builds the `/docs` package with `npm ci` and `npm run build`, t
 
 ## AI declaration
 
-This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

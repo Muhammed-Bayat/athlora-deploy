@@ -8,7 +8,7 @@ This document records how the Athlora team tracks and resolves defects during ea
 
 ## Approach
 
-The team maintains a separate bug tracker alongside the Gitea Projects Kanban board. Bugs are entered with:
+The team maintains its bug tracker in the [Gitea Projects workspace](https://sdp.ms.wits.ac.za/cache-us-outside/athlora/projects), alongside the Sprint 1-4 boards. Bugs are entered with:
 
 - A clear, reproducible description
 - Affected environment (local, production, or both)
@@ -72,4 +72,4 @@ Sprint 2 identified that keeping the bug tracker current with reproducible descr
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The Sprint 3 section and workflow reconciliation were updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -29,7 +29,7 @@ The backend also provides `db:migrate` for source migrations and `db:migrate:pro
 | `frontend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `backend` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` |
 | `docs` | `npm ci`, `npm run build` |
-| `coverage` | `npm ci` (frontend, backend), `npm run test:coverage` (frontend, backend), `node scripts/generate-coverage-report.mjs` |
+| `coverage` | `npm ci` (frontend, backend), frontend `test:coverage`, backend `test:coverage:ci`, `node scripts/generate-coverage-report.mjs` |
 | `e2e` | PostgreSQL on port `55432`, `npm ci` (backend, frontend, e2e), `npx playwright install --with-deps chromium`, `npm test --prefix e2e` |
 
 The `e2e` job first detects whether the seven repository secrets are present (via a step output — not `secrets` in `if:`), then provisions an isolated PostgreSQL cluster inside the job container on port `55432` so host-networked Gitea runners cannot collide with an existing database on `5432`. Provisioning is root/sudo-aware: act runner images often run as root without a `sudo` binary, so the job elevates only when needed and switches to the `postgres` user with `runuser`/`su` instead of `sudo -u`. Playwright `global-setup` migrates and truncates that database before every run. When any of the seven secrets are missing it prints a clear skip message and stays green. Playwright's HTML report is uploaded as an artifact on failure.
@@ -94,7 +94,7 @@ Run the authenticated Playwright suite separately using the [E2E guide](./e2e). 
 GraySky Free is used server-side for current and event-day weather. No provider account, key, or environment variable is required. Current/daily data share a ten-minute coordinate cache with in-flight deduplication and a short failure cooldown. See the weather section of the API contract for nullable DTOs and the live-endpoint verification status.
 ## End-to-end tests (Playwright)
 
-The `/e2e` package drives the full 100m vertical slice against real servers and a real database, on desktop and mobile Chromium, plus an automated accessibility audit.
+The `/e2e` package drives the full stack against real servers and a real database, on desktop and mobile Chromium, plus an automated accessibility audit. Its core flow is 100m; separate specs cover workspaces, fixtures, offline logging, public surfaces, vertical events, and relays.
 
 Prerequisites:
 
@@ -124,7 +124,7 @@ Projects:
 | `desktop-chromium` | All authenticated spec files (`testIgnore` excludes only `auth.setup.ts` and `smoke.spec.ts`) | Full authenticated suite at desktop viewport |
 | `mobile-chromium` | The same authenticated spec files | Same suite at Pixel 5 viewport |
 
-Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates its 30-entry application table list (`APP_TABLES`, including clubs, fixture notifications, event helpers, public logger links, sync receipts, and athlete injuries) with `CASCADE` before each run; the catalogue and session tables (`discipline_definitions`, `discipline_sessions`, `session_*`, `meet_*`, `relay_members`, and the offline/public sync logs) are seeded by migrations and deliberately left in place, so the live schema holds 44 tables in total. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations, plus keyboard-navigation and 320px no-horizontal-scroll checks. `e2e/tests/accessibility.spec.ts` still contains a `fixtures` audit entry, but the console nav has no Fixtures item — `/console/fixtures` redirects to `/console/events` (`frontend/src/App.tsx`).
+Runs are serial (`workers: 1`) and every project uses data unique to that project, so desktop and mobile runs stay deterministic and isolated. `global-setup.ts` applies migrations and truncates its application-table list with `CASCADE`; catalogue rows seeded by migrations are retained. The expanded suite audits key coach views (dashboard, roster, events, live logger, comparison, account, athlete detail) with axe (`wcag2a/aa`, `wcag21a/aa`) and fails on critical or serious violations, plus keyboard-navigation and 320px no-horizontal-scroll checks. `/console/fixtures` redirects to `/console/events` because fixture controls live in event detail.
 
 ## Coverage Reports
 
@@ -132,7 +132,7 @@ Generate the same coverage reports used by Gitea Actions:
 
 ```bash
 npm run test:coverage --prefix frontend
-npm run test:coverage --prefix backend
+npm run test:coverage:ci --prefix backend
 node scripts/generate-coverage-report.mjs
 ```
 
@@ -142,15 +142,12 @@ The commands create ignored JSON coverage summaries. The Gitea `coverage` job pr
 
 Record a status snapshot only when a change needs verification evidence: run the affected package gates (lint, typecheck, test, build — plus coverage and the browser suite where configured), then replace the table below with that run's date and results. Dated totals go stale as specs, tests, and migrations are added, so read every number from the current tree at run time rather than carrying an older snapshot forward, and keep at most one snapshot in this section.
 
-| Metric (snapshot 2026-10-05) | Count |
+| Record | Requirement |
 |---|---|
-| Frontend unit test files | 104 |
-| Backend test files (12 integration) | 100 |
-| E2E spec files | 23 |
-| Backend migrations | 46 |
-| Frontend tests (lint, typecheck, test, build) | 803 passed / 803 (lint: 0 errors, 16 warnings) |
-| Backend tests with `TEST_DATABASE_URL` (`vitest run --no-file-parallelism`) | 846 passed, 28 failed (every failure is a member of the pre-change baseline of 30 — three of those baseline failures now pass and no new failure was introduced; the run-level `relation "squads" already exists` migration artifact still moves between suites) |
-| Backend lint / typecheck / build and docs typecheck / build | pass |
+| Test and migration inventory | Count from the current tree immediately before submission; do not reuse historical totals. |
+| Local check result | Record the date, command, environment, pass/fail result, and any skipped credential-gated suite. |
+| Coverage result | Run the CI-equivalent commands above and retain the generated Markdown summary. |
+| Browser result | Record desktop/mobile project outcome, Auth0 configuration status, and accessibility findings. |
 
 ## Definition of done
 
@@ -158,6 +155,4 @@ A change is ready for review when its affected checks pass, its documentation an
 
 ## AI declaration
 
-The global assistant, discipline analytics, athlete progression graph, and current-day calendar verification statuses were generated and edited with the assistance of OpenCode[openai/gpt-5.6-terra].
-
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra] and opencode[gpt-5.6-sol]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The independent publication flags and public schedule checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The user dashboard preferences checks and the e2e CI provisioning fix were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club branding feature (migration, storage/validation services, branding/media routes, contrast helpers, `ClubBadge`, account settings card, branded surface wiring, tests, and related documentation) was generated and edited with opencode[mimo-v2.6-flash-free]. The authenticated offline batch sync checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay team support checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The public club schedule experience checks were documented with the assistance of opencode[mimo-v2.6-flash-free]. The whole-meet public logger and event-discipline roster verification statuses were documented with the assistance of OpenCode[gpt-5.6-terra]. The exact public-age filter verification status was documented with the assistance of OpenCode[gpt-5.6-terra]. The CI job tables, Playwright project table, accessibility target list, mockup reference, and check-status section were updated with the assistance of opencode[mimo-v2.6-flash-free]. The recording check status snapshot for the relay pool RSVP and meet start fix was updated with the assistance of opencode[mimo-v2.6-flash-free]. The check-status snapshot refresh for per-athlete relay split results (issue #319) was updated with the assistance of opencode[mimo-v2.6-flash-free]. The check-status snapshot refresh for public logger link authorization and own-club official selection (#313, #314) was updated with the assistance of opencode[mimo-v2.6-flash-free]. The check-status snapshot refresh for relay leg personal bests (#346) was updated with the assistance of opencode[mimo-v2.6-flash-free]. The check-status snapshot refresh for relay PB surfaces, the public report/leaderboard relay team rows, and the retired-code discipline prune (#346) was updated with the assistance of opencode[mimo-v2.6-flash-free]. The check-status snapshot refresh for the athlete performance log work (PB/SB consistency, completed-competition progressions, multi-discipline history, tag removal, and the four-column log table) was updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

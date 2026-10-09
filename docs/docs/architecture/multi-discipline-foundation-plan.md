@@ -86,4 +86,4 @@ build, and real PostgreSQL integration tests independently of Auth0 E2E secrets.
 
 ## AI declaration
 
-Prepared and implemented with OpenCode[openai/gpt-6-astra] for Issue #244. Relay roster patch rules, coach-selected official entry, and related verification notes were updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

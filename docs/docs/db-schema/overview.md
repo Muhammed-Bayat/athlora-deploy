@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Database schema
 
-This is the single AI-ready reference for Athlora's final database schema. It is derived from every SQL migration in `backend/src/db/migrations/` as of migration `0044_prune_unsupported_athlete_disciplines.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
+This is the single reference for Athlora's database schema. It is derived from every SQL migration in `backend/src/db/migrations/` through `0046_session_finalization_jobs.sql`. The migrations remain the executable source of truth; use this page together with them when a tool needs an ERD or schema analysis.
 
 PostgreSQL 13+ is required because the schema uses `gen_random_uuid()`. Types below use PostgreSQL names. `PK` means primary key, `FK` means foreign key, `UQ` means unique constraint or unique index, and `NULL` means nullable.
 
@@ -25,7 +25,9 @@ Open the [SVG ERD](/img/erd.svg) for a zoomable version.
 - `timeline_entries` are created by exactly one actor: either an authenticated `users` row or a `public_logger_sessions` row.
 - Results are materialized from the timeline and are unique per event, athlete, and discipline.
 - A user's dashboard preferences are stored per `(user, workspace)` pair.
+- `athlete_preferred_disciplines` represents current assignments; `athlete_discipline_assignments` preserves every discipline ever assigned so historical performance remains discoverable.
 - Catalogue-backed meets group entrants into `discipline_sessions` through `session_entrants`, with `session_timeline_entries` and one `session_results` row per (session, entrant).
+- Generic-session completion uses one durable `session_finalization_jobs` row per session.
 
 ## Final relational schema
 
@@ -155,6 +157,12 @@ athlete_preferred_disciplines
   athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
   discipline_definition_id UUID PK, FK -> discipline_definitions.id ON DELETE RESTRICT
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+athlete_discipline_assignments                -- append-only discipline history (0045)
+  athlete_id UUID PK, FK -> athletes.id ON DELETE CASCADE
+  discipline_definition_id UUID PK, FK -> discipline_definitions.id ON DELETE RESTRICT
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  index: (discipline_definition_id)
 
 athlete_season_goals
   id UUID PK DEFAULT gen_random_uuid()
@@ -461,6 +469,22 @@ session_relay_selections
   FK (event_id, session_id, entrant_id, workspace_id) -> session_entrants(event_id, session_id, entrant_id, workspace_id) ON DELETE RESTRICT
   index: (event_id, session_id, entrant_id)
 
+session_finalization_jobs                     -- durable async completion work (0046)
+  id UUID PK DEFAULT gen_random_uuid()
+  event_id UUID FK -> events.id ON DELETE CASCADE
+  session_id UUID FK -> discipline_sessions.id ON DELETE CASCADE, UQ
+  workspace_id UUID FK -> workspaces.id ON DELETE CASCADE
+  requested_by UUID FK -> users.id ON DELETE RESTRICT
+  expected_version INTEGER NOT NULL CHECK (> 0)
+  status TEXT NOT NULL CHECK ('pending', 'running', 'completed', 'failed')
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (>= 0)
+  error_message TEXT NULL
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  started_at TIMESTAMPTZ NULL
+  completed_at TIMESTAMPTZ NULL
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  index: (created_at) WHERE status = 'pending'
+
 meet_domain_audit
   id UUID PK DEFAULT gen_random_uuid()
   event_id UUID NOT NULL
@@ -754,6 +778,8 @@ Migrations apply in lexicographic filename order (`backend/src/db/migrate.ts`), 
 | `0042_event_archive.sql` | Adds `events.archived_at` for reversible soft-archived events plus a partial index over archived workspace events |
 | `0043_relay_leg_results.sql` | Per-athlete relay splits: `session_timeline_entries.relay_member_id`, `relay_members (id, relay_id)` uniqueness, and the `session_relay_selections` official-selection table |
 | `0044_prune_unsupported_athlete_disciplines.sql` | Deletes `athlete_preferred_disciplines` rows for retired catalogue codes (`4x400m`, `hammer`); `discipline_definitions` rows stay for historical foreign keys |
+| `0045_athlete_discipline_assignment_history.sql` | Adds append-only history of athlete discipline assignments so removed current preferences do not hide historical performance groups |
+| `0046_session_finalization_jobs.sql` | Adds durable pending/running/completed/failed jobs for generic-session finalization |
 
 ## Schema maintenance
 
@@ -761,4 +787,4 @@ Migrations are checksum-tracked by `backend/src/db/migrate.ts`. Never modify a m
 
 ## AI declaration
 
-This document was reconciled with the committed SQL migrations using OpenCode[gpt-5.6-terra] and updated for migration `0026_user_preferences.sql` with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0027_club_branding.sql` was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0028`-`0033`, including athlete discipline preferences, season goals, generic meet usage, and guest entrant details, were documented with the assistance of OpenCode[gpt-5.6-terra]. Migration `0034_relay_catalogue_and_official_entry.sql` (relay catalogue seed and official-entry selection) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migrations `0035`-`0039`, the multi-discipline catalogue and session tables, and the offline reconciliation additions were reconciled with the committed SQL and updated with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal and migration `0040_remove_club_accent_color.sql` were documented with OpenCode[openai/gpt-5.6-terra]. Migration `0041_remove_squads.sql` was documented with OpenCode[openai/gpt-5.6-terra]. Migration `0042_event_archive.sql` (event soft-archive column and partial index) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0043_relay_leg_results.sql` (member-scoped relay split entries and the per-leg official selection table) was documented with the assistance of opencode[mimo-v2.6-flash-free]. Migration `0044_prune_unsupported_athlete_disciplines.sql` (retired-code athlete preference prune) was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

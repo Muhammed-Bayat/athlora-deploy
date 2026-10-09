@@ -53,6 +53,8 @@ const config: Config = {
           position: 'left',
           label: 'Docs',
         },
+        {to: '/docs/getting-started/frontend', label: 'Start here', position: 'left'},
+        {to: '/docs/quality/deployment-data', label: 'Operations', position: 'left'},
       ],
     },
     footer: {
@@ -62,7 +64,8 @@ const config: Config = {
           title: 'Docs',
           items: [
             {label: 'Getting Started', to: '/docs/getting-started/frontend'},
-            {label: 'Architecture', to: '/docs/architecture/overview'},
+            {label: 'Product & Architecture', to: '/docs/architecture/overview'},
+            {label: 'Quality & Operations', to: '/docs/quality/deployment-data'},
             {label: 'Database', to: '/docs/db-schema/overview'},
           ],
         },

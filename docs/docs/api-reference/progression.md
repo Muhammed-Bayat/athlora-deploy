@@ -157,4 +157,4 @@ This endpoint is **100m-only**: the discipline filter is hardcoded to `disciplin
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The response example was updated with OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

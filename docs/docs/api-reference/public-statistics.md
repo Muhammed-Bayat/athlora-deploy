@@ -216,4 +216,4 @@ GET /api/v1/public/statistics/standings?season={year|all}
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. The published session/team results endpoint was documented with the assistance of opencode[mimo-v2.6-flash-free]. The detailed public statistics report and exact public age filtering were documented with the assistance of OpenCode[gpt-5.6-terra]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra]. Re-mounting the published session-results section on the public Stats page per selected discipline, and switching the relay example from the retired `4x400m` code to `4x100m`, were documented with the assistance of opencode[mimo-v2.6-flash-free]. Relay team rows on the public report and leaderboard, relay legs on the public athlete statistics, and the gender/age filter exclusion for relay rows were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

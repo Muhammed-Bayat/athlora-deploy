@@ -48,7 +48,7 @@ See [Venues](./venues) for the full DTO reference.
 
 The backend creates a short-lived, single-use Gemini API token. The frontend uses `@google/genai` SDK to establish a `BidiGenerateContentConstrained` WebSocket session with the Sulafat voice. Gemini output is mono PCM16 at 24kHz; microphone input is mono PCM16 at 16kHz.
 
-Two function tools are declared: `create_athlete` (after user confirmation) and `sleep_assistant` (deactivation command).
+Gemini can request page context, discipline lookup, athlete search, factual performance/injury/ranking analysis, named/current-location weather, report generation, athlete-draft preparation, and sleep. It has no direct athlete-create tool: the browser validates a draft locally and the coach must explicitly confirm the existing Athlora API action.
 
 See [AI Integration](./ai-integration) for the full architecture.
 
@@ -67,4 +67,4 @@ See [Auth0](./auth0) for the full integration reference.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

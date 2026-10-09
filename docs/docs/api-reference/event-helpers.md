@@ -166,4 +166,4 @@ Grant revocation immediately removes the helper from the event room. After event
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -367,14 +367,15 @@ Dexie provides a typed, promise-based IndexedDB wrapper for offline action queui
 
 **Authenticated users** — `frontend/src/offline/db.ts`:
 
-Database name: `athlora-${userId}` (per-user isolation).
+Database name: `athlora-${userId}` (per-user isolation, current schema version 2).
 
 ```typescript
-db.version(1).stores({
+db.version(2).stores({
   offlineActions:     'id, [status+eventId+createdAt], eventId, status',
   cachedEvents:       'id, [workspaceId+id]',
   cachedParticipants: 'eventId',
   cachedTimeline:     'eventId',
+  cachedSessions:     'id, eventId',
 });
 ```
 
@@ -383,9 +384,10 @@ db.version(1).stores({
 Database name: `athlora-public-${hash}` (session-scoped, anonymous).
 
 ```typescript
-db.version(1).stores({
+db.version(2).stores({
   publicOfflineActions: 'id, [status+eventId+createdAt], eventId, status',
   publicCachedSnapshots: 'id',
+  publicCachedSessions: 'id, eventId',
 });
 ```
 
@@ -772,11 +774,11 @@ Coaches upload a club logo and cover image as multipart form data. Bytes are sni
 
 ### Testing patterns
 
-**Frontend (RTL):** 62 test files covering API wrappers, feature components, shared components, hooks, and pure logic. Uses `vi.mock()` for dependency replacement, `@testing-library/user-event` for realistic interactions, and accessible role queries (`getByRole`, `getByLabelText`).
+**Frontend (RTL):** Tests cover API wrappers, feature components, shared components, hooks, and pure logic. They use `vi.mock()` for dependency replacement, `@testing-library/user-event` for realistic interactions, and accessible role queries (`getByRole`, `getByLabelText`).
 
-**Backend (Supertest):** 15 test files covering route validation, response shapes, status codes, auth headers, ownership non-disclosure, and lifecycle state machines. Uses mocked `jose.jwtVerify` and `pg.Pool.query`.
+**Backend (Supertest):** Tests cover route validation, response shapes, status codes, auth headers, ownership non-disclosure, and lifecycle state machines. They use mocked `jose.jwtVerify` and `pg.Pool.query`.
 
-**Backend integration:** 8 `TEST_DATABASE_URL`-gated test files exercising real PostgreSQL — migrations, athlete/event/participant/timeline persistence, aggregates, cross-coach authorization, and injuries.
+**Backend integration:** `TEST_DATABASE_URL`-gated tests exercise real PostgreSQL migrations, persistence, aggregates, cross-coach authorization, injuries, meets, sync, and public logger authorization.
 
 **E2E (Playwright):** 23 spec files in `e2e/tests/` running against real Auth0, backend, frontend, and PostgreSQL. Projects: `auth-setup`, `smoke`, `desktop-chromium`, `mobile-chromium`. Auth setup fills Auth0 Universal Login forms and saves browser state. Serial execution (`workers: 1`) with per-project unique data.
 
@@ -885,6 +887,6 @@ Flat config format (`eslint.config.js`) in each package.
 
 ---
 
-## AI Declaration
+## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. Research and compilation were performed with the assistance of opencode[mimo-v2.5-free]. The club brand media section (multer, AWS SDK for S3, and `S3_*` environment variables) was documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

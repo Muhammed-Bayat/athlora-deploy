@@ -198,7 +198,7 @@ Opened multi-discipline sessions are cached with their catalogue, entrants, entr
 
 Concurrent creates are independent observations and are never discarded. Stale authenticated edits are rejected, while public logger edits retain their last-write-wins behaviour. Both paths retain immutable conflict evidence containing the device, actor or public session, action ID, attempted payload, expected/canonical version, and source timestamps.
 
-Conflict evidence is audit-only: `offline_sync_conflicts` rows record every observation, but there is no resolution API and unresolved rows never block finalization. Coaches review results and record decisions exclusively through the normal official-entry selection and result-override controls, which remain the sole finalization authority.
+For multi-discipline sessions, coaches can review conflict evidence through `GET /events/:eventId/sessions/:disciplineSessionId/resolution` and acknowledge a conflict through `POST .../conflicts/:conflictId/resolve`. Unresolved session conflicts block finalization with `409 OFFLINE_CONFLICT_RESOLUTION_REQUIRED`; acknowledgement records the coach's reason, after which normal official-entry selection remains part of finalization.
 
 Public logger expiry or link revocation purges the token-scoped IndexedDB database when the browser next learns of invalidation. Public logger API routes are network-only in the service worker, so a revoked session cannot render a shared stale response. An offline browser cannot learn about revocation until it reconnects.
 
@@ -223,4 +223,4 @@ Write operations bypass the service worker and go directly to the action queue.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The authenticated batch drain single-flight guard, chunking, receipt processing, and transport-failure behavior were documented with the assistance of opencode[mimo-v2.6-flash-free]. The recovery surface and designation-status documentation were updated with assistance from OpenCode[openai/gpt-5.6-terra]. The target-scoped public multi-discipline queue behavior was documented with assistance from OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

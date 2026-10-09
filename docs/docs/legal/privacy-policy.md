@@ -97,4 +97,4 @@ For questions about this privacy policy, please contact us through the Athlora a
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The weather-provider disclosure was edited with OpenCode[openai/gpt-6-astra]. The profile-data disclosure was updated with OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

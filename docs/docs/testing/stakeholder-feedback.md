@@ -84,6 +84,6 @@ The following Google Form response screenshots are retained in capture-time orde
 
 ![Stakeholder feedback response, 19:30:17](./screenshots/Screenshot%202026-09-28%20at%2019.30.17.png)
 
-## AI Declaration
+## AI declaration
 
-This document was created from supplied stakeholder-feedback evidence with the assistance of OpenCode[openai/gpt-5.6-terra] and updated with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

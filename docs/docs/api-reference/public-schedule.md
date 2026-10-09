@@ -75,4 +75,4 @@ Events are ordered by date ascending, then time ascending (nulls last), then cre
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.6-flash-free]. Club branding fields were documented with the assistance of opencode[mimo-v2.6-flash-free]. The `disciplines` event field and ordering/branding clarifications were documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

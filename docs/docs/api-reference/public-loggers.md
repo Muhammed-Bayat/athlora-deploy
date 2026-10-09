@@ -231,4 +231,4 @@ For a multi-discipline meet, every action carries a `target` with `disciplineSes
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. Public incident undo was documented with the assistance of OpenCode[gpt-5.6-terra]. Public per-athlete relay split capture (`relayMemberId` payloads, `relayLegs[]` results, and entrant `members[]`) and the removal of the public logger standings table and CSV export were documented with the assistance of opencode[mimo-v2.6-flash-free]. Owner-endpoint participation scoping for link management (#313) was documented with the assistance of opencode[mimo-v2.6-flash-free]. The relay-leg `isPb`/`isSb` markers in the public snapshot were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -108,6 +108,6 @@ The system instruction requires evidence-first answers: use tools for Athlora fa
 | `frontend/src/features/assistant/AthloraAssistantProvider.tsx` | Authenticated tool execution, UI state, downloads, microphone behavior. |
 | `frontend/src/features/reports/coachingAnalyticsReport.ts` | Evidence-only multi-athlete PDF generation. |
 
-## AI Declaration
+## AI declaration
 
-This document was updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -103,4 +103,4 @@ Repeat `clubId` once per club; 2–5 unique UUIDs are required, otherwise `422 C
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free]. The club branding summary field was documented with the assistance of opencode[mimo-v2.6-flash-free]. The club accent-colour removal was documented with OpenCode[openai/gpt-5.6-terra]. Relay leg splits feeding athlete and club `disciplines[]` rows and the supported-catalogue preference filter were documented with the assistance of opencode[mimo-v2.6-flash-free]. The team-based club-statistics relay aggregation and the athlete-versus-club relay row wording were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

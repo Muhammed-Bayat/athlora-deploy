@@ -78,4 +78,4 @@ These rules are deliberately small and pure so they can be unit-tested exhaustiv
 
 ## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra]. The selected official-entry derivation rule for multi-discipline session results was documented with the assistance of opencode[mimo-v2.6-flash-free]. Measured-field official selection and vertical result officialization were documented with the assistance of OpenCode[gpt-5.6-terra]. Per-athlete relay split derivation, per-leg official selection, the finalize gate, and standings presentation were documented with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

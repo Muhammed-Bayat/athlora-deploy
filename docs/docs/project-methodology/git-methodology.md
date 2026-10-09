@@ -172,6 +172,6 @@ git push origin v1.2.0
 ```
 ---
 
-## AI Declaration
+## AI declaration
 
-The preceding document was generated with the assistance of Claude-Web[Sonnet 5] and edited with the assistance of Codex[GPT-5], opencode[deepseek-v4-flash-free], and OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

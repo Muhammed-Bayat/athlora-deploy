@@ -8,7 +8,7 @@
 
 ### Short Description
 
-The frontend is the React single-page application used by coaches to manage athletes and events, log the current 100m workflow, review results, and view coaching insight. It consumes the separate Athlora Express API through authenticated HTTP requests.
+The frontend is the React single-page application used by coaches to manage athletes and meets, log legacy 100m and catalogue-backed multi-discipline sessions, review results, and view coaching insight. It consumes the separate Athlora Express API through authenticated HTTP requests.
 
 ### System Requirements
 
@@ -60,7 +60,7 @@ npm run typecheck
 npm run test
 ```
 
-In the application, sign in, create athletes and a 100m event, assign participants, start the event, then record finishes from **Live Logger**. The dashboard and athlete profile views update from API-derived result data.
+In the application, sign in, create athletes and an event, add a supported discipline session, assign participants, start the event, then record results from **Live Logger**. The dashboard and athlete profile views update from API-derived result data.
 
 ## Scripts
 
@@ -73,6 +73,6 @@ In the application, sign in, create athletes and a 100m event, assign participan
 | `npm run test` | Run Vitest and React Testing Library. |
 | `npm run lint` | Run ESLint. |
 
-## AI Declaration
+## AI declaration
 
-This document was created and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

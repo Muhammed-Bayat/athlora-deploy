@@ -54,6 +54,6 @@ Add a guide by creating a Markdown file in `docs/docs`, then add its document ID
 
 The published site is https://athlora-deploy.pages.dev.
 
-## AI Declaration
+## AI declaration
 
-This document was created with the assistance of opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

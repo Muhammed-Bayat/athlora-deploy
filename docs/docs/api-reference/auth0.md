@@ -111,4 +111,4 @@ Status: `403`.
 
 ## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

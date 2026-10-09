@@ -8,7 +8,7 @@
 
 ### Short Description
 
-This Playwright package validates the current 100m coaching workflow across the real local frontend, backend, PostgreSQL database, and Auth0 login. It covers anonymous access, authenticated desktop/mobile workflows, and accessibility checks.
+This Playwright package validates the Athlora coaching workflow across the real local frontend, backend, PostgreSQL database, and Auth0 login. It covers the 100m core flow plus multi-discipline, public, offline, fixture, desktop/mobile, and accessibility scenarios.
 
 ### System Requirements
 
@@ -55,6 +55,6 @@ The configuration starts the API on port `4100` and Vite on port `5174`. It prep
 | `npm run test:install` | Install Playwright Chromium. |
 | `npm test` | Run the configured Playwright projects. |
 
-## AI Declaration
+## AI declaration
 
-This document was created and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

@@ -16,18 +16,26 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Testing',
-      items: ['testing/overview', 'testing/stakeholder-feedback', 'testing/user-feedback'],
-    },
-    {
-      type: 'category',
-      label: 'Architecture',
+      label: 'Product & Architecture',
       items: [
         'architecture/overview',
+        'architecture/product-experience',
         'architecture/anatomy-surface-map',
         'architecture/offline-sync',
         'architecture/vertical-events',
         'architecture/multi-discipline-foundation-plan',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Quality & Operations',
+      items: [
+        'testing/overview',
+        'testing/stakeholder-feedback',
+        'testing/user-feedback',
+        'quality/accessibility-responsive',
+        'quality/performance-reliability',
+        'quality/deployment-data',
       ],
     },
     {

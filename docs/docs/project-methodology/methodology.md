@@ -51,7 +51,7 @@ Sprint milestones are delivery checkpoints, not a restriction on useful work. At
 
 ## 3. The Visual Board
 
-The team uses a **Gitea Projects** board as the primary live view of work status. It is not the only record: Gitea issues carry scope and acceptance criteria, delivery rows sequence the Sprint's work, and the separate [bug tracker](./bug-tracker) records defects, with the [delivery roadmap](./delivery-roadmap) keeping the longer-range status. The board is the common surface those records move across. Every piece of work — features, bugs, documentation, infrastructure — is represented as a card on the board.
+The team uses the [Gitea Projects workspace](https://sdp.ms.wits.ac.za/cache-us-outside/athlora/projects) as the primary live view of work status. It contains the Sprint 1-4 project views and bug tracker. It is not the only record: Gitea issues carry scope and acceptance criteria, delivery rows sequence the Sprint's work, and the [delivery roadmap](./delivery-roadmap) keeps longer-range status. The board is the common surface those records move across. Every piece of work — features, bugs, documentation, infrastructure — is represented as a card on the board.
 
 ### 3.1 Board Columns
 
@@ -134,6 +134,6 @@ All three Sprint folders (`sprint-1`, `sprint-2`, `sprint-3`) share the same str
 
 ---
 
-## AI Declaration
+## AI declaration
 
-This document was created with the assistance of opencode[mimo-v2.5-free] and updated with the assistance of OpenCode[gpt-5.6-terra]. The work-tracking and sprint-structure clarifications were updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

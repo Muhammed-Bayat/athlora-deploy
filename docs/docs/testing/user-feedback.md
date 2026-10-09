@@ -86,6 +86,6 @@ The following Google Form response screenshots are retained in capture-time orde
 
 ![User feedback response, 19:36:35](./screenshots/Screenshot%202026-09-28%20at%2019.36.35.png)
 
-## AI Declaration
+## AI declaration
 
-This document was created from supplied user-feedback evidence with the assistance of OpenCode[openai/gpt-5.6-terra] and updated with the assistance of OpenCode[openai/gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

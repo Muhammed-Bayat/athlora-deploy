@@ -8,7 +8,7 @@
 
 ### Short Description
 
-The backend is the Express REST API for Athlora. It verifies Auth0 access tokens, enforces coach ownership, persists the roster/event/timeline model in PostgreSQL, derives the current 100m results, and proxies weather data safely.
+The backend is the Express REST API for Athlora. It verifies Auth0 access tokens, enforces club ownership, persists roster/meet/timeline data in PostgreSQL, derives legacy 100m and catalogue-session results, and proxies external services safely.
 
 ### System Requirements
 
@@ -67,6 +67,6 @@ Set `TEST_DATABASE_URL` to a disposable PostgreSQL database before running the i
 | `npm run test` | Run Vitest and Supertest. |
 | `npm run lint` | Run ESLint. |
 
-## AI Declaration
+## AI declaration
 
-This document was created and updated with the assistance of OpenCode[gpt-5.6-terra].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

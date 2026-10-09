@@ -1,7 +1,22 @@
-.hero {
-  max-width: 42rem;
+.page {
   margin: 0 auto;
-  padding: 5rem 1rem 6rem;
+  max-width: 75rem;
+  padding: 3rem 1.5rem 5rem;
+}
+
+.hero {
+  max-width: 48rem;
+  padding: 3rem 0 4rem;
+}
+
+.eyebrow,
+.card span {
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .title {
@@ -20,6 +35,7 @@
 .lede {
   font-size: 1.125rem;
   color: var(--ifm-color-emphasis-700);
+  max-width: 42rem;
 }
 
 .actions {
@@ -27,4 +43,48 @@
   gap: 1rem;
   flex-wrap: wrap;
   margin-top: 2.5rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.card {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 0.75rem;
+  color: inherit;
+  padding: 1.5rem;
+  text-decoration: none;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.card:hover {
+  border-color: var(--ifm-color-primary);
+  color: inherit;
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  font-size: 1.3rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.card p {
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 3rem;
+}
+
+@media (max-width: 700px) {
+  .page { padding: 1.5rem 1rem 3rem; }
+  .hero { padding: 2rem 0 3rem; }
+  .grid { grid-template-columns: 1fr; }
 }

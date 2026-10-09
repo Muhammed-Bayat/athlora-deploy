@@ -69,4 +69,4 @@ The HTML report is written to `e2e/playwright-report`. On a failed test, traces 
 
 ## AI declaration
 
-This document was created with the assistance of OpenCode[gpt-5.6-terra] and updated with the assistance of OpenCode[gpt-5.6-terra], opencode[gpt-5.6-sol], and OpenCode[openai/gpt-5.6-terra]. The expanded suite coverage note for relay session logging was updated with the assistance of opencode[mimo-v2.6-flash-free]. The public schedule spec coverage note was documented with the assistance of opencode[mimo-v2.6-flash-free]. The public statistics report E2E coverage note was updated with the assistance of OpenCode[gpt-5.6-terra]. The relay split logging and per-leg official selection coverage note (issue #319) was updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

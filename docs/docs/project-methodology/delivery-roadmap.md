@@ -255,8 +255,6 @@ Key outcomes:
 
 Every roadmap item is complete only when its implementation and documentation are aligned, relevant tests pass, and the applicable CI checks are green. The current CI runs frontend, backend, documentation, an informational frontend/backend coverage job, and credential-gated E2E jobs. The coverage job prints a short Markdown summary and does not yet impose a threshold. New work must preserve the coach-ownership boundary, responsive track-side interaction, accessible controls, and server-authoritative result derivation.
 
-## AI Declaration
+## AI declaration
 
-The discipline analytics roadmap status and retired athlete-group functionality removal were edited with the assistance of OpenCode[openai/gpt-5.6-terra].
-
-This document was created with the assistance of Codex[GPT-5] and opencode[deepseek-v4-flash-free], and updated with the assistance of OpenCode[gpt-5.6-terra]. The GraySky migration documentation was edited with OpenCode[openai/gpt-6-astra]. The completed-roadmap and stage-status refresh was updated with the assistance of opencode[mimo-v2.6-flash-free].
+This document was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].

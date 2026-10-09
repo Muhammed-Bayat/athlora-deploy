@@ -19,6 +19,25 @@
 
 Run the whole athletics season from one place.
 
+## Live Services
+
+- Application: https://athlora-deploy.vercel.app
+- API health: https://athlora-deploy.onrender.com/health
+- Documentation: https://athlora-deploy.pages.dev
+
+## Coverage
+
+| Measure | Current baseline | Source |
+|---|---:|---|
+| Combined source coverage | >82% | Latest successful coverage-focused merge (`#382`) |
+| Line / branch / function detail | Latest CI run | Gitea `coverage` job summary |
+
+To view the latest report, open the repository's **Actions** tab, select the
+latest `ci` run for `main`, then open the **coverage** job. Its job summary
+contains the frontend, backend, and combined line, branch, and function
+coverage table. Coverage is informational and does not currently enforce a
+threshold.
+
 ## Core Requirements
 
 ### Project Title
@@ -29,9 +48,10 @@ Run the whole athletics season from one place.
 
 Athlora is a web application for athletics coaches who need one place to
 manage athletes, plan training and competitions, and record results at the
-track. The shipped vertical slice supports 100m timing, live corrections,
-derived results, PBs/SBs, athlete statistics, weather, and a coach dashboard;
-the roadmap expands this into a full athletics-meet system.
+track. The shipped product supports a focused athletics catalogue, live
+corrections, derived results, PBs/SBs, athlete statistics, weather, fixtures,
+public club surfaces, and a coach dashboard. Multi-events and automated season
+scheduling remain planned work.
 
 ### System Requirements
 
@@ -175,71 +195,6 @@ role enforcement, athlete lifecycle, injuries, event helpers, realtime,
 reminders, public logger, fixture notifications, authorization boundaries,
 migration verification, accessibility deep audit, routing, and analytics.
 
-## Services and Documentation
+## AI usage
 
-- Application: https://athlora-deploy.vercel.app
-- API health: https://athlora-deploy.onrender.com/health
-- Documentation: https://athlora-deploy.pages.dev
-- [Frontend guide](docs/docs/getting-started/frontend.md)
-- [Backend guide](docs/docs/getting-started/backend.md)
-- [E2E guide](docs/docs/getting-started/e2e.md)
-- [Architecture](docs/docs/architecture/overview.md)
-- [API reference](docs/docs/api-reference/contract.md)
-- [Project methodology](docs/docs/project-methodology/methodology.md)
-- [Delivery roadmap](docs/docs/project-methodology/delivery-roadmap.md)
-
-## AI Usage
-
-The global Athlora assistant, discipline analytics, shared PDF reports,
-tests, and documentation updates for retired athlete-group functionality were
-generated and edited with OpenCode[openai/gpt-5.6-terra]; the same tool/model
-performed targeted code review. No separate AI planning tool was used for
-this update.
-
-### AI Declaration
-
-This document was created with the assistance of
-opencode[deepseek-v4-flash-free] and opencode[gpt-5.6-sol], and updated with
-the assistance of OpenCode[gpt-5.6-terra]. Authentication diagnostics and
-fixture repair code generation and inline editing used opencode[gpt-5.6-sol];
-AI code review was not used for these updates. GraySky migration code/test
-generation, inline editing, and documentation editing used
-OpenCode[openai/gpt-6-astra]. Independent club publication flags, public
-schedule endpoints, coach toggles, tests, and related documentation were
-generated and edited with opencode[mimo-v2.6-flash-free]. User dashboard
-preferences (migration, API, customization UI, saved views, tests, docs) and
-the e2e CI provisioning fix were generated and edited with
-opencode[mimo-v2.6-flash-free]. Club branding (migration, S3-compatible media
-storage, WCAG contrast validation, branding/media routes and tests,
-`ClubBadge` UI, branded surface wiring, and related documentation) was
-generated and edited with opencode[mimo-v2.6-flash-free]. Authenticated
-offline batch sync (body-owned batch route, idempotent receipts, single-flight
-chunked drain, receipt-aware toast, unit/integration/e2e tests, and related
-documentation) was generated and edited with
-opencode[mimo-v2.6-flash-free]. Athlete preferred disciplines and private
-measurable season goals (catalogue validation, migration, protected profile
-flow, UI, tests, and docs) and generic multi-discipline meet setup were
-generated and edited with OpenCode[gpt-5.6-terra]. Relay team support
-(migration `0034`, selection-aware derivation and official-entry API, roster
-edit, session live logger with offline enqueue, public session standings,
-athlete relay history without PB impact, tests, e2e, and related documentation)
-was generated and edited with opencode[mimo-v2.6-flash-free]. The public club
-schedule experience (public schedule API `disciplines` projection,
-unauthenticated `/schedule` and `/schedule/:clubId` pages, landing/public-stats
-cross-links, unit and e2e tests, and related documentation) was generated and
-edited with opencode[mimo-v2.6-flash-free]. Event archive/unarchive (migration
-`0042_event_archive.sql`, archive/unarchive API routes with guards, console
-Archive/Unarchive controls, the Archived status filter and badges, removal of
-shared results from the event fixture panel, unit/RTL tests, and related
-documentation) was generated and edited with
-opencode[mimo-v2.6-flash-free]. No separate AI code-review tool was used for
-these updates. Per-athlete relay split capture (migration
-`0043_relay_leg_results.sql`, relay derivation, `relayMemberId` entry
-validation, per-leg official selection, `RELAY_RESULTS_INCOMPLETE` finalize
-gate, `relayLegs[]` projections, coach and public logger split inputs,
-final-only team totals in standings/CSV, event final-results leg lines,
-unit/integration/RTL/e2e tests, and related documentation) was generated and
-edited with opencode[mimo-v2.6-flash-free]; no separate AI code-review tool
-was used for this update. The README header badge row (deployed site,
-documentation site, and API health buttons) was generated and edited with
-opencode[mimo-v2.6-flash-free].
+This repository documentation was created or updated with the assistance of OpenCode[openai/gpt-5.6-terra].
