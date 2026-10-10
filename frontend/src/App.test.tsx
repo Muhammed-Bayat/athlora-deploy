@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardSummary } from './types';
 import App from './App';
+import './features/dashboard/CoachConsole';
 
 const authState = vi.hoisted(() => ({
   isAuthenticated: false,
