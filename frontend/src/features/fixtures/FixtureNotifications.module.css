@@ -36,7 +36,9 @@
 }
 
 .notifications > summary:focus-visible,
-.list button:focus-visible {
+.item > button:first-child:focus-visible,
+.starBtn:focus-visible,
+.deleteBtn:focus-visible {
   outline: 2px solid var(--cyan-200);
   outline-offset: 3px;
 }
@@ -66,7 +68,9 @@
 
   .notifications > summary {
     display: flex;
+    flex: 0 0 auto;
     width: auto;
+    min-width: 68px;
     height: 36px;
     gap: 6px;
     padding: 0 8px;
@@ -166,8 +170,9 @@
 .starBtn,
 .deleteBtn {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   place-items: center;
   padding: 0;
   border: none;
@@ -175,6 +180,7 @@
   background: transparent;
   color: #66838F;
   cursor: pointer;
+  line-height: 0;
   transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 
@@ -194,6 +200,7 @@
 
 .starBtn svg,
 .deleteBtn svg {
+  display: block;
   width: 13px;
   height: 13px;
 }
@@ -202,7 +209,7 @@
   color: #E2664F;
 }
 
-.list button {
+.item > button:first-child {
   display: grid;
   width: 100%;
   grid-template-columns: 9px minmax(0, 1fr) auto;
@@ -219,24 +226,24 @@
   transition: background 0.16s var(--ease), border-color 0.16s var(--ease), transform 0.16s var(--ease);
 }
 
-.list button:hover {
+.item > button:first-child:hover {
   border-color: rgba(138, 233, 242, 0.11);
   background: rgba(138, 233, 242, 0.065);
   transform: translateX(2px);
 }
 
-.list button:disabled {
+.item > button:first-child:disabled {
   cursor: default;
   opacity: 0.56;
 }
 
-.list button:disabled:hover {
+.item > button:first-child:disabled:hover {
   border-color: transparent;
   background: transparent;
   transform: none;
 }
 
-.list button > i {
+.item > button:first-child > i {
   width: 7px;
   height: 7px;
   margin-top: 5px;
@@ -245,12 +252,12 @@
   box-shadow: 0 0 0 3px rgba(138, 233, 242, 0.07), 0 0 11px rgba(138, 233, 242, 0.45);
 }
 
-.list button[data-read=true] > i {
+.item > button:first-child[data-read=true] > i {
   background: #5A7A87;
   box-shadow: none;
 }
 
-.list button > span {
+.item > button:first-child > span {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -326,7 +333,7 @@
 :global(html.theme-light) .panelHeader p { color: #0086AC; }
 :global(html.theme-light) .panelHeader h2 { color: #123747; }
 :global(html.theme-light) .panelHeader > span { border-color: rgba(0, 78, 105, 0.10); background: rgba(0, 146, 188, 0.07); color: #52717E; }
-:global(html.theme-light) .list button:hover { border-color: rgba(0, 146, 188, 0.13); background: rgba(255, 255, 255, 0.42); }
+:global(html.theme-light) .item > button:first-child:hover { border-color: rgba(0, 146, 188, 0.13); background: rgba(255, 255, 255, 0.42); }
 :global(html.theme-light) .starBtn:hover,
 :global(html.theme-light) .deleteBtn:hover { background: rgba(0, 146, 188, 0.1); }
 :global(html.theme-light) .starBtn { color: #8A9DA5; }
@@ -336,12 +343,25 @@
 :global(html.theme-light) .list strong { color: #0B526A; }
 :global(html.theme-light) .list strong + span { color: #577482; }
 :global(html.theme-light) .list time { color: #76909B; }
-:global(html.theme-light) .list button[data-read=true] > i { background: #8BA7B1; }
+:global(html.theme-light) .item > button:first-child[data-read=true] > i { background: #8BA7B1; }
 :global(html.theme-light) .empty { color: #718A95; }
 :global(html.theme-light) .empty i { border-color: rgba(0, 78, 105, 0.10); background: rgba(255, 255, 255, 0.36); color: #0086AC; }
 
 @media (max-width: 620px) {
-  .notifications > summary { width: 32px; height: 32px; border-radius: 10px; }
   .notifications > summary svg { width: 16px; height: 16px; }
   .panel { top: calc(100% + 8px); }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .actions { opacity: 1; }
+}
+
+@media (max-width: 360px) {
+  .notifications > summary {
+    width: 32px;
+    min-width: 0;
+    padding-inline: 0;
+  }
+
+  .triggerLabel { display: none; }
 }
