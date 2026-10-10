@@ -353,13 +353,13 @@ This document defines the user stories, acceptance criteria, and User Acceptance
 1. **Given** an event I own, **When** I create an event helper invitation via `POST /events/:id/helpers`, **Then** a time-limited invitation token is generated.
 2. **Given** a valid helper invitation token, **When** a user redeems it via `POST /events/:id/helpers/redeem`, **Then** they gain temporary logging access to the event.
 3. **Given** a helper invitation, **When** I revoke it, **Then** the token is invalidated and any granted access is removed.
-4. **Given** rate limiting, **When** more than 10 redemption attempts are made from the same IP within one minute, **Then** the request is rejected with `429 Too Many Requests`.
+4. **Given** rate limiting, **When** more than 20 redemption attempts are made from the same IP within one minute, **Then** the request is rejected with `429 Too Many Requests`.
 
 #### User Acceptance Tests (UAT)
 - **UAT-019.1:** Create a helper invitation for an event. Verify a token is returned.
 - **UAT-019.2:** Redeem the helper invitation. Verify the helper gains access to the event's timeline entries.
 - **UAT-019.3:** Revoke a helper invitation and attempt to redeem it. Verify the redemption is rejected.
-- **UAT-019.4:** Attempt 11 rapid redemption requests from the same IP. Verify the 11th request returns HTTP `429`.
+- **UAT-019.4:** Attempt 21 rapid redemption requests from the same IP. Verify the 21st request returns HTTP `429`.
 
 ---
 

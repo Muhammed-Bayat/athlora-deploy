@@ -18,28 +18,28 @@ function jsonLimit(options: { windowMs: number; limit: number; code: string; mes
 
 export const apiLimiter = jsonLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 600,
+  limit: 1200,
   code: 'RATE_LIMITED',
   message: 'Too many requests, please try again later',
 });
 
 export const aiTokenLimiter = jsonLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 45,
+  limit: 90,
   code: 'RATE_LIMITED',
   message: 'Too many AI token requests, please try again later',
 });
 
 export const publicApiLimiter = jsonLimit({
   windowMs: 60 * 1000,
-  limit: 120,
+  limit: 240,
   code: 'RATE_LIMITED',
   message: 'Too many requests, please slow down',
 });
 
 export const authSyncLimiter = jsonLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 60,
+  limit: 120,
   code: 'RATE_LIMITED',
   message: 'Too many account sync attempts, please try again later',
 });

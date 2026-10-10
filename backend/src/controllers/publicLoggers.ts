@@ -13,7 +13,7 @@ import {
 } from '../services/publicLoggers.js';
 
 const SESSION_ATTEMPT_WINDOW_MS = 15 * 60_000;
-const SESSION_ATTEMPT_LIMIT = 12;
+const SESSION_ATTEMPT_LIMIT = 24;
 const sessionAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function assertSessionRateLimit(req: Parameters<RequestHandler>[0]): void {
