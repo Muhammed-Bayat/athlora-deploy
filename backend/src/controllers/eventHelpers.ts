@@ -16,7 +16,7 @@ export function rateLimitRedemption(req: Request, res: Response, next: NextFunct
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxAttempts = 10;
+  const maxAttempts = 20;
 
   let record = redemptionAttempts.get(ip);
   if (!record || now > record.resetTime) {
