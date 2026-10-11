@@ -190,12 +190,21 @@ describe('AuthPage', () => {
 
   it('shows workspace management to coaches', async () => {
     workspaceApi.listWorkspaceMembers.mockResolvedValue({
-      data: [{ userId: 'user-2', name: 'Assistant Sam', email: 'sam@example.com', role: 'assistant' }],
-      meta: { count: 1 },
+      data: [
+        { userId: currentUser.id, name: currentUser.name, email: currentUser.email, role: 'coach' },
+        { userId: 'user-2', name: 'Assistant Sam', email: 'sam@example.com', role: 'assistant' },
+        { userId: 'user-3', name: 'Coach Alex', email: 'alex@example.com', role: 'coach' },
+      ],
+      meta: { count: 3 },
     });
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Club members' })).toBeInTheDocument();
-    expect(screen.getByText('Assistant Sam')).toBeInTheDocument();
+    const ownRow = (await screen.findByText('Coach Avery (you)')).closest('li')!;
+    expect(within(ownRow).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    for (const name of ['Assistant Sam', 'Coach Alex']) {
+      const memberRow = screen.getByText(name).closest('li')!;
+      expect(within(memberRow).getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    }
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create invitation' })).not.toBeInTheDocument();
     expect(workspaceApi.listWorkspaceMembers).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000000');
