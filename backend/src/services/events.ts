@@ -281,7 +281,7 @@ export async function replaceEvent(
         [eventId],
       );
       if (activeSessions.rows.length > 0) {
-        throw new ApiError(409, 'SESSIONS_IN_PROGRESS', 'Complete or cancel all in-progress sessions before completing the meet');
+        throw new ApiError(409, 'SESSIONS_IN_PROGRESS', 'Complete all in-progress sessions before completing the meet');
       }
     }
     if (currentEvent.status === 'scheduled' && updated.status === 'in_progress' && currentRow.fixture_revision !== undefined) {

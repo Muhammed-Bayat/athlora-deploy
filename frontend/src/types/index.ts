@@ -544,6 +544,7 @@ export interface PublicLoggerLink {
   status: 'active' | 'revoked';
   createdAt: string;
   revokedAt: string | null;
+  loggerNames: string[];
 }
 
 export interface PublicLoggerSnapshot {

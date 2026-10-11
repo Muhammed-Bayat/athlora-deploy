@@ -21,6 +21,7 @@ export interface PublicLoggerLink {
   status: 'active' | 'revoked';
   createdAt: string;
   revokedAt: string | null;
+  loggerNames: string[];
 }
 
 export interface PublicLoggerSnapshot {
@@ -35,6 +36,7 @@ interface LinkRow {
   status: 'active' | 'revoked';
   created_at: Date | string;
   revoked_at: Date | string | null;
+  logger_names?: string[];
 }
 
 interface SessionRow {
@@ -72,6 +74,7 @@ function mapLink(row: LinkRow): PublicLoggerLink {
     status: row.status,
     createdAt: timestamp(row.created_at),
     revokedAt: row.revoked_at === null ? null : timestamp(row.revoked_at),
+    loggerNames: row.logger_names ?? [],
   };
 }
 
@@ -118,7 +121,9 @@ export async function listPublicLoggerLinks(
 ): Promise<PublicLoggerLink[]> {
   assertUuid(workspaceId); assertUuid(eventId);
   const result = await executor.query<LinkRow>(
-    `SELECT pl.id, pl.event_id, pl.status, pl.created_at, pl.revoked_at
+    `SELECT pl.id, pl.event_id, pl.status, pl.created_at, pl.revoked_at,
+            ARRAY(SELECT DISTINCT ps.logger_name FROM public_logger_sessions ps
+                  WHERE ps.link_id = pl.id ORDER BY ps.logger_name) AS logger_names
      FROM public_logger_links pl
      JOIN events e ON e.id = pl.event_id
      WHERE pl.event_id = $1 AND ${eventParticipationSql('$2')}

@@ -31,8 +31,24 @@ describe('PublicLoggerPanel', () => {
     vi.mocked(publicLoggerApi.listPublicLoggerLinks).mockResolvedValue({ data: [], meta: { count: 0 } });
     vi.mocked(publicLoggerApi.createPublicLoggerLink).mockResolvedValue({
       token: 'public-link-token',
-      link: { id: '33333333-3333-4333-8333-333333333333', eventId: event.id, status: 'active', createdAt: event.createdAt, revokedAt: null },
+      link: { id: '33333333-3333-4333-8333-333333333333', eventId: event.id, status: 'active', createdAt: event.createdAt, revokedAt: null, loggerNames: [] },
     });
+  });
+
+  it('shows logger names alongside Active and revokes the corresponding link', async () => {
+    const user = userEvent.setup();
+    const link = {
+      id: '33333333-3333-4333-8333-333333333333', eventId: event.id,
+      status: 'active' as const, createdAt: event.createdAt, revokedAt: null,
+      loggerNames: ['Meet Official', 'Track Official'],
+    };
+    vi.mocked(publicLoggerApi.listPublicLoggerLinks).mockResolvedValue({ data: [link], meta: { count: 1 } });
+    render(<PublicLoggerPanel event={event} />);
+
+    expect(await screen.findByText(`Active · Meet Official, Track Official · created ${new Date(event.createdAt).toLocaleString()}`)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Revoke' }));
+
+    expect(publicLoggerApi.revokePublicLoggerLink).toHaveBeenCalledWith(event.id, link.id);
   });
 
   it('reveals the URL and QR code after creating a link', async () => {
