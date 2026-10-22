@@ -1,7 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AthleticsEvent } from '../../types';
+import type { SessionFinalizationJob } from '../../api/meets';
 import * as eventHelpersApi from '../../api/eventHelpers';
 import { SessionLivePanel } from './SessionLivePanel';
 
@@ -94,10 +95,14 @@ describe('SessionLivePanel', () => {
       sessionVersion += 1;
       return {};
     });
-    api.queueSessionFinalization.mockResolvedValue({
-      id: 'job-1', eventId: 'event-1', sessionId: 'session-1', status: 'pending', attempts: 0, errorMessage: null,
+    let finalizationJob: SessionFinalizationJob | null = null;
+    api.queueSessionFinalization.mockImplementation(async () => {
+      finalizationJob = {
+        id: 'job-1', eventId: 'event-1', sessionId: 'session-1', status: 'pending', attempts: 0, errorMessage: null,
+      };
+      return finalizationJob;
     });
-    api.getSessionFinalizationStatus.mockResolvedValue({ data: null });
+    api.getSessionFinalizationStatus.mockImplementation(async () => ({ data: finalizationJob }));
     api.listDisciplines.mockResolvedValue({ data: [{
       id: 'relay-100',
       code: '4x100m',
@@ -184,7 +189,12 @@ describe('SessionLivePanel', () => {
     api.selectSessionResultEntry.mockResolvedValue({});
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('starts a session, logs a team attempt, and selects an official entry', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const user = userEvent.setup();
     render(<SessionLivePanel event={event} canOperate isCoach />);
 
@@ -213,6 +223,13 @@ describe('SessionLivePanel', () => {
     await user.click(screen.getByRole('button', { name: 'Finalize session' }));
     expect(api.queueSessionFinalization).toHaveBeenCalledWith('event-1', 'session-1', 2);
     expect(await screen.findByText('Calculating final results')).toBeInTheDocument();
+
+    const statusCalls = api.getSessionFinalizationStatus.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(api.getSessionFinalizationStatus).toHaveBeenCalledTimes(statusCalls + 1);
+    expect(screen.getByText('Calculating final results')).toBeInTheDocument();
   });
 
   it('lists relay legs in standings and defers the team total until results are final', async () => {
